@@ -121,14 +121,16 @@ export function DayPlanner() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      <DayHeader
-        dateLabel={formatDateLabel(selectedDay)}
-        onPrevDay={() => setSelectedDay((current) => addDays(current, -1))}
-        onNextDay={() => setSelectedDay((current) => addDays(current, 1))}
-        onToday={() => setSelectedDay(todayIso())}
-      />
+      <div className="sticky top-0 z-20 border-b border-slate-800 bg-slate-950/95 pb-3 backdrop-blur-sm">
+        <DayHeader
+          dateLabel={formatDateLabel(selectedDay)}
+          onPrevDay={() => setSelectedDay((current) => addDays(current, -1))}
+          onNextDay={() => setSelectedDay((current) => addDays(current, 1))}
+          onToday={() => setSelectedDay(todayIso())}
+        />
+      </div>
 
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)]">
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)] lg:items-start">
         <div className="space-y-3">
           {FIXED_SECTIONS.map((section) => (
             <SectionColumn
@@ -141,7 +143,7 @@ export function DayPlanner() {
             />
           ))}
         </div>
-        <div className="space-y-3">
+        <div className="space-y-3 lg:sticky lg:top-20">
           <WeeklyOverview state={appState as AppState} referenceDay={selectedDay} />
           <DeepWorkTimer />
         </div>
