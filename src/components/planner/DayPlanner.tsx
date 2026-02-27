@@ -129,7 +129,7 @@ export function DayPlanner() {
       />
 
       <div className="grid gap-3 lg:grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)]">
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="space-y-3">
           {FIXED_SECTIONS.map((section) => (
             <SectionColumn
               key={section.id}
