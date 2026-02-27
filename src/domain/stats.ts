@@ -32,3 +32,15 @@ export function computeWeeklyStats(state: AppState, referenceDayIso: string): We
   }
 }
 
+export function computeDayCompletion(state: AppState, dayIso: string): WeeklyStatsDaySummary {
+  const dayState = state.days[dayIso]
+  const totalCount = dayState?.tasks.length ?? 0
+  const completedCount = dayState?.tasks.filter((task) => task.isDone).length ?? 0
+
+  return {
+    date: dayIso,
+    completedCount,
+    totalCount,
+  }
+}
+

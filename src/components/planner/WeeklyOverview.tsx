@@ -5,7 +5,7 @@
  */
 
 import type { AppState } from '../../domain/types'
-import { computeWeeklyStats } from '../../domain/stats'
+import { computeDayCompletion, computeWeeklyStats } from '../../domain/stats'
 
 interface WeeklyOverviewProps {
   state: AppState
@@ -24,6 +24,9 @@ function formatShortLabel(isoDay: string): string {
 
 export function WeeklyOverview({ state, referenceDay }: WeeklyOverviewProps) {
   const stats = computeWeeklyStats(state, referenceDay)
+  const today = computeDayCompletion(state, referenceDay)
+  const todayRatio = today.totalCount === 0 ? 0 : today.completedCount / today.totalCount
+  const todayPercentage = today.totalCount === 0 ? 0 : Math.round(todayRatio * 100)
 
   return (
     <section className="rounded-lg border border-slate-800 bg-slate-900 p-3 sm:p-4">
@@ -36,6 +39,22 @@ export function WeeklyOverview({ state, referenceDay }: WeeklyOverviewProps) {
           {stats.totalCompleted}/{stats.totalTasks} done
         </p>
       </header>
+
+      <div className="mb-3 rounded-md bg-slate-950/60 px-3 py-2 text-xs text-slate-300">
+        {today.totalCount === 0 ? (
+          <p>
+            You haven&apos;t planned any tasks for today yet. Add your 3 must-dos and let the day
+            flow from there.
+          </p>
+        ) : (
+          <p>
+            You&apos;re{' '}
+            <span className="font-semibold text-sky-400">{todayPercentage}%</span> done with
+            today&apos;s tasks ({today.completedCount}/{today.totalCount}). Nice work—keep your
+            focus blocks honest and kind to yourself.
+          </p>
+        )}
+      </div>
 
       <div className="space-y-1.5">
         {stats.days.map((day) => {

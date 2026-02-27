@@ -14,6 +14,7 @@ import { DayHeader } from './DayHeader'
 import { SectionColumn } from './SectionColumn'
 import { WeeklyOverview } from './WeeklyOverview'
 import { DeepWorkTimer } from '../timer/DeepWorkTimer'
+import { MotivationCard } from '../timer/MotivationCard'
 
 function formatDateLabel(isoDay: string): string {
   const [year, month, day] = isoDay.split('-').map((part) => Number(part))
@@ -146,6 +147,7 @@ export function DayPlanner() {
         <div className="space-y-3 lg:sticky lg:top-20">
           <WeeklyOverview state={appState as AppState} referenceDay={selectedDay} />
           <DeepWorkTimer />
+          <MotivationCard />
         </div>
       </div>
     </div>
