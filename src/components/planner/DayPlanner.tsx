@@ -32,6 +32,16 @@ function createTaskId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
+/** Reorder array: move item at fromIndex to toIndex (0 = top). */
+function reorderTasks<T>(arr: T[], fromIndex: number, toIndex: number): T[] {
+  if (fromIndex === toIndex) return arr
+  const copy = [...arr]
+  const [removed] = copy.splice(fromIndex, 1)
+  const insertIdx = fromIndex < toIndex ? toIndex - 1 : toIndex
+  copy.splice(insertIdx, 0, removed)
+  return copy
+}
+
 export function DayPlanner() {
   const [appState, updateAppState] = usePersistentState()
   const [selectedDay, setSelectedDay] = useState<string>(todayIso)
@@ -103,6 +113,26 @@ export function DayPlanner() {
     })
   }
 
+  const handleReorderTask = (sectionId: TaskSectionId, fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex) return
+    updateAppState((prev) => {
+      const existingDay = getOrCreateDay(prev, selectedDay)
+      const sectionTasks = existingDay.tasks.filter((t) => t.sectionId === sectionId)
+      const reordered = reorderTasks(sectionTasks, fromIndex, toIndex)
+      let j = 0
+      const nextTasks = existingDay.tasks.map((t) =>
+        t.sectionId === sectionId ? reordered[j++]! : t,
+      )
+      return {
+        ...prev,
+        days: {
+          ...prev.days,
+          [selectedDay]: { ...existingDay, tasks: nextTasks },
+        },
+      }
+    })
+  }
+
   const tasksBySection: Record<TaskSectionId, Task[]> = useMemo(() => {
     const grouped: Record<TaskSectionId, Task[]> = {
       mustDo: [],
@@ -141,6 +171,7 @@ export function DayPlanner() {
               onAddTask={(title) => handleAddTask(section.id, title)}
               onToggleTask={(taskId) => handleToggleTask(taskId)}
               onDeleteTask={(taskId) => handleDeleteTask(taskId)}
+              onReorder={(fromIndex, toIndex) => handleReorderTask(section.id, fromIndex, toIndex)}
             />
           ))}
         </div>

@@ -2,8 +2,10 @@
  * components/planner/SectionColumn.tsx
  *
  * Renders a single section (e.g. Morning routine, High Priority) with its tasks.
+ * Manages drag state for reordering within the section.
  */
 
+import { useState } from 'react'
 import type { Task, TaskSection } from '../../domain/types'
 import { AddTaskInput } from './AddTaskInput'
 import { TaskItem } from './TaskItem'
@@ -14,7 +16,10 @@ interface SectionColumnProps {
   onAddTask: (title: string) => void
   onToggleTask: (taskId: string) => void
   onDeleteTask: (taskId: string) => void
+  onReorder: (fromIndex: number, toIndex: number) => void
 }
+
+type DropPosition = 'above' | 'below'
 
 export function SectionColumn({
   section,
@@ -22,7 +27,30 @@ export function SectionColumn({
   onAddTask,
   onToggleTask,
   onDeleteTask,
+  onReorder,
 }: SectionColumnProps) {
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
+  const [dropTarget, setDropTarget] = useState<{ index: number; position: DropPosition } | null>(
+    null,
+  )
+
+  const handleDragStart = (index: number) => setDraggedIndex(index)
+  const handleDragOver = (index: number, position: DropPosition) =>
+    setDropTarget({ index, position })
+  const handleDragLeave = () => setDropTarget(null)
+  const handleDrop = () => {
+    if (draggedIndex == null || !dropTarget) return
+    const toIndex =
+      dropTarget.position === 'above' ? dropTarget.index : dropTarget.index + 1
+    if (draggedIndex !== toIndex) onReorder(draggedIndex, toIndex)
+    setDraggedIndex(null)
+    setDropTarget(null)
+  }
+  const handleDragEnd = () => {
+    setDraggedIndex(null)
+    setDropTarget(null)
+  }
+
   return (
     <section className="rounded-lg border border-slate-800 bg-slate-900 p-3 sm:p-4">
       <header className="mb-2">
@@ -35,12 +63,21 @@ export function SectionColumn({
         {tasks.length === 0 ? (
           <p className="text-xs text-slate-400 italic">No tasks yet.</p>
         ) : (
-          tasks.map((task) => (
+          tasks.map((task, index) => (
             <TaskItem
               key={task.id}
               task={task}
+              index={index}
+              isDragging={draggedIndex === index}
+              showDropAbove={dropTarget?.index === index && dropTarget?.position === 'above'}
+              showDropBelow={dropTarget?.index === index && dropTarget?.position === 'below'}
               onToggle={() => onToggleTask(task.id)}
               onDelete={() => onDeleteTask(task.id)}
+              onDragStart={() => handleDragStart(index)}
+              onDragOver={(position) => handleDragOver(index, position)}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              onDragEnd={handleDragEnd}
             />
           ))
         )}
