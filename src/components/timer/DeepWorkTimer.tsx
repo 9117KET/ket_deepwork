@@ -6,7 +6,8 @@
  * focused block quickly.
  */
 
-import { FormEvent, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import type { FormEvent } from 'react'
 
 interface DeepWorkTimerProps {
   onSessionComplete?: (label: string, durationMinutes: number) => void

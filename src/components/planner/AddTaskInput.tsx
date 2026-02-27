@@ -4,7 +4,8 @@
  * Compact input used to add a new task within a section.
  */
 
-import { FormEvent, useState } from 'react'
+import { useState } from 'react'
+import type { FormEvent } from 'react'
 
 interface AddTaskInputProps {
   placeholder?: string
