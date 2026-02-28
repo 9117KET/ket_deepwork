@@ -12,7 +12,6 @@ const DURATION_OPTIONS = [5, 10, 15, 20, 25, 30, 45, 60, 90, 120]
 
 interface TaskItemProps {
   task: Task
-  index?: number
   isDragging?: boolean
   showDropAbove?: boolean
   showDropBelow?: boolean
@@ -45,9 +44,50 @@ function GripIcon() {
   )
 }
 
+/** French/24h time: 1 PM = 13, 2 PM = 14, etc. Always shows 00–23 for hour. */
+function Time24({ value, onChange }: { value: string | undefined; onChange: (v: string | undefined) => void }) {
+  const [h, m] = (value ?? '').split(':').map((n) => parseInt(n, 10))
+  const hour = Number.isInteger(h) && h >= 0 && h <= 23 ? h : null
+  const minute = Number.isInteger(m) && m >= 0 && m <= 59 ? m : 0
+
+  const setTime = (newH: number | null, newM: number) => {
+    if (newH == null) {
+      onChange(undefined)
+      return
+    }
+    onChange(normalizeHhmm(`${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}`))
+  }
+
+  return (
+    <span className="flex items-center gap-0.5">
+      <select
+        value={hour ?? ''}
+        onChange={(e) => setTime(e.target.value === '' ? null : Number(e.target.value), minute)}
+        className="w-11 rounded border border-slate-700 bg-slate-800 px-1 py-0.5 text-xs text-slate-200"
+        title="Heure (24h)"
+      >
+        <option value="">—</option>
+        {Array.from({ length: 24 }, (_, i) => (
+          <option key={i} value={i}>{String(i).padStart(2, '0')}</option>
+        ))}
+      </select>
+      <span className="text-slate-500">h</span>
+      <select
+        value={minute}
+        onChange={(e) => setTime(hour, Number(e.target.value))}
+        className="w-11 rounded border border-slate-700 bg-slate-800 px-1 py-0.5 text-xs text-slate-200"
+        title="Minute"
+      >
+        {Array.from({ length: 60 }, (_, i) => (
+          <option key={i} value={i}>{String(i).padStart(2, '0')}</option>
+        ))}
+      </select>
+    </span>
+  )
+}
+
 export function TaskItem({
   task,
-  index: _index = 0,
   isDragging = false,
   showDropAbove = false,
   showDropBelow = false,
@@ -141,18 +181,10 @@ export function TaskItem({
         {canEditTime && (
           <span className="flex shrink-0 items-center gap-1.5">
             <label className="flex items-center gap-1 text-xs text-slate-400">
-              <span className="sr-only">Start time</span>
-              <input
-                type="time"
-                value={task.scheduledAt ?? ''}
-                onChange={(e) => {
-                  const v = e.target.value
-                  onUpdateTask?.({
-                    scheduledAt: v ? normalizeHhmm(v) : undefined,
-                  })
-                }}
-                className="w-24 rounded border border-slate-700 bg-slate-800 px-1.5 py-0.5 text-xs text-slate-200 [color-scheme:dark]"
-                title="Start time (local)"
+              <span className="sr-only">Heure (24h, ex. 13h00 = 1 PM)</span>
+              <Time24
+                value={task.scheduledAt}
+                onChange={(v) => onUpdateTask?.({ scheduledAt: v })}
               />
             </label>
             <label className="flex items-center gap-1 text-xs text-slate-400">

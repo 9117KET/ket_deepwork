@@ -71,7 +71,6 @@ export function SectionColumn({
             <TaskItem
               key={task.id}
               task={task}
-              index={index}
               isDragging={draggedIndex === index}
               showDropAbove={dropTarget?.index === index && dropTarget?.position === 'above'}
               showDropBelow={dropTarget?.index === index && dropTarget?.position === 'below'}
