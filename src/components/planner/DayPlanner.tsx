@@ -240,6 +240,8 @@ export function DayPlanner() {
     const now = new Date()
     const currentMinutes = now.getHours() * 60 + now.getMinutes()
     const set = new Set<string>()
+
+    // 1) Highlight all tasks currently in their time window
     for (const task of day.tasks) {
       if (!task.scheduledAt || task.isDone) continue
       const normalized = normalizeHhmm(task.scheduledAt)
@@ -249,6 +251,25 @@ export function DayPlanner() {
       const endMinutes = startMinutes + durationMins
       if (currentMinutes >= startMinutes && currentMinutes < endMinutes) set.add(task.id)
     }
+
+    // 2) If no task is in-window, highlight the next upcoming one so completing a task
+    //    immediately shows the next (rewarding flow)
+    if (set.size === 0) {
+      let nextStart = Infinity
+      let nextId: string | null = null
+      for (const task of day.tasks) {
+        if (!task.scheduledAt || task.isDone) continue
+        const normalized = normalizeHhmm(task.scheduledAt)
+        const [h, m] = normalized.split(':').map(Number)
+        const startMinutes = h * 60 + m
+        if (startMinutes >= currentMinutes && startMinutes < nextStart) {
+          nextStart = startMinutes
+          nextId = task.id
+        }
+      }
+      if (nextId) set.add(nextId)
+    }
+
     return set
   }, [appState, tick])
 
