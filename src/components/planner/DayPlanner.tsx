@@ -5,7 +5,7 @@
  * This component ties together storage + domain logic + UI sections.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AppState } from '../../domain/types'
 import { FIXED_SECTIONS, type TaskSectionId, type Task } from '../../domain/types'
 import { addDays, todayIso, sameWeekdayLastWeek, normalizeHhmm } from '../../domain/dateUtils'
@@ -252,29 +252,65 @@ export function DayPlanner() {
     return set
   }, [appState, tick])
 
-  const lastBeepedRef = useRef<string | null>(null)
-  useEffect(() => {
-    if (taskIdsDueNow.size === 0) return
-    const now = new Date()
-    const minuteKey = `${now.getHours()}:${now.getMinutes()}`
-    if (lastBeepedRef.current === minuteKey) return
-    lastBeepedRef.current = minuteKey
+  const lastBeepedRef = useRef<Record<string, { start?: boolean; mid?: boolean; end?: boolean }>>(
+    {},
+  )
+
+  const playBeep = useCallback(() => {
     try {
-      const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
+      const ctx = new (window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
       const osc = ctx.createOscillator()
       const gain = ctx.createGain()
       osc.connect(gain)
       gain.connect(ctx.destination)
       osc.frequency.value = 880
       osc.type = 'sine'
-      gain.gain.setValueAtTime(0.15, ctx.currentTime)
-      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3)
+      gain.gain.setValueAtTime(0.12, ctx.currentTime)
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2)
       osc.start(ctx.currentTime)
-      osc.stop(ctx.currentTime + 0.3)
+      osc.stop(ctx.currentTime + 0.2)
     } catch {
       // ignore
     }
-  }, [taskIdsDueNow])
+  }, [])
+
+  useEffect(() => {
+    void tick
+    const today = todayIso()
+    const day = getOrCreateDay(appState, today)
+    const now = new Date()
+    const currentMinutes = now.getHours() * 60 + now.getMinutes()
+
+    for (const task of day.tasks) {
+      if (!task.scheduledAt || task.isDone) continue
+      const normalized = normalizeHhmm(task.scheduledAt)
+      const [h, m] = normalized.split(':').map(Number)
+      const startMinutes = h * 60 + m
+      const durationMins = task.durationMinutes ?? 1
+      const midMinutes = startMinutes + Math.floor(durationMins / 2)
+      const endMinutes = startMinutes + durationMins
+
+      const key = `${task.id}-${today}`
+      const state = lastBeepedRef.current[key] ?? {}
+
+      if (currentMinutes >= endMinutes && !state.end) {
+        lastBeepedRef.current[key] = { ...state, end: true }
+        playBeep()
+        return
+      }
+      if (currentMinutes >= midMinutes && !state.mid) {
+        lastBeepedRef.current[key] = { ...state, mid: true }
+        playBeep()
+        return
+      }
+      if (currentMinutes >= startMinutes && !state.start) {
+        lastBeepedRef.current[key] = { ...state, start: true }
+        playBeep()
+        return
+      }
+    }
+  }, [appState, tick, playBeep])
 
   return (
     <div className="space-y-4 sm:space-y-6">
