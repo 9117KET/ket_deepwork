@@ -238,12 +238,16 @@ export function DayPlanner() {
     const today = todayIso()
     const day = getOrCreateDay(appState, today)
     const now = new Date()
-    const hhmm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+    const currentMinutes = now.getHours() * 60 + now.getMinutes()
     const set = new Set<string>()
     for (const task of day.tasks) {
       if (!task.scheduledAt || task.isDone) continue
       const normalized = normalizeHhmm(task.scheduledAt)
-      if (normalized === hhmm) set.add(task.id)
+      const [h, m] = normalized.split(':').map(Number)
+      const startMinutes = h * 60 + m
+      const durationMins = task.durationMinutes ?? 1
+      const endMinutes = startMinutes + durationMins
+      if (currentMinutes >= startMinutes && currentMinutes < endMinutes) set.add(task.id)
     }
     return set
   }, [appState, tick])
