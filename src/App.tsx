@@ -8,10 +8,8 @@
 import { useEffect, useState } from 'react'
 import { DayPlanner } from './components/planner/DayPlanner'
 import { HelpModal } from './components/HelpModal'
-import {
-  OnboardingTour,
-  getTourCompleted,
-} from './components/OnboardingTour'
+import { OnboardingTour } from './components/OnboardingTour'
+import { getTourCompleted } from './utils/tourStorage'
 
 function App() {
   const [helpOpen, setHelpOpen] = useState(false)

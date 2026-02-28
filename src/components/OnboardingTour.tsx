@@ -2,22 +2,11 @@
  * components/OnboardingTour.tsx
  *
  * Interactive step-by-step onboarding: spotlight on UI elements and short copy.
- * Completion is stored in localStorage so we can auto-show only on first visit.
+ * Completion is stored in localStorage (see utils/tourStorage).
  */
 
-import { useCallback, useEffect, useState } from 'react'
-
-const STORAGE_KEY = 'ket_deepwork_tour_done'
-
-export function getTourCompleted(): boolean {
-  if (typeof window === 'undefined') return true
-  return window.localStorage.getItem(STORAGE_KEY) === '1'
-}
-
-export function setTourCompleted(): void {
-  if (typeof window === 'undefined') return
-  window.localStorage.setItem(STORAGE_KEY, '1')
-}
+import { useEffect, useState } from 'react'
+import { setTourCompleted } from '../utils/tourStorage'
 
 export interface TourStep {
   id: string
@@ -93,27 +82,18 @@ export function OnboardingTour({ isActive, onComplete }: OnboardingTourProps) {
   const isFirst = stepIndex === 0
   const isLast = stepIndex === TOUR_STEPS.length - 1
 
-  const updateSpotlight = useCallback(() => {
-    if (!step) return
-    setSpotlight(getTargetRect(step.target))
-  }, [step?.id, step?.target])
-
   useEffect(() => {
-    if (!isActive) return
-    updateSpotlight()
-    window.addEventListener('resize', updateSpotlight)
-    window.addEventListener('scroll', updateSpotlight, true)
+    if (!isActive || !step) return
+    const update = () => setSpotlight(getTargetRect(step.target))
+    const rafId = requestAnimationFrame(update)
+    window.addEventListener('resize', update)
+    window.addEventListener('scroll', update, true)
     return () => {
-      window.removeEventListener('resize', updateSpotlight)
-      window.removeEventListener('scroll', updateSpotlight, true)
+      cancelAnimationFrame(rafId)
+      window.removeEventListener('resize', update)
+      window.removeEventListener('scroll', update, true)
     }
-  }, [isActive, updateSpotlight])
-
-  useEffect(() => {
-    if (!isActive) return
-    const t = setTimeout(updateSpotlight, 100)
-    return () => clearTimeout(t)
-  }, [isActive, stepIndex, updateSpotlight])
+  }, [isActive, step])
 
   const handleNext = () => {
     if (isLast) {
@@ -167,7 +147,7 @@ export function OnboardingTour({ isActive, onComplete }: OnboardingTourProps) {
           spotlight
             ? {
                 position: 'fixed',
-                top: Math.min(spotlight.bottom + 24, window.innerHeight - 280),
+                top: Math.min(spotlight.top + spotlight.height + 24, window.innerHeight - 280),
                 left: '50%',
                 transform: 'translateX(-50%)',
               }
