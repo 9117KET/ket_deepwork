@@ -8,6 +8,8 @@
 import type { Task } from '../../domain/types'
 import { normalizeHhmm } from '../../domain/dateUtils'
 
+const DURATION_OPTIONS = [5, 10, 15, 20, 25, 30, 45, 60, 90, 120]
+
 interface TaskItemProps {
   task: Task
   index?: number
@@ -166,15 +168,14 @@ export function TaskItem({
               >
                 <option value="">—</option>
                 {task.durationMinutes != null &&
-                  ![15, 30, 45, 60, 90, 120].includes(task.durationMinutes) && (
+                  !DURATION_OPTIONS.includes(task.durationMinutes) && (
                     <option value={task.durationMinutes}>{task.durationMinutes}m</option>
                   )}
-                <option value={15}>15m</option>
-                <option value={30}>30m</option>
-                <option value={45}>45m</option>
-                <option value={60}>60m</option>
-                <option value={90}>90m</option>
-                <option value={120}>120m</option>
+                {DURATION_OPTIONS.map((m) => (
+                  <option key={m} value={m}>
+                    {m}m
+                  </option>
+                ))}
               </select>
             </label>
           </span>

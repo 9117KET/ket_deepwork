@@ -274,7 +274,10 @@ export function DayPlanner() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      <div className="sticky top-0 z-20 border-b border-slate-800 bg-slate-950/95 pb-3 backdrop-blur-sm">
+      <div
+        className="sticky top-0 z-20 border-b border-slate-800 bg-slate-950/95 pb-3 backdrop-blur-sm"
+        data-tour="date-nav"
+      >
         <DayHeader
           dateLabel={formatDateLabel(selectedDay)}
           onPrevDay={() => setSelectedDay((current) => addDays(current, -1))}
@@ -283,7 +286,7 @@ export function DayPlanner() {
         />
         {/* Last week same day has priority; copy from yesterday only when no last-weekday data */}
         {lastWeekdayState.tasks.length > 0 ? (
-          <div className="mt-2 text-xs">
+          <div className="mt-2 text-xs" data-tour="fill-day">
             <button
               type="button"
               onClick={handleFillFromLastWeekday}
@@ -293,7 +296,7 @@ export function DayPlanner() {
             </button>
           </div>
         ) : prevDayState.tasks.length > 0 ? (
-          <div className="mt-2 text-xs">
+          <div className="mt-2 text-xs" data-tour="fill-day">
             <button
               type="button"
               onClick={handleCopyFromPreviousDay}
@@ -306,7 +309,7 @@ export function DayPlanner() {
       </div>
 
       <div className="grid gap-3 lg:grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)] lg:items-start">
-        <div className="space-y-3">
+        <div className="space-y-3" data-tour="tasks-section">
           {FIXED_SECTIONS.map((section) => (
             <SectionColumn
               key={section.id}
@@ -321,7 +324,7 @@ export function DayPlanner() {
             />
           ))}
         </div>
-        <div className="space-y-3 lg:sticky lg:top-20">
+        <div className="space-y-3 lg:sticky lg:top-20" data-tour="sidebar">
           <WeeklyOverview state={appState as AppState} referenceDay={selectedDay} />
           <DeepWorkTimer />
           <MotivationCard />
