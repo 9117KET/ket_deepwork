@@ -55,3 +55,22 @@ export function weekForDay(isoDay: string): WeekRange {
   }
 }
 
+/**
+ * Same weekday in the previous week (e.g. last Thursday from this Thursday).
+ * Used to replicate a weekly template.
+ */
+export function sameWeekdayLastWeek(isoDay: string): string {
+  return addDays(isoDay, -7)
+}
+
+/**
+ * Normalize time string to HH:mm for storage and comparison.
+ * Handles "9:0" -> "09:00" so persistence and due-now checks are consistent.
+ */
+export function normalizeHhmm(value: string): string {
+  const parts = value.trim().split(':').map((p) => p.replace(/\D/g, ''))
+  const h = Math.min(23, Math.max(0, parseInt(parts[0] ?? '0', 10) || 0))
+  const m = Math.min(59, Math.max(0, parseInt(parts[1] ?? '0', 10) || 0))
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+}
+

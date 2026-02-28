@@ -25,6 +25,10 @@ export interface Task {
   sectionId: TaskSectionId
   date: string // ISO date string: YYYY-MM-DD in local time
   isDone: boolean
+  /** Time of day to start/remind (local), e.g. "09:00". */
+  scheduledAt?: string
+  /** Planned duration in minutes (for display / future timer link). */
+  durationMinutes?: number
 }
 
 export interface DeepWorkSession {

@@ -17,6 +17,8 @@ interface SectionColumnProps {
   onToggleTask: (taskId: string) => void
   onDeleteTask: (taskId: string) => void
   onReorder: (fromIndex: number, toIndex: number) => void
+  onUpdateTask: (taskId: string, patch: { scheduledAt?: string; durationMinutes?: number }) => void
+  taskIdsDueNow: Set<string>
 }
 
 type DropPosition = 'above' | 'below'
@@ -28,6 +30,8 @@ export function SectionColumn({
   onToggleTask,
   onDeleteTask,
   onReorder,
+  onUpdateTask,
+  taskIdsDueNow,
 }: SectionColumnProps) {
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
   const [dropTarget, setDropTarget] = useState<{ index: number; position: DropPosition } | null>(
@@ -71,8 +75,10 @@ export function SectionColumn({
               isDragging={draggedIndex === index}
               showDropAbove={dropTarget?.index === index && dropTarget?.position === 'above'}
               showDropBelow={dropTarget?.index === index && dropTarget?.position === 'below'}
+              isDueNow={taskIdsDueNow.has(task.id)}
               onToggle={() => onToggleTask(task.id)}
               onDelete={() => onDeleteTask(task.id)}
+              onUpdateTask={(patch) => onUpdateTask(task.id, patch)}
               onDragStart={() => handleDragStart(index)}
               onDragOver={(position) => handleDragOver(index, position)}
               onDragLeave={handleDragLeave}

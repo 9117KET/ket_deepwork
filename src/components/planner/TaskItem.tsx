@@ -6,6 +6,7 @@
  */
 
 import type { Task } from '../../domain/types'
+import { normalizeHhmm } from '../../domain/dateUtils'
 
 interface TaskItemProps {
   task: Task
@@ -13,8 +14,10 @@ interface TaskItemProps {
   isDragging?: boolean
   showDropAbove?: boolean
   showDropBelow?: boolean
+  isDueNow?: boolean
   onToggle: () => void
   onDelete: () => void
+  onUpdateTask?: (patch: { scheduledAt?: string; durationMinutes?: number }) => void
   onDragStart?: () => void
   onDragOver?: (position: 'above' | 'below') => void
   onDragLeave?: () => void
@@ -46,8 +49,10 @@ export function TaskItem({
   isDragging = false,
   showDropAbove = false,
   showDropBelow = false,
+  isDueNow = false,
   onToggle,
   onDelete,
+  onUpdateTask,
   onDragStart,
   onDragOver,
   onDragLeave,
@@ -60,6 +65,7 @@ export function TaskItem({
     task.isDone ? 'text-slate-400 line-through decoration-slate-500/60' : 'text-slate-100'
   }`
   const isReorderable = typeof onDragStart === 'function' && typeof onDrop === 'function'
+  const canEditTime = typeof onUpdateTask === 'function'
 
   const handleDragStart = (e: React.DragEvent) => {
     e.dataTransfer.effectAllowed = 'move'
@@ -91,7 +97,7 @@ export function TaskItem({
         />
       )}
       <div
-        className={`flex items-center gap-2 py-1.5 ${isDragging ? 'opacity-50' : ''}`}
+        className={`flex flex-wrap items-center gap-2 py-1.5 ${isDragging ? 'opacity-50' : ''} ${isDueNow ? 'rounded-md border border-amber-500/70 bg-amber-500/10' : ''}`}
         onDragOver={handleDragOver}
         onDragLeave={onDragLeave}
         onDrop={handleDrop}
@@ -109,12 +115,12 @@ export function TaskItem({
             <GripIcon />
           </div>
         ) : null}
-        <label className="flex flex-1 cursor-pointer items-center gap-2">
+        <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
           <input
             type="checkbox"
             checked={task.isDone}
             onChange={onToggle}
-            className="h-4 w-4 rounded border-slate-800 bg-slate-900 text-sky-400 focus:ring-sky-500"
+            className="h-4 w-4 shrink-0 rounded border-slate-800 bg-slate-900 text-sky-400 focus:ring-sky-500"
           />
           {isUrl ? (
             <a
@@ -127,13 +133,56 @@ export function TaskItem({
               {trimmedTitle}
             </a>
           ) : (
-            <span className={textClasses}>{task.title}</span>
+            <span className={`min-w-0 break-words ${textClasses}`}>{task.title}</span>
           )}
         </label>
+        {canEditTime && (
+          <span className="flex shrink-0 items-center gap-1.5">
+            <label className="flex items-center gap-1 text-xs text-slate-400">
+              <span className="sr-only">Start time</span>
+              <input
+                type="time"
+                value={task.scheduledAt ?? ''}
+                onChange={(e) => {
+                  const v = e.target.value
+                  onUpdateTask?.({
+                    scheduledAt: v ? normalizeHhmm(v) : undefined,
+                  })
+                }}
+                className="w-24 rounded border border-slate-700 bg-slate-800 px-1.5 py-0.5 text-xs text-slate-200 [color-scheme:dark]"
+                title="Start time (local)"
+              />
+            </label>
+            <label className="flex items-center gap-1 text-xs text-slate-400">
+              <span className="sr-only">Duration (minutes)</span>
+              <select
+                value={task.durationMinutes ?? ''}
+                onChange={(e) => {
+                  const v = e.target.value === '' ? undefined : Number(e.target.value)
+                  onUpdateTask?.({ durationMinutes: v })
+                }}
+                className="w-14 rounded border border-slate-700 bg-slate-800 px-1 py-0.5 text-xs text-slate-200"
+                title="Duration (minutes)"
+              >
+                <option value="">—</option>
+                {task.durationMinutes != null &&
+                  ![15, 30, 45, 60, 90, 120].includes(task.durationMinutes) && (
+                    <option value={task.durationMinutes}>{task.durationMinutes}m</option>
+                  )}
+                <option value={15}>15m</option>
+                <option value={30}>30m</option>
+                <option value={45}>45m</option>
+                <option value={60}>60m</option>
+                <option value={90}>90m</option>
+                <option value={120}>120m</option>
+              </select>
+            </label>
+          </span>
+        )}
         <button
           type="button"
           onClick={onDelete}
-          className="rounded-md px-1.5 py-0.5 text-xs text-slate-400 hover:bg-slate-900 hover:text-sky-400"
+          className="shrink-0 rounded-md px-1.5 py-0.5 text-xs text-slate-400 hover:bg-slate-900 hover:text-sky-400"
         >
           ✕
         </button>
