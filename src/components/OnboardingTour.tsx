@@ -20,7 +20,7 @@ const TOUR_STEPS: TourStep[] = [
   {
     id: 'welcome',
     target: null,
-    title: 'Welcome to your Deepwork Planner',
+    title: 'Welcome to Deepblock',
     body: 'This short tour will show you the main areas. You can skip anytime or go back a step.',
   },
   {

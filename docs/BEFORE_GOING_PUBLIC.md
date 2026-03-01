@@ -8,7 +8,7 @@ Use this list before you make the repo public or announce it.
 - [ ] **README** – Describes the project, how to run it, and links to CONTRIBUTING and CoC.
 - [ ] **No secrets** – No API keys, passwords, or `.env` with real values in the repo. `.gitignore` includes `.env` and `.env.*.local`.
 - [ ] **Build passes** – Run `npm run build` and `npm run lint` locally; fix any errors.
-- [ ] **Copyright in LICENSE** – Replace "KET (ket_deepwork contributors)" in `LICENSE` with your name or preferred attribution.
+- [ ] **Copyright in LICENSE** – Confirm attribution in `LICENSE` (e.g. "Deepblock contributors" or your name).
 
 ## Recommended
 

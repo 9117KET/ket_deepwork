@@ -1,7 +1,7 @@
 /**
  * App.tsx
  *
- * Root application shell for the KET Deepwork planner.
+ * Root application shell for the Deepblock planner.
  * Responsible for high-level layout and delegating to the planner page.
  */
 
@@ -27,7 +27,7 @@ function App() {
         <header className="mb-6 sm:mb-8 flex flex-col gap-2 sm:flex-row sm:items-baseline sm:justify-between">
           <div>
             <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">
-              2026 Deepwork Planner
+              Deepblock
             </h1>
             <p className="text-sm text-slate-400">
               Daily focus hub for job applications, German, and deep work.

@@ -1,4 +1,4 @@
-﻿# KET Deepwork Planner
+# Deepblock
 
 A daily deep-work planner with time-blocked tasks, weekly overview, and focus timer. Built for job applications, language practice, and focused work.
 
@@ -19,8 +19,8 @@ A daily deep-work planner with time-blocked tasks, weekly overview, and focus ti
 ## Quick start
 
 ```
-git clone https://github.com/9117KET/ket_deepwork.git
-cd ket_deepwork
+git clone https://github.com/9117KET/deepblock.git
+cd deepblock
 npm install
 npm run dev
 ```

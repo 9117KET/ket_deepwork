@@ -1,7 +1,7 @@
 /**
  * domain/types.ts
  *
- * Core domain types for the KET Deepwork planner.
+ * Core domain types for the Deepblock planner.
  * This keeps UI components simple and enforces a clear data model.
  */
 

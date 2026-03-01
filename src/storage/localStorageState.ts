@@ -10,7 +10,7 @@ import { useEffect, useState } from 'react'
 import type { AppState, DayState } from '../domain/types'
 import { todayIso } from '../domain/dateUtils'
 
-const STORAGE_KEY = 'ket_deepwork_state_v1'
+const STORAGE_KEY = 'deepblock_state_v1'
 const SCHEMA_VERSION = 1
 
 interface PersistedStateV1 {

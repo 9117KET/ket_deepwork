@@ -1,4 +1,4 @@
-# Contributing to KET Deepwork Planner
+# Contributing to Deepblock
 
 Thanks for considering contributing. Here’s how to get started.
 
@@ -11,8 +11,8 @@ Thanks for considering contributing. Here’s how to get started.
 ## Setup
 
 ```bash
-git clone https://github.com/9117KET/ket_deepwork.git
-cd ket_deepwork
+git clone https://github.com/9117KET/deepblock.git
+cd deepblock
 npm install
 npm run dev
 ```
