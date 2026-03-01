@@ -11,6 +11,8 @@ import type { AppState, DayState } from '../domain/types'
 import { todayIso } from '../domain/dateUtils'
 
 const STORAGE_KEY = 'deepblock_state_v1'
+/** Legacy key from before the Deepblock rename; used once to migrate existing data. */
+const LEGACY_STORAGE_KEY = 'ket_deepwork_state_v1'
 const SCHEMA_VERSION = 1
 
 interface PersistedStateV1 {
@@ -54,7 +56,31 @@ function readInitialState(): AppState {
   }
   const raw = window.localStorage.getItem(STORAGE_KEY)
   const parsed = safeParse(raw)
-  return migrate(parsed)
+  let state = migrate(parsed)
+
+  // One-time migration: if new key is empty and legacy key has data, copy it over.
+  const hasDays = state.days && Object.keys(state.days).length > 0
+  if (!hasDays) {
+    const legacyRaw = window.localStorage.getItem(LEGACY_STORAGE_KEY)
+    const legacyParsed = safeParse(legacyRaw)
+    const legacyState = migrate(legacyParsed)
+    const legacyHasDays = legacyState.days && Object.keys(legacyState.days).length > 0
+    if (legacyHasDays) {
+      state = legacyState
+      const wrapped: PersistedStateV1 = {
+        version: SCHEMA_VERSION,
+        state: legacyState,
+      }
+      try {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(wrapped))
+        window.localStorage.removeItem(LEGACY_STORAGE_KEY)
+      } catch {
+        // If write fails, we still return legacy state; next load will retry migration.
+      }
+    }
+  }
+
+  return state
 }
 
 function writeState(next: AppState) {
