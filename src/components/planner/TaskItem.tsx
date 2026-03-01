@@ -1,10 +1,12 @@
 /**
  * components/planner/TaskItem.tsx
  *
- * Single task row with checkbox, optional drag handle for reorder, and delete.
- * When drag props are provided, the row is a drop target and shows a grip to drag.
+ * Single task row with checkbox, optional drag handle for reorder.
+ * Right-click on grip opens context menu: Edit, Add task below, Add subtask, Delete.
+ * Delete is only via this menu (no ✕ button) to avoid accidental removal.
  */
 
+import { useEffect, useRef, useState } from 'react'
 import type { Task } from '../../domain/types'
 import { normalizeHhmm } from '../../domain/dateUtils'
 
@@ -12,13 +14,16 @@ const DURATION_OPTIONS = [5, 10, 15, 20, 25, 30, 45, 60, 90, 120]
 
 interface TaskItemProps {
   task: Task
+  isSubtask?: boolean
   isDragging?: boolean
   showDropAbove?: boolean
   showDropBelow?: boolean
   isDueNow?: boolean
   onToggle: () => void
   onDelete: () => void
-  onUpdateTask?: (patch: { scheduledAt?: string; durationMinutes?: number }) => void
+  onAddTaskBelow?: () => void
+  onAddSubtask?: () => void
+  onUpdateTask?: (patch: { scheduledAt?: string; durationMinutes?: number; title?: string }) => void
   onDragStart?: () => void
   onDragOver?: (position: 'above' | 'below') => void
   onDragLeave?: () => void
@@ -88,12 +93,15 @@ function Time24({ value, onChange }: { value: string | undefined; onChange: (v: 
 
 export function TaskItem({
   task,
+  isSubtask = false,
   isDragging = false,
   showDropAbove = false,
   showDropBelow = false,
   isDueNow = false,
   onToggle,
   onDelete,
+  onAddTaskBelow,
+  onAddSubtask,
   onUpdateTask,
   onDragStart,
   onDragOver,
@@ -101,6 +109,21 @@ export function TaskItem({
   onDrop,
   onDragEnd,
 }: TaskItemProps) {
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
+  const gripRef = useRef<HTMLDivElement | null>(null)
+  const menuRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!menu) return
+    const close = (e: MouseEvent) => {
+      const target = e.target as Node
+      if (gripRef.current?.contains(target) || menuRef.current?.contains(target)) return
+      setMenu(null)
+    }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [menu])
+
   const trimmedTitle = task.title.trim()
   const isUrl = /^https?:\/\/\S+$/i.test(trimmedTitle)
   const textClasses = `text-sm ${
@@ -108,11 +131,21 @@ export function TaskItem({
   }`
   const isReorderable = typeof onDragStart === 'function' && typeof onDrop === 'function'
   const canEditTime = typeof onUpdateTask === 'function'
+  const showContextMenu = Boolean(
+    onUpdateTask ?? onAddTaskBelow ?? onAddSubtask ?? onDelete,
+  )
 
   const handleDragStart = (e: React.DragEvent) => {
     e.dataTransfer.effectAllowed = 'move'
     e.dataTransfer.setData('text/plain', '')
     onDragStart?.()
+  }
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    if (!showContextMenu) return
+    e.preventDefault()
+    e.stopPropagation()
+    setMenu({ x: e.clientX, y: e.clientY })
   }
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -130,8 +163,13 @@ export function TaskItem({
     onDrop?.()
   }
 
+  const closeAnd = (fn: (() => void) | undefined) => {
+    setMenu(null)
+    fn?.()
+  }
+
   return (
-    <div className="relative">
+    <div className={`relative ${isSubtask ? 'pl-6' : ''}`}>
       {showDropAbove && (
         <div
           className="absolute left-0 right-0 top-0 h-0.5 rounded-full bg-sky-500"
@@ -146,13 +184,15 @@ export function TaskItem({
       >
         {isReorderable ? (
           <div
+            ref={gripRef}
             role="button"
             tabIndex={0}
             draggable
             onDragStart={handleDragStart}
             onDragEnd={onDragEnd}
+            onContextMenu={handleContextMenu}
             className="cursor-grab touch-none rounded p-0.5 text-slate-500 hover:bg-slate-800 hover:text-slate-300 active:cursor-grabbing"
-            aria-label="Drag to reorder"
+            aria-label="Drag to reorder; right-click for menu"
           >
             <GripIcon />
           </div>
@@ -212,14 +252,63 @@ export function TaskItem({
             </label>
           </span>
         )}
-        <button
-          type="button"
-          onClick={onDelete}
-          className="shrink-0 rounded-md px-1.5 py-0.5 text-xs text-slate-400 hover:bg-slate-900 hover:text-sky-400"
-        >
-          ✕
-        </button>
       </div>
+      {menu && (
+        <div
+          ref={menuRef}
+          className="fixed z-50 min-w-[10rem] rounded-md border border-slate-700 bg-slate-800 py-1 shadow-lg"
+          style={{ left: menu.x, top: menu.y }}
+          role="menu"
+        >
+          {onUpdateTask && (
+            <button
+              type="button"
+              role="menuitem"
+              className="w-full px-3 py-1.5 text-left text-sm text-slate-200 hover:bg-slate-700"
+              onClick={() => {
+                const newTitle = window.prompt('Edit task title:', task.title)
+                if (newTitle != null && newTitle.trim() !== '') {
+                  closeAnd(() => onUpdateTask?.({ title: newTitle.trim() }))
+                } else {
+                  setMenu(null)
+                }
+              }}
+            >
+              Edit
+            </button>
+          )}
+          {onAddTaskBelow && (
+            <button
+              type="button"
+              role="menuitem"
+              className="w-full px-3 py-1.5 text-left text-sm text-slate-200 hover:bg-slate-700"
+              onClick={() => closeAnd(onAddTaskBelow)}
+            >
+              Add task below
+            </button>
+          )}
+          {onAddSubtask && (
+            <button
+              type="button"
+              role="menuitem"
+              className="w-full px-3 py-1.5 text-left text-sm text-slate-200 hover:bg-slate-700"
+              onClick={() => closeAnd(onAddSubtask)}
+            >
+              Add subtask
+            </button>
+          )}
+          {onDelete && (
+            <button
+              type="button"
+              role="menuitem"
+              className="w-full px-3 py-1.5 text-left text-sm text-red-300 hover:bg-slate-700"
+              onClick={() => closeAnd(onDelete)}
+            >
+              Delete
+            </button>
+          )}
+        </div>
+      )}
       {showDropBelow && (
         <div
           className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-sky-500"

@@ -16,7 +16,9 @@ function App() {
   const [tourActive, setTourActive] = useState(false)
 
   useEffect(() => {
-    if (!getTourCompleted()) setTourActive(true)
+    queueMicrotask(() => {
+      if (!getTourCompleted()) setTourActive(true)
+    })
   }, [])
 
   return (

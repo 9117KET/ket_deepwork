@@ -14,10 +14,15 @@ interface SectionColumnProps {
   section: TaskSection
   tasks: Task[]
   onAddTask: (title: string) => void
+  onAddTaskBelow?: (afterTaskId: string) => void
+  onAddSubtask?: (parentTaskId: string) => void
   onToggleTask: (taskId: string) => void
   onDeleteTask: (taskId: string) => void
   onReorder: (fromIndex: number, toIndex: number) => void
-  onUpdateTask: (taskId: string, patch: { scheduledAt?: string; durationMinutes?: number }) => void
+  onUpdateTask: (
+    taskId: string,
+    patch: { scheduledAt?: string; durationMinutes?: number; title?: string },
+  ) => void
   taskIdsDueNow: Set<string>
 }
 
@@ -27,6 +32,8 @@ export function SectionColumn({
   section,
   tasks,
   onAddTask,
+  onAddTaskBelow,
+  onAddSubtask,
   onToggleTask,
   onDeleteTask,
   onReorder,
@@ -71,12 +78,15 @@ export function SectionColumn({
             <TaskItem
               key={task.id}
               task={task}
+              isSubtask={Boolean(task.parentId)}
               isDragging={draggedIndex === index}
               showDropAbove={dropTarget?.index === index && dropTarget?.position === 'above'}
               showDropBelow={dropTarget?.index === index && dropTarget?.position === 'below'}
               isDueNow={taskIdsDueNow.has(task.id)}
               onToggle={() => onToggleTask(task.id)}
               onDelete={() => onDeleteTask(task.id)}
+              onAddTaskBelow={onAddTaskBelow ? () => onAddTaskBelow(task.id) : undefined}
+              onAddSubtask={onAddSubtask ? () => onAddSubtask(task.id) : undefined}
               onUpdateTask={(patch) => onUpdateTask(task.id, patch)}
               onDragStart={() => handleDragStart(index)}
               onDragOver={(position) => handleDragOver(index, position)}

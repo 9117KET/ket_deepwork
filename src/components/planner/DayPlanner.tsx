@@ -42,13 +42,56 @@ function reorderTasks<T>(arr: T[], fromIndex: number, toIndex: number): T[] {
   return copy
 }
 
-/** Clone tasks for another day: new IDs, same content and times. */
-function cloneTasksForDay(tasks: Task[], targetDate: string): Task[] {
-  return tasks.map((t) => ({
+/** Section tasks in display order: roots first (in array order), then each root's children (in array order). */
+function getOrderedTasksForSection(tasks: Task[]): Task[] {
+  const roots = tasks.filter((t) => !t.parentId)
+  const ordered: Task[] = []
+  for (const r of roots) {
+    ordered.push(r)
+    ordered.push(...tasks.filter((t) => t.parentId === r.id))
+  }
+  return ordered
+}
+
+/** Collect all descendant task ids (children, grandchildren, ...). */
+function getDescendantIds(tasks: Task[], parentId: string): Set<string> {
+  const set = new Set<string>()
+  const collect = (pid: string) => {
+    for (const t of tasks) {
+      if (t.parentId === pid) {
+        set.add(t.id)
+        collect(t.id)
+      }
+    }
+  }
+  collect(parentId)
+  return set
+}
+
+/**
+ * Clone tasks for another day: new IDs, same content; parentId remapped.
+ * When resetTimes is true, scheduledAt and durationMinutes are cleared so the
+ * new day can be scheduled from scratch (used for "Copy from yesterday" / "Fill from last [weekday]").
+ */
+function cloneTasksForDay(
+  tasks: Task[],
+  targetDate: string,
+  options?: { resetTimes?: boolean },
+): Task[] {
+  const idMap = new Map<string, string>()
+  const resetTimes = options?.resetTimes ?? false
+  const cloned = tasks.map((t) => {
+    const newId = createTaskId()
+    idMap.set(t.id, newId)
+    const base = { ...t, id: newId, date: targetDate, isDone: false }
+    if (resetTimes) {
+      return { ...base, scheduledAt: undefined, durationMinutes: undefined }
+    }
+    return base
+  })
+  return cloned.map((t) => ({
     ...t,
-    id: createTaskId(),
-    date: targetDate,
-    isDone: false,
+    parentId: t.parentId ? idMap.get(t.parentId) ?? undefined : undefined,
   }))
 }
 
@@ -88,19 +131,18 @@ export function DayPlanner() {
   const handleToggleTask = (taskId: string) => {
     updateAppState((prev) => {
       const existingDay = getOrCreateDay(prev, selectedDay)
-      const nextTasks = existingDay.tasks.map((task) =>
-        task.id === taskId ? { ...task, isDone: !task.isDone } : task,
-      )
-
+      const task = existingDay.tasks.find((t) => t.id === taskId)
+      const becomingDone = task ? !task.isDone : false
+      const descendantIds =
+        becomingDone && task ? getDescendantIds(existingDay.tasks, taskId) : new Set<string>()
+      const nextTasks = existingDay.tasks.map((t) => {
+        if (t.id === taskId) return { ...t, isDone: !t.isDone }
+        if (descendantIds.has(t.id)) return { ...t, isDone: true }
+        return t
+      })
       return {
         ...prev,
-        days: {
-          ...prev.days,
-          [selectedDay]: {
-            ...existingDay,
-            tasks: nextTasks,
-          },
-        },
+        days: { ...prev.days, [selectedDay]: { ...existingDay, tasks: nextTasks } },
       }
     })
   }
@@ -108,17 +150,67 @@ export function DayPlanner() {
   const handleDeleteTask = (taskId: string) => {
     updateAppState((prev) => {
       const existingDay = getOrCreateDay(prev, selectedDay)
-      const nextTasks = existingDay.tasks.filter((task) => task.id !== taskId)
-
+      const descendantIds = getDescendantIds(existingDay.tasks, taskId)
+      const toRemove = new Set([taskId, ...descendantIds])
+      const nextTasks = existingDay.tasks.filter((t) => !toRemove.has(t.id))
       return {
         ...prev,
-        days: {
-          ...prev.days,
-          [selectedDay]: {
-            ...existingDay,
-            tasks: nextTasks,
-          },
-        },
+        days: { ...prev.days, [selectedDay]: { ...existingDay, tasks: nextTasks } },
+      }
+    })
+  }
+
+  const handleAddTaskBelow = (sectionId: TaskSectionId, afterTaskId: string) => {
+    const title = window.prompt('Task title:', 'New task') ?? 'New task'
+    if (title.trim() === '') return
+    updateAppState((prev) => {
+      const existingDay = getOrCreateDay(prev, selectedDay)
+      const idx = existingDay.tasks.findIndex((t) => t.id === afterTaskId)
+      const after = existingDay.tasks[idx]
+      if (idx < 0 || !after) return prev
+      const newTask: Task = {
+        id: createTaskId(),
+        title: title.trim(),
+        sectionId,
+        date: selectedDay,
+        isDone: false,
+      }
+      const nextTasks = [
+        ...existingDay.tasks.slice(0, idx + 1),
+        newTask,
+        ...existingDay.tasks.slice(idx + 1),
+      ]
+      return {
+        ...prev,
+        days: { ...prev.days, [selectedDay]: { ...existingDay, tasks: nextTasks } },
+      }
+    })
+  }
+
+  const handleAddSubtask = (parentTaskId: string) => {
+    const title = window.prompt('Subtask title:', 'New subtask') ?? 'New subtask'
+    if (title.trim() === '') return
+    updateAppState((prev) => {
+      const existingDay = getOrCreateDay(prev, selectedDay)
+      const idx = existingDay.tasks.findIndex((t) => t.id === parentTaskId)
+      const parent = existingDay.tasks[idx]
+      if (idx < 0 || !parent) return prev
+      const newTask: Task = {
+        id: createTaskId(),
+        title: title.trim(),
+        sectionId: parent.sectionId,
+        date: parent.date,
+        isDone: false,
+        parentId: parentTaskId,
+      }
+      const nextTasks = [
+        ...existingDay.tasks.slice(0, idx + 1),
+        newTask,
+        ...existingDay.tasks.slice(idx + 1),
+      ]
+      return {
+        ...prev,
+        days: { ...prev.days, [selectedDay]: { ...existingDay, tasks: nextTasks } },
       }
     })
   }
@@ -127,8 +219,9 @@ export function DayPlanner() {
     if (fromIndex === toIndex) return
     updateAppState((prev) => {
       const existingDay = getOrCreateDay(prev, selectedDay)
-      const sectionTasks = existingDay.tasks.filter((t) => t.sectionId === sectionId)
-      const reordered = reorderTasks(sectionTasks, fromIndex, toIndex)
+      const sectionTasksRaw = existingDay.tasks.filter((t) => t.sectionId === sectionId)
+      const ordered = getOrderedTasksForSection(sectionTasksRaw)
+      const reordered = reorderTasks(ordered, fromIndex, toIndex)
       let j = 0
       const nextTasks = existingDay.tasks.map((t) =>
         t.sectionId === sectionId ? reordered[j++]! : t,
@@ -147,7 +240,9 @@ export function DayPlanner() {
     const prevDay = addDays(selectedDay, -1)
     const sourceDayState = getOrCreateDay(appState, prevDay)
     if (sourceDayState.tasks.length === 0) return
-    const newTasks = cloneTasksForDay(sourceDayState.tasks, selectedDay)
+    const newTasks = cloneTasksForDay(sourceDayState.tasks, selectedDay, {
+      resetTimes: true,
+    })
     updateAppState((prev) => {
       const existingDay = getOrCreateDay(prev, selectedDay)
       return {
@@ -164,7 +259,9 @@ export function DayPlanner() {
     const sourceDay = sameWeekdayLastWeek(selectedDay)
     const sourceDayState = getOrCreateDay(appState, sourceDay)
     if (sourceDayState.tasks.length === 0) return
-    const newTasks = cloneTasksForDay(sourceDayState.tasks, selectedDay)
+    const newTasks = cloneTasksForDay(sourceDayState.tasks, selectedDay, {
+      resetTimes: true,
+    })
     updateAppState((prev) => {
       const existingDay = getOrCreateDay(prev, selectedDay)
       return {
@@ -179,7 +276,11 @@ export function DayPlanner() {
 
   const handleUpdateTask = (
     taskId: string,
-    patch: { scheduledAt?: string; durationMinutes?: number },
+    patch: {
+      scheduledAt?: string
+      durationMinutes?: number
+      title?: string
+    },
   ) => {
     updateAppState((prev) => {
       const existingDay = getOrCreateDay(prev, selectedDay)
@@ -210,6 +311,9 @@ export function DayPlanner() {
       grouped[task.sectionId]?.push(task)
     }
 
+    for (const key of Object.keys(grouped) as TaskSectionId[]) {
+      grouped[key] = getOrderedTasksForSection(grouped[key] ?? [])
+    }
     return grouped
   }, [dayState.tasks])
 
@@ -377,6 +481,8 @@ export function DayPlanner() {
               section={section}
               tasks={tasksBySection[section.id]}
               onAddTask={(title) => handleAddTask(section.id, title)}
+              onAddTaskBelow={(afterTaskId) => handleAddTaskBelow(section.id, afterTaskId)}
+              onAddSubtask={handleAddSubtask}
               onToggleTask={(taskId) => handleToggleTask(taskId)}
               onDeleteTask={(taskId) => handleDeleteTask(taskId)}
               onReorder={(fromIndex, toIndex) => handleReorderTask(section.id, fromIndex, toIndex)}
