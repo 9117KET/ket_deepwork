@@ -31,6 +31,10 @@ interface SectionColumnProps {
     patch: { scheduledAt?: string; durationMinutes?: number; title?: string },
   ) => void
   taskIdsDueNow: Set<string>
+  /** Task ids that are part of multi-selection (Ctrl+Click). */
+  selectedTaskIds?: Set<string>
+  /** Toggle task in multi-selection. */
+  onToggleSelect?: (taskId: string) => void
 }
 
 type DropPosition = 'above' | 'below'
@@ -50,6 +54,8 @@ export function SectionColumn({
   onDeleteTask,
   onUpdateTask,
   taskIdsDueNow,
+  selectedTaskIds = new Set(),
+  onToggleSelect,
 }: SectionColumnProps) {
   const [dropTarget, setDropTarget] = useState<{ index: number; position: DropPosition } | null>(
     null,
@@ -118,6 +124,8 @@ export function SectionColumn({
               showDropAbove={dropTarget?.index === index && dropTarget?.position === 'above'}
               showDropBelow={dropTarget?.index === index && dropTarget?.position === 'below'}
               isDueNow={taskIdsDueNow.has(task.id)}
+              isSelected={selectedTaskIds.has(task.id)}
+              onToggleSelect={onToggleSelect ? () => onToggleSelect(task.id) : undefined}
               onToggle={() => onToggleTask(task.id)}
               onDelete={() => onDeleteTask(task.id)}
               onAddTaskBelow={onAddTaskBelow ? () => onAddTaskBelow(task.id) : undefined}

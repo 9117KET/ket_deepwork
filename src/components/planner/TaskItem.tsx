@@ -19,6 +19,10 @@ interface TaskItemProps {
   showDropAbove?: boolean
   showDropBelow?: boolean
   isDueNow?: boolean
+  /** When true, task is part of multi-selection (Ctrl+Click). */
+  isSelected?: boolean
+  /** Called when user Ctrl/Cmd+clicks the task to toggle selection. */
+  onToggleSelect?: () => void
   onToggle: () => void
   onDelete: () => void
   onAddTaskBelow?: () => void
@@ -98,6 +102,8 @@ export function TaskItem({
   showDropAbove = false,
   showDropBelow = false,
   isDueNow = false,
+  isSelected = false,
+  onToggleSelect,
   onToggle,
   onDelete,
   onAddTaskBelow,
@@ -168,6 +174,14 @@ export function TaskItem({
     fn?.()
   }
 
+  const handleRowClickCapture = (e: React.MouseEvent) => {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault()
+      e.stopPropagation()
+      onToggleSelect?.()
+    }
+  }
+
   return (
     <div className={`relative ${isSubtask ? 'pl-6' : ''}`}>
       {showDropAbove && (
@@ -177,7 +191,16 @@ export function TaskItem({
         />
       )}
       <div
-        className={`flex flex-wrap items-center gap-2 py-1.5 ${isDragging ? 'opacity-50' : ''} ${isDueNow ? 'rounded-md border border-amber-500/70 bg-amber-500/10' : ''}`}
+        role="button"
+        tabIndex={0}
+        onClickCapture={handleRowClickCapture}
+        onKeyDown={(e) => {
+          if ((e.ctrlKey || e.metaKey) && (e.key === 'Enter' || e.key === ' ')) {
+            e.preventDefault()
+            onToggleSelect?.()
+          }
+        }}
+        className={`flex flex-wrap items-center gap-2 py-1.5 ${isDragging ? 'opacity-50' : ''} ${isDueNow ? 'rounded-md border border-amber-500/70 bg-amber-500/10' : ''} ${isSelected ? 'rounded-md bg-sky-500/20 ring-1 ring-sky-500/50' : ''} ${onToggleSelect ? 'cursor-default' : ''}`}
         onDragOver={handleDragOver}
         onDragLeave={onDragLeave}
         onDrop={handleDrop}

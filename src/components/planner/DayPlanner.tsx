@@ -78,9 +78,10 @@ function createTaskId(): string {
 /** Reorder array: move item at fromIndex to toIndex (0 = top). */
 function reorderTasks<T>(arr: T[], fromIndex: number, toIndex: number): T[] {
   if (fromIndex === toIndex) return arr;
+  if (fromIndex < 0 || toIndex < 0 || fromIndex >= arr.length) return arr;
   const copy = [...arr];
   const [removed] = copy.splice(fromIndex, 1);
-  const insertIdx = fromIndex < toIndex ? toIndex - 1 : toIndex;
+  const insertIdx = Math.min(toIndex, copy.length);
   copy.splice(insertIdx, 0, removed);
   return copy;
 }
@@ -287,43 +288,50 @@ export function DayPlanner() {
     insertIndex: number,
   ) => {
     updateAppState((prev) => {
-      const existingDay = getOrCreateDay(prev, selectedDay);
-      const task = existingDay.tasks.find((t) => t.id === taskId);
-      if (!task) return prev;
-      const descendantIds = getDescendantIds(existingDay.tasks, taskId);
-      const toMoveIds = new Set([taskId, ...descendantIds]);
-      const nextTasks = existingDay.tasks.filter((t) => !toMoveIds.has(t.id));
-      const toMoveOrdered = getOrderedTasksForSection(
-        existingDay.tasks.filter((t) => toMoveIds.has(t.id)),
-      );
-      const movedTasks = toMoveOrdered.map((t) => ({ ...t, sectionId: toSectionId }));
-      const bySection: Record<TaskSectionId, Task[]> = {
-        mustDo: [],
-        morningRoutine: [],
-        highPriority: [],
-        mediumPriority: [],
-        lowPriority: [],
-        nightRoutine: [],
-      };
-      for (const t of nextTasks) {
-        bySection[t.sectionId]?.push(t);
+      try {
+        const existingDay = getOrCreateDay(prev, selectedDay);
+        const task = existingDay.tasks.find((t) => t.id === taskId);
+        if (!task) return prev;
+        const descendantIds = getDescendantIds(existingDay.tasks, taskId);
+        const toMoveIds = new Set([taskId, ...descendantIds]);
+        const nextTasks = existingDay.tasks.filter((t) => !toMoveIds.has(t.id));
+        const toMoveOrdered = getOrderedTasksForSection(
+          existingDay.tasks.filter((t) => toMoveIds.has(t.id)),
+        );
+        const movedTasks = toMoveOrdered.map((t) => ({ ...t, sectionId: toSectionId }));
+        const bySection: Record<TaskSectionId, Task[]> = {
+          mustDo: [],
+          morningRoutine: [],
+          highPriority: [],
+          mediumPriority: [],
+          lowPriority: [],
+          nightRoutine: [],
+        };
+        for (const t of nextTasks) {
+          const list = bySection[t.sectionId];
+          if (list) list.push(t);
+        }
+        const targetList = bySection[toSectionId] ?? [];
+        const orderedTarget = getOrderedTasksForSection(targetList);
+        const safeInsert = Math.max(0, Math.min(insertIndex, orderedTarget.length));
+        const merged = [
+          ...orderedTarget.slice(0, safeInsert),
+          ...movedTasks,
+          ...orderedTarget.slice(safeInsert),
+        ];
+        bySection[toSectionId] = merged;
+        const flat = FIXED_SECTIONS.flatMap((s) => bySection[s.id] ?? []);
+        if (flat.length !== existingDay.tasks.length) return prev;
+        return {
+          ...prev,
+          days: {
+            ...prev.days,
+            [selectedDay]: { ...existingDay, tasks: flat },
+          },
+        };
+      } catch {
+        return prev;
       }
-      const targetList = bySection[toSectionId] ?? [];
-      const orderedTarget = getOrderedTasksForSection(targetList);
-      const merged = [
-        ...orderedTarget.slice(0, insertIndex),
-        ...movedTasks,
-        ...orderedTarget.slice(insertIndex),
-      ];
-      bySection[toSectionId] = merged;
-      const flat = (FIXED_SECTIONS.map((s) => bySection[s.id] ?? [])).flat();
-      return {
-        ...prev,
-        days: {
-          ...prev.days,
-          [selectedDay]: { ...existingDay, tasks: flat },
-        },
-      };
     });
   };
 
@@ -331,6 +339,37 @@ export function DayPlanner() {
     sectionId: TaskSectionId;
     taskId: string;
   } | null>(null);
+
+  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
+
+  const handleToggleSelect = (taskId: string) => {
+    setSelectedTaskIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(taskId)) next.delete(taskId);
+      else next.add(taskId);
+      return next;
+    });
+  };
+
+  const handleDeleteSelected = () => {
+    if (selectedTaskIds.size === 0) return;
+    updateAppState((prev) => {
+      const existingDay = getOrCreateDay(prev, selectedDay);
+      const toRemove = new Set<string>(selectedTaskIds);
+      for (const id of selectedTaskIds) {
+        getDescendantIds(existingDay.tasks, id).forEach((desc) => toRemove.add(desc));
+      }
+      const nextTasks = existingDay.tasks.filter((t) => !toRemove.has(t.id));
+      return {
+        ...prev,
+        days: {
+          ...prev.days,
+          [selectedDay]: { ...existingDay, tasks: nextTasks },
+        },
+      };
+    });
+    setSelectedTaskIds(new Set());
+  };
 
   const handleDragStart = (sectionId: TaskSectionId, taskId: string) => {
     setDraggedTask({ sectionId, taskId });
@@ -347,24 +386,32 @@ export function DayPlanner() {
     setDraggedTask(null);
     if (fromSectionId === targetSectionId) {
       updateAppState((prev) => {
-        const existingDay = getOrCreateDay(prev, selectedDay);
-        const sectionTasks = getOrderedTasksForSection(
-          existingDay.tasks.filter((t) => t.sectionId === fromSectionId),
-        );
-        const fromIndex = sectionTasks.findIndex((t) => t.id === taskId);
-        if (fromIndex < 0 || fromIndex === insertIndex) return prev;
-        const reordered = reorderTasks(sectionTasks, fromIndex, insertIndex);
-        let j = 0;
-        const nextTasks = existingDay.tasks.map((t) =>
-          t.sectionId === fromSectionId ? reordered[j++]! : t,
-        );
-        return {
-          ...prev,
-          days: {
-            ...prev.days,
-            [selectedDay]: { ...existingDay, tasks: nextTasks },
-          },
-        };
+        try {
+          const existingDay = getOrCreateDay(prev, selectedDay);
+          const sectionTasks = getOrderedTasksForSection(
+            existingDay.tasks.filter((t) => t.sectionId === fromSectionId),
+          );
+          const fromIndex = sectionTasks.findIndex((t) => t.id === taskId);
+          if (fromIndex < 0) return prev;
+          const safeInsert = Math.max(0, Math.min(insertIndex, sectionTasks.length));
+          if (fromIndex === safeInsert) return prev;
+          const reordered = reorderTasks(sectionTasks, fromIndex, safeInsert);
+          if (reordered.length !== sectionTasks.length) return prev;
+          let j = 0;
+          const nextTasks = existingDay.tasks.map((t) =>
+            t.sectionId === fromSectionId ? reordered[j++]! : t,
+          );
+          if (nextTasks.length !== existingDay.tasks.length) return prev;
+          return {
+            ...prev,
+            days: {
+              ...prev.days,
+              [selectedDay]: { ...existingDay, tasks: nextTasks },
+            },
+          };
+        } catch {
+          return prev;
+        }
       });
     } else {
       handleMoveTask(fromSectionId, taskId, targetSectionId, insertIndex);
@@ -634,6 +681,27 @@ export function DayPlanner() {
               </button>
             </div>
           ) : null)}
+        {selectedTaskIds.size > 0 && (
+          <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md border border-sky-600/60 bg-sky-500/10 px-2 py-1.5 text-xs">
+            <span className="text-slate-300">
+              {selectedTaskIds.size} selected
+            </span>
+            <button
+              type="button"
+              onClick={handleDeleteSelected}
+              className="rounded border border-red-600/60 bg-red-500/20 px-2 py-1 text-red-300 hover:bg-red-500/30"
+            >
+              Delete selected
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedTaskIds(new Set())}
+              className="rounded border border-slate-600 px-2 py-1 text-slate-400 hover:bg-slate-800"
+            >
+              Clear selection
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="grid gap-3 lg:grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)] lg:items-start">
@@ -648,6 +716,8 @@ export function DayPlanner() {
               onDragStart={handleDragStart}
               onDragEnd={handleDragEnd}
               onDrop={(insertIndex: number) => handleDrop(section.id, insertIndex)}
+              selectedTaskIds={selectedTaskIds}
+              onToggleSelect={handleToggleSelect}
               onAddTask={(title) => handleAddTask(section.id, title)}
               onAddTaskBelow={(afterTaskId) =>
                 handleAddTaskBelow(section.id, afterTaskId)
