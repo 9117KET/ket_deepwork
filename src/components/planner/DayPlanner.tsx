@@ -40,6 +40,32 @@ function formatDateLabel(isoDay: string): string {
   return formatter.format(date);
 }
 
+/** Short label for a date (e.g. "28 Feb") for copy-from buttons. */
+function formatDateShort(isoDay: string): string {
+  const [year, month, day] = isoDay.split("-").map((part) => Number(part));
+  const date = new Date(year!, month! - 1, day!);
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+  }).format(date);
+}
+
+/**
+ * Most recent date before beforeDate that has at least one task in state.
+ * Used when yesterday and same-day-last-week have no tasks (e.g. first week or after a skip).
+ */
+function getLastDayWithTasks(state: AppState, beforeDate: string): string | null {
+  let last: string | null = null;
+  for (const date of Object.keys(state.days)) {
+    if (date >= beforeDate) continue;
+    const day = state.days[date];
+    if (day?.tasks && day.tasks.length > 0) {
+      if (last === null || date > last) last = date;
+    }
+  }
+  return last;
+}
+
 function createTaskId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -275,43 +301,27 @@ export function DayPlanner() {
     });
   };
 
-  const handleCopyFromPreviousDay = () => {
-    const prevDay = addDays(selectedDay, -1);
-    const sourceDayState = getOrCreateDay(appState, prevDay);
-    if (sourceDayState.tasks.length === 0) return;
-    const newTasks = cloneTasksForDay(sourceDayState.tasks, selectedDay, {
-      resetTimes: true,
-    });
-    updateAppState((prev) => {
-      const existingDay = getOrCreateDay(prev, selectedDay);
-      return {
-        ...prev,
-        days: {
-          ...prev.days,
-          [selectedDay]: { ...existingDay, tasks: newTasks },
-        },
-      };
-    });
-  };
-
-  const handleFillFromLastWeekday = () => {
-    const sourceDay = sameWeekdayLastWeek(selectedDay);
-    const sourceDayState = getOrCreateDay(appState, sourceDay);
-    if (sourceDayState.tasks.length === 0) return;
-    const newTasks = cloneTasksForDay(sourceDayState.tasks, selectedDay, {
-      resetTimes: true,
-    });
-    updateAppState((prev) => {
-      const existingDay = getOrCreateDay(prev, selectedDay);
-      return {
-        ...prev,
-        days: {
-          ...prev.days,
-          [selectedDay]: { ...existingDay, tasks: newTasks },
-        },
-      };
-    });
-  };
+  /** Copy tasks from a source day into the selected day (times reset). Used for fill/copy buttons. */
+  const handleCopyFromDay = useCallback(
+    (sourceDate: string) => {
+      const sourceDayState = getOrCreateDay(appState, sourceDate);
+      if (sourceDayState.tasks.length === 0) return;
+      const newTasks = cloneTasksForDay(sourceDayState.tasks, selectedDay, {
+        resetTimes: true,
+      });
+      updateAppState((prev) => {
+        const existingDay = getOrCreateDay(prev, selectedDay);
+        return {
+          ...prev,
+          days: {
+            ...prev.days,
+            [selectedDay]: { ...existingDay, tasks: newTasks },
+          },
+        };
+      });
+    },
+    [appState, selectedDay, updateAppState],
+  );
 
   const handleUpdateTask = (
     taskId: string,
@@ -365,6 +375,18 @@ export function DayPlanner() {
   const lastWeekdayState = useMemo(
     () => getOrCreateDay(appState, lastWeekday),
     [appState, lastWeekday],
+  );
+  /** Fallback when yesterday and same-day-last-week have no tasks: last day that had tasks. */
+  const lastDayWithTasks = useMemo(
+    () => getLastDayWithTasks(appState, selectedDay),
+    [appState, selectedDay],
+  );
+  const lastDayWithTasksState = useMemo(
+    () =>
+      lastDayWithTasks
+        ? getOrCreateDay(appState, lastDayWithTasks)
+        : { tasks: [] as Task[] },
+    [appState, lastDayWithTasks],
   );
   const weekdayLabel = useMemo(() => {
     const [y, m, d] = selectedDay.split("-").map(Number);
@@ -495,26 +517,37 @@ export function DayPlanner() {
           onNextDay={() => setSelectedDay((current) => addDays(current, 1))}
           onToday={() => setSelectedDay(todayIso())}
         />
-        {/* Copy/fill only when the selected day has no tasks—avoids overwriting progress. */}
+        {/* Copy/fill only when the selected day has no tasks. Priority: same day last week > yesterday > last day with tasks. */}
         {dayState.tasks.length === 0 &&
           (lastWeekdayState.tasks.length > 0 ? (
-            <div className="mt-2 text-xs" data-tour="fill-day">
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs" data-tour="fill-day">
               <button
                 type="button"
-                onClick={handleFillFromLastWeekday}
+                onClick={() => handleCopyFromDay(lastWeekday)}
                 className="rounded-md border border-slate-700 bg-slate-800 px-2 py-1.5 text-slate-300 hover:border-sky-600 hover:text-sky-300"
               >
                 Fill from last {weekdayLabel}
               </button>
             </div>
           ) : prevDayState.tasks.length > 0 ? (
-            <div className="mt-2 text-xs" data-tour="fill-day">
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs" data-tour="fill-day">
               <button
                 type="button"
-                onClick={handleCopyFromPreviousDay}
+                onClick={() => handleCopyFromDay(prevDay)}
                 className="rounded-md border border-slate-700 bg-slate-800 px-2 py-1.5 text-slate-300 hover:border-sky-600 hover:text-sky-300"
               >
                 Copy from yesterday
+              </button>
+            </div>
+          ) : lastDayWithTasks != null && lastDayWithTasksState.tasks.length > 0 ? (
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs" data-tour="fill-day">
+              <button
+                type="button"
+                onClick={() => handleCopyFromDay(lastDayWithTasks)}
+                className="rounded-md border border-slate-700 bg-slate-800 px-2 py-1.5 text-slate-300 hover:border-sky-600 hover:text-sky-300"
+                title={`Copy tasks from ${formatDateLabel(lastDayWithTasks)}`}
+              >
+                Copy from {formatDateShort(lastDayWithTasks)}
               </button>
             </div>
           ) : null)}
