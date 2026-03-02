@@ -19,6 +19,11 @@ import {
   normalizeHhmm,
 } from "../../domain/dateUtils";
 import {
+  getActiveSectionIds,
+  isSleepTime,
+  SLEEP_WINDOW_LABEL,
+} from "../../domain/sectionTimeBlocks";
+import {
   usePersistentState,
   getOrCreateDay,
 } from "../../storage/localStorageState";
@@ -442,6 +447,19 @@ export function DayPlanner() {
     return set;
   }, [appState, tick]);
 
+  /** Which section block is active right now (5–9 morning, 9–5 focus, etc.). Updates with tick. */
+  const activeSectionIds = useMemo(() => {
+    void tick;
+    const now = new Date();
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    return getActiveSectionIds(currentMinutes);
+  }, [tick]);
+  const isSleepTimeNow = useMemo(() => {
+    void tick;
+    const now = new Date();
+    return isSleepTime(now.getHours() * 60 + now.getMinutes());
+  }, [tick]);
+
   const lastBeepedRef = useRef<
     Record<string, { start?: boolean; mid?: boolean; end?: boolean }>
   >({});
@@ -560,6 +578,7 @@ export function DayPlanner() {
               key={section.id}
               section={section}
               tasks={tasksBySection[section.id]}
+              isTimeBlockActive={activeSectionIds.includes(section.id)}
               onAddTask={(title) => handleAddTask(section.id, title)}
               onAddTaskBelow={(afterTaskId) =>
                 handleAddTaskBelow(section.id, afterTaskId)
@@ -574,6 +593,24 @@ export function DayPlanner() {
               taskIdsDueNow={taskIdsDueNow}
             />
           ))}
+          {/* Sleep block: same style as sections, no tasks, highlights when current time is 11 PM – 5 AM */}
+          <section
+            className={`rounded-lg border p-3 sm:p-4 ${
+              isSleepTimeNow
+                ? 'border-amber-500/60 bg-amber-500/10'
+                : 'border-slate-800 bg-slate-900'
+            }`}
+            aria-label="Sleep block"
+          >
+            <header className="mb-2">
+              <h3 className="text-sm sm:text-base font-semibold text-slate-100">
+                Sleep
+              </h3>
+              <p className="text-xs text-slate-400">
+                Timeframe: {SLEEP_WINDOW_LABEL}
+              </p>
+            </header>
+          </section>
         </div>
         <div className="space-y-3 lg:sticky lg:top-20" data-tour="sidebar">
           <WeeklyOverview

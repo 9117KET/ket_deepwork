@@ -72,24 +72,27 @@ export const FIXED_SECTIONS: TaskSection[] = [
   {
     id: 'morningRoutine',
     title: 'Morning routine',
-    description: 'Timeframe: 5 to 9',
+    description: 'Timeframe: 5 AM to 9 AM',
   },
   {
     id: 'highPriority',
     title: 'High Priority (Focus Tasks)',
-    description: 'Timeframe: 9 to 5',
+    description: 'Timeframe: 9 AM to 5 PM',
   },
   {
     id: 'mediumPriority',
     title: 'Medium Priority (Supplementary Tasks)',
+    description: 'Timeframe: 5 PM to 9 PM',
   },
   {
     id: 'lowPriority',
     title: 'Low Priority (Optional)',
+    description: 'Timeframe: 5 PM to 9 PM',
   },
   {
     id: 'nightRoutine',
     title: 'Night routine',
+    description: 'Timeframe: 9 PM to 11 PM',
   },
 ]
 

@@ -13,6 +13,8 @@ import { TaskItem } from './TaskItem'
 interface SectionColumnProps {
   section: TaskSection
   tasks: Task[]
+  /** When true, this section's time block is current (e.g. 5–9 morning, 9–5 focus). */
+  isTimeBlockActive?: boolean
   onAddTask: (title: string) => void
   onAddTaskBelow?: (afterTaskId: string) => void
   onAddSubtask?: (parentTaskId: string) => void
@@ -31,6 +33,7 @@ type DropPosition = 'above' | 'below'
 export function SectionColumn({
   section,
   tasks,
+  isTimeBlockActive = false,
   onAddTask,
   onAddTaskBelow,
   onAddSubtask,
@@ -63,7 +66,13 @@ export function SectionColumn({
   }
 
   return (
-    <section className="rounded-lg border border-slate-800 bg-slate-900 p-3 sm:p-4">
+    <section
+      className={`rounded-lg border p-3 sm:p-4 ${
+        isTimeBlockActive
+          ? 'border-amber-500/60 bg-amber-500/10'
+          : 'border-slate-800 bg-slate-900'
+      }`}
+    >
       <header className="mb-2">
         <h3 className="text-sm sm:text-base font-semibold text-slate-100">{section.title}</h3>
         {section.description ? (
