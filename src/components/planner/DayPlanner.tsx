@@ -77,6 +77,24 @@ function createTaskId(): string {
 
 /** Reorder array: move item at fromIndex to toIndex (0 = top). */
 function reorderTasks<T>(arr: T[], fromIndex: number, toIndex: number): T[] {
+  // #region agent log
+  fetch('http://127.0.0.1:7672/ingest/c681dac9-d6c5-4064-a81d-81b760169275', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Debug-Session-Id': '45b958',
+    },
+    body: JSON.stringify({
+      sessionId: '45b958',
+      runId: 'drag-debug',
+      hypothesisId: 'H-reorder',
+      location: 'DayPlanner.tsx:reorderTasks',
+      message: 'reorderTasks called',
+      data: { length: arr.length, fromIndex, toIndex },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion agent log
   if (fromIndex === toIndex) return arr;
   if (fromIndex < 0 || toIndex < 0 || fromIndex >= arr.length) return arr;
   const copy = [...arr];
@@ -294,6 +312,30 @@ export function DayPlanner() {
         if (!task) return prev;
         const descendantIds = getDescendantIds(existingDay.tasks, taskId);
         const toMoveIds = new Set([taskId, ...descendantIds]);
+        // #region agent log
+        fetch('http://127.0.0.1:7672/ingest/c681dac9-d6c5-4064-a81d-81b760169275', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Debug-Session-Id': '45b958',
+          },
+          body: JSON.stringify({
+            sessionId: '45b958',
+            runId: 'drag-debug',
+            hypothesisId: 'H-move',
+            location: 'DayPlanner.tsx:handleMoveTask',
+            message: 'handleMoveTask before move',
+            data: {
+              taskId,
+              toSectionId,
+              insertIndex,
+              totalTasks: existingDay.tasks.length,
+              moveCount: toMoveIds.size,
+            },
+            timestamp: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion agent log
         const nextTasks = existingDay.tasks.filter((t) => !toMoveIds.has(t.id));
         const toMoveOrdered = getOrderedTasksForSection(
           existingDay.tasks.filter((t) => toMoveIds.has(t.id)),
@@ -322,6 +364,29 @@ export function DayPlanner() {
         bySection[toSectionId] = merged;
         const flat = FIXED_SECTIONS.flatMap((s) => bySection[s.id] ?? []);
         if (flat.length !== existingDay.tasks.length) return prev;
+        // #region agent log
+        fetch('http://127.0.0.1:7672/ingest/c681dac9-d6c5-4064-a81d-81b760169275', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Debug-Session-Id': '45b958',
+          },
+          body: JSON.stringify({
+            sessionId: '45b958',
+            runId: 'drag-debug',
+            hypothesisId: 'H-move',
+            location: 'DayPlanner.tsx:handleMoveTask',
+            message: 'handleMoveTask after move',
+            data: {
+              taskId,
+              toSectionId,
+              insertIndex,
+              totalTasksAfter: flat.length,
+            },
+            timestamp: Date.now(),
+          }),
+        }).catch(() => {});
+        // #endregion agent log
         return {
           ...prev,
           days: {
@@ -336,6 +401,12 @@ export function DayPlanner() {
   };
 
   const [draggedTask, setDraggedTask] = useState<{
+    sectionId: TaskSectionId;
+    taskId: string;
+  } | null>(null);
+
+  /** Ref holds current drag payload so handleDrop always has it (avoids stale closure in production when drop runs after state was cleared). */
+  const draggedTaskRef = useRef<{
     sectionId: TaskSectionId;
     taskId: string;
   } | null>(null);
@@ -372,17 +443,57 @@ export function DayPlanner() {
   };
 
   const handleDragStart = (sectionId: TaskSectionId, taskId: string) => {
+    // #region agent log
+    fetch('http://127.0.0.1:7672/ingest/c681dac9-d6c5-4064-a81d-81b760169275', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Debug-Session-Id': '45b958',
+      },
+      body: JSON.stringify({
+        sessionId: '45b958',
+        runId: 'drag-debug',
+        hypothesisId: 'H-drag-start',
+        location: 'DayPlanner.tsx:handleDragStart',
+        message: 'Drag started',
+        data: { sectionId, taskId },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion agent log
+    draggedTaskRef.current = { sectionId, taskId };
     setDraggedTask({ sectionId, taskId });
   };
 
   const handleDragEnd = () => {
+    draggedTaskRef.current = null;
     setDraggedTask(null);
   };
 
   const handleDrop = (targetSectionId: TaskSectionId, insertIndex: number) => {
-    if (!draggedTask) return;
-    const fromSectionId = draggedTask.sectionId;
-    const taskId = draggedTask.taskId;
+    const payload = draggedTaskRef.current ?? draggedTask;
+    if (!payload) return;
+    const fromSectionId = payload.sectionId;
+    const taskId = payload.taskId;
+    draggedTaskRef.current = null;
+    // #region agent log
+    fetch('http://127.0.0.1:7672/ingest/c681dac9-d6c5-4064-a81d-81b760169275', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Debug-Session-Id': '45b958',
+      },
+      body: JSON.stringify({
+        sessionId: '45b958',
+        runId: 'drag-debug',
+        hypothesisId: 'H-drop',
+        location: 'DayPlanner.tsx:handleDrop',
+        message: 'Drop called',
+        data: { fromSectionId, targetSectionId, taskId, insertIndex },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion agent log
     setDraggedTask(null);
     if (fromSectionId === targetSectionId) {
       updateAppState((prev) => {
