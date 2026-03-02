@@ -13,6 +13,7 @@ Use this list before you make the repo public or announce it.
 ## Recommended
 
 - [ ] **Demo link** – Add a live demo URL (e.g. Vercel) to the README.
+- [ ] **Vercel URL matches app name** – The deployment URL (e.g. `ket-deepwork.vercel.app`) is set by the **Vercel project name** (or the GitHub repo name when you first linked it). Renaming the app in code does not change the URL. To get `deepblock.vercel.app`: in Vercel go to **Project Settings → General → Project Name**, change it to `deepblock` and save. Optionally rename the GitHub repo to `deepblock` so clone URLs and project name stay in sync.
 - [ ] **Screenshot** – Add a screenshot or short GIF to the README so people see the UI.
 - [ ] **GitHub repo settings** – Add description and topics (e.g. `react`, `productivity`, `planner`, `deep-work`, `vite`).
 - [ ] **First release** – Create a GitHub release (e.g. v1.0.0) with a short note and tag.

@@ -27,6 +27,10 @@ npm run dev
 
 Open http://localhost:5173. Build: `npm run build`. Preview: `npm run preview`.
 
+## Deploying (e.g. Vercel)
+
+The **live URL** (e.g. `your-project.vercel.app`) comes from your Vercel **project name**, not from the app name in code. If you renamed the repo to Deepblock but the URL still shows the old name: in Vercel go to **Project Settings → General → Project Name**, set it to `deepblock`, and save. The default URL will become `deepblock.vercel.app` (or your team/username prefix).
+
 ## Project structure
 
 - `src/components/` - planner UI, timer, onboarding, help

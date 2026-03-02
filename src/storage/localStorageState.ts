@@ -58,24 +58,36 @@ function readInitialState(): AppState {
   const parsed = safeParse(raw)
   let state = migrate(parsed)
 
-  // One-time migration: if new key is empty and legacy key has data, copy it over.
-  const hasDays = state.days && Object.keys(state.days).length > 0
-  if (!hasDays) {
-    const legacyRaw = window.localStorage.getItem(LEGACY_STORAGE_KEY)
-    const legacyParsed = safeParse(legacyRaw)
-    const legacyState = migrate(legacyParsed)
-    const legacyHasDays = legacyState.days && Object.keys(legacyState.days).length > 0
-    if (legacyHasDays) {
-      state = legacyState
+  // One-time migration from ket_deepwork → Deepblock rename.
+  // Note: localStorage is per-origin. Data on localhost never exists on production (different origin).
+  // If legacy key exists here and has data, merge it in so no progress is lost on this browser.
+  const legacyRaw = window.localStorage.getItem(LEGACY_STORAGE_KEY)
+  const legacyParsed = safeParse(legacyRaw)
+  const legacyState = migrate(legacyParsed)
+  const legacyHasDays = legacyState.days && Object.keys(legacyState.days).length > 0
+  if (legacyHasDays) {
+    const currentDays = state.days ?? {}
+    const legacyDays = legacyState.days ?? {}
+    let merged = false
+    const mergedDays = { ...currentDays }
+    for (const [date, dayState] of Object.entries(legacyDays)) {
+      if (!dayState) continue
+      if (!mergedDays[date] || (dayState.tasks?.length ?? 0) > (mergedDays[date].tasks?.length ?? 0)) {
+        mergedDays[date] = dayState
+        merged = true
+      }
+    }
+    if (merged || Object.keys(currentDays).length === 0) {
+      state = { ...state, days: mergedDays }
       const wrapped: PersistedStateV1 = {
         version: SCHEMA_VERSION,
-        state: legacyState,
+        state,
       }
       try {
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(wrapped))
         window.localStorage.removeItem(LEGACY_STORAGE_KEY)
       } catch {
-        // If write fails, we still return legacy state; next load will retry migration.
+        // If write fails, we still return merged state; next load will retry.
       }
     }
   }
