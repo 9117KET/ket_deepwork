@@ -92,10 +92,12 @@ export function SectionColumn({
       <header className="mb-2">
         <h3 className="text-sm sm:text-base font-semibold text-slate-100">{section.title}</h3>
         {timeframeLabel ? (
-          <p className="text-xs text-slate-400">Timeframe: {timeframeLabel}</p>
-        ) : null}
-        {section.description ? (
-          <p className="mt-0.5 text-xs text-slate-500">{section.description}</p>
+          <p className="text-xs text-slate-400">
+            Timeframe: {timeframeLabel}
+            {section.description ? ` (${section.description})` : null}
+          </p>
+        ) : section.description ? (
+          <p className="text-xs text-slate-500">{section.description}</p>
         ) : null}
       </header>
       <div className="space-y-1">
