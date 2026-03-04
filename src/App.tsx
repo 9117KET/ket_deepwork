@@ -31,7 +31,6 @@ function App() {
   const handleSignOut = async () => {
     const error = await signOut()
     if (error) {
-      // eslint-disable-next-line no-console
       console.error('[auth] Failed to sign out', error)
     }
   }

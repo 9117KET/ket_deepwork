@@ -5,7 +5,8 @@
  * Uses the AuthContext to sign users in or up, with a guest option.
  */
 
-import { FormEvent, useState } from 'react'
+import { useState } from 'react'
+import type { FormEvent } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 
 interface LoginFormProps {

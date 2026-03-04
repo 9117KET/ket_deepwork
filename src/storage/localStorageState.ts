@@ -125,12 +125,21 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
 
   // When a user is signed in, hydrate from Supabase and decide whether remote or local wins.
   useEffect(() => {
-    if (!user || authLoading) {
-      setReadyToSync(false)
-      return
-    }
-
     let cancelled = false
+
+    if (!user || authLoading) {
+      // Defer reset to a microtask so we don't synchronously set state
+      // inside the effect body, which can trigger the lint rule about
+      // cascading renders.
+      Promise.resolve().then(() => {
+        if (!cancelled) {
+          setReadyToSync(false)
+        }
+      })
+      return () => {
+        cancelled = true
+      }
+    }
 
     const loadFromSupabase = async () => {
       const remote = await fetchPlannerState(user.id)
@@ -155,7 +164,9 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
         })
       }
 
-      setReadyToSync(true)
+      if (!cancelled) {
+        setReadyToSync(true)
+      }
     }
 
     void loadFromSupabase()

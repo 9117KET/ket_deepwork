@@ -37,7 +37,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data, error } = await supabase.auth.getSession()
       if (!isMounted) return
       if (error) {
-        // eslint-disable-next-line no-console
         console.error('[auth] Failed to get initial session', error)
       }
       setUser(data.session?.user ?? null)
@@ -46,21 +45,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     void init()
 
-    const {
-      data: authListener,
-      error: listenerError,
-    } = supabase.auth.onAuthStateChange((_, session) => {
+    const { data } = supabase.auth.onAuthStateChange((_, session) => {
       setUser(session?.user ?? null)
     })
 
-    if (listenerError) {
-      // eslint-disable-next-line no-console
-      console.error('[auth] Failed to subscribe to auth changes', listenerError)
-    }
-
     return () => {
       isMounted = false
-      authListener.subscription.unsubscribe()
+      data.subscription.unsubscribe()
     }
   }, [])
 
@@ -105,6 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext)
   if (!ctx) {

@@ -13,7 +13,6 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undef
 if (!supabaseUrl || !supabaseAnonKey) {
   // In development this will surface a clear error instead of failing silently.
   // In production these should always be set via environment variables.
-  // eslint-disable-next-line no-console
   console.warn(
     '[supabase] Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY. Supabase features will be disabled until configured.',
   )

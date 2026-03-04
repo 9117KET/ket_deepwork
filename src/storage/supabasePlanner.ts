@@ -24,7 +24,6 @@ export async function fetchPlannerState(userId: string): Promise<AppState | null
     .order('date', { ascending: true })
 
   if (error) {
-    // eslint-disable-next-line no-console
     console.error('[planner] Failed to fetch planner_days from Supabase', error)
     return null
   }
@@ -63,7 +62,6 @@ export async function upsertPlannerDays(userId: string, days: AppState['days']):
   })
 
   if (error) {
-    // eslint-disable-next-line no-console
     console.error('[planner] Failed to upsert planner_days to Supabase', error)
   }
 }
