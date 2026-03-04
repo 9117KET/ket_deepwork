@@ -8,7 +8,6 @@
 import { useState } from 'react'
 import type { AppState } from '../../domain/types'
 import { computeDayCompletion, computeWeeklyStats } from '../../domain/stats'
-import { useLanguage, interpolate } from '../../contexts/useLanguage'
 
 interface WeeklyOverviewProps {
   state: AppState
@@ -27,7 +26,6 @@ function formatShortLabel(isoDay: string): string {
 
 export function WeeklyOverview({ state, referenceDay }: WeeklyOverviewProps) {
   const [view, setView] = useState<'day' | 'week' | 'month' | 'year'>('week')
-  const { t } = useLanguage()
   const stats = computeWeeklyStats(state, referenceDay)
   const today = computeDayCompletion(state, referenceDay)
   const todayRatio = today.totalCount === 0 ? 0 : today.completedCount / today.totalCount
@@ -65,8 +63,8 @@ export function WeeklyOverview({ state, referenceDay }: WeeklyOverviewProps) {
     >
       <header className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h3 className="text-sm sm:text-base font-semibold text-slate-100">{t('weekly.title')}</h3>
-          <p className="text-xs text-slate-400">{t('weekly.subtitle')}</p>
+          <h3 className="text-sm sm:text-base font-semibold text-slate-100">Progress</h3>
+          <p className="text-xs text-slate-400">Day · Week · Month · Year overview of your tasks.</p>
         </div>
         <div className="inline-flex self-start rounded-full border border-slate-700 bg-slate-950 text-xs text-slate-300">
           {(['day', 'week', 'month', 'year'] as const).map((key) => (
@@ -90,41 +88,40 @@ export function WeeklyOverview({ state, referenceDay }: WeeklyOverviewProps) {
         {view === 'day' && (
           <>
             {today.totalCount === 0 ? (
-              <p>{t('weekly.day.noTasks')}</p>
+              <p>
+                You haven&apos;t planned any tasks for today yet. Add your 3 must-dos and let the day
+                flow from there.
+              </p>
             ) : (
               <p>
-                {interpolate(t('weekly.day.summary'), {
-                  percentage: todayPercentage,
-                  completed: today.completedCount,
-                  total: today.totalCount,
-                })}
+                You&apos;re{' '}
+                <span className="font-semibold text-sky-400">{todayPercentage}%</span> done with
+                today&apos;s tasks ({today.completedCount}/{today.totalCount}). Nice work. Keep your
+                focus blocks honest and kind to yourself.
               </p>
             )}
           </>
         )}
         {view === 'week' && (
           <p>
-            {interpolate(t('weekly.week.summary'), {
-              completed: stats.totalCompleted,
-              total: stats.totalTasks,
-            })}
+            This week you&apos;ve completed{' '}
+            <span className="font-semibold text-sky-400">{stats.totalCompleted}</span> of{' '}
+            <span className="font-semibold">{stats.totalTasks}</span> planned tasks. Keep stacking
+            small wins.
           </p>
         )}
         {view === 'month' && (
           <p>
-            {interpolate(t('weekly.month.summary'), {
-              percentage: monthPercentage,
-              completed: monthCompleted,
-              total: monthTotal,
-            })}
+            This month you&apos;re at{' '}
+            <span className="font-semibold text-sky-400">{monthPercentage}%</span> completion (
+            {monthCompleted}/{monthTotal} tasks).
           </p>
         )}
         {view === 'year' && (
           <p>
-            {interpolate(t('weekly.year.summary'), {
-              completed: yearCompleted,
-              total: yearTotal,
-            })}
+            This year you&apos;ve finished{' '}
+            <span className="font-semibold text-sky-400">{yearCompleted}</span> of{' '}
+            <span className="font-semibold">{yearTotal}</span> tasks you planned.
           </p>
         )}
       </div>

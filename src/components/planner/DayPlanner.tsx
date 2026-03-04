@@ -34,7 +34,6 @@ import { SectionColumn } from "./SectionColumn";
 import { WeeklyOverview } from "./WeeklyOverview";
 import { DeepWorkTimer } from "../timer/DeepWorkTimer";
 import { MotivationCard } from "../timer/MotivationCard";
-import { useLanguage, interpolate } from "../../contexts/useLanguage";
 
 function formatDateLabel(isoDay: string): string {
   const [year, month, day] = isoDay.split("-").map((part) => Number(part));
@@ -146,7 +145,6 @@ export function DayPlanner() {
   const [appState, updateAppState] = usePersistentState();
   const [selectedDay, setSelectedDay] = useState<string>(todayIso);
   const [splitRatio, setSplitRatio] = useState(0.68); // fraction of width for task column
-  const { t } = useLanguage();
   const gridRef = useRef<HTMLDivElement | null>(null);
   const dragStateRef = useRef<{
     startX: number;
@@ -790,32 +788,30 @@ export function DayPlanner() {
         {selectedTaskIds.size > 0 && (
           <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md border border-sky-600/60 bg-sky-500/10 px-2 py-1.5 text-xs">
             <span className="text-slate-300">
-              {selectedTaskIds.size} {t("planner.selectedCount")}
+              {selectedTaskIds.size} selected
             </span>
             <button
               type="button"
               onClick={handleDeleteSelected}
               className="rounded border border-red-600/60 bg-red-500/20 px-2 py-1 text-red-300 hover:bg-red-500/30"
             >
-              {t("planner.selected.delete")}
+              Delete selected
             </button>
             <button
               type="button"
               onClick={() => setSelectedTaskIds(new Set())}
               className="rounded border border-slate-600 px-2 py-1 text-slate-400 hover:bg-slate-800"
             >
-              {t("planner.selected.clear")}
+              Clear selection
             </button>
           </div>
         )}
         <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
           <span className="text-slate-400">
-            {t("planner.timeOffset.label")}{" "}
+            Daily timeframe offset (defaults: 5–9 morning, 9–5 focus, 5–9 evening).{" "}
             {timeOffsetMinutes === 0
-              ? t("planner.timeOffset.status.default")
-              : interpolate(t("planner.timeOffset.status.shifted"), {
-                  minutes: timeOffsetMinutes,
-                })}
+              ? "Using default blocks. Shift by ±30 minutes as needed."
+              : `Shifted by ${timeOffsetMinutes} minutes from the default blocks.`}
           </span>
           <button
             type="button"

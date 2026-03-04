@@ -11,12 +11,10 @@ import { HelpModal } from './components/HelpModal'
 import { OnboardingTour } from './components/OnboardingTour'
 import { getTourCompleted } from './utils/tourStorage'
 import { useAuth } from './contexts/AuthContext'
-import { useLanguage } from './contexts/useLanguage'
 import { LoginForm } from './components/auth/LoginForm'
 
 function App() {
   const { user, loading, signOut } = useAuth()
-  const { language, setLanguage, t } = useLanguage()
   const [helpOpen, setHelpOpen] = useState(false)
   const [tourActive, setTourActive] = useState(false)
   const [guest, setGuest] = useState(false)
@@ -53,7 +51,7 @@ function App() {
   if (loading) {
     return (
       <div className="bg-slate-950 text-slate-100 min-h-screen flex items-center justify-center">
-        <p className="text-sm text-slate-400">{t('app.loading')}</p>
+        <p className="text-sm text-slate-400">Loading your workspace...</p>
       </div>
     )
   }
@@ -68,26 +66,9 @@ function App() {
         <header className="mb-6 sm:mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">Deepblock</h1>
-            <p className="text-sm text-slate-400">{t('app.tagline')}</p>
+            <p className="text-sm text-slate-400">Daily focus hub for everything.</p>
           </div>
           <div className="flex items-center justify-between gap-4 sm:justify-end">
-            <div className="flex items-center gap-1 rounded-full border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] text-slate-300">
-              <span className="hidden sm:inline">{t('app.languageLabel')}:</span>
-              {(['en', 'de', 'fr'] as const).map((code) => (
-                <button
-                  key={code}
-                  type="button"
-                  onClick={() => setLanguage(code)}
-                  className={`rounded-full px-1.5 py-0.5 ${
-                    language === code
-                      ? 'bg-sky-600 text-slate-950'
-                      : 'hover:bg-slate-800 hover:text-slate-100'
-                  }`}
-                >
-                  {code.toUpperCase()}
-                </button>
-              ))}
-            </div>
             <button
               type="button"
               onClick={() => setHelpOpen(true)}
@@ -103,7 +84,7 @@ function App() {
                   onClick={handleOpenDashboard}
                   className="hidden sm:inline-flex rounded-md border border-slate-600 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-sky-600 hover:text-sky-300"
                 >
-                  {t('app.viewProgress')}
+                  View progress
                 </button>
                 <div className="flex items-center gap-2 rounded-full border border-slate-700 bg-slate-900 px-2 py-1">
                   <div className="flex h-7 w-7 items-center justify-center rounded-full bg-sky-600 text-xs font-semibold text-slate-950">
@@ -119,7 +100,7 @@ function App() {
                         onClick={handleSignOut}
                         className="text-[11px] text-slate-400 hover:text-slate-200"
                       >
-                        {t('app.signOut')}
+                        Sign out
                       </button>
                     </div>
                   </div>
