@@ -855,7 +855,7 @@ export function DayPlanner() {
 
       <div
         ref={gridRef}
-        className="mt-3 grid gap-y-3 lg:gap-x-3 lg:items-start"
+        className="mt-3 flex flex-col gap-3 lg:grid lg:gap-y-3 lg:gap-x-3 lg:items-start"
         style={{
           gridTemplateColumns: `minmax(0, ${splitRatio}fr) 4px minmax(0, ${
             1 - splitRatio
@@ -907,7 +907,8 @@ export function DayPlanner() {
           </section>
         </div>
 
-        <div className="hidden h-full w-1 cursor-col-resize rounded-full bg-slate-800 hover:bg-sky-500 lg:block"
+        <div
+          className="hidden h-full w-1 cursor-col-resize rounded-full bg-slate-800 hover:bg-sky-500 lg:block"
           onMouseDown={handleSplitterMouseDown}
           aria-hidden="true"
         />
