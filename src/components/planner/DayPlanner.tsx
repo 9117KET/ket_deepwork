@@ -34,6 +34,7 @@ import { SectionColumn } from "./SectionColumn";
 import { WeeklyOverview } from "./WeeklyOverview";
 import { DeepWorkTimer } from "../timer/DeepWorkTimer";
 import { MotivationCard } from "../timer/MotivationCard";
+import { useLanguage, interpolate } from "../../contexts/LanguageContext";
 
 function formatDateLabel(isoDay: string): string {
   const [year, month, day] = isoDay.split("-").map((part) => Number(part));
@@ -144,8 +145,8 @@ function cloneTasksForDay(
 export function DayPlanner() {
   const [appState, updateAppState] = usePersistentState();
   const [selectedDay, setSelectedDay] = useState<string>(todayIso);
-  const [layoutMode, setLayoutMode] = useState<"balanced" | "tasks" | "insights">("balanced");
   const [splitRatio, setSplitRatio] = useState(0.68); // fraction of width for task column
+  const { t } = useLanguage();
   const gridRef = useRef<HTMLDivElement | null>(null);
   const dragStateRef = useRef<{
     startX: number;
@@ -703,17 +704,6 @@ export function DayPlanner() {
     }
   }, [appState, tick, playBeep]);
 
-  // Keep split ratio in a sensible range and allow layout presets to adjust it.
-  useEffect(() => {
-    if (layoutMode === "tasks") {
-      setSplitRatio(0.76);
-    } else if (layoutMode === "insights") {
-      setSplitRatio(0.58);
-    } else {
-      setSplitRatio(0.68);
-    }
-  }, [layoutMode]);
-
   useEffect(() => {
     return () => {
       window.removeEventListener("mousemove", handleSplitterMouseMove);
@@ -800,30 +790,32 @@ export function DayPlanner() {
         {selectedTaskIds.size > 0 && (
           <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md border border-sky-600/60 bg-sky-500/10 px-2 py-1.5 text-xs">
             <span className="text-slate-300">
-              {selectedTaskIds.size} selected
+              {selectedTaskIds.size} {t("planner.selectedCount")}
             </span>
             <button
               type="button"
               onClick={handleDeleteSelected}
               className="rounded border border-red-600/60 bg-red-500/20 px-2 py-1 text-red-300 hover:bg-red-500/30"
             >
-              Delete selected
+              {t("planner.selected.delete")}
             </button>
             <button
               type="button"
               onClick={() => setSelectedTaskIds(new Set())}
               className="rounded border border-slate-600 px-2 py-1 text-slate-400 hover:bg-slate-800"
             >
-              Clear selection
+              {t("planner.selected.clear")}
             </button>
           </div>
         )}
         <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
           <span className="text-slate-400">
-            Daily timeframes offset{" "}
+            {t("planner.timeOffset.label")}{" "}
             {timeOffsetMinutes === 0
-              ? "(default)"
-              : `(${timeOffsetMinutes > 0 ? "+" : ""}${timeOffsetMinutes} min)`}
+              ? t("planner.timeOffset.status.default")
+              : interpolate(t("planner.timeOffset.status.shifted"), {
+                  minutes: timeOffsetMinutes,
+                })}
           </span>
           <button
             type="button"
@@ -859,24 +851,6 @@ export function DayPlanner() {
             </button>
           )}
         </div>
-      </div>
-
-      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-        <span className="text-slate-400">Layout</span>
-        {(["tasks", "balanced", "insights"] as const).map((mode) => (
-          <button
-            key={mode}
-            type="button"
-            onClick={() => setLayoutMode(mode)}
-            className={`rounded-full border px-2 py-0.5 text-[11px] ${
-              layoutMode === mode
-                ? "border-sky-500 bg-sky-500/10 text-sky-300"
-                : "border-slate-700 bg-slate-900 text-slate-300 hover:border-sky-600 hover:text-sky-300"
-            }`}
-          >
-            {mode === "tasks" ? "Focus on tasks" : mode === "balanced" ? "Balanced" : "Insights"}
-          </button>
-        ))}
       </div>
 
       <div

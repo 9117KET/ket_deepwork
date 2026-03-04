@@ -8,6 +8,7 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
+import { useLanguage } from '../../contexts/LanguageContext'
 
 interface LoginFormProps {
   onContinueAsGuest: () => void
@@ -15,6 +16,7 @@ interface LoginFormProps {
 
 export function LoginForm({ onContinueAsGuest }: LoginFormProps) {
   const { signIn, signUp } = useAuth()
+  const { t } = useLanguage()
   const [mode, setMode] = useState<'signin' | 'signup'>('signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -32,13 +34,13 @@ export function LoginForm({ onContinueAsGuest }: LoginFormProps) {
     const trimmedPassword = password.trim()
 
     if (!trimmedEmail || !trimmedPassword) {
-      setErrorMessage('Please enter both email and password.')
+      setErrorMessage(t('login.error.empty'))
       setSubmitting(false)
       return
     }
 
     if (trimmedPassword.length < 6) {
-      setErrorMessage('Password should be at least 6 characters.')
+      setErrorMessage(t('login.error.shortPassword'))
       setSubmitting(false)
       return
     }
@@ -47,11 +49,9 @@ export function LoginForm({ onContinueAsGuest }: LoginFormProps) {
     const error = await action({ email: trimmedEmail, password: trimmedPassword })
 
     if (error) {
-      setErrorMessage(error.message ?? 'Authentication failed. Please try again.')
+      setErrorMessage(error.message ?? t('login.error.generic'))
     } else if (mode === 'signup') {
-      setInfoMessage(
-        'Account created. You may need to confirm your email depending on project settings, then sign in.',
-      )
+      setInfoMessage(t('login.info.signupCreated'))
     }
 
     setSubmitting(false)
@@ -62,15 +62,13 @@ export function LoginForm({ onContinueAsGuest }: LoginFormProps) {
       <div className="w-full max-w-md rounded-xl border border-slate-800 bg-slate-900/70 p-6 shadow-xl">
         <div className="mb-6 text-center">
           <h1 className="text-2xl font-semibold tracking-tight">Deepblock</h1>
-          <p className="mt-1 text-sm text-slate-400">
-            Sign in to sync your planner across devices, or continue as a guest.
-          </p>
+          <p className="mt-1 text-sm text-slate-400">{t('login.subtitle')}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1">
             <label htmlFor="email" className="block text-sm font-medium text-slate-200">
-              Email
+              {t('login.email')}
             </label>
             <input
               id="email"
@@ -86,7 +84,7 @@ export function LoginForm({ onContinueAsGuest }: LoginFormProps) {
 
           <div className="space-y-1">
             <label htmlFor="password" className="block text-sm font-medium text-slate-200">
-              Password
+              {t('login.password')}
             </label>
             <input
               id="password"
@@ -95,7 +93,7 @@ export function LoginForm({ onContinueAsGuest }: LoginFormProps) {
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-              placeholder="At least 6 characters"
+              placeholder={t('login.passwordPlaceholder')}
               disabled={submitting}
             />
           </div>
@@ -118,11 +116,11 @@ export function LoginForm({ onContinueAsGuest }: LoginFormProps) {
           >
             {submitting
               ? mode === 'signin'
-                ? 'Signing in...'
-                : 'Creating account...'
+                ? t('login.submit.signInLoading')
+                : t('login.submit.signUpLoading')
               : mode === 'signin'
-                ? 'Sign in'
-                : 'Create account'}
+                ? t('login.submit.signIn')
+                : t('login.submit.signUp')}
           </button>
         </form>
 
@@ -132,14 +130,14 @@ export function LoginForm({ onContinueAsGuest }: LoginFormProps) {
             onClick={() => setMode(mode === 'signin' ? 'signup' : 'signin')}
             className="font-medium text-sky-400 hover:text-sky-300"
           >
-            {mode === 'signin' ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
+            {mode === 'signin' ? t('login.toggle.toSignup') : t('login.toggle.toSignin')}
           </button>
           <button
             type="button"
             onClick={onContinueAsGuest}
             className="font-medium text-slate-400 hover:text-slate-200"
           >
-            Continue as guest
+            {t('login.guest')}
           </button>
         </div>
       </div>
