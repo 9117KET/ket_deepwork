@@ -50,7 +50,7 @@ export function WeeklyOverview({ state, referenceDay }: WeeklyOverviewProps) {
           <p>
             You&apos;re{' '}
             <span className="font-semibold text-sky-400">{todayPercentage}%</span> done with
-            today&apos;s tasks ({today.completedCount}/{today.totalCount}). Nice work—keep your
+            today&apos;s tasks ({today.completedCount}/{today.totalCount}). Nice work. Keep your
             focus blocks honest and kind to yourself.
           </p>
         )}
@@ -72,9 +72,7 @@ export function WeeklyOverview({ state, referenceDay }: WeeklyOverviewProps) {
                   />
                 </div>
               </div>
-              <div className="w-16 text-right text-xs text-slate-400">
-                {day.completedCount}/{day.totalCount}
-              </div>
+              <div className="w-16 text-right text-xs text-slate-400">{percentage}%</div>
             </div>
           )
         })}
