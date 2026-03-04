@@ -11,7 +11,7 @@ import { HelpModal } from './components/HelpModal'
 import { OnboardingTour } from './components/OnboardingTour'
 import { getTourCompleted } from './utils/tourStorage'
 import { useAuth } from './contexts/AuthContext'
-import { useLanguage } from './contexts/LanguageContext'
+import { useLanguage } from './contexts/useLanguage'
 import { LoginForm } from './components/auth/LoginForm'
 
 function App() {

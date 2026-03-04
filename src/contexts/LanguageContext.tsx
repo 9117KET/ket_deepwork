@@ -6,13 +6,7 @@
  * This intentionally focuses on high-level shell copy and key planner labels.
  */
 
-import {
-  createContext,
-  useContext,
-  useMemo,
-  useState,
-  type ReactNode,
-} from 'react'
+import { createContext, useMemo, useState, type ReactNode } from 'react'
 
 export type Language = 'en' | 'de' | 'fr'
 
@@ -22,7 +16,7 @@ interface LanguageContextValue {
   t: (key: string) => string
 }
 
-const LanguageContext = createContext<LanguageContextValue | undefined>(undefined)
+export const LanguageContext = createContext<LanguageContextValue | undefined>(undefined)
 
 const TRANSLATIONS: Record<Language, Record<string, string>> = {
   en: {
@@ -169,12 +163,6 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
   },
 }
 
-function interpolate(template: string, params: Record<string, string | number>): string {
-  return Object.entries(params).reduce((result, [key, value]) => {
-    return result.replace(`{${key}}`, String(value))
-  }, template)
-}
-
 export function LanguageProvider({ children }: { children: ReactNode }) {
   const [language, setLanguage] = useState<Language>('en')
 
@@ -192,14 +180,3 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
 
   return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>
 }
-
-export function useLanguage(): LanguageContextValue {
-  const ctx = useContext(LanguageContext)
-  if (!ctx) {
-    throw new Error('useLanguage must be used within a LanguageProvider')
-  }
-  return ctx
-}
-
-export { interpolate }
-

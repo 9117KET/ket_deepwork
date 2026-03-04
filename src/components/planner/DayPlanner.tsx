@@ -34,7 +34,7 @@ import { SectionColumn } from "./SectionColumn";
 import { WeeklyOverview } from "./WeeklyOverview";
 import { DeepWorkTimer } from "../timer/DeepWorkTimer";
 import { MotivationCard } from "../timer/MotivationCard";
-import { useLanguage, interpolate } from "../../contexts/LanguageContext";
+import { useLanguage, interpolate } from "../../contexts/useLanguage";
 
 function formatDateLabel(isoDay: string): string {
   const [year, month, day] = isoDay.split("-").map((part) => Number(part));

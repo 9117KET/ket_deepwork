@@ -8,7 +8,7 @@
 import { useState } from 'react'
 import type { AppState } from '../../domain/types'
 import { computeDayCompletion, computeWeeklyStats } from '../../domain/stats'
-import { useLanguage, interpolate } from '../../contexts/LanguageContext'
+import { useLanguage, interpolate } from '../../contexts/useLanguage'
 
 interface WeeklyOverviewProps {
   state: AppState
