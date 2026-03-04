@@ -5,6 +5,7 @@
  * This component ties together storage + domain logic + UI sections.
  */
 
+import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AppState } from "../../domain/types";
 import {
@@ -143,6 +144,17 @@ function cloneTasksForDay(
 export function DayPlanner() {
   const [appState, updateAppState] = usePersistentState();
   const [selectedDay, setSelectedDay] = useState<string>(todayIso);
+  const [layoutMode, setLayoutMode] = useState<"balanced" | "tasks" | "insights">("balanced");
+  const [splitRatio, setSplitRatio] = useState(0.68); // fraction of width for task column
+  const gridRef = useRef<HTMLDivElement | null>(null);
+  const dragStateRef = useRef<{
+    startX: number;
+    startRatio: number;
+    width: number;
+  } | null>(null);
+
+  const MIN_SPLIT_RATIO = 0.5;
+  const MAX_SPLIT_RATIO = 0.8;
 
   const timeOffsetMinutes = appState.timeOffsetMinutes ?? 0;
 
@@ -691,6 +703,54 @@ export function DayPlanner() {
     }
   }, [appState, tick, playBeep]);
 
+  // Keep split ratio in a sensible range and allow layout presets to adjust it.
+  useEffect(() => {
+    if (layoutMode === "tasks") {
+      setSplitRatio(0.76);
+    } else if (layoutMode === "insights") {
+      setSplitRatio(0.58);
+    } else {
+      setSplitRatio(0.68);
+    }
+  }, [layoutMode]);
+
+  useEffect(() => {
+    return () => {
+      window.removeEventListener("mousemove", handleSplitterMouseMove);
+      window.removeEventListener("mouseup", handleSplitterMouseUp);
+    };
+    // We intentionally omit handleSplitterMouseMove / handleSplitterMouseUp from deps
+    // because they are stable function declarations and we only need this cleanup on unmount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function handleSplitterMouseDown(event: React.MouseEvent<HTMLDivElement>) {
+    if (!gridRef.current) return;
+    const rect = gridRef.current.getBoundingClientRect();
+    dragStateRef.current = {
+      startX: event.clientX,
+      startRatio: splitRatio,
+      width: rect.width,
+    };
+    window.addEventListener("mousemove", handleSplitterMouseMove);
+    window.addEventListener("mouseup", handleSplitterMouseUp);
+  }
+
+  function handleSplitterMouseMove(event: MouseEvent) {
+    const state = dragStateRef.current;
+    if (!state || !gridRef.current) return;
+    const deltaX = event.clientX - state.startX;
+    const rawRatio = state.startRatio + deltaX / state.width;
+    const clamped = Math.min(MAX_SPLIT_RATIO, Math.max(MIN_SPLIT_RATIO, rawRatio));
+    setSplitRatio(clamped);
+  }
+
+  function handleSplitterMouseUp() {
+    dragStateRef.current = null;
+    window.removeEventListener("mousemove", handleSplitterMouseMove);
+    window.removeEventListener("mouseup", handleSplitterMouseUp);
+  }
+
   return (
     <div className="space-y-4 sm:space-y-6">
       <div
@@ -801,7 +861,33 @@ export function DayPlanner() {
         </div>
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)] lg:items-start">
+      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+        <span className="text-slate-400">Layout</span>
+        {(["tasks", "balanced", "insights"] as const).map((mode) => (
+          <button
+            key={mode}
+            type="button"
+            onClick={() => setLayoutMode(mode)}
+            className={`rounded-full border px-2 py-0.5 text-[11px] ${
+              layoutMode === mode
+                ? "border-sky-500 bg-sky-500/10 text-sky-300"
+                : "border-slate-700 bg-slate-900 text-slate-300 hover:border-sky-600 hover:text-sky-300"
+            }`}
+          >
+            {mode === "tasks" ? "Focus on tasks" : mode === "balanced" ? "Balanced" : "Insights"}
+          </button>
+        ))}
+      </div>
+
+      <div
+        ref={gridRef}
+        className="mt-3 grid gap-y-3 lg:gap-x-3 lg:items-start"
+        style={{
+          gridTemplateColumns: `minmax(0, ${splitRatio}fr) 4px minmax(0, ${
+            1 - splitRatio
+          }fr)`,
+        }}
+      >
         <div className="space-y-3" data-tour="tasks-section">
           {FIXED_SECTIONS.map((section) => (
             <SectionColumn
@@ -846,6 +932,12 @@ export function DayPlanner() {
             </header>
           </section>
         </div>
+
+        <div className="hidden h-full w-1 cursor-col-resize rounded-full bg-slate-800 hover:bg-sky-500 lg:block"
+          onMouseDown={handleSplitterMouseDown}
+          aria-hidden="true"
+        />
+
         <div className="space-y-3 lg:sticky lg:top-20" data-tour="sidebar">
           <WeeklyOverview
             state={appState as AppState}
