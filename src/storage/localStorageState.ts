@@ -1,14 +1,16 @@
 /**
  * storage/localStorageState.ts
  *
- * Small persistence layer that keeps the app's state in localStorage.
- * This isolates browser APIs from the rest of the app and makes it
- * easier to swap in a real backend later.
+ * Persistence layer that keeps the app's state in localStorage for guests
+ * and syncs to Supabase when a user is signed in.
+ * This isolates browser APIs and backend APIs from the rest of the app.
  */
 
 import { useEffect, useState } from 'react'
 import type { AppState, DayState } from '../domain/types'
 import { todayIso } from '../domain/dateUtils'
+import { useAuth } from '../contexts/AuthContext'
+import { fetchPlannerState, upsertPlannerDays } from './supabasePlanner'
 
 const STORAGE_KEY = 'deepblock_state_v1'
 /** Legacy key from before the Deepblock rename; used once to migrate existing data. */
@@ -113,11 +115,69 @@ function writeState(next: AppState) {
 }
 
 export function usePersistentState(): [AppState, (updater: (prev: AppState) => AppState) => void] {
+  const { user, loading: authLoading } = useAuth()
   const [state, setState] = useState<AppState>(() => readInitialState())
+  const [readyToSync, setReadyToSync] = useState(false)
 
   useEffect(() => {
     writeState(state)
   }, [state])
+
+  // When a user is signed in, hydrate from Supabase and decide whether remote or local wins.
+  useEffect(() => {
+    if (!user || authLoading) {
+      setReadyToSync(false)
+      return
+    }
+
+    let cancelled = false
+
+    const loadFromSupabase = async () => {
+      const remote = await fetchPlannerState(user.id)
+      if (cancelled) return
+
+      if (remote) {
+        setState((prev) => {
+          const prevHasDays = Object.keys(prev.days ?? {}).length > 0
+          const remoteHasDays = Object.keys(remote.days ?? {}).length > 0
+
+          if (!prevHasDays && remoteHasDays) {
+            return remote
+          }
+          if (prevHasDays && !remoteHasDays) {
+            return prev
+          }
+          if (!prevHasDays && !remoteHasDays) {
+            return prev
+          }
+          // Both have data; prefer the remote snapshot for now.
+          return remote
+        })
+      }
+
+      setReadyToSync(true)
+    }
+
+    void loadFromSupabase()
+
+    return () => {
+      cancelled = true
+    }
+  }, [user, authLoading])
+
+  // When logged in and initial remote load finished, push changes to Supabase with debounce.
+  useEffect(() => {
+    if (!user || !readyToSync) return
+    if (typeof window === 'undefined') return
+
+    const handle = window.setTimeout(() => {
+      void upsertPlannerDays(user.id, state.days)
+    }, 800)
+
+    return () => {
+      window.clearTimeout(handle)
+    }
+  }, [state, user, readyToSync])
 
   const update = (updater: (prev: AppState) => AppState) => {
     setState((prev) => updater(prev))

@@ -50,6 +50,12 @@ export interface DayState {
 
 export interface AppState {
   days: Record<string, DayState | undefined>
+  /**
+   * Global offset (in minutes) applied to all time-of-day blocks.
+   * 0 = use default timeframes (5–9 morning, 9–5 focus, etc.).
+   * Positive = shift blocks later, negative = earlier. Clamped to ±180.
+   */
+  timeOffsetMinutes?: number
 }
 
 export interface WeeklyStatsDaySummary {
@@ -72,27 +78,27 @@ export const FIXED_SECTIONS: TaskSection[] = [
   {
     id: 'morningRoutine',
     title: 'Morning routine',
-    description: 'Timeframe: 5 AM to 9 AM',
+    description: 'Use for wake-up and morning prep tasks.',
   },
   {
     id: 'highPriority',
     title: 'High Priority (Focus Tasks)',
-    description: 'Timeframe: 9 AM to 5 PM',
+    description: 'Deep focus work that moves the needle.',
   },
   {
     id: 'mediumPriority',
     title: 'Medium Priority (Supplementary Tasks)',
-    description: 'Timeframe: 5 PM to 9 PM',
+    description: 'Important but not mission-critical tasks.',
   },
   {
     id: 'lowPriority',
     title: 'Low Priority (Optional)',
-    description: 'Timeframe: 5 PM to 9 PM',
+    description: 'Nice-to-have or optional tasks.',
   },
   {
     id: 'nightRoutine',
     title: 'Night routine',
-    description: 'Timeframe: 9 PM to 11 PM',
+    description: 'Wind-down and end-of-day tasks.',
   },
 ]
 

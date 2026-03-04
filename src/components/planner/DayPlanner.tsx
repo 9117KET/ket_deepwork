@@ -20,8 +20,9 @@ import {
 } from "../../domain/dateUtils";
 import {
   getActiveSectionIds,
+  getSectionTimeframeLabel,
+  getSleepWindowLabel,
   isSleepTime,
-  SLEEP_WINDOW_LABEL,
 } from "../../domain/sectionTimeBlocks";
 import {
   usePersistentState,
@@ -142,6 +143,8 @@ function cloneTasksForDay(
 export function DayPlanner() {
   const [appState, updateAppState] = usePersistentState();
   const [selectedDay, setSelectedDay] = useState<string>(todayIso);
+
+  const timeOffsetMinutes = appState.timeOffsetMinutes ?? 0;
 
   const dayState = useMemo(
     () => getOrCreateDay(appState, selectedDay),
@@ -522,6 +525,34 @@ export function DayPlanner() {
     );
   }, [selectedDay]);
 
+  const MAX_TIME_OFFSET_MINUTES = 3 * 60;
+
+  const handleAdjustTimeOffset = (deltaMinutes: number) => {
+    updateAppState((prev) => {
+      const current = prev.timeOffsetMinutes ?? 0;
+      const next = Math.max(
+        -MAX_TIME_OFFSET_MINUTES,
+        Math.min(MAX_TIME_OFFSET_MINUTES, current + deltaMinutes),
+      );
+      if (next === current) return prev;
+      return {
+        ...prev,
+        timeOffsetMinutes: next,
+      };
+    });
+  };
+
+  const handleResetTimeOffset = () => {
+    updateAppState((prev) => {
+      const current = prev.timeOffsetMinutes ?? 0;
+      if (current === 0) return prev;
+      return {
+        ...prev,
+        timeOffsetMinutes: 0,
+      };
+    });
+  };
+
   const [tick, setTick] = useState(0);
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 15_000);
@@ -574,13 +605,28 @@ export function DayPlanner() {
     void tick;
     const now = new Date();
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
-    return getActiveSectionIds(currentMinutes);
-  }, [tick]);
+    return getActiveSectionIds(currentMinutes, timeOffsetMinutes);
+  }, [tick, timeOffsetMinutes]);
   const isSleepTimeNow = useMemo(() => {
     void tick;
     const now = new Date();
-    return isSleepTime(now.getHours() * 60 + now.getMinutes());
-  }, [tick]);
+    return isSleepTime(now.getHours() * 60 + now.getMinutes(), timeOffsetMinutes);
+  }, [tick, timeOffsetMinutes]);
+
+  const timeframeLabelsBySection: Record<TaskSectionId, string | null> = useMemo(() => {
+    const labels: Record<TaskSectionId, string | null> = {
+      mustDo: null,
+      morningRoutine: null,
+      highPriority: null,
+      mediumPriority: null,
+      lowPriority: null,
+      nightRoutine: null,
+    };
+    for (const section of FIXED_SECTIONS) {
+      labels[section.id] = getSectionTimeframeLabel(section.id, timeOffsetMinutes);
+    }
+    return labels;
+  }, [timeOffsetMinutes]);
 
   const lastBeepedRef = useRef<
     Record<string, { start?: boolean; mid?: boolean; end?: boolean }>
@@ -712,6 +758,47 @@ export function DayPlanner() {
             </button>
           </div>
         )}
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+          <span className="text-slate-400">
+            Daily timeframes offset{" "}
+            {timeOffsetMinutes === 0
+              ? "(default)"
+              : `(${timeOffsetMinutes > 0 ? "+" : ""}${timeOffsetMinutes} min)`}
+          </span>
+          <button
+            type="button"
+            onClick={() => handleAdjustTimeOffset(-30)}
+            disabled={timeOffsetMinutes <= -MAX_TIME_OFFSET_MINUTES}
+            className={`rounded border px-2 py-1 ${
+              timeOffsetMinutes <= -MAX_TIME_OFFSET_MINUTES
+                ? "cursor-not-allowed border-slate-800 bg-slate-900 text-slate-600"
+                : "border-slate-700 bg-slate-900 text-slate-300 hover:border-sky-600 hover:text-sky-300"
+            }`}
+          >
+            Earlier (-30m)
+          </button>
+          <button
+            type="button"
+            onClick={() => handleAdjustTimeOffset(30)}
+            disabled={timeOffsetMinutes >= MAX_TIME_OFFSET_MINUTES}
+            className={`rounded border px-2 py-1 ${
+              timeOffsetMinutes >= MAX_TIME_OFFSET_MINUTES
+                ? "cursor-not-allowed border-slate-800 bg-slate-900 text-slate-600"
+                : "border-slate-700 bg-slate-900 text-slate-300 hover:border-sky-600 hover:text-sky-300"
+            }`}
+          >
+            Later (+30m)
+          </button>
+          {timeOffsetMinutes !== 0 && (
+            <button
+              type="button"
+              onClick={handleResetTimeOffset}
+              className="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-300 hover:border-sky-600 hover:text-sky-300"
+            >
+              Reset
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="grid gap-3 lg:grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)] lg:items-start">
@@ -722,6 +809,7 @@ export function DayPlanner() {
               section={section}
               tasks={tasksBySection[section.id]}
               isTimeBlockActive={activeSectionIds.includes(section.id)}
+              timeframeLabel={timeframeLabelsBySection[section.id]}
               draggedTask={draggedTask}
               onDragStart={handleDragStart}
               onDragEnd={handleDragEnd}
@@ -753,7 +841,7 @@ export function DayPlanner() {
                 Sleep
               </h3>
               <p className="text-xs text-slate-400">
-                Timeframe: {SLEEP_WINDOW_LABEL}
+                Timeframe: {getSleepWindowLabel(timeOffsetMinutes)}
               </p>
             </header>
           </section>

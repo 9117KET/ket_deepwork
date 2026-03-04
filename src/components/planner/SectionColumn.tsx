@@ -15,6 +15,8 @@ interface SectionColumnProps {
   tasks: Task[]
   /** When true, this section's time block is current (e.g. 5–9 morning, 9–5 focus). */
   isTimeBlockActive?: boolean
+  /** Human-readable timeframe label for this section (already adjusted for any global offset). */
+  timeframeLabel?: string | null
   /** Task currently being dragged (for cross-section drag); used to show drop targets and isDragging. */
   draggedTask?: { sectionId: TaskSectionId; taskId: string } | null
   onDragStart?: (sectionId: TaskSectionId, taskId: string) => void
@@ -43,6 +45,7 @@ export function SectionColumn({
   section,
   tasks,
   isTimeBlockActive = false,
+  timeframeLabel = null,
   draggedTask = null,
   onDragStart,
   onDragEnd,
@@ -88,8 +91,11 @@ export function SectionColumn({
     >
       <header className="mb-2">
         <h3 className="text-sm sm:text-base font-semibold text-slate-100">{section.title}</h3>
+        {timeframeLabel ? (
+          <p className="text-xs text-slate-400">Timeframe: {timeframeLabel}</p>
+        ) : null}
         {section.description ? (
-          <p className="text-xs text-slate-400">{section.description}</p>
+          <p className="mt-0.5 text-xs text-slate-500">{section.description}</p>
         ) : null}
       </header>
       <div className="space-y-1">
