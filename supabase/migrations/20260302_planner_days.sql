@@ -14,6 +14,10 @@ create table if not exists public.planner_days (
 create unique index if not exists planner_days_user_date_idx
   on public.planner_days (user_id, date);
 
+-- Global daily timeframe offset (in minutes) for the planner.
+alter table public.planner_days
+  add column if not exists time_offset_minutes integer default 0;
+
 alter table public.planner_days enable row level security;
 
 -- RLS: users can manage only their own rows.

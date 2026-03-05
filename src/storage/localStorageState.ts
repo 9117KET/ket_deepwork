@@ -182,7 +182,7 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
     if (typeof window === 'undefined') return
 
     const handle = window.setTimeout(() => {
-      void upsertPlannerDays(user.id, state.days)
+      void upsertPlannerDays(user.id, state.days, state.timeOffsetMinutes)
     }, 800)
 
     return () => {
