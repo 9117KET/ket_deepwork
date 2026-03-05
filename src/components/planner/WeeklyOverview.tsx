@@ -41,8 +41,8 @@ export function WeeklyOverview({ state, referenceDay }: WeeklyOverviewProps) {
   for (const [isoDay, dayState] of Object.entries(state.days)) {
     if (!dayState) continue
     const [y, m] = isoDay.split('-').map((part) => Number(part))
-    const totalCount = dayState.tasks.length
-    const completedCount = dayState.tasks.filter((task) => task.isDone).length
+    // Reuse the same weighted scoring so month/year stats are consistent
+    const { total: totalCount, completed: completedCount } = computeDayCompletion(state, isoDay)
 
     if (y === refYear) {
       yearCompleted += completedCount
