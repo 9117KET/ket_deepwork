@@ -29,7 +29,7 @@ export function WeeklyOverview({ state, referenceDay }: WeeklyOverviewProps) {
   const stats = computeWeeklyStats(state, referenceDay)
   const today = computeDayCompletion(state, referenceDay)
   const todayRatio = today.totalCount === 0 ? 0 : today.completedCount / today.totalCount
-  const todayPercentage = today.totalCount === 0 ? 0 : Math.round(todayRatio * 100)
+  const todayPercentage = today.totalCount === 0 ? 0 : parseFloat((todayRatio * 100).toFixed(1))
 
   const [refYear, refMonth] = referenceDay.split('-').map((part) => Number(part))
 
@@ -54,7 +54,7 @@ export function WeeklyOverview({ state, referenceDay }: WeeklyOverviewProps) {
     }
   }
 
-  const monthPercentage = monthTotal === 0 ? 0 : Math.round((monthCompleted / monthTotal) * 100)
+  const monthPercentage = monthTotal === 0 ? 0 : parseFloat(((monthCompleted / monthTotal) * 100).toFixed(1))
 
   return (
     <section
@@ -95,7 +95,7 @@ export function WeeklyOverview({ state, referenceDay }: WeeklyOverviewProps) {
             ) : (
               <p>
                 You&apos;re{' '}
-                <span className="font-semibold text-sky-400">{todayPercentage}%</span> done with
+                <span className="font-semibold text-sky-400">{todayPercentage.toFixed(1)}%</span> done with
                 today&apos;s tasks ({today.completedCount}/{today.totalCount}). Nice work. Keep your
                 focus blocks honest and kind to yourself.
               </p>
@@ -113,7 +113,7 @@ export function WeeklyOverview({ state, referenceDay }: WeeklyOverviewProps) {
         {view === 'month' && (
           <p>
             This month you&apos;re at{' '}
-            <span className="font-semibold text-sky-400">{monthPercentage}%</span> completion (
+            <span className="font-semibold text-sky-400">{monthPercentage.toFixed(1)}%</span> completion (
             {monthCompleted}/{monthTotal} tasks).
           </p>
         )}
@@ -130,7 +130,7 @@ export function WeeklyOverview({ state, referenceDay }: WeeklyOverviewProps) {
         <div className="space-y-1.5">
           {stats.days.map((day) => {
             const ratio = day.totalCount === 0 ? 0 : day.completedCount / day.totalCount
-            const percentage = day.totalCount === 0 ? 0 : Math.round(ratio * 100)
+            const percentage = day.totalCount === 0 ? 0 : parseFloat((ratio * 100).toFixed(1))
 
             return (
               <div key={day.date} className="flex items-center gap-2">
@@ -143,7 +143,7 @@ export function WeeklyOverview({ state, referenceDay }: WeeklyOverviewProps) {
                     />
                   </div>
                 </div>
-                <div className="w-16 text-right text-xs text-slate-400">{percentage}%</div>
+                <div className="w-16 text-right text-xs text-slate-400">{percentage.toFixed(1)}%</div>
               </div>
             )
           })}
