@@ -42,7 +42,7 @@ export function WeeklyOverview({ state, referenceDay }: WeeklyOverviewProps) {
     if (!dayState) continue
     const [y, m] = isoDay.split('-').map((part) => Number(part))
     // Reuse the same weighted scoring so month/year stats are consistent
-    const { total: totalCount, completed: completedCount } = computeDayCompletion(state, isoDay)
+    const { totalCount, completedCount } = computeDayCompletion(state, isoDay)
 
     if (y === refYear) {
       yearCompleted += completedCount
