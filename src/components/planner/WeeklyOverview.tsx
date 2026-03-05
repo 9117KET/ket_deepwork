@@ -64,7 +64,7 @@ export function WeeklyOverview({ state, referenceDay }: WeeklyOverviewProps) {
       <header className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h3 className="text-sm sm:text-base font-semibold text-slate-100">Progress</h3>
-          <p className="text-xs text-slate-400">Day · Week · Month · Year overview of your tasks.</p>
+          <p className="text-xs text-slate-400">Year overview of your tasks.</p>
         </div>
         <div className="inline-flex self-start rounded-full border border-slate-700 bg-slate-950 text-xs text-slate-300">
           {(['day', 'week', 'month', 'year'] as const).map((key) => (
@@ -96,7 +96,7 @@ export function WeeklyOverview({ state, referenceDay }: WeeklyOverviewProps) {
               <p>
                 You&apos;re{' '}
                 <span className="font-semibold text-sky-400">{todayPercentage.toFixed(1)}%</span> done with
-                today&apos;s tasks ({today.completedCount}/{today.totalCount}). Nice work. Keep your
+                today&apos;s tasks ({today.completedCount.toFixed(1)}/{today.totalCount.toFixed(1)}). Nice work. Keep your
                 focus blocks honest and kind to yourself.
               </p>
             )}
@@ -105,8 +105,8 @@ export function WeeklyOverview({ state, referenceDay }: WeeklyOverviewProps) {
         {view === 'week' && (
           <p>
             This week you&apos;ve completed{' '}
-            <span className="font-semibold text-sky-400">{stats.totalCompleted}</span> of{' '}
-            <span className="font-semibold">{stats.totalTasks}</span> planned tasks. Keep stacking
+            <span className="font-semibold text-sky-400">{stats.totalCompleted.toFixed(1)}</span> of{' '}
+            <span className="font-semibold">{stats.totalTasks.toFixed(1)}</span> planned tasks. Keep stacking
             small wins.
           </p>
         )}
@@ -114,14 +114,14 @@ export function WeeklyOverview({ state, referenceDay }: WeeklyOverviewProps) {
           <p>
             This month you&apos;re at{' '}
             <span className="font-semibold text-sky-400">{monthPercentage.toFixed(1)}%</span> completion (
-            {monthCompleted}/{monthTotal} tasks).
+            {monthCompleted.toFixed(1)}/{monthTotal.toFixed(1)} tasks).
           </p>
         )}
         {view === 'year' && (
           <p>
             This year you&apos;ve finished{' '}
-            <span className="font-semibold text-sky-400">{yearCompleted}</span> of{' '}
-            <span className="font-semibold">{yearTotal}</span> tasks you planned.
+            <span className="font-semibold text-sky-400">{yearCompleted.toFixed(1)}</span> of{' '}
+            <span className="font-semibold">{yearTotal.toFixed(1)}</span> tasks you planned.
           </p>
         )}
       </div>
