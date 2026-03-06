@@ -751,40 +751,39 @@ export function DayPlanner() {
           onNextDay={() => setSelectedDay((current) => addDays(current, 1))}
           onToday={() => setSelectedDay(todayIso())}
         />
-        {/* Copy/fill only when the selected day has no tasks. Priority: same day last week > yesterday > last day with tasks. */}
-        {dayState.tasks.length === 0 &&
-          (lastWeekdayState.tasks.length > 0 ? (
+        {/* Copy/fill only when the selected day has no tasks. Show all available sources so the user can choose (same day last week, yesterday, or last day with tasks if a day was skipped). */}
+        {dayState.tasks.length === 0 && (() => {
+          const copyOptions: { label: string; sourceDate: string; title?: string }[] = [];
+          if (lastWeekdayState.tasks.length > 0) {
+            copyOptions.push({ label: `Fill from last ${weekdayLabel}`, sourceDate: lastWeekday });
+          }
+          if (prevDayState.tasks.length > 0) {
+            copyOptions.push({ label: 'Fill from yesterday', sourceDate: prevDay });
+          }
+          if (lastDayWithTasks != null && lastDayWithTasksState.tasks.length > 0 && lastDayWithTasks !== prevDay && lastDayWithTasks !== lastWeekday) {
+            copyOptions.push({
+              label: `Copy from ${formatDateShort(lastDayWithTasks)}`,
+              sourceDate: lastDayWithTasks,
+              title: `Copy tasks from ${formatDateLabel(lastDayWithTasks)} (last day with tasks)`,
+            });
+          }
+          if (copyOptions.length === 0) return null;
+          return (
             <div className="mt-2 flex flex-wrap items-center gap-2 text-xs" data-tour="fill-day">
-              <button
-                type="button"
-                onClick={() => handleCopyFromDay(lastWeekday)}
-                className="rounded-md border border-slate-700 bg-slate-800 px-2 py-1.5 text-slate-300 hover:border-sky-600 hover:text-sky-300"
-              >
-                Fill from last {weekdayLabel}
-              </button>
+              {copyOptions.map(({ label, sourceDate, title }) => (
+                <button
+                  key={sourceDate}
+                  type="button"
+                  onClick={() => handleCopyFromDay(sourceDate)}
+                  className="rounded-md border border-slate-700 bg-slate-800 px-2 py-1.5 text-slate-300 hover:border-sky-600 hover:text-sky-300"
+                  title={title}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
-          ) : prevDayState.tasks.length > 0 ? (
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs" data-tour="fill-day">
-              <button
-                type="button"
-                onClick={() => handleCopyFromDay(prevDay)}
-                className="rounded-md border border-slate-700 bg-slate-800 px-2 py-1.5 text-slate-300 hover:border-sky-600 hover:text-sky-300"
-              >
-                Copy from yesterday
-              </button>
-            </div>
-          ) : lastDayWithTasks != null && lastDayWithTasksState.tasks.length > 0 ? (
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs" data-tour="fill-day">
-              <button
-                type="button"
-                onClick={() => handleCopyFromDay(lastDayWithTasks)}
-                className="rounded-md border border-slate-700 bg-slate-800 px-2 py-1.5 text-slate-300 hover:border-sky-600 hover:text-sky-300"
-                title={`Copy tasks from ${formatDateLabel(lastDayWithTasks)}`}
-              >
-                Copy from {formatDateShort(lastDayWithTasks)}
-              </button>
-            </div>
-          ) : null)}
+          );
+        })()}
         {selectedTaskIds.size > 0 && (
           <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md border border-sky-600/60 bg-sky-500/10 px-2 py-1.5 text-xs">
             <span className="text-slate-300">
