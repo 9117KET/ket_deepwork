@@ -7,6 +7,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { DayPlanner } from './components/planner/DayPlanner'
+import { FinancePlanner } from './components/finance/FinancePlanner'
 import { HelpModal } from './components/HelpModal'
 import { OnboardingTour } from './components/OnboardingTour'
 import { getTourCompleted } from './utils/tourStorage'
@@ -15,6 +16,7 @@ import { LoginForm } from './components/auth/LoginForm'
 
 function App() {
   const { user, loading, signOut } = useAuth()
+  const [view, setView] = useState<'planner' | 'finance'>('planner')
   const [helpOpen, setHelpOpen] = useState(false)
   const [tourActive, setTourActive] = useState(false)
   const [guest, setGuest] = useState(false)
@@ -69,6 +71,30 @@ function App() {
             <p className="text-sm text-slate-400">Daily focus hub for everything.</p>
           </div>
           <div className="flex items-center justify-between gap-4 sm:justify-end">
+            <div className="inline-flex rounded-full border border-slate-700 bg-slate-950 text-xs text-slate-300">
+              <button
+                type="button"
+                onClick={() => setView('planner')}
+                className={`px-3 py-1.5 first:rounded-l-full last:rounded-r-full ${
+                  view === 'planner'
+                    ? 'bg-sky-600 text-slate-950'
+                    : 'hover:bg-slate-800 hover:text-slate-100'
+                }`}
+              >
+                Planner
+              </button>
+              <button
+                type="button"
+                onClick={() => setView('finance')}
+                className={`px-3 py-1.5 first:rounded-l-full last:rounded-r-full ${
+                  view === 'finance'
+                    ? 'bg-sky-600 text-slate-950'
+                    : 'hover:bg-slate-800 hover:text-slate-100'
+                }`}
+              >
+                Finance
+              </button>
+            </div>
             <button
               type="button"
               onClick={() => setHelpOpen(true)}
@@ -79,13 +105,15 @@ function App() {
             </button>
             {isAuthenticated && (
               <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={handleOpenDashboard}
-                  className="hidden sm:inline-flex rounded-md border border-slate-600 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-sky-600 hover:text-sky-300"
-                >
-                  View progress
-                </button>
+                {view === 'planner' && (
+                  <button
+                    type="button"
+                    onClick={handleOpenDashboard}
+                    className="hidden sm:inline-flex rounded-md border border-slate-600 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-sky-600 hover:text-sky-300"
+                  >
+                    View progress
+                  </button>
+                )}
                 <div className="flex items-center gap-2 rounded-full border border-slate-700 bg-slate-900 px-2 py-1">
                   <div className="flex h-7 w-7 items-center justify-center rounded-full bg-sky-600 text-xs font-semibold text-slate-950">
                     {userInitial}
@@ -109,7 +137,8 @@ function App() {
             )}
           </div>
         </header>
-        <DayPlanner />
+        {view === 'planner' && <DayPlanner />}
+        {view === 'finance' && <FinancePlanner />}
       </div>
       <HelpModal
         isOpen={helpOpen}

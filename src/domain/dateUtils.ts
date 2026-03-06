@@ -64,6 +64,36 @@ export function sameWeekdayLastWeek(isoDay: string): string {
 }
 
 /**
+ * Month id (YYYY-MM) for the given ISO date string or Date.
+ */
+export function toMonthId(isoDay: string): string {
+  const [y, m] = isoDay.split('-')
+  return `${y}-${m}`
+}
+
+/**
+ * Current month id (YYYY-MM) and next month id from today.
+ */
+export function currentAndNextMonthIds(): { current: string; next: string } {
+  const today = todayIso()
+  const current = toMonthId(today)
+  const [year, month] = current.split('-').map(Number)
+  const nextMonth = month === 12 ? 1 : month + 1
+  const nextYear = month === 12 ? year + 1 : year
+  const next = `${nextYear}-${String(nextMonth).padStart(2, '0')}`
+  return { current, next }
+}
+
+/**
+ * Previous month id (YYYY-MM) for a given month id.
+ */
+export function previousMonthId(monthId: string): string {
+  const [y, m] = monthId.split('-').map(Number)
+  if (m === 1) return `${y - 1}-12`
+  return `${y}-${String(m - 1).padStart(2, '0')}`
+}
+
+/**
  * Normalize time string to HH:mm for storage and comparison.
  * Handles "9:0" -> "09:00" so persistence and due-now checks are consistent.
  */
