@@ -123,7 +123,7 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
     writeState(state)
   }, [state])
 
-  // When signed in, Supabase is source of truth: always load from DB and replace local state.
+  // When signed in, Supabase is source of truth for dates it has; local-only dates are kept so we don't lose progress (e.g. days that never synced).
   // If fetch fails (e.g. offline), keep localStorage as backup.
   useEffect(() => {
     let cancelled = false
@@ -141,7 +141,10 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
       const remote = await fetchPlannerState(user.id)
       if (cancelled) return
       if (remote !== null) {
-        setState(remote)
+        setState((prev) => ({
+          days: { ...(prev.days ?? {}), ...(remote.days ?? {}) },
+          timeOffsetMinutes: remote.timeOffsetMinutes ?? prev.timeOffsetMinutes,
+        }))
       }
       if (!cancelled) {
         setReadyToSync(true)
@@ -204,7 +207,10 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
         fetchPlannerState(user.id).then((remote) => {
           if (refetchCancelled) return
           if (remote !== null) {
-            setState(remote)
+            setState((prev) => ({
+              days: { ...(prev.days ?? {}), ...(remote.days ?? {}) },
+              timeOffsetMinutes: remote.timeOffsetMinutes ?? prev.timeOffsetMinutes,
+            }))
           }
         })
       }
