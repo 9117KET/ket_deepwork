@@ -115,10 +115,10 @@ function App() {
                   </button>
                 )}
                 <div className="flex items-center gap-2 rounded-full border border-slate-700 bg-slate-900 px-2 py-1">
-                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-sky-600 text-xs font-semibold text-slate-950">
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sky-600 text-xs font-semibold text-slate-950">
                     {userInitial}
                   </div>
-                  <div className="hidden text-xs text-slate-300 sm:block">
+                  <div className="hidden min-w-0 text-xs text-slate-300 sm:block">
                     <div className="max-w-[180px] truncate font-medium">
                       {user?.email ?? 'Signed in'}
                     </div>
@@ -132,6 +132,14 @@ function App() {
                       </button>
                     </div>
                   </div>
+                  <button
+                    type="button"
+                    onClick={handleSignOut}
+                    className="touch-manipulation rounded-md px-2 py-1.5 text-xs font-medium text-slate-400 hover:bg-slate-800 hover:text-slate-200 active:bg-slate-700 sm:hidden"
+                    aria-label="Sign out"
+                  >
+                    Sign out
+                  </button>
                 </div>
               </div>
             )}
