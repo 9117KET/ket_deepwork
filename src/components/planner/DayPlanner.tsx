@@ -403,42 +403,45 @@ export function DayPlanner() {
 
   const handleDrop = (targetSectionId: TaskSectionId, insertIndex: number) => {
     const payload = draggedTaskRef.current ?? draggedTask;
-    if (!payload) return;
-    const fromSectionId = payload.sectionId;
-    const taskId = payload.taskId;
-    draggedTaskRef.current = null;
-    setDraggedTask(null);
-    if (fromSectionId === targetSectionId) {
-      updateAppState((prev) => {
-        try {
-          const existingDay = getOrCreateDay(prev, selectedDay);
-          const sectionTasks = getOrderedTasksForSection(
-            existingDay.tasks.filter((t) => t.sectionId === fromSectionId),
-          );
-          const fromIndex = sectionTasks.findIndex((t) => t.id === taskId);
-          if (fromIndex < 0) return prev;
-          const safeInsert = Math.max(0, Math.min(insertIndex, sectionTasks.length));
-          if (fromIndex === safeInsert) return prev;
-          const reordered = reorderTasks(sectionTasks, fromIndex, safeInsert);
-          if (reordered.length !== sectionTasks.length) return prev;
-          let j = 0;
-          const nextTasks = existingDay.tasks.map((t) =>
-            t.sectionId === fromSectionId ? reordered[j++]! : t,
-          );
-          if (nextTasks.length !== existingDay.tasks.length) return prev;
-          return {
-            ...prev,
-            days: {
-              ...prev.days,
-              [selectedDay]: { ...existingDay, tasks: nextTasks },
-            },
-          };
-        } catch {
-          return prev;
-        }
-      });
-    } else {
-      handleMoveTask(fromSectionId, taskId, targetSectionId, insertIndex);
+    try {
+      if (!payload) return;
+      const fromSectionId = payload.sectionId;
+      const taskId = payload.taskId;
+      if (fromSectionId === targetSectionId) {
+        updateAppState((prev) => {
+          try {
+            const existingDay = getOrCreateDay(prev, selectedDay);
+            const sectionTasks = getOrderedTasksForSection(
+              existingDay.tasks.filter((t) => t.sectionId === fromSectionId),
+            );
+            const fromIndex = sectionTasks.findIndex((t) => t.id === taskId);
+            if (fromIndex < 0) return prev;
+            const safeInsert = Math.max(0, Math.min(insertIndex, sectionTasks.length));
+            if (fromIndex === safeInsert) return prev;
+            const reordered = reorderTasks(sectionTasks, fromIndex, safeInsert);
+            if (reordered.length !== sectionTasks.length) return prev;
+            let j = 0;
+            const nextTasks = existingDay.tasks.map((t) =>
+              t.sectionId === fromSectionId ? reordered[j++]! : t,
+            );
+            if (nextTasks.length !== existingDay.tasks.length) return prev;
+            return {
+              ...prev,
+              days: {
+                ...prev.days,
+                [selectedDay]: { ...existingDay, tasks: nextTasks },
+              },
+            };
+          } catch {
+            return prev;
+          }
+        });
+      } else {
+        handleMoveTask(fromSectionId, taskId, targetSectionId, insertIndex);
+      }
+    } finally {
+      draggedTaskRef.current = null;
+      setDraggedTask(null);
     }
   };
 

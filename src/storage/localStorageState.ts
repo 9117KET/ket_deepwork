@@ -6,7 +6,7 @@
  * This isolates browser APIs and backend APIs from the rest of the app.
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { AppState, DayState } from '../domain/types'
 import { todayIso } from '../domain/dateUtils'
 import { useAuth } from '../contexts/AuthContext'
@@ -176,19 +176,73 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
     }
   }, [user, authLoading])
 
+  // Refs so we can flush pending sync on tab hide/close and always read latest state.
+  const stateRef = useRef(state)
+  const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   // When logged in and initial remote load finished, push changes to Supabase with debounce.
   useEffect(() => {
     if (!user || !readyToSync) return
     if (typeof window === 'undefined') return
 
-    const handle = window.setTimeout(() => {
-      void upsertPlannerDays(user.id, state.days, state.timeOffsetMinutes)
+    stateRef.current = state
+    if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current)
+    syncTimeoutRef.current = setTimeout(() => {
+      syncTimeoutRef.current = null
+      void upsertPlannerDays(user.id, stateRef.current.days, stateRef.current.timeOffsetMinutes)
     }, 800)
 
     return () => {
-      window.clearTimeout(handle)
+      if (syncTimeoutRef.current) {
+        clearTimeout(syncTimeoutRef.current)
+        syncTimeoutRef.current = null
+      }
     }
   }, [state, user, readyToSync])
+
+  // Flush pending sync when tab is hidden or page unloads so other devices see changes.
+  // Refetch from Supabase when tab becomes visible so this device shows latest (e.g. after editing on phone).
+  useEffect(() => {
+    if (!user || typeof document === 'undefined') return
+
+    const flushSync = () => {
+      if (syncTimeoutRef.current) {
+        clearTimeout(syncTimeoutRef.current)
+        syncTimeoutRef.current = null
+        void upsertPlannerDays(user.id, stateRef.current.days, stateRef.current.timeOffsetMinutes)
+      }
+    }
+
+    let refetchCancelled = false
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        flushSync()
+        return
+      }
+      if (document.visibilityState === 'visible') {
+        refetchCancelled = false
+        fetchPlannerState(user.id).then((remote) => {
+          if (refetchCancelled) return
+          if (remote && Object.keys(remote.days ?? {}).length > 0) {
+            setState((prev) => ({ ...prev, ...remote }))
+          }
+        })
+      }
+    }
+
+    const handleBeforeUnload = () => {
+      flushSync()
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => {
+      refetchCancelled = true
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+    }
+  }, [user])
 
   const update = (updater: (prev: AppState) => AppState) => {
     setState((prev) => updater(prev))

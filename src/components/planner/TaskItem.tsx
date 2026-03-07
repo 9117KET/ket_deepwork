@@ -142,9 +142,16 @@ export function TaskItem({
   )
 
   const handleDragStart = (e: React.DragEvent) => {
-    e.dataTransfer.effectAllowed = 'move'
-    e.dataTransfer.setData('text/plain', '')
-    onDragStart?.()
+    try {
+      if (e.dataTransfer) {
+        e.dataTransfer.effectAllowed = 'move'
+        e.dataTransfer.setData('text/plain', '')
+      }
+      onDragStart?.()
+    } catch {
+      // dataTransfer can be null or throw in some browsers (e.g. Safari, touch, production).
+      onDragStart?.()
+    }
   }
 
   const handleContextMenu = (e: React.MouseEvent) => {
@@ -156,17 +163,26 @@ export function TaskItem({
 
   const handleDragOver = (e: React.DragEvent) => {
     if (!isReorderable || !onDragOver) return
-    e.preventDefault()
-    e.dataTransfer.dropEffect = 'move'
-    const rect = e.currentTarget.getBoundingClientRect()
-    const mid = rect.top + rect.height / 2
-    onDragOver(e.clientY < mid ? 'above' : 'below')
+    try {
+      e.preventDefault()
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+      const rect = e.currentTarget.getBoundingClientRect()
+      const mid = rect.top + rect.height / 2
+      onDragOver(e.clientY < mid ? 'above' : 'below')
+    } catch {
+      e.preventDefault()
+    }
   }
 
   const handleDrop = (e: React.DragEvent) => {
     if (!isReorderable) return
-    e.preventDefault()
-    onDrop?.()
+    try {
+      e.preventDefault()
+      e.stopPropagation()
+      onDrop?.()
+    } catch {
+      e.preventDefault()
+    }
   }
 
   const closeAnd = (fn: (() => void) | undefined) => {
