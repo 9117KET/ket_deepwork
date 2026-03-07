@@ -1,9 +1,9 @@
 /**
  * storage/localStorageState.ts
  *
- * Persistence layer that keeps the app's state in localStorage for guests
- * and syncs to Supabase when a user is signed in.
- * This isolates browser APIs and backend APIs from the rest of the app.
+ * Persistence layer: when signed in, Supabase is the single source of truth;
+ * localStorage is backup only (e.g. before first fetch or when offline).
+ * For guests, state lives only in localStorage.
  */
 
 import { useEffect, useRef, useState } from 'react'
@@ -123,18 +123,14 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
     writeState(state)
   }, [state])
 
-  // When a user is signed in, hydrate from Supabase and decide whether remote or local wins.
+  // When signed in, Supabase is source of truth: always load from DB and replace local state.
+  // If fetch fails (e.g. offline), keep localStorage as backup.
   useEffect(() => {
     let cancelled = false
 
     if (!user || authLoading) {
-      // Defer reset to a microtask so we don't synchronously set state
-      // inside the effect body, which can trigger the lint rule about
-      // cascading renders.
       Promise.resolve().then(() => {
-        if (!cancelled) {
-          setReadyToSync(false)
-        }
+        if (!cancelled) setReadyToSync(false)
       })
       return () => {
         cancelled = true
@@ -145,25 +141,9 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
       const remote = await fetchPlannerState(user.id)
       if (cancelled) return
 
-      if (remote) {
-        setState((prev) => {
-          const prevHasDays = Object.keys(prev.days ?? {}).length > 0
-          const remoteHasDays = Object.keys(remote.days ?? {}).length > 0
-
-          if (!prevHasDays && remoteHasDays) {
-            return remote
-          }
-          if (prevHasDays && !remoteHasDays) {
-            return prev
-          }
-          if (!prevHasDays && !remoteHasDays) {
-            return prev
-          }
-          // Both have data; prefer the remote snapshot for now.
-          return remote
-        })
+      if (remote !== null) {
+        setState(remote)
       }
-
       if (!cancelled) {
         setReadyToSync(true)
       }
@@ -224,8 +204,8 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
         refetchCancelled = false
         fetchPlannerState(user.id).then((remote) => {
           if (refetchCancelled) return
-          if (remote && Object.keys(remote.days ?? {}).length > 0) {
-            setState((prev) => ({ ...prev, ...remote }))
+          if (remote !== null) {
+            setState(remote)
           }
         })
       }
