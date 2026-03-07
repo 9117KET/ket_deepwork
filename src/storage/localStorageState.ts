@@ -140,7 +140,6 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
     const loadFromSupabase = async () => {
       const remote = await fetchPlannerState(user.id)
       if (cancelled) return
-
       if (remote !== null) {
         setState(remote)
       }
@@ -169,7 +168,7 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
     if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current)
     syncTimeoutRef.current = setTimeout(() => {
       syncTimeoutRef.current = null
-      void upsertPlannerDays(user.id, stateRef.current.days, stateRef.current.timeOffsetMinutes)
+      void upsertPlannerDays(user.id, stateRef.current.days)
     }, 800)
 
     return () => {
@@ -189,7 +188,7 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
       if (syncTimeoutRef.current) {
         clearTimeout(syncTimeoutRef.current)
         syncTimeoutRef.current = null
-        void upsertPlannerDays(user.id, stateRef.current.days, stateRef.current.timeOffsetMinutes)
+        void upsertPlannerDays(user.id, stateRef.current.days)
       }
     }
 

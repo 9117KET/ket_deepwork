@@ -14,13 +14,12 @@ interface PlannerDayRow {
   date: string
   tasks: unknown
   deep_work_sessions: unknown
-  time_offset_minutes?: number | null
 }
 
 export async function fetchPlannerState(userId: string): Promise<AppState | null> {
   const { data, error } = await supabase
     .from('planner_days')
-    .select('id, user_id, date, tasks, deep_work_sessions, time_offset_minutes')
+    .select('id, user_id, date, tasks, deep_work_sessions')
     .eq('user_id', userId)
     .order('date', { ascending: true })
 
@@ -30,7 +29,6 @@ export async function fetchPlannerState(userId: string): Promise<AppState | null
   }
 
   const days: AppState['days'] = {}
-  let timeOffsetMinutes: number | undefined
 
   for (const row of (data ?? []) as PlannerDayRow[]) {
     const tasks = (row.tasks as DayState['tasks'] | null) ?? []
@@ -40,19 +38,12 @@ export async function fetchPlannerState(userId: string): Promise<AppState | null
       tasks,
       deepWorkSessions,
     }
-    if (timeOffsetMinutes === undefined && typeof row.time_offset_minutes === 'number') {
-      timeOffsetMinutes = row.time_offset_minutes
-    }
   }
 
-  return { days, timeOffsetMinutes }
+  return { days, timeOffsetMinutes: undefined }
 }
 
-export async function upsertPlannerDays(
-  userId: string,
-  days: AppState['days'],
-  timeOffsetMinutes?: number,
-): Promise<void> {
+export async function upsertPlannerDays(userId: string, days: AppState['days']): Promise<void> {
   const payload = Object.values(days)
     .filter((day): day is DayState => Boolean(day))
     .map((day) => ({
@@ -60,7 +51,6 @@ export async function upsertPlannerDays(
       date: day.date,
       tasks: day.tasks ?? [],
       deep_work_sessions: day.deepWorkSessions ?? [],
-      time_offset_minutes: timeOffsetMinutes ?? 0,
     }))
 
   if (payload.length === 0) {
