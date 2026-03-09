@@ -29,6 +29,7 @@ import {
   usePersistentState,
   getOrCreateDay,
 } from "../../storage/localStorageState";
+import { computeDayCompletion } from "../../domain/stats";
 import { DayHeader } from "./DayHeader";
 import { SectionColumn } from "./SectionColumn";
 import { WeeklyOverview } from "./WeeklyOverview";
@@ -161,6 +162,15 @@ export function DayPlanner() {
     () => getOrCreateDay(appState, selectedDay),
     [appState, selectedDay],
   );
+
+  const dayCompletion = useMemo(
+    () => computeDayCompletion(appState, selectedDay),
+    [appState, selectedDay],
+  );
+  const dayCompletionRatio =
+    dayCompletion.totalCount === 0
+      ? 0
+      : dayCompletion.completedCount / dayCompletion.totalCount;
 
   const handleAddTask = (sectionId: TaskSectionId, title: string) => {
     updateAppState((prev) => {
@@ -750,6 +760,9 @@ export function DayPlanner() {
       >
         <DayHeader
           dateLabel={formatDateLabel(selectedDay)}
+          completionRatio={dayCompletionRatio}
+          completedPoints={dayCompletion.completedCount}
+          totalPoints={dayCompletion.totalCount}
           onPrevDay={() => setSelectedDay((current) => addDays(current, -1))}
           onNextDay={() => setSelectedDay((current) => addDays(current, 1))}
           onToday={() => setSelectedDay(todayIso())}

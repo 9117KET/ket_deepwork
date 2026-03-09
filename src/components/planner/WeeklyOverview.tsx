@@ -56,6 +56,27 @@ export function WeeklyOverview({ state, referenceDay }: WeeklyOverviewProps) {
 
   const monthPercentage = monthTotal === 0 ? 0 : parseFloat(((monthCompleted / monthTotal) * 100).toFixed(1))
 
+  let activeCompleted = 0
+  let activeTotal = 0
+
+  if (view === 'day') {
+    activeCompleted = today.completedCount
+    activeTotal = today.totalCount
+  } else if (view === 'week') {
+    activeCompleted = stats.totalCompleted
+    activeTotal = stats.totalTasks
+  } else if (view === 'month') {
+    activeCompleted = monthCompleted
+    activeTotal = monthTotal
+  } else {
+    activeCompleted = yearCompleted
+    activeTotal = yearTotal
+  }
+
+  const activeRatio = activeTotal === 0 ? 0 : activeCompleted / activeTotal
+  const activePercentage =
+    activeTotal === 0 ? 0 : parseFloat((activeRatio * 100).toFixed(1))
+
   return (
     <section
       id="progress-dashboard"
@@ -84,6 +105,28 @@ export function WeeklyOverview({ state, referenceDay }: WeeklyOverviewProps) {
         </div>
       </header>
 
+      {activeTotal > 0 && (
+        <div className="mb-3">
+          <div className="flex items-center justify-between text-[11px] text-slate-400">
+            <span>
+              {view.charAt(0).toUpperCase() + view.slice(1)}:{' '}
+              <span className="font-medium text-slate-200">
+                {activePercentage.toFixed(1)}%
+              </span>
+            </span>
+            <span>
+              {activeCompleted.toFixed(1)}/{activeTotal.toFixed(1)} pts
+            </span>
+          </div>
+          <div className="mt-1 h-1.5 w-full rounded-full bg-slate-900">
+            <div
+              className="h-1.5 rounded-full bg-sky-500"
+              style={{ width: `${activePercentage}%` }}
+            />
+          </div>
+        </div>
+      )}
+
       <div className="mb-3 rounded-md bg-slate-950/60 px-3 py-2 text-xs text-slate-300">
         {view === 'day' && (
           <>
@@ -96,7 +139,7 @@ export function WeeklyOverview({ state, referenceDay }: WeeklyOverviewProps) {
               <p>
                 You&apos;re{' '}
                 <span className="font-semibold text-sky-400">{todayPercentage.toFixed(1)}%</span> done with
-                today&apos;s tasks ({today.completedCount.toFixed(1)}/{today.totalCount.toFixed(1)}). Nice work. Keep your
+                today&apos;s plan ({today.completedCount.toFixed(1)}/{today.totalCount.toFixed(1)} points). Nice work. Keep your
                 focus blocks honest and kind to yourself.
               </p>
             )}
@@ -106,7 +149,7 @@ export function WeeklyOverview({ state, referenceDay }: WeeklyOverviewProps) {
           <p>
             This week you&apos;ve completed{' '}
             <span className="font-semibold text-sky-400">{stats.totalCompleted.toFixed(1)}</span> of{' '}
-            <span className="font-semibold">{stats.totalTasks.toFixed(1)}</span> planned tasks. Keep stacking
+            <span className="font-semibold">{stats.totalTasks.toFixed(1)}</span> points. Keep stacking
             small wins.
           </p>
         )}
@@ -114,14 +157,14 @@ export function WeeklyOverview({ state, referenceDay }: WeeklyOverviewProps) {
           <p>
             This month you&apos;re at{' '}
             <span className="font-semibold text-sky-400">{monthPercentage.toFixed(1)}%</span> completion (
-            {monthCompleted.toFixed(1)}/{monthTotal.toFixed(1)} tasks).
+            {monthCompleted.toFixed(1)}/{monthTotal.toFixed(1)} points).
           </p>
         )}
         {view === 'year' && (
           <p>
             This year you&apos;ve finished{' '}
             <span className="font-semibold text-sky-400">{yearCompleted.toFixed(1)}</span> of{' '}
-            <span className="font-semibold">{yearTotal.toFixed(1)}</span> tasks you planned.
+            <span className="font-semibold">{yearTotal.toFixed(1)}</span> points you planned.
           </p>
         )}
       </div>

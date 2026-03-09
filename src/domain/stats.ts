@@ -3,23 +3,33 @@
  *
  * Functions for computing weekly task completion statistics.
  *
- * Scoring rule:
- *   - A root task with NO subtasks counts as 1 point (0 or 1 depending on isDone).
- *   - A root task WITH subtasks counts as 1 point total, weighted by how many
- *     subtasks are done: e.g. 2 of 4 subtasks done → 0.5 points toward completion.
- *   - The parent task's own isDone flag is ignored for scoring when it has children
- *     (the parent is marked done automatically when all children are done).
- *
- * This way a task-group always contributes exactly 1 point, regardless of how many
- * subtasks it has, keeping percentages meaningful.
+ * Scoring rule (weighted points):
+ *   - Each ROOT task contributes a number of possible points based on its section.
+ *   - Leaf root tasks: earn all points if done, else 0.
+ *   - Root tasks WITH subtasks: earn a fraction based on subtask completion
+ *     (doneSubs / subtaskCount). Parent isDone is ignored for scoring.
+ *   - Subtasks add a small capped bonus to the root task's possible points so
+ *     completing a structured task feels slightly more rewarding without being gameable.
  */
 
 import type { AppState, Task, WeeklyStats, WeeklyStatsDaySummary } from './types'
 import { weekForDay } from './dateUtils'
 
+const SECTION_WEIGHTS: Record<Task['sectionId'], number> = {
+  mustDo: 3.0,
+  highPriority: 2.0,
+  mediumPriority: 1.5,
+  morningRoutine: 1.0,
+  nightRoutine: 1.0,
+  lowPriority: 0.5,
+}
+
+const SUBTASK_BONUS_PER_TASK = 0.1
+const SUBTASK_BONUS_CAP = 3
+
 /**
  * Compute points {total, completed} for a list of tasks.
- * Each root task = 1 point. Subtask completion drives the fraction earned.
+ * Each root task contributes weighted possible points. Subtask completion drives the fraction earned.
  */
 function computePoints(tasks: Task[]): { total: number; completed: number } {
   const childrenByParent = new Map<string, Task[]>()
@@ -39,16 +49,18 @@ function computePoints(tasks: Task[]): { total: number; completed: number } {
   let completed = 0
 
   for (const root of roots) {
-    total += 1
+    const baseWeight = SECTION_WEIGHTS[root.sectionId] ?? 1
     const children = childrenByParent.get(root.id) ?? []
 
     if (children.length === 0) {
-      // Leaf task: simply done or not
-      completed += root.isDone ? 1 : 0
+      total += baseWeight
+      completed += root.isDone ? baseWeight : 0
     } else {
-      // Has subtasks: fraction of children done
+      const effectiveWeight =
+        baseWeight + Math.min(children.length, SUBTASK_BONUS_CAP) * SUBTASK_BONUS_PER_TASK
+      total += effectiveWeight
       const doneSubs = children.filter((c) => c.isDone).length
-      completed += doneSubs / children.length
+      completed += effectiveWeight * (doneSubs / children.length)
     }
   }
 
