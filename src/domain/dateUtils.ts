@@ -15,6 +15,83 @@ export function todayIso(): string {
   return toLocalDayIso(new Date())
 }
 
+/**
+ * Merge activeDays with all dates that have planner data so previous work is never lost.
+ * Call when loading or recording open so streak reflects every day you had data since launch.
+ */
+export function mergeActiveDaysWithDayKeys(
+  activeDays: string[],
+  dayKeys: string[],
+): string[] {
+  return [...new Set([...activeDays, ...dayKeys])].sort()
+}
+
+export interface AccountabilityStats {
+  /** Longest consecutive run of active days up to the most recent active day. */
+  streak: number
+  /** Total calendar days from first use to today (inclusive). */
+  totalDays: number
+  /** Days you were active (unique entries in activeDays). */
+  daysActive: number
+  /** Calendar days between first use and today that you were NOT active. */
+  daysMissed: number
+  /** ISO date of the earliest recorded active day, or null if none. */
+  firstActiveDate: string | null
+}
+
+/**
+ * Full accountability picture from the activeDays history.
+ * Used by DayHeader to display streak, days missed, and days since launch.
+ */
+export function computeAccountabilityStats(activeDays: string[]): AccountabilityStats {
+  if (activeDays.length === 0) {
+    return { streak: 0, totalDays: 0, daysActive: 0, daysMissed: 0, firstActiveDate: null }
+  }
+
+  const sorted = [...new Set(activeDays)].sort()
+  const first = sorted[0]!
+  const today = todayIso()
+
+  // Count calendar days from first active day to today, inclusive.
+  let totalDays = 0
+  let cur = first
+  while (cur <= today) {
+    totalDays++
+    cur = addDays(cur, 1)
+  }
+
+  const daysActive = sorted.length
+  const daysMissed = Math.max(0, totalDays - daysActive)
+
+  return {
+    streak: computeStreak(sorted),
+    totalDays,
+    daysActive,
+    daysMissed,
+    firstActiveDate: first,
+  }
+}
+
+/**
+ * Longest consecutive run of active days ending at the most recent date.
+ * Used for streak display so all historical opens are counted.
+ */
+export function computeStreak(activeDays: string[]): number {
+  if (activeDays.length === 0) return 0
+  const sorted = [...new Set(activeDays)].sort()
+  const end = sorted[sorted.length - 1]!
+  let count = 1
+  let current = end
+  for (let i = sorted.length - 2; i >= 0; i--) {
+    const prev = sorted[i]!
+    const expectedPrev = addDays(current, -1)
+    if (prev !== expectedPrev) break
+    count += 1
+    current = prev
+  }
+  return count
+}
+
 export function addDays(isoDay: string, delta: number): string {
   const [year, month, day] = isoDay.split('-').map((part) => Number(part))
   const date = new Date(year, month - 1, day)
@@ -91,6 +168,29 @@ export function previousMonthId(monthId: string): string {
   const [y, m] = monthId.split('-').map(Number)
   if (m === 1) return `${y - 1}-12`
   return `${y}-${String(m - 1).padStart(2, '0')}`
+}
+
+/**
+ * Next month id (YYYY-MM) for a given month id.
+ */
+export function nextMonthId(monthId: string): string {
+  const [y, m] = monthId.split('-').map(Number)
+  if (m === 12) return `${y + 1}-01`
+  return `${y}-${String(m + 1).padStart(2, '0')}`
+}
+
+/**
+ * List of ISO date strings for every day in the given month (YYYY-MM).
+ */
+export function daysInMonth(monthId: string): string[] {
+  const [y, m] = monthId.split('-').map(Number)
+  const last = new Date(y!, m!, 0)
+  const count = last.getDate()
+  const out: string[] = []
+  for (let d = 1; d <= count; d += 1) {
+    out.push(toLocalDayIso(new Date(y!, m! - 1, d)))
+  }
+  return out
 }
 
 /**

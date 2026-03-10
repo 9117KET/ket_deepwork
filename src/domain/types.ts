@@ -46,6 +46,17 @@ export interface DayState {
   date: string;
   tasks: Task[];
   deepWorkSessions: DeepWorkSession[];
+  /** Habit id -> completed for this day (tracking dashboard). */
+  habitCompletions?: Record<string, boolean>;
+  /** Sleep duration in hours, e.g. 6, 7, 8 (null = not set). */
+  sleepHours?: number | null;
+  /** Mood emoji or code, e.g. "🙂" (null = not set). */
+  mood?: string | null;
+}
+
+export interface HabitDefinition {
+  id: string;
+  label: string;
 }
 
 export interface AppState {
@@ -56,6 +67,12 @@ export interface AppState {
    * Positive = shift blocks later, negative = earlier. Clamped to ±180.
    */
   timeOffsetMinutes?: number;
+  /** User-defined habits for the tracking dashboard (synced when signed in). */
+  habitDefinitions?: HabitDefinition[];
+  /** Month id (YYYY-MM) -> chapter title, e.g. "The Foundation". */
+  monthTitles?: Record<string, string>;
+  /** ISO dates (YYYY-MM-DD) when the app was opened; streak is computed from this so no days are lost. */
+  activeDays?: string[];
 }
 
 export interface WeeklyStatsDaySummary {
@@ -100,4 +117,18 @@ export const FIXED_SECTIONS: TaskSection[] = [
     title: "Night routine",
     description: "Wind-down and end-of-day tasks.",
   },
+];
+
+/** Default habit list for the tracking dashboard when user has none. */
+export const DEFAULT_HABIT_DEFINITIONS: HabitDefinition[] = [
+  { id: "habit-gym", label: "Gym" },
+  { id: "habit-eat-clean", label: "Eat Clean" },
+  { id: "habit-pray", label: "Pray" },
+  { id: "habit-bed-23", label: "Bed Before 23:00" },
+  { id: "habit-journal", label: "Journaling" },
+  { id: "habit-screen-5h", label: "Screen Time - 5h" },
+  { id: "habit-nofaps", label: "NoFaps" },
+  { id: "habit-deep-work", label: "Deep Work" },
+  { id: "habit-post-3x", label: "Post 3x" },
+  { id: "habit-deep-learning", label: "Deep Learning" },
 ];

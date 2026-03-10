@@ -9,6 +9,12 @@ interface DayHeaderProps {
   completionRatio?: number
   completedPoints?: number
   totalPoints?: number
+  /** Consecutive days the app was opened. */
+  streak?: number
+  /** Calendar days between first use and today that were missed. */
+  daysMissed?: number
+  /** Total calendar days since first use (for accountability context). */
+  totalDays?: number
   onPrevDay: () => void
   onNextDay: () => void
   onToday: () => void
@@ -19,6 +25,9 @@ export function DayHeader({
   completionRatio = 0,
   completedPoints = 0,
   totalPoints = 0,
+  streak,
+  daysMissed,
+  totalDays,
   onPrevDay,
   onNextDay,
   onToday,
@@ -28,7 +37,29 @@ export function DayHeader({
   return (
     <div className="mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-between">
       <div>
-        <p className="text-xs uppercase tracking-wide text-sky-300/80">Today&apos;s plan</p>
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+          <p className="text-xs uppercase tracking-wide text-sky-300/80">Today&apos;s plan</p>
+          {streak != null && streak > 0 && (
+            <span className="rounded border border-amber-500/50 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-200">
+              🔥 {streak} day streak
+            </span>
+          )}
+          {daysMissed != null && daysMissed === 0 && totalDays != null && totalDays > 0 && (
+            <span className="rounded border border-emerald-500/50 bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-300">
+              0 days missed
+            </span>
+          )}
+          {daysMissed != null && daysMissed > 0 && (
+            <span className="rounded border border-red-500/60 bg-red-500/10 px-2 py-0.5 text-xs font-medium text-red-300">
+              {daysMissed} day{daysMissed !== 1 ? 's' : ''} missed
+            </span>
+          )}
+          {totalDays != null && totalDays > 0 && (
+            <span className="rounded border border-slate-700 bg-slate-800/60 px-2 py-0.5 text-xs text-slate-400">
+              {totalDays} day{totalDays !== 1 ? 's' : ''} since 1st use
+            </span>
+          )}
+        </div>
         <h2 className="text-xl sm:text-2xl font-semibold tracking-tight">{dateLabel}</h2>
         {totalPoints > 0 ? (
           <div className="mt-2 max-w-md">

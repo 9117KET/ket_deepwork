@@ -21,7 +21,7 @@ alter table public.planner_days
 alter table public.planner_days enable row level security;
 
 -- RLS: users can manage only their own rows.
-create policy if not exists "Users can manage their own planner_days"
+create policy "Users can manage their own planner_days"
   on public.planner_days
   for all
   using (auth.uid() = user_id)

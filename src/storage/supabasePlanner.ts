@@ -14,12 +14,15 @@ interface PlannerDayRow {
   date: string
   tasks: unknown
   deep_work_sessions: unknown
+  habit_completions?: unknown
+  sleep_hours?: number | null
+  mood?: string | null
 }
 
 export async function fetchPlannerState(userId: string): Promise<AppState | null> {
   const { data, error } = await supabase
     .from('planner_days')
-    .select('id, user_id, date, tasks, deep_work_sessions')
+    .select('id, user_id, date, tasks, deep_work_sessions, habit_completions, sleep_hours, mood')
     .eq('user_id', userId)
     .order('date', { ascending: true })
 
@@ -33,10 +36,14 @@ export async function fetchPlannerState(userId: string): Promise<AppState | null
   for (const row of (data ?? []) as PlannerDayRow[]) {
     const tasks = (row.tasks as DayState['tasks'] | null) ?? []
     const deepWorkSessions = (row.deep_work_sessions as DayState['deepWorkSessions'] | null) ?? []
+    const habitCompletions = (row.habit_completions as DayState['habitCompletions'] | null) ?? {}
     days[row.date] = {
       date: row.date,
       tasks,
       deepWorkSessions,
+      habitCompletions: Object.keys(habitCompletions).length > 0 ? habitCompletions : undefined,
+      sleepHours: row.sleep_hours ?? undefined,
+      mood: row.mood ?? undefined,
     }
   }
 
@@ -51,6 +58,9 @@ export async function upsertPlannerDays(userId: string, days: AppState['days']):
       date: day.date,
       tasks: day.tasks ?? [],
       deep_work_sessions: day.deepWorkSessions ?? [],
+      habit_completions: day.habitCompletions ?? {},
+      sleep_hours: day.sleepHours ?? null,
+      mood: day.mood ?? null,
     }))
 
   if (payload.length === 0) {

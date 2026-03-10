@@ -8,9 +8,10 @@
 
 import { useEffect, useRef, useState } from 'react'
 import type { AppState, DayState } from '../domain/types'
-import { todayIso } from '../domain/dateUtils'
+import { todayIso, mergeActiveDaysWithDayKeys } from '../domain/dateUtils'
 import { useAuth } from '../contexts/AuthContext'
 import { fetchPlannerState, upsertPlannerDays } from './supabasePlanner'
+import { fetchUserSettings, upsertUserSettings } from './supabaseUserSettings'
 
 const STORAGE_KEY = 'deepblock_state_v1'
 /** Legacy key from before the Deepblock rename; used once to migrate existing data. */
@@ -52,6 +53,16 @@ function migrate(persisted: PersistedStateV1 | null): AppState {
   return persisted.state ?? EMPTY_STATE
 }
 
+/** Merge activeDays with all state.days keys so every day with data counts; migrate legacy lastOpenDate. */
+function migrateLegacyStreak(state: AppState): AppState {
+  const legacy = state as AppState & { lastOpenDate?: string }
+  const dayKeys = Object.keys(state.days ?? {}).filter(Boolean)
+  let base = state.activeDays ?? []
+  if (legacy.lastOpenDate && !base.length) base = [legacy.lastOpenDate]
+  const activeDays = mergeActiveDaysWithDayKeys(base, dayKeys)
+  return { ...state, activeDays }
+}
+
 function readInitialState(): AppState {
   if (typeof window === 'undefined') {
     return EMPTY_STATE
@@ -59,6 +70,7 @@ function readInitialState(): AppState {
   const raw = window.localStorage.getItem(STORAGE_KEY)
   const parsed = safeParse(raw)
   let state = migrate(parsed)
+  state = migrateLegacyStreak(state)
 
   // One-time migration from ket_deepwork → Deepblock rename.
   // Note: localStorage is per-origin. Data on localhost never exists on production (different origin).
@@ -94,7 +106,7 @@ function readInitialState(): AppState {
     }
   }
 
-  return state
+  return migrateLegacyStreak(state)
 }
 
 function writeState(next: AppState) {
@@ -138,13 +150,29 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
     }
 
     const loadFromSupabase = async () => {
-      const remote = await fetchPlannerState(user.id)
+      const [remote, settings] = await Promise.all([
+        fetchPlannerState(user.id),
+        fetchUserSettings(user.id),
+      ])
       if (cancelled) return
-      if (remote !== null) {
-        setState((prev) => ({
-          days: { ...(prev.days ?? {}), ...(remote.days ?? {}) },
-          timeOffsetMinutes: remote.timeOffsetMinutes ?? prev.timeOffsetMinutes,
-        }))
+      if (remote !== null || settings !== null) {
+        setState((prev) => {
+          const prevLegacy = prev as AppState & { lastOpenDate?: string }
+          let activeDays =
+            settings?.activeDays ??
+            (prevLegacy.lastOpenDate && !prev.activeDays?.length
+              ? [prevLegacy.lastOpenDate]
+              : prev.activeDays ?? [])
+          const dayKeys = Object.keys(remote?.days ? { ...prev.days, ...remote.days } : prev.days ?? {}).filter(Boolean)
+          activeDays = mergeActiveDaysWithDayKeys(activeDays, dayKeys)
+          return {
+            days: remote?.days ? { ...(prev.days ?? {}), ...remote.days } : prev.days,
+            timeOffsetMinutes: remote?.timeOffsetMinutes ?? prev.timeOffsetMinutes,
+            habitDefinitions: settings?.habitDefinitions ?? prev.habitDefinitions,
+            monthTitles: settings?.monthTitles ?? prev.monthTitles,
+            activeDays,
+          }
+        })
       }
       if (!cancelled) {
         setReadyToSync(true)
@@ -163,6 +191,8 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
   const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // When logged in and initial remote load finished, push changes to Supabase with debounce.
+  const settingsSyncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   useEffect(() => {
     if (!user || !readyToSync) return
     if (typeof window === 'undefined') return
@@ -182,6 +212,29 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
     }
   }, [state, user, readyToSync])
 
+  // Sync user_settings (habit definitions, month titles, streak) when they change; debounced.
+  useEffect(() => {
+    if (!user || !readyToSync) return
+    if (typeof window === 'undefined') return
+
+    if (settingsSyncTimeoutRef.current) clearTimeout(settingsSyncTimeoutRef.current)
+    settingsSyncTimeoutRef.current = setTimeout(() => {
+      settingsSyncTimeoutRef.current = null
+      void upsertUserSettings(user.id, {
+        habitDefinitions: stateRef.current.habitDefinitions ?? [],
+        monthTitles: stateRef.current.monthTitles ?? {},
+        activeDays: stateRef.current.activeDays ?? [],
+      })
+    }, 800)
+
+    return () => {
+      if (settingsSyncTimeoutRef.current) {
+        clearTimeout(settingsSyncTimeoutRef.current)
+        settingsSyncTimeoutRef.current = null
+      }
+    }
+  }, [state.habitDefinitions, state.monthTitles, state.activeDays, user, readyToSync])
+
   // Flush pending sync when tab is hidden or page unloads so other devices see changes.
   // Refetch from Supabase when tab becomes visible so this device shows latest (e.g. after editing on phone).
   useEffect(() => {
@@ -192,6 +245,15 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
         clearTimeout(syncTimeoutRef.current)
         syncTimeoutRef.current = null
         void upsertPlannerDays(user.id, stateRef.current.days)
+      }
+      if (settingsSyncTimeoutRef.current) {
+        clearTimeout(settingsSyncTimeoutRef.current)
+        settingsSyncTimeoutRef.current = null
+        void upsertUserSettings(user.id, {
+          habitDefinitions: stateRef.current.habitDefinitions ?? [],
+          monthTitles: stateRef.current.monthTitles ?? {},
+          activeDays: stateRef.current.activeDays ?? [],
+        })
       }
     }
 
@@ -204,15 +266,29 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
       }
       if (document.visibilityState === 'visible') {
         refetchCancelled = false
-        fetchPlannerState(user.id).then((remote) => {
-          if (refetchCancelled) return
-          if (remote !== null) {
-            setState((prev) => ({
-              days: { ...(prev.days ?? {}), ...(remote.days ?? {}) },
-              timeOffsetMinutes: remote.timeOffsetMinutes ?? prev.timeOffsetMinutes,
-            }))
-          }
-        })
+        Promise.all([fetchPlannerState(user.id), fetchUserSettings(user.id)]).then(
+          ([remote, settings]) => {
+            if (refetchCancelled) return
+            if (remote !== null || settings !== null) {
+              setState((prev) => {
+                const mergedDays = remote?.days ? { ...(prev.days ?? {}), ...remote.days } : prev.days ?? {}
+                const dayKeys = Object.keys(mergedDays).filter(Boolean)
+                const activeDays = mergeActiveDaysWithDayKeys(
+                  settings?.activeDays ?? prev.activeDays ?? [],
+                  dayKeys,
+                )
+                return {
+                  ...prev,
+                  days: remote?.days ? mergedDays : prev.days,
+                  timeOffsetMinutes: remote?.timeOffsetMinutes ?? prev.timeOffsetMinutes,
+                  habitDefinitions: settings?.habitDefinitions ?? prev.habitDefinitions,
+                  monthTitles: settings?.monthTitles ?? prev.monthTitles,
+                  activeDays,
+                }
+              })
+            }
+          },
+        )
       }
     }
 

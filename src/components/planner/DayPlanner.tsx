@@ -7,17 +7,21 @@
 
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { AppState } from "../../domain/types";
 import {
   FIXED_SECTIONS,
-  type TaskSectionId,
+  type AppState,
+  type DayState,
+  type HabitDefinition,
   type Task,
+  type TaskSectionId,
 } from "../../domain/types";
 import {
   addDays,
   todayIso,
   sameWeekdayLastWeek,
   normalizeHhmm,
+  computeAccountabilityStats,
+  mergeActiveDaysWithDayKeys,
 } from "../../domain/dateUtils";
 import {
   getActiveSectionIds,
@@ -33,6 +37,7 @@ import { computeDayCompletion } from "../../domain/stats";
 import { DayHeader } from "./DayHeader";
 import { SectionColumn } from "./SectionColumn";
 import { WeeklyOverview } from "./WeeklyOverview";
+import { MonthlyTrackingDashboard } from "../tracking";
 import { DeepWorkTimer } from "../timer/DeepWorkTimer";
 import { MotivationCard } from "../timer/MotivationCard";
 
@@ -142,8 +147,24 @@ function cloneTasksForDay(
   }));
 }
 
-export function DayPlanner() {
-  const [appState, updateAppState] = usePersistentState();
+interface DayPlannerProps {
+  /**
+   * 'view' = read-only shared planner (all actions disabled).
+   * 'edit' = shared planner with task add/complete/delete via external updater.
+   * Omit for normal owner mode.
+   */
+  shareMode?: 'view' | 'edit'
+  /** External AppState to display instead of the owner's persisted state. */
+  externalState?: AppState
+  /** Called when any AppState update is requested in shared mode; parent handles persistence. */
+  onExternalUpdate?: (updater: (prev: AppState) => AppState) => void
+}
+
+export function DayPlanner({ shareMode, externalState, onExternalUpdate }: DayPlannerProps = {}) {
+  const [ownState, updateOwnState] = usePersistentState();
+  // Use external shared state when provided; fall back to owner's state.
+  const appState = externalState ?? ownState;
+  const updateAppState = (shareMode && onExternalUpdate) ? onExternalUpdate : updateOwnState;
   const [selectedDay, setSelectedDay] = useState<string>(todayIso);
   const [splitRatio, setSplitRatio] = useState(0.68); // fraction of width for task column
   const gridRef = useRef<HTMLDivElement | null>(null);
@@ -171,6 +192,11 @@ export function DayPlanner() {
     dayCompletion.totalCount === 0
       ? 0
       : dayCompletion.completedCount / dayCompletion.totalCount;
+
+  const accountabilityStats = useMemo(
+    () => computeAccountabilityStats(appState.activeDays ?? []),
+    [appState.activeDays],
+  );
 
   const handleAddTask = (sectionId: TaskSectionId, title: string) => {
     updateAppState((prev) => {
@@ -577,6 +603,42 @@ export function DayPlanner() {
     });
   };
 
+  const handleTrackingUpdateDay = useCallback(
+    (isoDate: string, updatedDay: DayState) => {
+      updateAppState((prev) => {
+        const existing = getOrCreateDay(prev, isoDate);
+        return { ...prev, days: { ...prev.days, [isoDate]: { ...existing, ...updatedDay } } };
+      });
+    },
+    [updateAppState],
+  );
+
+  const handleTrackingUpdateSettings = useCallback(
+    (patch: { habitDefinitions?: HabitDefinition[]; monthTitles?: Record<string, string> }) => {
+      updateAppState((prev) => ({
+        ...prev,
+        habitDefinitions: patch.habitDefinitions ?? prev.habitDefinitions,
+        monthTitles: patch.monthTitles ?? prev.monthTitles,
+      }));
+    },
+    [updateAppState],
+  );
+
+  // Record app open once per page load (owner only). Backfill activeDays from all state.days so no previous day is lost.
+  const recordedOpenRef = useRef(false);
+  useEffect(() => {
+    if (shareMode) return; // never record an open for a shared visitor
+    if (recordedOpenRef.current) return;
+    recordedOpenRef.current = true;
+    updateAppState((prev) => {
+      const today = todayIso();
+      const dayKeys = Object.keys(prev.days ?? {}).filter(Boolean);
+      let merged = mergeActiveDaysWithDayKeys(prev.activeDays ?? [], dayKeys);
+      if (!merged.includes(today)) merged = [...merged, today].sort();
+      return { ...prev, activeDays: merged };
+    });
+  }, [shareMode, updateAppState]);
+
   const [tick, setTick] = useState(0);
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 15_000);
@@ -763,12 +825,15 @@ export function DayPlanner() {
           completionRatio={dayCompletionRatio}
           completedPoints={dayCompletion.completedCount}
           totalPoints={dayCompletion.totalCount}
+          streak={accountabilityStats.streak}
+          daysMissed={shareMode ? undefined : accountabilityStats.daysMissed}
+          totalDays={shareMode ? undefined : accountabilityStats.totalDays}
           onPrevDay={() => setSelectedDay((current) => addDays(current, -1))}
           onNextDay={() => setSelectedDay((current) => addDays(current, 1))}
           onToday={() => setSelectedDay(todayIso())}
         />
-        {/* Copy/fill only when the selected day has no tasks. Show all available sources so the user can choose (same day last week, yesterday, or last day with tasks if a day was skipped). */}
-        {dayState.tasks.length === 0 && (() => {
+        {/* Copy/fill: owner only — don't expose other days' tasks to shared visitors */}
+        {!shareMode && dayState.tasks.length === 0 && (() => {
           const copyOptions: { label: string; sourceDate: string; title?: string }[] = [];
           if (lastWeekdayState.tasks.length > 0) {
             copyOptions.push({ label: `Fill from last ${weekdayLabel}`, sourceDate: lastWeekday });
@@ -821,47 +886,50 @@ export function DayPlanner() {
             </button>
           </div>
         )}
-        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-          <span className="text-slate-400">
-            Daily timeframe offset (defaults: 5–9 morning, 9–5 focus, 5–9 evening).{" "}
-            {timeOffsetMinutes === 0
-              ? "Using default blocks. Shift by ±30 minutes as needed."
-              : `Shifted by ${timeOffsetMinutes} minutes from the default blocks.`}
-          </span>
-          <button
-            type="button"
-            onClick={() => handleAdjustTimeOffset(-30)}
-            disabled={timeOffsetMinutes <= -MAX_TIME_OFFSET_MINUTES}
-            className={`rounded border px-2 py-1 ${
-              timeOffsetMinutes <= -MAX_TIME_OFFSET_MINUTES
-                ? "cursor-not-allowed border-slate-800 bg-slate-900 text-slate-600"
-                : "border-slate-700 bg-slate-900 text-slate-300 hover:border-sky-600 hover:text-sky-300"
-            }`}
-          >
-            Earlier (-30m)
-          </button>
-          <button
-            type="button"
-            onClick={() => handleAdjustTimeOffset(30)}
-            disabled={timeOffsetMinutes >= MAX_TIME_OFFSET_MINUTES}
-            className={`rounded border px-2 py-1 ${
-              timeOffsetMinutes >= MAX_TIME_OFFSET_MINUTES
-                ? "cursor-not-allowed border-slate-800 bg-slate-900 text-slate-600"
-                : "border-slate-700 bg-slate-900 text-slate-300 hover:border-sky-600 hover:text-sky-300"
-            }`}
-          >
-            Later (+30m)
-          </button>
-          {timeOffsetMinutes !== 0 && (
+        {/* Time offset controls: owner only */}
+        {!shareMode && (
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+            <span className="text-slate-400">
+              Daily timeframe offset (defaults: 5–9 morning, 9–5 focus, 5–9 evening).{" "}
+              {timeOffsetMinutes === 0
+                ? "Using default blocks. Shift by ±30 minutes as needed."
+                : `Shifted by ${timeOffsetMinutes} minutes from the default blocks.`}
+            </span>
             <button
               type="button"
-              onClick={handleResetTimeOffset}
-              className="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-300 hover:border-sky-600 hover:text-sky-300"
+              onClick={() => handleAdjustTimeOffset(-30)}
+              disabled={timeOffsetMinutes <= -MAX_TIME_OFFSET_MINUTES}
+              className={`rounded border px-2 py-1 ${
+                timeOffsetMinutes <= -MAX_TIME_OFFSET_MINUTES
+                  ? "cursor-not-allowed border-slate-800 bg-slate-900 text-slate-600"
+                  : "border-slate-700 bg-slate-900 text-slate-300 hover:border-sky-600 hover:text-sky-300"
+              }`}
             >
-              Reset
+              Earlier (-30m)
             </button>
-          )}
-        </div>
+            <button
+              type="button"
+              onClick={() => handleAdjustTimeOffset(30)}
+              disabled={timeOffsetMinutes >= MAX_TIME_OFFSET_MINUTES}
+              className={`rounded border px-2 py-1 ${
+                timeOffsetMinutes >= MAX_TIME_OFFSET_MINUTES
+                  ? "cursor-not-allowed border-slate-800 bg-slate-900 text-slate-600"
+                  : "border-slate-700 bg-slate-900 text-slate-300 hover:border-sky-600 hover:text-sky-300"
+              }`}
+            >
+              Later (+30m)
+            </button>
+            {timeOffsetMinutes !== 0 && (
+              <button
+                type="button"
+                onClick={handleResetTimeOffset}
+                className="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-300 hover:border-sky-600 hover:text-sky-300"
+              >
+                Reset
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       <div
@@ -881,20 +949,20 @@ export function DayPlanner() {
               tasks={tasksBySection[section.id]}
               isTimeBlockActive={activeSectionIds.includes(section.id)}
               timeframeLabel={timeframeLabelsBySection[section.id]}
-              draggedTask={draggedTask}
-              onDragStart={handleDragStart}
-              onDragEnd={handleDragEnd}
-              onDrop={(insertIndex: number) => handleDrop(section.id, insertIndex)}
-              selectedTaskIds={selectedTaskIds}
-              onToggleSelect={handleToggleSelect}
-              onAddTask={(title) => handleAddTask(section.id, title)}
-              onAddTaskBelow={(afterTaskId) =>
+              draggedTask={shareMode ? null : draggedTask}
+              onDragStart={shareMode ? () => undefined : handleDragStart}
+              onDragEnd={shareMode ? () => undefined : handleDragEnd}
+              onDrop={shareMode ? () => undefined : (insertIndex: number) => handleDrop(section.id, insertIndex)}
+              selectedTaskIds={shareMode ? new Set<string>() : selectedTaskIds}
+              onToggleSelect={shareMode ? () => undefined : handleToggleSelect}
+              onAddTask={shareMode === 'view' ? () => undefined : (title) => handleAddTask(section.id, title)}
+              onAddTaskBelow={shareMode === 'view' ? () => undefined : (afterTaskId) =>
                 handleAddTaskBelow(section.id, afterTaskId)
               }
-              onAddSubtask={handleAddSubtask}
-              onToggleTask={(taskId) => handleToggleTask(taskId)}
-              onDeleteTask={(taskId) => handleDeleteTask(taskId)}
-              onUpdateTask={handleUpdateTask}
+              onAddSubtask={shareMode === 'view' ? () => undefined : handleAddSubtask}
+              onToggleTask={shareMode === 'view' ? () => undefined : (taskId) => handleToggleTask(taskId)}
+              onDeleteTask={shareMode === 'view' ? () => undefined : (taskId) => handleDeleteTask(taskId)}
+              onUpdateTask={shareMode === 'view' ? () => undefined : handleUpdateTask}
               taskIdsDueNow={taskIdsDueNow}
             />
           ))}
@@ -929,10 +997,23 @@ export function DayPlanner() {
             state={appState as AppState}
             referenceDay={selectedDay}
           />
-          <DeepWorkTimer />
-          <MotivationCard />
+          {/* Deep work timer and motivation card: owner only */}
+          {!shareMode && <DeepWorkTimer />}
+          {!shareMode && <MotivationCard />}
         </div>
       </div>
+
+      {/* Monthly tracking: owner only (not shown on shared views) */}
+      {!shareMode && (
+        <div className="mt-6">
+          <MonthlyTrackingDashboard
+            state={appState}
+            referenceDay={selectedDay}
+            onUpdateDay={handleTrackingUpdateDay}
+            onUpdateSettings={handleTrackingUpdateSettings}
+          />
+        </div>
+      )}
     </div>
   );
 }

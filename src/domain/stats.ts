@@ -102,3 +102,24 @@ export function computeDayCompletion(state: AppState, dayIso: string): WeeklySta
   }
 }
 
+/**
+ * For a list of tasks, returns how many root tasks are total vs completed
+ * broken down by section. Only root tasks are counted (parentId absent) —
+ * subtasks are owned by their parent's score.
+ */
+export function computeSectionCompletion(
+  tasks: Task[],
+): Partial<Record<Task['sectionId'], { total: number; completed: number }>> {
+  const result: Partial<Record<Task['sectionId'], { total: number; completed: number }>> = {}
+
+  for (const task of tasks) {
+    if (task.parentId) continue // subtasks don't count independently
+    const bucket = result[task.sectionId] ?? { total: 0, completed: 0 }
+    bucket.total++
+    if (task.isDone) bucket.completed++
+    result[task.sectionId] = bucket
+  }
+
+  return result
+}
+
