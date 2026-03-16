@@ -890,9 +890,9 @@ export function DayPlanner({ shareMode, externalState, onExternalUpdate }: DayPl
         {!shareMode && (
           <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
             <span className="text-slate-400">
-              Daily timeframe offset (defaults: 5–9 morning, 9–5 focus, 5–9 evening).{" "}
+              Daily timeframe offset.{" "}
               {timeOffsetMinutes === 0
-                ? "Using default blocks. Shift by ±30 minutes as needed."
+                ? "Shift by ±30 minutes as needed."
                 : `Shifted by ${timeOffsetMinutes} minutes from the default blocks.`}
             </span>
             <button

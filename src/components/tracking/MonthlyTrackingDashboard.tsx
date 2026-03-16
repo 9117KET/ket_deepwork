@@ -1,14 +1,15 @@
 /**
  * components/tracking/MonthlyTrackingDashboard.tsx
  *
- * Monthly tracking: habits grid, sleep line chart, mood row.
- * Uses existing AppState and callbacks so persistence stays in the parent.
+ * Monthly tracking: block (section) completion from planner tasks, sleep, mood.
+ * No per-task or custom-habit grid — completion rates per block are derived from
+ * actual day tasks so the metric stays accurate as tasks change daily.
  */
 
 import type React from 'react'
 import { useState, useMemo, useCallback } from 'react'
 import type { AppState, DayState, HabitDefinition } from '../../domain/types'
-import { DEFAULT_HABIT_DEFINITIONS, FIXED_SECTIONS } from '../../domain/types'
+import { FIXED_SECTIONS } from '../../domain/types'
 import {
   toMonthId,
   previousMonthId,
@@ -16,7 +17,7 @@ import {
   daysInMonth,
 } from '../../domain/dateUtils'
 import { getOrCreateDay } from '../../storage/localStorageState'
-import { computeSectionCompletion } from '../../domain/stats'
+import { computeSectionCompletion, computeDayCompletion } from '../../domain/stats'
 
 const SLEEP_HOUR_OPTIONS = [3, 4, 5, 6, 7, 8, 9] as const
 const MOOD_OPTIONS = ['🙂', '😐', '🙁', '😊', '😢', '😤', '😴', '🔥'] as const
@@ -44,13 +45,9 @@ export function MonthlyTrackingDashboard({
   onUpdateSettings,
 }: MonthlyTrackingDashboardProps) {
   const [selectedMonthId, setSelectedMonthId] = useState(() => toMonthId(referenceDay))
-  const [editHabitsOpen, setEditHabitsOpen] = useState(false)
   const [moodPickerDay, setMoodPickerDay] = useState<string | null>(null)
   const [sleepPickerDay, setSleepPickerDay] = useState<string | null>(null)
 
-  const habits = state.habitDefinitions?.length
-    ? state.habitDefinitions
-    : DEFAULT_HABIT_DEFINITIONS
   const monthDays = useMemo(() => daysInMonth(selectedMonthId), [selectedMonthId])
   const chapterTitle = state.monthTitles?.[selectedMonthId] ?? ''
 
@@ -61,18 +58,6 @@ export function MonthlyTrackingDashboard({
       })
     },
     [onUpdateSettings, state.monthTitles, selectedMonthId],
-  )
-
-  const handleToggleHabit = useCallback(
-    (isoDate: string, habitId: string) => {
-      const day = getOrCreateDay(state, isoDate)
-      const current = day.habitCompletions?.[habitId] ?? false
-      onUpdateDay(isoDate, {
-        ...day,
-        habitCompletions: { ...(day.habitCompletions ?? {}), [habitId]: !current },
-      })
-    },
-    [state, onUpdateDay],
   )
 
   const handleSetSleep = useCallback(
@@ -92,16 +77,6 @@ export function MonthlyTrackingDashboard({
     },
     [state, onUpdateDay],
   )
-
-  const totalPointsPerDay = useMemo(() => {
-    const totals: Record<string, number> = {}
-    for (const isoDate of monthDays) {
-      const day = state.days[isoDate]
-      const completions = day?.habitCompletions ?? {}
-      totals[isoDate] = habits.filter((h) => completions[h.id]).length
-    }
-    return totals
-  }, [state.days, monthDays, habits])
 
   const sleepData = useMemo(() => {
     return monthDays.map((isoDate) => {
@@ -137,7 +112,7 @@ export function MonthlyTrackingDashboard({
           <h3 className="text-sm sm:text-base font-semibold text-slate-100">
             Monthly tracking
           </h3>
-          <p className="text-xs text-slate-400">Habits, sleep, and mood.</p>
+          <p className="text-xs text-slate-400">Block completion, sleep, and mood.</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -173,86 +148,8 @@ export function MonthlyTrackingDashboard({
         />
       </div>
 
-      {/* Habit grid */}
-      <div className="mb-4">
-        <div className="mb-2 flex items-center justify-between">
-          <span className="text-xs font-medium text-slate-300">30 Day Dashboard</span>
-          <button
-            type="button"
-            onClick={() => setEditHabitsOpen(true)}
-            className="text-xs text-sky-400 hover:text-sky-300"
-          >
-            Edit habits
-          </button>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[600px] border-collapse text-xs">
-            <thead>
-              <tr>
-                <th className="border border-slate-700 bg-slate-950 px-1 py-1 text-left font-medium text-slate-400 w-32">
-                  Habits
-                </th>
-                {monthDays.map((isoDate) => {
-                  const d = isoDate.split('-')[2]
-                  return (
-                    <th
-                      key={isoDate}
-                      className="border border-slate-700 bg-slate-950 px-0.5 py-1 text-center text-slate-500 w-7"
-                    >
-                      {d}
-                    </th>
-                  )
-                })}
-              </tr>
-            </thead>
-            <tbody>
-              {habits.map((habit) => (
-                <tr key={habit.id}>
-                  <td className="border border-slate-700 bg-slate-900 px-1 py-0.5 text-slate-200">
-                    {habit.label}
-                  </td>
-                  {monthDays.map((isoDate) => {
-                    const day = state.days[isoDate]
-                    const checked = (day?.habitCompletions ?? {})[habit.id] ?? false
-                    return (
-                      <td
-                        key={isoDate}
-                        className="border border-slate-700 bg-slate-900 p-0 text-center"
-                      >
-                        <button
-                          type="button"
-                          onClick={() => handleToggleHabit(isoDate, habit.id)}
-                          className="h-6 w-full hover:bg-slate-800 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                          aria-label={`${habit.label} ${isoDate} ${checked ? 'done' : 'not done'}`}
-                        >
-                          {checked ? (
-                            <span className="text-sky-400" aria-hidden>✓</span>
-                          ) : (
-                            <span className="text-slate-600">·</span>
-                          )}
-                        </button>
-                      </td>
-                    )
-                  })}
-                </tr>
-              ))}
-              <tr>
-                <td className="border border-slate-700 bg-slate-950 px-1 py-1 font-medium text-slate-400">
-                  Total Points
-                </td>
-                {monthDays.map((isoDate) => (
-                  <td
-                    key={isoDate}
-                    className="border border-slate-700 bg-slate-950 px-0.5 py-1 text-center text-slate-300"
-                  >
-                    {totalPointsPerDay[isoDate] ?? 0}
-                  </td>
-                ))}
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
+      {/* Block completion (from planner tasks) — primary metric; no individual tasks */}
+      <BlockCompletionGrid state={state} monthDays={monthDays} />
 
       {/* Sleep tracker */}
       <div className="mb-4">
@@ -365,19 +262,6 @@ export function MonthlyTrackingDashboard({
         </div>
       </div>
 
-      {/* Block completion grid */}
-      <BlockCompletionGrid state={state} monthDays={monthDays} />
-
-      {editHabitsOpen && (
-        <EditHabitsModal
-          habits={habits}
-          onSave={(next) => {
-            onUpdateSettings({ habitDefinitions: next })
-            setEditHabitsOpen(false)
-          }}
-          onClose={() => setEditHabitsOpen(false)}
-        />
-      )}
     </section>
   )
 }
@@ -423,7 +307,6 @@ function BlockCompletionGrid({
   state: AppState
   monthDays: string[]
 }) {
-  // Pre-compute section completion for every day in the month.
   const byDay = useMemo(() => {
     const map: Record<string, ReturnType<typeof computeSectionCompletion>> = {}
     for (const isoDate of monthDays) {
@@ -432,38 +315,29 @@ function BlockCompletionGrid({
     return map
   }, [state.days, monthDays])
 
-  // Only show sections that have at least one task anywhere in this month.
-  const activeSections = useMemo(
-    () =>
-      FIXED_SECTIONS.filter((s) =>
-        monthDays.some((d) => (byDay[d]?.[s.id]?.total ?? 0) > 0),
-      ),
-    [byDay, monthDays],
-  )
-
-  if (activeSections.length === 0) {
-    return (
-      <div className="mt-4">
-        <h4 className="text-xs font-medium text-slate-300 mb-2">Block Completion</h4>
-        <p className="text-xs text-slate-500">No tasks logged this month yet.</p>
-      </div>
-    )
-  }
+  const dayTotals = useMemo(() => {
+    const out: Record<string, { total: number; completed: number }> = {}
+    for (const isoDate of monthDays) {
+      const day = computeDayCompletion(state, isoDate)
+      out[isoDate] = { total: day.totalCount, completed: day.completedCount }
+    }
+    return out
+  }, [state, monthDays])
 
   return (
-    <div className="mt-4">
-      <h4 className="text-xs font-medium text-slate-300 mb-1">Block Completion</h4>
+    <div className="mb-4">
+      <h4 className="text-xs font-medium text-slate-300 mb-1">Block completion rate</h4>
       <p className="text-[10px] text-slate-500 mb-2">
-        How many tasks were completed in each planner block per day.
-        <span className="ml-2 text-sky-400">✓ = all done</span>
+        From your planner tasks. Rate per block (not individual tasks) so it stays accurate as tasks change.
+        <span className="ml-2 text-sky-400">✓ = 100%</span>
         <span className="ml-1 text-amber-300">n/m = partial</span>
-        <span className="ml-1 text-red-400/70">red = nothing done</span>
+        <span className="ml-1 text-red-400/70">0%</span>
       </p>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[600px] border-collapse text-xs">
           <thead>
             <tr>
-              <th className="border border-slate-700 bg-slate-950 px-1 py-1 text-left font-medium text-slate-400 w-20">
+              <th className="border border-slate-700 bg-slate-950 px-1 py-1 text-left font-medium text-slate-400 w-24">
                 Block
               </th>
               {monthDays.map((isoDate) => (
@@ -477,7 +351,34 @@ function BlockCompletionGrid({
             </tr>
           </thead>
           <tbody>
-            {activeSections.map((section) => (
+            {/* Overall day row: weighted completion rate (percentage) */}
+            <tr>
+              <td className="border border-slate-700 bg-slate-950 px-1 py-0.5 font-medium text-slate-400 whitespace-nowrap">
+                Day
+              </td>
+              {monthDays.map((isoDate) => {
+                const { total, completed } = dayTotals[isoDate] ?? { total: 0, completed: 0 }
+                const pct = total > 0 ? (completed / total) * 100 : 0
+                return (
+                  <td
+                    key={isoDate}
+                    title={total > 0 ? `${completed.toFixed(1)}/${total.toFixed(1)} pts` : 'No tasks'}
+                    className={`border border-slate-700 p-0 text-center ${blockCellClass(total, completed)}`}
+                  >
+                    <div className="flex h-6 w-full items-center justify-center">
+                      {total === 0 ? (
+                        <span className="text-slate-600">·</span>
+                      ) : pct >= 100 ? (
+                        <span className="text-sky-400 font-medium">✓</span>
+                      ) : (
+                        <span className="text-[9px] leading-none text-amber-300">{Math.round(pct)}%</span>
+                      )}
+                    </div>
+                  </td>
+                )
+              })}
+            </tr>
+            {FIXED_SECTIONS.map((section) => (
               <tr key={section.id}>
                 <td className="border border-slate-700 bg-slate-900 px-1 py-0.5 text-slate-300 whitespace-nowrap">
                   {SECTION_SHORT_LABELS[section.id] ?? section.id}
@@ -489,7 +390,7 @@ function BlockCompletionGrid({
                   return (
                     <td
                       key={isoDate}
-                      title={total > 0 ? `${completed}/${total} done` : 'No tasks'}
+                      title={total > 0 ? `${completed}/${total} (${total ? Math.round((completed / total) * 100) : 0}%)` : 'No tasks'}
                       className={`border border-slate-700 p-0 text-center ${blockCellClass(total, completed)}`}
                     >
                       <div className="flex h-6 w-full items-center justify-center">
@@ -507,89 +408,3 @@ function BlockCompletionGrid({
   )
 }
 
-function createHabitId(): string {
-  return `habit-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
-}
-
-function EditHabitsModal({
-  habits,
-  onSave,
-  onClose,
-}: {
-  habits: HabitDefinition[]
-  onSave: (next: HabitDefinition[]) => void
-  onClose: () => void
-}) {
-  const [list, setList] = useState<HabitDefinition[]>(() => [...habits])
-
-  const handleAdd = () => {
-    setList((prev) => [...prev, { id: createHabitId(), label: 'New habit' }])
-  }
-
-  const handleRemove = (id: string) => {
-    setList((prev) => prev.filter((h) => h.id !== id))
-  }
-
-  const handleLabelChange = (id: string, label: string) => {
-    setList((prev) =>
-      prev.map((h) => (h.id === id ? { ...h, label } : h)),
-    )
-  }
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Edit habits"
-    >
-      <div className="w-full max-w-md rounded-lg border border-slate-700 bg-slate-900 p-4 shadow-xl">
-        <h4 className="text-sm font-semibold text-slate-100 mb-3">Edit habits</h4>
-        <ul className="space-y-2 mb-4 max-h-64 overflow-y-auto">
-          {list.map((h) => (
-            <li key={h.id} className="flex items-center gap-2">
-              <input
-                type="text"
-                value={h.label}
-                onChange={(e) => handleLabelChange(h.id, e.target.value)}
-                className="flex-1 rounded border border-slate-700 bg-slate-950 px-2 py-1 text-sm text-slate-100 focus:border-sky-600 focus:outline-none"
-              />
-              <button
-                type="button"
-                onClick={() => handleRemove(h.id)}
-                className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-400 hover:bg-red-500/20 hover:text-red-300"
-              >
-                Remove
-              </button>
-            </li>
-          ))}
-        </ul>
-        <div className="flex justify-between">
-          <button
-            type="button"
-            onClick={handleAdd}
-            className="rounded border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-slate-200 hover:border-sky-600"
-          >
-            Add habit
-          </button>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded border border-slate-700 px-3 py-1.5 text-xs text-slate-400 hover:bg-slate-800"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={() => onSave(list)}
-              className="rounded border border-sky-600 bg-sky-600 px-3 py-1.5 text-xs text-slate-950 hover:bg-sky-500"
-            >
-              Save
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
