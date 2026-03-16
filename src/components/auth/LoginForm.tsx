@@ -1,7 +1,7 @@
 /**
  * components/auth/LoginForm.tsx
  *
- * Minimal email/password authentication screen for Deepblock.
+ * Minimal email/password authentication screen for Life Planner.
  * Uses the AuthContext to sign users in or up, with a guest option.
  */
 
@@ -61,7 +61,7 @@ export function LoginForm({ onContinueAsGuest }: LoginFormProps) {
     <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center px-4">
       <div className="w-full max-w-md rounded-xl border border-slate-800 bg-slate-900/70 p-6 shadow-xl">
         <div className="mb-6 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight">Deepblock</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Life Planner</h1>
           <p className="mt-1 text-sm text-slate-400">
             Sign in to sync your planner across devices, or continue as a guest.
           </p>
