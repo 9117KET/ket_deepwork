@@ -4,6 +4,8 @@
  * Centralised date helpers so that all date logic is easy to adjust later.
  */
 
+import type { DayState } from './types'
+
 export function toLocalDayIso(date: Date): string {
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
@@ -16,14 +18,20 @@ export function todayIso(): string {
 }
 
 /**
- * Merge activeDays with all dates that have planner data so previous work is never lost.
- * Call when loading or recording open so streak reflects every day you had data since launch.
+ * Streak rule:
+ * A day counts only if it has at least one task AND at least one task is completed.
+ * This avoids \"gaming\" by opening/skipping days without completing anything.
  */
-export function mergeActiveDaysWithDayKeys(
-  activeDays: string[],
-  dayKeys: string[],
-): string[] {
-  return [...new Set([...activeDays, ...dayKeys])].sort()
+export function dayCountsForStreak(day: DayState | undefined): boolean {
+  const tasks = day?.tasks ?? []
+  return tasks.length > 0 && tasks.some((t) => t.isDone)
+}
+
+export function deriveActiveDaysFromDays(days: Record<string, DayState | undefined>): string[] {
+  return Object.keys(days)
+    .filter(Boolean)
+    .filter((iso) => dayCountsForStreak(days[iso]))
+    .sort()
 }
 
 export interface AccountabilityStats {

@@ -21,7 +21,7 @@ import {
   sameWeekdayLastWeek,
   normalizeHhmm,
   computeAccountabilityStats,
-  mergeActiveDaysWithDayKeys,
+  deriveActiveDaysFromDays,
 } from "../../domain/dateUtils";
 import {
   getActiveSectionIds,
@@ -239,12 +239,14 @@ export function DayPlanner({ shareMode, externalState, onExternalUpdate }: DayPl
         if (descendantIds.has(t.id)) return { ...t, isDone: true };
         return t;
       });
+      const nextDays = {
+        ...prev.days,
+        [selectedDay]: { ...existingDay, tasks: nextTasks },
+      };
       return {
         ...prev,
-        days: {
-          ...prev.days,
-          [selectedDay]: { ...existingDay, tasks: nextTasks },
-        },
+        days: nextDays,
+        activeDays: deriveActiveDaysFromDays(nextDays),
       };
     });
   };
@@ -255,12 +257,14 @@ export function DayPlanner({ shareMode, externalState, onExternalUpdate }: DayPl
       const descendantIds = getDescendantIds(existingDay.tasks, taskId);
       const toRemove = new Set([taskId, ...descendantIds]);
       const nextTasks = existingDay.tasks.filter((t) => !toRemove.has(t.id));
+      const nextDays = {
+        ...prev.days,
+        [selectedDay]: { ...existingDay, tasks: nextTasks },
+      };
       return {
         ...prev,
-        days: {
-          ...prev.days,
-          [selectedDay]: { ...existingDay, tasks: nextTasks },
-        },
+        days: nextDays,
+        activeDays: deriveActiveDaysFromDays(nextDays),
       };
     });
   };
@@ -624,20 +628,7 @@ export function DayPlanner({ shareMode, externalState, onExternalUpdate }: DayPl
     [updateAppState],
   );
 
-  // Record app open once per page load (owner only). Backfill activeDays from all state.days so no previous day is lost.
-  const recordedOpenRef = useRef(false);
-  useEffect(() => {
-    if (shareMode) return; // never record an open for a shared visitor
-    if (recordedOpenRef.current) return;
-    recordedOpenRef.current = true;
-    updateAppState((prev) => {
-      const today = todayIso();
-      const dayKeys = Object.keys(prev.days ?? {}).filter(Boolean);
-      let merged = mergeActiveDaysWithDayKeys(prev.activeDays ?? [], dayKeys);
-      if (!merged.includes(today)) merged = [...merged, today].sort();
-      return { ...prev, activeDays: merged };
-    });
-  }, [shareMode, updateAppState]);
+  // Streak counts are derived from completed tasks (not just opening the app).
 
   const [tick, setTick] = useState(0);
   useEffect(() => {

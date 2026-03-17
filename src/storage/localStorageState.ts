@@ -8,7 +8,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import type { AppState, DayState } from '../domain/types'
-import { todayIso, mergeActiveDaysWithDayKeys } from '../domain/dateUtils'
+import { todayIso, deriveActiveDaysFromDays } from '../domain/dateUtils'
 import { useAuth } from '../contexts/AuthContext'
 import { fetchPlannerState, upsertPlannerDays } from './supabasePlanner'
 import { fetchUserSettings, upsertUserSettings } from './supabaseUserSettings'
@@ -53,13 +53,20 @@ function migrate(persisted: PersistedStateV1 | null): AppState {
   return persisted.state ?? EMPTY_STATE
 }
 
-/** Merge activeDays with all state.days keys so every day with data counts; migrate legacy lastOpenDate. */
+/** Recompute activeDays from tasks completion; migrate legacy lastOpenDate. */
 function migrateLegacyStreak(state: AppState): AppState {
   const legacy = state as AppState & { lastOpenDate?: string }
-  const dayKeys = Object.keys(state.days ?? {}).filter(Boolean)
-  let base = state.activeDays ?? []
-  if (legacy.lastOpenDate && !base.length) base = [legacy.lastOpenDate]
-  const activeDays = mergeActiveDaysWithDayKeys(base, dayKeys)
+  // Keep legacy date only as a hint; the derived rule (completed tasks) still applies.
+  const baseDays = state.days ?? {}
+  const activeDays = deriveActiveDaysFromDays(baseDays)
+  // If we have no derived days but legacy exists *and* that legacy day has a completed task,
+  // allow it to count.
+  if (activeDays.length === 0 && legacy.lastOpenDate) {
+    const legacyDay = baseDays[legacy.lastOpenDate]
+    if (legacyDay && legacyDay.tasks?.some((t) => t.isDone)) {
+      return { ...state, activeDays: [legacy.lastOpenDate] }
+    }
+  }
   return { ...state, activeDays }
 }
 
@@ -158,15 +165,12 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
       if (remote !== null || settings !== null) {
         setState((prev) => {
           const prevLegacy = prev as AppState & { lastOpenDate?: string }
-          let activeDays =
-            settings?.activeDays ??
-            (prevLegacy.lastOpenDate && !prev.activeDays?.length
-              ? [prevLegacy.lastOpenDate]
-              : prev.activeDays ?? [])
-          const dayKeys = Object.keys(remote?.days ? { ...prev.days, ...remote.days } : prev.days ?? {}).filter(Boolean)
-          activeDays = mergeActiveDaysWithDayKeys(activeDays, dayKeys)
+          void settings
+          void prevLegacy
+          const mergedDays = remote?.days ? { ...(prev.days ?? {}), ...remote.days } : prev.days ?? {}
+          const activeDays = deriveActiveDaysFromDays(mergedDays)
           return {
-            days: remote?.days ? { ...(prev.days ?? {}), ...remote.days } : prev.days,
+            days: remote?.days ? mergedDays : prev.days,
             timeOffsetMinutes: remote?.timeOffsetMinutes ?? prev.timeOffsetMinutes,
             habitDefinitions: settings?.habitDefinitions ?? prev.habitDefinitions,
             monthTitles: settings?.monthTitles ?? prev.monthTitles,
@@ -272,11 +276,7 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
             if (remote !== null || settings !== null) {
               setState((prev) => {
                 const mergedDays = remote?.days ? { ...(prev.days ?? {}), ...remote.days } : prev.days ?? {}
-                const dayKeys = Object.keys(mergedDays).filter(Boolean)
-                const activeDays = mergeActiveDaysWithDayKeys(
-                  settings?.activeDays ?? prev.activeDays ?? [],
-                  dayKeys,
-                )
+                const activeDays = deriveActiveDaysFromDays(mergedDays)
                 return {
                   ...prev,
                   days: remote?.days ? mergedDays : prev.days,
