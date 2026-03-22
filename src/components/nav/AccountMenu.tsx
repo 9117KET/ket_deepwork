@@ -79,7 +79,7 @@ export function AccountMenu({
         ref={buttonRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 rounded-full border border-slate-700 bg-slate-900 px-2 py-1 hover:border-sky-600"
+        className="flex items-center gap-2 rounded-full border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-2 py-1 hover:border-share-primary/50"
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={menuId}
@@ -87,14 +87,14 @@ export function AccountMenu({
         <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sky-600 text-xs font-semibold text-slate-950">
           {userInitial}
         </div>
-        <div className="hidden min-w-0 text-left text-xs text-slate-300 sm:block">
+        <div className="hidden min-w-0 text-left text-xs text-share-onSurface sm:block">
           <div className="max-w-[180px] truncate font-medium">
             {userEmail ?? "Account"}
           </div>
-          <div className="text-[11px] text-slate-500">Menu</div>
+          <div className="text-[11px] text-share-onSurfaceVariant">Menu</div>
         </div>
         <span className="sr-only">Open account menu</span>
-        <span className="px-1 text-slate-400" aria-hidden="true">
+        <span className="px-1 text-share-onSurfaceVariant" aria-hidden="true">
           ▾
         </span>
       </button>
@@ -105,12 +105,12 @@ export function AccountMenu({
           id={menuId}
           role="menu"
           aria-label="Account menu"
-          className="absolute right-0 z-50 mt-2 w-56 overflow-hidden rounded-lg border border-slate-700 bg-slate-900 shadow-xl"
+          className="absolute right-0 z-50 mt-2 w-56 overflow-hidden rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainer shadow-xl"
         >
           <div className="px-3 py-2 sm:hidden">
-            <div className="text-xs font-medium text-slate-200">Account</div>
+            <div className="text-xs font-medium text-share-onSurface">Account</div>
             {userEmail ? (
-              <div className="mt-0.5 truncate text-xs text-slate-400">
+              <div className="mt-0.5 truncate text-xs text-share-onSurfaceVariant">
                 {userEmail}
               </div>
             ) : null}
@@ -133,8 +133,8 @@ export function AccountMenu({
                 role="menuitem"
                 onClick={() => handleSelect(item.onSelect)}
                 autoFocus={item.key === firstActionKey}
-                className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-slate-800 ${
-                  item.muted ? "text-slate-300" : "text-slate-100"
+                className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-share-surfaceContainerHigh ${
+                  item.muted ? "text-share-onSurfaceVariant" : "text-share-onSurface"
                 }`}
               >
                 <span>{item.label}</span>

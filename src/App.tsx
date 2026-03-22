@@ -5,10 +5,12 @@
  * Handles share links (?share=TOKEN) first, then routes: landing, day planner, travel, finance.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Routes, Route } from "react-router-dom";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Routes, Route, useSearchParams } from "react-router-dom";
 import type { AppState, DayState } from "./domain/types";
+import { todayIso } from "./domain/dateUtils";
 import { DayPlanner } from "./components/planner/DayPlanner";
+import { SharedPlannerShell } from "./components/planner/SharedPlannerShell";
 import {
   validateShareToken,
   fetchSharedPlannerState,
@@ -18,21 +20,31 @@ import { LandingPage } from "./pages/LandingPage";
 import { PlannerPage } from "./pages/PlannerPage";
 import { TravelPlannerPage } from "./pages/TravelPlannerPage";
 import { FinancialPlannerPage } from "./pages/FinancialPlannerPage";
-
-/** Read ?share=TOKEN from the URL once on load. */
-function getShareTokenFromUrl(): string | null {
-  return new URLSearchParams(window.location.search).get("share");
-}
+import { CalendarSyncPage } from "./pages/CalendarSyncPage";
+import { CalendarCallbackPage } from "./pages/CalendarCallbackPage";
 
 function App() {
+  const [searchParams] = useSearchParams();
+  const shareToken = searchParams.get("share");
+
   // ── Shared planner (visitor mode) ──────────────────────────────────────────
-  const shareToken = useMemo(() => getShareTokenFromUrl(), []);
   const [sharePermission, setSharePermission] = useState<
     "view" | "edit" | null
   >(null);
   const [sharedState, setSharedState] = useState<AppState | null>(null);
   const [shareLoading, setShareLoading] = useState(Boolean(shareToken));
   const [shareError, setShareError] = useState(false);
+  const [shareSelectedDay, setShareSelectedDay] = useState(todayIso);
+
+  /** In-memory planner for dev-only Stitch shell preview (no share token). */
+  const [previewShellState, setPreviewShellState] = useState<AppState>({ days: {} });
+  const [previewShellDay, setPreviewShellDay] = useState(todayIso);
+  const handlePreviewShellUpdate = useCallback(
+    (updater: (prev: AppState) => AppState) => {
+      setPreviewShellState((prev) => updater(prev));
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!shareToken) return;
@@ -78,24 +90,22 @@ function App() {
   if (shareToken) {
     if (shareLoading) {
       return (
-        <div className="bg-slate-950 text-slate-100 min-h-screen flex items-center justify-center">
-          <p className="text-sm text-slate-400">Loading shared planner…</p>
+        <div className="flex min-h-screen items-center justify-center bg-share-bg font-shareSans text-share-onSurfaceVariant">
+          <p className="text-sm">Loading shared planner…</p>
         </div>
       );
     }
     if (shareError || !sharedState || !sharePermission) {
       return (
-        <div className="bg-slate-950 text-slate-100 min-h-screen flex items-center justify-center p-6">
+        <div className="flex min-h-screen items-center justify-center bg-share-bg p-6 font-shareSans text-share-onBg">
           <div className="text-center space-y-2">
-            <p className="text-base font-medium text-slate-200">
-              Link not found or expired
-            </p>
-            <p className="text-sm text-slate-400">
+            <p className="text-base font-bold text-share-onSurface">Link not found or expired</p>
+            <p className="text-sm text-share-onSurfaceVariant">
               This share link may have been removed by its owner.
             </p>
             <a
               href="/"
-              className="inline-block mt-4 rounded border border-slate-600 bg-slate-800 px-4 py-2 text-xs text-slate-200 hover:border-sky-600 hover:text-sky-300"
+              className="mt-4 inline-block rounded-lg border border-share-outlineVariant/50 bg-share-surfaceContainerHigh px-4 py-2 text-xs font-bold text-share-onSurface hover:border-share-primary/50"
             >
               Go to Life Planner
             </a>
@@ -105,38 +115,44 @@ function App() {
     }
 
     return (
-      <div className="bg-slate-950 text-slate-100 min-h-screen">
-        <div className="mx-auto max-w-7xl px-3 sm:px-6 lg:px-8 py-6 sm:py-8">
-          <header className="mb-6 sm:mb-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">
-                Life Planner
-              </h1>
-              <p className="text-sm text-slate-400">
-                {sharePermission === "edit"
-                  ? "Shared planner — you can add, complete, and delete tasks."
-                  : "Shared planner — view only."}
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              <span
-                className={`rounded border px-2.5 py-1 text-xs font-medium ${
-                  sharePermission === "edit"
-                    ? "border-amber-500/50 bg-amber-500/10 text-amber-200"
-                    : "border-slate-600 bg-slate-800 text-slate-300"
-                }`}
-              >
-                {sharePermission === "edit" ? "Edit access" : "View only"}
-              </span>
-            </div>
-          </header>
-          <DayPlanner
-            shareMode={sharePermission}
-            externalState={sharedState}
-            onExternalUpdate={handleExternalUpdate}
-          />
-        </div>
-      </div>
+      <SharedPlannerShell
+        permission={sharePermission}
+        appState={sharedState}
+        selectedDay={shareSelectedDay}
+      >
+        <DayPlanner
+          shareMode={sharePermission}
+          externalState={sharedState}
+          onExternalUpdate={handleExternalUpdate}
+          shareShellLayout
+          selectedDay={shareSelectedDay}
+          onSelectedDayChange={setShareSelectedDay}
+        />
+      </SharedPlannerShell>
+    );
+  }
+
+  if (
+    import.meta.env.DEV &&
+    !shareToken &&
+    searchParams.get("previewSharedShell") === "1"
+  ) {
+    return (
+      <SharedPlannerShell
+        permission="edit"
+        appState={previewShellState}
+        selectedDay={previewShellDay}
+        devPreview
+      >
+        <DayPlanner
+          shareMode="edit"
+          externalState={previewShellState}
+          onExternalUpdate={handlePreviewShellUpdate}
+          shareShellLayout
+          selectedDay={previewShellDay}
+          onSelectedDayChange={setPreviewShellDay}
+        />
+      </SharedPlannerShell>
     );
   }
 
@@ -146,6 +162,8 @@ function App() {
       <Route path="/planner" element={<PlannerPage />} />
       <Route path="/travel" element={<TravelPlannerPage />} />
       <Route path="/finance" element={<FinancialPlannerPage />} />
+      <Route path="/calendar" element={<CalendarSyncPage />} />
+      <Route path="/calendar/callback" element={<CalendarCallbackPage />} />
     </Routes>
   );
 }

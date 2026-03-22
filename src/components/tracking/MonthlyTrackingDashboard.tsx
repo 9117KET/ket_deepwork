@@ -1,9 +1,8 @@
 /**
  * components/tracking/MonthlyTrackingDashboard.tsx
  *
- * Monthly tracking: block (section) completion from planner tasks, sleep, mood.
- * No per-task or custom-habit grid — completion rates per block are derived from
- * actual day tasks so the metric stays accurate as tasks change daily.
+ * Monthly tracking: block (section) completion from planner tasks and mood per day.
+ * Mood shares the block-completion table so day columns align vertically.
  */
 
 import type React from 'react'
@@ -19,7 +18,6 @@ import {
 import { getOrCreateDay } from '../../storage/localStorageState'
 import { computeSectionCompletion, computeDayCompletion } from '../../domain/stats'
 
-const SLEEP_HOUR_OPTIONS = [3, 4, 5, 6, 7, 8, 9] as const
 const MOOD_OPTIONS = ['🙂', '😐', '🙁', '😊', '😢', '😤', '😴', '🔥'] as const
 
 interface MonthlyTrackingDashboardProps {
@@ -46,7 +44,6 @@ export function MonthlyTrackingDashboard({
 }: MonthlyTrackingDashboardProps) {
   const [selectedMonthId, setSelectedMonthId] = useState(() => toMonthId(referenceDay))
   const [moodPickerDay, setMoodPickerDay] = useState<string | null>(null)
-  const [sleepPickerDay, setSleepPickerDay] = useState<string | null>(null)
 
   const monthDays = useMemo(() => daysInMonth(selectedMonthId), [selectedMonthId])
   const chapterTitle = state.monthTitles?.[selectedMonthId] ?? ''
@@ -60,15 +57,6 @@ export function MonthlyTrackingDashboard({
     [onUpdateSettings, state.monthTitles, selectedMonthId],
   )
 
-  const handleSetSleep = useCallback(
-    (isoDate: string, hours: number | null) => {
-      const day = getOrCreateDay(state, isoDate)
-      onUpdateDay(isoDate, { ...day, sleepHours: hours })
-      setSleepPickerDay(null)
-    },
-    [state, onUpdateDay],
-  )
-
   const handleSetMood = useCallback(
     (isoDate: string, mood: string | null) => {
       const day = getOrCreateDay(state, isoDate)
@@ -77,29 +65,6 @@ export function MonthlyTrackingDashboard({
     },
     [state, onUpdateDay],
   )
-
-  const sleepData = useMemo(() => {
-    return monthDays.map((isoDate) => {
-      const day = state.days[isoDate]
-      const hours = day?.sleepHours
-      return { isoDate, hours: hours != null ? Math.min(9, Math.max(3, hours)) : null }
-    })
-  }, [state.days, monthDays])
-
-  const sleepValues = sleepData.map((d) => d.hours).filter((h): h is number => h != null)
-  const sleepMin = sleepValues.length ? Math.min(...sleepValues, 8) : 8
-  const sleepMax = 9
-  const sleepRange = sleepMax - sleepMin || 1
-  const chartHeight = 80
-  const sleepPoints = useMemo(() => {
-    const defined = sleepData
-      .map((d, i) => (d.hours != null ? { i, hours: d.hours } : null))
-      .filter((x): x is { i: number; hours: number } => x != null)
-    return defined.map(({ i, hours }) => {
-      const y = chartHeight - ((hours - sleepMin) / sleepRange) * chartHeight
-      return `${i * 8},${y}`
-    })
-  }, [sleepData, sleepMin, sleepRange])
 
   return (
     <section
@@ -112,7 +77,7 @@ export function MonthlyTrackingDashboard({
           <h3 className="text-sm sm:text-base font-semibold text-slate-100">
             Monthly tracking
           </h3>
-          <p className="text-xs text-slate-400">Block completion, sleep, and mood.</p>
+          <p className="text-xs text-slate-400">Block completion and mood by day.</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -148,119 +113,13 @@ export function MonthlyTrackingDashboard({
         />
       </div>
 
-      {/* Block completion (from planner tasks) — primary metric; no individual tasks */}
-      <BlockCompletionGrid state={state} monthDays={monthDays} />
-
-      {/* Sleep tracker */}
-      <div className="mb-4">
-        <h4 className="text-xs font-medium text-slate-300 mb-2">Sleep Tracker</h4>
-        <div className="flex items-end gap-0.5" style={{ height: chartHeight + 24 }}>
-          <div className="flex flex-col justify-between text-[10px] text-slate-500 pr-1 h-full">
-            <span>8+</span>
-            <span>6</span>
-            <span>4</span>
-          </div>
-          <div className="flex-1 min-w-0">
-            <svg
-              viewBox={`0 0 ${monthDays.length * 8} ${chartHeight}`}
-              preserveAspectRatio="none"
-              className="w-full h-full"
-            >
-              {sleepPoints.length > 0 && (
-                <polyline
-                  fill="none"
-                  stroke="rgb(56 189 248)"
-                  strokeWidth="1.5"
-                  points={sleepPoints.join(' ')}
-                />
-              )}
-            </svg>
-            <div className="flex justify-between mt-0.5 text-[10px] text-slate-500">
-              {monthDays.map((isoDate, i) => (
-                <button
-                  key={isoDate}
-                  type="button"
-                  onClick={() =>
-                    setSleepPickerDay(sleepPickerDay === isoDate ? null : isoDate)
-                  }
-                  className="flex-1 min-w-0 truncate hover:text-sky-400"
-                  title={`Day ${i + 1}: set sleep`}
-                >
-                  {i + 1}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-        {sleepPickerDay && (
-          <div className="mt-2 flex flex-wrap gap-1 p-2 rounded border border-slate-700 bg-slate-950">
-            {SLEEP_HOUR_OPTIONS.map((h) => (
-              <button
-                key={h}
-                type="button"
-                onClick={() => handleSetSleep(sleepPickerDay, h)}
-                className="rounded border border-slate-600 bg-slate-800 px-2 py-1 text-xs text-slate-200 hover:border-sky-600"
-              >
-                {h}h
-              </button>
-            ))}
-            <button
-              type="button"
-              onClick={() => handleSetSleep(sleepPickerDay, null)}
-              className="rounded border border-slate-600 bg-slate-800 px-2 py-1 text-xs text-slate-500 hover:border-sky-600"
-            >
-              Clear
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Mood tracker */}
-      <div>
-        <h4 className="text-xs font-medium text-slate-300 mb-2">Mood Tracker</h4>
-        <div className="flex gap-0.5 flex-wrap">
-          {monthDays.map((isoDate) => {
-            const day = state.days[isoDate]
-            const mood = day?.mood ?? null
-            const dayNum = isoDate.split('-')[2]
-            const isOpen = moodPickerDay === isoDate
-            return (
-              <div key={isoDate} className="relative">
-                <button
-                  type="button"
-                  onClick={() => setMoodPickerDay(isOpen ? null : isoDate)}
-                  className="flex flex-col items-center justify-center w-8 h-9 rounded border border-slate-700 bg-slate-800 hover:border-sky-600 text-lg"
-                  title={`Day ${dayNum}: set mood`}
-                >
-                  <span>{mood ?? '·'}</span>
-                  <span className="text-[10px] text-slate-500">{dayNum}</span>
-                </button>
-                {isOpen && (
-                  <div className="absolute left-0 top-full z-10 mt-1 flex flex-wrap gap-1 p-2 rounded border border-slate-700 bg-slate-950 shadow-lg">
-                    {MOOD_OPTIONS.map((emoji) => (
-                      <button
-                        key={emoji}
-                        type="button"
-                        onClick={() => handleSetMood(isoDate, emoji)}
-                        className="text-xl hover:scale-125 focus:outline-none"
-                      >
-                        {emoji}
-                      </button>
-                    ))}
-                    <button
-                      type="button"
-                      onClick={() => handleSetMood(isoDate, null)}
-                      className="text-xs text-slate-500 hover:text-slate-300"
-                    >
-                      Clear
-                    </button>
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      </div>
+      <BlockCompletionGrid
+        state={state}
+        monthDays={monthDays}
+        moodPickerDay={moodPickerDay}
+        onMoodPickerDayChange={setMoodPickerDay}
+        onSetMood={handleSetMood}
+      />
 
     </section>
   )
@@ -303,9 +162,15 @@ function blockCellContent(total: number, completed: number): React.ReactNode {
 function BlockCompletionGrid({
   state,
   monthDays,
+  moodPickerDay,
+  onMoodPickerDayChange,
+  onSetMood,
 }: {
   state: AppState
   monthDays: string[]
+  moodPickerDay: string | null
+  onMoodPickerDayChange: (iso: string | null) => void
+  onSetMood: (isoDate: string, mood: string | null) => void
 }) {
   const byDay = useMemo(() => {
     const map: Record<string, ReturnType<typeof computeSectionCompletion>> = {}
@@ -324,6 +189,10 @@ function BlockCompletionGrid({
     return out
   }, [state, monthDays])
 
+  const dayHeaderCell =
+    'border border-slate-700 bg-slate-950 px-0.5 py-1 text-center text-slate-500 w-7 min-w-[1.75rem] max-w-[1.75rem]'
+  const dayBodyCell = 'border border-slate-700 p-0 text-center w-7 min-w-[1.75rem] max-w-[1.75rem]'
+
   return (
     <div className="mb-4">
       <h4 className="text-xs font-medium text-slate-300 mb-1">Block completion rate</h4>
@@ -334,17 +203,20 @@ function BlockCompletionGrid({
         <span className="ml-1 text-red-400/70">0%</span>
       </p>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[600px] border-collapse text-xs">
+        <table className="w-full min-w-[600px] border-collapse text-xs table-fixed">
+          <colgroup>
+            <col className="w-24" />
+            {monthDays.map((isoDate) => (
+              <col key={isoDate} className="w-7" />
+            ))}
+          </colgroup>
           <thead>
             <tr>
-              <th className="border border-slate-700 bg-slate-950 px-1 py-1 text-left font-medium text-slate-400 w-24">
+              <th className="border border-slate-700 bg-slate-950 px-1 py-1 text-left font-medium text-slate-400">
                 Block
               </th>
               {monthDays.map((isoDate) => (
-                <th
-                  key={isoDate}
-                  className="border border-slate-700 bg-slate-950 px-0.5 py-1 text-center text-slate-500 w-7"
-                >
+                <th key={isoDate} className={dayHeaderCell}>
                   {isoDate.split('-')[2]}
                 </th>
               ))}
@@ -363,7 +235,7 @@ function BlockCompletionGrid({
                   <td
                     key={isoDate}
                     title={total > 0 ? `${completed.toFixed(1)}/${total.toFixed(1)} pts` : 'No tasks'}
-                    className={`border border-slate-700 p-0 text-center ${blockCellClass(total, completed)}`}
+                    className={`${dayBodyCell} ${blockCellClass(total, completed)}`}
                   >
                     <div className="flex h-6 w-full items-center justify-center">
                       {total === 0 ? (
@@ -391,7 +263,7 @@ function BlockCompletionGrid({
                     <td
                       key={isoDate}
                       title={total > 0 ? `${completed}/${total} (${total ? Math.round((completed / total) * 100) : 0}%)` : 'No tasks'}
-                      className={`border border-slate-700 p-0 text-center ${blockCellClass(total, completed)}`}
+                      className={`${dayBodyCell} ${blockCellClass(total, completed)}`}
                     >
                       <div className="flex h-6 w-full items-center justify-center">
                         {blockCellContent(total, completed)}
@@ -401,6 +273,54 @@ function BlockCompletionGrid({
                 })}
               </tr>
             ))}
+            <tr>
+              <td className="border border-slate-700 bg-slate-900 px-1 py-0.5 font-medium text-slate-400 whitespace-nowrap">
+                Mood
+              </td>
+              {monthDays.map((isoDate) => {
+                const day = state.days[isoDate]
+                const mood = day?.mood ?? null
+                const dayNum = isoDate.split('-')[2]
+                const isOpen = moodPickerDay === isoDate
+                return (
+                  <td key={isoDate} className={`${dayBodyCell} align-top bg-slate-900`}>
+                    <div className="relative flex h-6 w-full items-center justify-center">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onMoodPickerDayChange(isOpen ? null : isoDate)
+                        }
+                        className="flex h-full w-full items-center justify-center rounded-sm text-base leading-none hover:bg-slate-800/80"
+                        title={`Day ${dayNum}: set mood`}
+                      >
+                        {mood ?? '·'}
+                      </button>
+                      {isOpen && (
+                        <div className="absolute left-0 top-full z-20 mt-1 flex max-w-[220px] flex-wrap gap-1 rounded border border-slate-700 bg-slate-950 p-2 shadow-lg">
+                          {MOOD_OPTIONS.map((emoji) => (
+                            <button
+                              key={emoji}
+                              type="button"
+                              onClick={() => onSetMood(isoDate, emoji)}
+                              className="text-xl hover:scale-125 focus:outline-none"
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => onSetMood(isoDate, null)}
+                            className="text-xs text-slate-500 hover:text-slate-300"
+                          >
+                            Clear
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </td>
+                )
+              })}
+            </tr>
           </tbody>
         </table>
       </div>

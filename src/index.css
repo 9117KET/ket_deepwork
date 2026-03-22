@@ -8,10 +8,28 @@
   }
 
   body {
-    @apply bg-slate-950 text-slate-100 font-sans antialiased;
+    @apply bg-share-bg text-share-onBg font-shareSans antialiased;
   }
 
   #root {
     @apply min-h-screen;
+  }
+
+  .material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    vertical-align: middle;
+    font-size: 1.25rem;
+    line-height: 1;
+  }
+
+  /* Landing atmospheric glow (Stitch) */
+  .sky-glow {
+    pointer-events: none;
+    background: radial-gradient(
+      circle,
+      rgba(0, 218, 243, 0.14) 0%,
+      rgba(0, 218, 243, 0) 70%
+    );
+    filter: blur(80px);
   }
 }

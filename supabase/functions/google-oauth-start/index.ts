@@ -1,0 +1,33 @@
+import { requireUserId } from '../_shared/supabase.ts'
+import { GOOGLE_AUTH_BASE, GOOGLE_SCOPES, buildRedirectUri, json } from '../_shared/google.ts'
+
+Deno.serve(async (req) => {
+  try {
+    if (req.method !== 'POST') return json({ error: 'Method not allowed' }, { status: 405 })
+    await requireUserId(req)
+
+    const clientId = Deno.env.get('GOOGLE_CLIENT_ID')
+    if (!clientId) throw new Error('Missing GOOGLE_CLIENT_ID')
+
+    const { origin } = await req.json().catch(() => ({ origin: '' }))
+    if (!origin) throw new Error('Missing origin')
+
+    const redirectUri = buildRedirectUri(origin)
+    const state = crypto.randomUUID()
+
+    const url = new URL(GOOGLE_AUTH_BASE)
+    url.searchParams.set('client_id', clientId)
+    url.searchParams.set('redirect_uri', redirectUri)
+    url.searchParams.set('response_type', 'code')
+    url.searchParams.set('scope', GOOGLE_SCOPES.join(' '))
+    url.searchParams.set('access_type', 'offline')
+    url.searchParams.set('prompt', 'consent')
+    url.searchParams.set('include_granted_scopes', 'true')
+    url.searchParams.set('state', state)
+
+    return json({ url: url.toString(), state })
+  } catch (e) {
+    return json({ error: (e as Error).message ?? 'Unknown error' }, { status: 400 })
+  }
+})
+

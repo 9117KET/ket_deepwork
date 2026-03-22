@@ -58,18 +58,17 @@ export function LoginForm({ onContinueAsGuest }: LoginFormProps) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center px-4">
-      <div className="w-full max-w-md rounded-xl border border-slate-800 bg-slate-900/70 p-6 shadow-xl">
+    <div className="w-full max-w-md rounded-xl border border-share-outlineVariant/30 bg-share-surfaceContainerLow p-6 shadow-2xl shadow-black/40">
         <div className="mb-6 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight">Life Planner</h1>
-          <p className="mt-1 text-sm text-slate-400">
+          <h1 className="font-shareHeadline text-2xl font-black tracking-tight text-share-onSurface">Life Planner</h1>
+          <p className="mt-1 text-sm text-share-onSurfaceVariant">
             Sign in to sync your planner across devices, or continue as a guest.
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1">
-            <label htmlFor="email" className="block text-sm font-medium text-slate-200">
+            <label htmlFor="email" className="block text-sm font-medium text-share-onSurface">
               Email
             </label>
             <input
@@ -78,14 +77,14 @@ export function LoginForm({ onContinueAsGuest }: LoginFormProps) {
               autoComplete="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+              className="w-full rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainer px-3 py-2 text-sm text-share-onSurface placeholder:text-share-onSurfaceVariant/60 focus:border-share-primary focus:outline-none focus:ring-1 focus:ring-share-primary"
               placeholder="you@example.com"
               disabled={submitting}
             />
           </div>
 
           <div className="space-y-1">
-            <label htmlFor="password" className="block text-sm font-medium text-slate-200">
+            <label htmlFor="password" className="block text-sm font-medium text-share-onSurface">
               Password
             </label>
             <input
@@ -94,7 +93,7 @@ export function LoginForm({ onContinueAsGuest }: LoginFormProps) {
               autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+              className="w-full rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainer px-3 py-2 text-sm text-share-onSurface placeholder:text-share-onSurfaceVariant/60 focus:border-share-primary focus:outline-none focus:ring-1 focus:ring-share-primary"
               placeholder="At least 6 characters"
               disabled={submitting}
             />
@@ -106,7 +105,7 @@ export function LoginForm({ onContinueAsGuest }: LoginFormProps) {
             </p>
           )}
           {infoMessage && (
-            <p className="text-sm text-sky-400" role="status">
+            <p className="text-sm text-share-primary" role="status">
               {infoMessage}
             </p>
           )}
@@ -114,7 +113,7 @@ export function LoginForm({ onContinueAsGuest }: LoginFormProps) {
           <button
             type="submit"
             disabled={submitting}
-            className="mt-2 inline-flex w-full items-center justify-center rounded-md bg-sky-600 px-3 py-2 text-sm font-medium text-white hover:bg-sky-500 disabled:opacity-60"
+            className="mt-2 inline-flex w-full items-center justify-center rounded-lg bg-share-primary px-3 py-2 text-sm font-bold text-share-onPrimary transition-colors hover:bg-share-primaryContainer disabled:opacity-60"
           >
             {submitting
               ? mode === 'signin'
@@ -126,23 +125,22 @@ export function LoginForm({ onContinueAsGuest }: LoginFormProps) {
           </button>
         </form>
 
-        <div className="mt-4 flex items-center justify-between text-xs text-slate-400">
+        <div className="mt-4 flex flex-col gap-3 text-xs text-share-onSurfaceVariant sm:flex-row sm:items-center sm:justify-between">
           <button
             type="button"
             onClick={() => setMode(mode === 'signin' ? 'signup' : 'signin')}
-            className="font-medium text-sky-400 hover:text-sky-300"
+            className="text-left font-bold text-share-primary hover:text-share-primaryContainer"
           >
             {mode === 'signin' ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
           </button>
           <button
             type="button"
             onClick={onContinueAsGuest}
-            className="font-medium text-slate-400 hover:text-slate-200"
+            className="text-left font-medium text-share-onSurfaceVariant hover:text-share-onSurface sm:text-right"
           >
             Continue as guest
           </button>
         </div>
-      </div>
     </div>
   )
 }

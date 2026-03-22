@@ -9,8 +9,10 @@ interface DayHeaderProps {
   completionRatio?: number
   completedPoints?: number
   totalPoints?: number
-  /** Consecutive days the app was opened. */
+  /** Current consecutive active days (ending on last active day). */
   streak?: number
+  /** Longest consecutive active streak ever; shown with current streak for context. */
+  bestStreak?: number
   /** Calendar days between first use and today that were missed. */
   daysMissed?: number
   /** Total calendar days since first use (for accountability context). */
@@ -26,6 +28,7 @@ export function DayHeader({
   completedPoints = 0,
   totalPoints = 0,
   streak,
+  bestStreak,
   daysMissed,
   totalDays,
   onPrevDay,
@@ -42,8 +45,21 @@ export function DayHeader({
           {streak != null && streak > 0 && (
             <span className="rounded border border-amber-500/50 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-200">
               🔥 {streak} day streak
+              {bestStreak != null && bestStreak > 0 && streak >= bestStreak ? ' · best' : ''}
             </span>
           )}
+          {bestStreak != null &&
+            bestStreak > 0 &&
+            streak != null &&
+            streak > 0 &&
+            bestStreak > streak && (
+              <span
+                className="rounded border border-violet-500/50 bg-violet-500/10 px-2 py-0.5 text-xs font-medium text-violet-200"
+                title="Longest consecutive streak you have recorded"
+              >
+                Best {bestStreak} days
+              </span>
+            )}
           {daysMissed != null && daysMissed === 0 && totalDays != null && totalDays > 0 && (
             <span className="rounded border border-emerald-500/50 bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-300">
               0 days missed

@@ -35,8 +35,10 @@ export function deriveActiveDaysFromDays(days: Record<string, DayState | undefin
 }
 
 export interface AccountabilityStats {
-  /** Longest consecutive run of active days up to the most recent active day. */
+  /** Consecutive active days ending on the most recent active day (current streak). */
   streak: number
+  /** Longest consecutive run of active days ever in history. */
+  bestStreak: number
   /** Total calendar days from first use to today (inclusive). */
   totalDays: number
   /** Days you were active (unique entries in activeDays). */
@@ -53,7 +55,14 @@ export interface AccountabilityStats {
  */
 export function computeAccountabilityStats(activeDays: string[]): AccountabilityStats {
   if (activeDays.length === 0) {
-    return { streak: 0, totalDays: 0, daysActive: 0, daysMissed: 0, firstActiveDate: null }
+    return {
+      streak: 0,
+      bestStreak: 0,
+      totalDays: 0,
+      daysActive: 0,
+      daysMissed: 0,
+      firstActiveDate: null,
+    }
   }
 
   const sorted = [...new Set(activeDays)].sort()
@@ -73,6 +82,7 @@ export function computeAccountabilityStats(activeDays: string[]): Accountability
 
   return {
     streak: computeStreak(sorted),
+    bestStreak: computeBestStreak(activeDays),
     totalDays,
     daysActive,
     daysMissed,
@@ -98,6 +108,27 @@ export function computeStreak(activeDays: string[]): number {
     current = prev
   }
   return count
+}
+
+/**
+ * Longest consecutive run of active days anywhere in history (same inputs as computeStreak).
+ */
+export function computeBestStreak(activeDays: string[]): number {
+  if (activeDays.length === 0) return 0
+  const sorted = [...new Set(activeDays)].sort()
+  let maxRun = 1
+  let currentRun = 1
+  for (let i = 1; i < sorted.length; i += 1) {
+    const prev = sorted[i - 1]!
+    const cur = sorted[i]!
+    if (cur === addDays(prev, 1)) {
+      currentRun += 1
+    } else {
+      maxRun = Math.max(maxRun, currentRun)
+      currentRun = 1
+    }
+  }
+  return Math.max(maxRun, currentRun)
 }
 
 export function addDays(isoDay: string, delta: number): string {

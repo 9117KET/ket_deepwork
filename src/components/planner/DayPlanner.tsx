@@ -6,7 +6,7 @@
  */
 
 import type React from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type SetStateAction } from "react";
 import {
   FIXED_SECTIONS,
   type AppState,
@@ -158,14 +158,48 @@ interface DayPlannerProps {
   externalState?: AppState
   /** Called when any AppState update is requested in shared mode; parent handles persistence. */
   onExternalUpdate?: (updater: (prev: AppState) => AppState) => void
+  /** When true with shareMode, hide internal weekly sidebar (parent shell provides layout). */
+  shareShellLayout?: boolean
+  /** Controlled selected day (e.g. shared shell keeps sidebar stats in sync). */
+  selectedDay?: string
+  onSelectedDayChange?: (day: string) => void
+  /** Sticky offset for the day header under a fixed app bar (e.g. top-16). */
+  stickyTopClass?: string
 }
 
-export function DayPlanner({ shareMode, externalState, onExternalUpdate }: DayPlannerProps = {}) {
+export function DayPlanner({
+  shareMode,
+  externalState,
+  onExternalUpdate,
+  shareShellLayout = false,
+  selectedDay: selectedDayProp,
+  onSelectedDayChange,
+  stickyTopClass,
+}: DayPlannerProps = {}) {
   const [ownState, updateOwnState] = usePersistentState();
   // Use external shared state when provided; fall back to owner's state.
   const appState = externalState ?? ownState;
   const updateAppState = (shareMode && onExternalUpdate) ? onExternalUpdate : updateOwnState;
-  const [selectedDay, setSelectedDay] = useState<string>(todayIso);
+  const [internalSelectedDay, setInternalSelectedDay] = useState<string>(todayIso);
+  const isSelectedDayControlled = selectedDayProp !== undefined;
+  const selectedDay = isSelectedDayControlled ? selectedDayProp : internalSelectedDay;
+
+  const setSelectedDay = useCallback(
+    (update: SetStateAction<string>) => {
+      if (isSelectedDayControlled) {
+        const next =
+          typeof update === "function"
+            ? (update as (prev: string) => string)(selectedDayProp!)
+            : update;
+        onSelectedDayChange?.(next);
+      } else {
+        setInternalSelectedDay((prev) =>
+          typeof update === "function" ? (update as (p: string) => string)(prev) : update,
+        );
+      }
+    },
+    [isSelectedDayControlled, selectedDayProp, onSelectedDayChange],
+  );
   const [splitRatio, setSplitRatio] = useState(0.68); // fraction of width for task column
   const gridRef = useRef<HTMLDivElement | null>(null);
   const dragStateRef = useRef<{
@@ -808,7 +842,11 @@ export function DayPlanner({ shareMode, externalState, onExternalUpdate }: DayPl
   return (
     <div className="space-y-4 sm:space-y-6">
       <div
-        className="sticky top-0 z-20 border-b border-slate-800 bg-slate-950/95 pb-3 backdrop-blur-sm"
+        className={
+          shareShellLayout
+            ? "sticky top-[6.5rem] z-20 border-b border-share-outlineVariant/25 bg-share-bg/95 pb-3 backdrop-blur-sm"
+            : `sticky z-20 border-b border-slate-800 bg-slate-950/95 pb-3 backdrop-blur-sm ${stickyTopClass ?? "top-0"}`
+        }
         data-tour="date-nav"
       >
         <DayHeader
@@ -817,6 +855,7 @@ export function DayPlanner({ shareMode, externalState, onExternalUpdate }: DayPl
           completedPoints={dayCompletion.completedCount}
           totalPoints={dayCompletion.totalCount}
           streak={accountabilityStats.streak}
+          bestStreak={accountabilityStats.bestStreak}
           daysMissed={shareMode ? undefined : accountabilityStats.daysMissed}
           totalDays={shareMode ? undefined : accountabilityStats.totalDays}
           onPrevDay={() => setSelectedDay((current) => addDays(current, -1))}
@@ -924,13 +963,21 @@ export function DayPlanner({ shareMode, externalState, onExternalUpdate }: DayPl
       </div>
 
       <div
-        ref={gridRef}
-        className="mt-3 flex flex-col gap-3 lg:grid lg:gap-y-3 lg:gap-x-3 lg:items-start"
-        style={{
-          gridTemplateColumns: `minmax(0, ${splitRatio}fr) 4px minmax(0, ${
-            1 - splitRatio
-          }fr)`,
-        }}
+        ref={shareShellLayout ? undefined : gridRef}
+        className={
+          shareShellLayout
+            ? "mt-3 flex flex-col gap-3"
+            : "mt-3 flex flex-col gap-3 lg:grid lg:gap-y-3 lg:gap-x-3 lg:items-start"
+        }
+        style={
+          shareShellLayout
+            ? undefined
+            : {
+                gridTemplateColumns: `minmax(0, ${splitRatio}fr) 4px minmax(0, ${
+                  1 - splitRatio
+                }fr)`,
+              }
+        }
       >
         <div className="space-y-3" data-tour="tasks-section">
           {FIXED_SECTIONS.map((section) => (
@@ -977,21 +1024,25 @@ export function DayPlanner({ shareMode, externalState, onExternalUpdate }: DayPl
           </section>
         </div>
 
-        <div
-          className="hidden h-full w-1 cursor-col-resize rounded-full bg-slate-800 hover:bg-sky-500 lg:block"
-          onMouseDown={handleSplitterMouseDown}
-          aria-hidden="true"
-        />
+        {!shareShellLayout && (
+          <>
+            <div
+              className="hidden h-full w-1 cursor-col-resize rounded-full bg-slate-800 hover:bg-sky-500 lg:block"
+              onMouseDown={handleSplitterMouseDown}
+              aria-hidden="true"
+            />
 
-        <div className="space-y-3 lg:sticky lg:top-20" data-tour="sidebar">
-          <WeeklyOverview
-            state={appState as AppState}
-            referenceDay={selectedDay}
-          />
-          {/* Deep work timer and motivation card: owner only */}
-          {!shareMode && <DeepWorkTimer />}
-          {!shareMode && <MotivationCard />}
-        </div>
+            <div className="space-y-3 lg:sticky lg:top-20" data-tour="sidebar">
+              <WeeklyOverview
+                state={appState as AppState}
+                referenceDay={selectedDay}
+              />
+              {/* Deep work timer and motivation card: owner only */}
+              {!shareMode && <DeepWorkTimer />}
+              {!shareMode && <MotivationCard />}
+            </div>
+          </>
+        )}
       </div>
 
       {/* Monthly tracking: owner only (not shown on shared views) */}
