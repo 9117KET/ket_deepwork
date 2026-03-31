@@ -13,6 +13,7 @@ Deno.serve(async (req) => {
     if (!origin) throw new Error('Missing origin')
 
     const redirectUri = buildRedirectUri(origin)
+    console.log('[oauth-start] user:', userId.slice(0, 8), '| origin:', origin, '| redirectUri:', redirectUri)
     const state = crypto.randomUUID()
 
     const url = new URL(GOOGLE_AUTH_BASE)
@@ -25,8 +26,10 @@ Deno.serve(async (req) => {
     url.searchParams.set('include_granted_scopes', 'true')
     url.searchParams.set('state', state)
 
+    console.log('[oauth-start] consent URL built ok')
     return json({ url: url.toString(), state })
   } catch (e) {
+    console.error('[oauth-start] error:', (e as Error).message)
     return json({ error: (e as Error).message ?? 'Unknown error' }, { status: 400 })
   }
 })

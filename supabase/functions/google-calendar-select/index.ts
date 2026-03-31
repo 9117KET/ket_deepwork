@@ -9,6 +9,7 @@ Deno.serve(async (req) => {
       calendarId?: string
       calendarSummary?: string
     }
+    console.log('[calendar-select] user:', userId.slice(0, 8), '| calendarId:', calendarId, '| summary:', calendarSummary ?? '—')
     if (!calendarId) throw new Error('Missing calendarId')
 
     const supabase = createServiceClient(req)
@@ -20,9 +21,11 @@ Deno.serve(async (req) => {
         updated_at: new Date().toISOString(),
       })
       .eq('user_id', userId)
+    console.log('[calendar-select] update ok:', !error, error ? '| error: ' + error.message : '')
     if (error) throw new Error('Failed to save selection')
     return json({ ok: true })
   } catch (e) {
+    console.error('[calendar-select] error:', (e as Error).message)
     return json({ error: (e as Error).message ?? 'Unknown error' }, { status: 400 })
   }
 })

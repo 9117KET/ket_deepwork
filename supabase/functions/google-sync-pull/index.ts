@@ -36,6 +36,7 @@ Deno.serve(async (req) => {
       .eq('user_id', userId)
       .maybeSingle()
 
+    console.log('[sync-pull] user:', userId.slice(0, 8), '| calendar:', conn?.selected_calendar_id ?? 'none')
     if (!conn?.selected_calendar_id) throw new Error('No calendar selected')
 
     const refreshToken = await decryptFromEnvelope(conn.encrypted_refresh_token as string)
@@ -52,6 +53,7 @@ Deno.serve(async (req) => {
     const now = new Date()
     const start = startDate ? new Date(`${startDate}T00:00:00`) : new Date(now)
     const end = endDate ? new Date(`${endDate}T23:59:59`) : new Date(now.getTime() + 14 * 864e5)
+    console.log('[sync-pull] timezone:', userTimezone, '| range:', start.toISOString().slice(0, 10), '→', end.toISOString().slice(0, 10))
 
     const url = new URL(`${GOOGLE_CALENDAR_BASE}/calendars/${encodeURIComponent(conn.selected_calendar_id)}/events`)
     url.searchParams.set('singleEvents', 'true')
@@ -60,6 +62,7 @@ Deno.serve(async (req) => {
     url.searchParams.set('timeMax', end.toISOString())
 
     const resp = await fetch(url.toString(), { headers: { Authorization: `Bearer ${accessToken}` } })
+    console.log('[sync-pull] Google Events API status:', resp.status)
     if (!resp.ok) throw new Error(`Failed to fetch events (${resp.status})`)
     const data = (await resp.json()) as {
       items?: Array<{
@@ -72,6 +75,7 @@ Deno.serve(async (req) => {
     }
 
     const items = data.items ?? []
+    console.log('[sync-pull] events from Google:', items.length, '(all-day events will be skipped)')
     let imported = 0
 
     for (const ev of items) {
@@ -164,8 +168,10 @@ Deno.serve(async (req) => {
       }
     }
 
+    console.log('[sync-pull] done | imported:', imported)
     return json({ ok: true, imported })
   } catch (e) {
+    console.error('[sync-pull] error:', (e as Error).message)
     return json({ error: (e as Error).message ?? 'Unknown error' }, { status: 400 })
   }
 })
