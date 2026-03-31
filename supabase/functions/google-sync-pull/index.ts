@@ -1,6 +1,6 @@
 import { createServiceClient, requireUserId } from '../_shared/supabase.ts'
 import { decryptFromEnvelope } from '../_shared/crypto.ts'
-import { GOOGLE_CALENDAR_BASE, getGoogleAccessToken, json } from '../_shared/google.ts'
+import { GOOGLE_CALENDAR_BASE, getGoogleAccessToken, json, CORS_PREFLIGHT } from '../_shared/google.ts'
 
 type PlannerTask = {
   id: string
@@ -25,6 +25,7 @@ function hhmmFromDate(d: Date, timezone: string): string {
 }
 
 Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') return CORS_PREFLIGHT
   try {
     if (req.method !== 'POST') return json({ error: 'Method not allowed' }, { status: 405 })
     const userId = await requireUserId(req)
