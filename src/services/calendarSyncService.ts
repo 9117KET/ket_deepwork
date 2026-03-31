@@ -13,17 +13,28 @@ export interface CalendarListItem {
   primary: boolean;
 }
 
+/** Explicitly attach the current session JWT so the Supabase relay accepts it.
+ * supabase-js only calls functions.setAuth() on auth state changes, so if
+ * the session already exists on page load the header is never set automatically.
+ */
+async function authHeaders(): Promise<Record<string, string>> {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session?.access_token) throw new Error("Not signed in");
+  return { Authorization: `Bearer ${session.access_token}` };
+}
+
 async function requireOk<T>(result: { data: T | null; error: unknown }): Promise<T> {
   if (result.error) {
     const err = result.error as { message?: string; context?: unknown };
-    // supabase-js also stashes the raw Response at result.response
     const rawResp =
       ((result as Record<string, unknown>).response as Response | undefined) ??
       (err.context as Response | undefined);
     let message = (err as Error).message ?? "Unknown error";
     if (rawResp) {
       try {
-        const body = (await rawResp.text()) as string;
+        const body = await rawResp.text();
         const parsed = JSON.parse(body) as { error?: string };
         if (parsed.error) message = parsed.error;
       } catch {
@@ -40,6 +51,7 @@ export async function startGoogleOAuth(): Promise<{ url: string; state: string }
   const origin = window.location.origin;
   const res = await supabase.functions.invoke("google-oauth-start", {
     body: { origin },
+    headers: await authHeaders(),
   });
   return (await requireOk(res)) as { url: string; state: string };
 }
@@ -48,12 +60,16 @@ export async function completeGoogleOAuth(code: string): Promise<void> {
   const origin = window.location.origin;
   const res = await supabase.functions.invoke("google-oauth-callback", {
     body: { code, origin },
+    headers: await authHeaders(),
   });
   await requireOk(res);
 }
 
 export async function listGoogleCalendars(): Promise<CalendarListItem[]> {
-  const res = await supabase.functions.invoke("google-calendars-list", { body: {} });
+  const res = await supabase.functions.invoke("google-calendars-list", {
+    body: {},
+    headers: await authHeaders(),
+  });
   const data = (await requireOk(res)) as { calendars: CalendarListItem[] };
   return data.calendars ?? [];
 }
@@ -64,6 +80,7 @@ export async function selectGoogleCalendar(params: {
 }): Promise<void> {
   const res = await supabase.functions.invoke("google-calendar-select", {
     body: params,
+    headers: await authHeaders(),
   });
   await requireOk(res);
 }
@@ -74,6 +91,7 @@ export async function syncFromGoogle(params?: {
 }): Promise<{ imported: number }> {
   const res = await supabase.functions.invoke("google-sync-pull", {
     body: { ...params, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone },
+    headers: await authHeaders(),
   });
   return (await requireOk(res)) as { imported: number };
 }
@@ -84,12 +102,15 @@ export async function syncToGoogle(params?: {
 }): Promise<{ created: number; updated: number; skipped: number }> {
   const res = await supabase.functions.invoke("google-sync-push", {
     body: { ...params, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone },
+    headers: await authHeaders(),
   });
   return (await requireOk(res)) as { created: number; updated: number; skipped: number };
 }
 
 export async function disconnectGoogle(): Promise<void> {
-  const res = await supabase.functions.invoke("google-disconnect", { body: {} });
+  const res = await supabase.functions.invoke("google-disconnect", {
+    body: {},
+    headers: await authHeaders(),
+  });
   await requireOk(res);
 }
-
