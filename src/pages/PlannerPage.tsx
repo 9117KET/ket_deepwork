@@ -49,9 +49,11 @@ export function PlannerPage() {
   }, []);
 
   useEffect(() => {
+    let mounted = true;
     queueMicrotask(() => {
-      if (!getTourCompleted()) setTourActive(true);
+      if (mounted && !getTourCompleted()) setTourActive(true);
     });
+    return () => { mounted = false; };
   }, []);
 
   if (loading) {

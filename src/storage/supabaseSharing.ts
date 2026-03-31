@@ -58,9 +58,6 @@ export async function createShareToken(
     .select('id, token, permission, label, created_at')
     .single()
 
-  // #region agent log
-  fetch('http://127.0.0.1:7672/ingest/f50c119d-f512-4c34-8c11-06b627e9fdea',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'3e698e'},body:JSON.stringify({sessionId:'3e698e',location:'supabaseSharing.ts:createShareToken',message:'insert result',data:{ok:!error,errorCode:error?.code,errorMsg:error?.message,hasData:!!data},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
-  // #endregion
   if (error) {
     console.error('[sharing] Failed to create share token:', error.message, error)
     // Re-throw so callers can show the real error to the user.
