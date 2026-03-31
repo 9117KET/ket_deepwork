@@ -2,7 +2,7 @@ import { createServiceClient, requireUserId } from '../_shared/supabase.ts'
 import { json, CORS_PREFLIGHT } from '../_shared/google.ts'
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return CORS_PREFLIGHT
+  if (req.method === 'OPTIONS') return CORS_PREFLIGHT()
   try {
     if (req.method !== 'POST') return json({ error: 'Method not allowed' }, { status: 405 })
     const userId = await requireUserId(req)

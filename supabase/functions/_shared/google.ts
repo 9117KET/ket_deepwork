@@ -18,7 +18,9 @@ export const CORS_HEADERS = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
-export const CORS_PREFLIGHT = new Response('ok', { headers: CORS_HEADERS })
+export function CORS_PREFLIGHT(): Response {
+  return new Response('ok', { headers: CORS_HEADERS })
+}
 
 export function json(resBody: unknown, init?: ResponseInit): Response {
   const { headers: extraHeaders, ...rest } = init ?? {}
