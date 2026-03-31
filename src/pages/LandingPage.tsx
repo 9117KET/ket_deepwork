@@ -5,7 +5,8 @@
  */
 
 import { Link } from "react-router-dom";
-import { AppChrome, appPrimaryButtonClass, appSecondaryButtonClass } from "../components/layout/AppChrome";
+import { AppChrome } from "../components/layout/AppChrome";
+import { appPrimaryButtonClass, appSecondaryButtonClass } from "../components/layout/appClasses";
 import { MaterialIcon } from "../components/ui/MaterialIcon";
 
 export function LandingPage() {

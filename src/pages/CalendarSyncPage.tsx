@@ -7,13 +7,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { AppChrome } from "../components/layout/AppChrome";
 import {
-  AppChrome,
   appCardClass,
   appInputClass,
   appPrimaryButtonClass,
   appSecondaryButtonClass,
-} from "../components/layout/AppChrome";
+} from "../components/layout/appClasses";
 import { MaterialIcon } from "../components/ui/MaterialIcon";
 import {
   listGoogleCalendars,

@@ -6,7 +6,8 @@
 
 import { useState } from "react";
 import { Link, NavLink } from "react-router-dom";
-import { AppChrome, appPrimaryButtonClass } from "../components/layout/AppChrome";
+import { AppChrome } from "../components/layout/AppChrome";
+import { appPrimaryButtonClass } from "../components/layout/appClasses";
 import { MaterialIcon } from "../components/ui/MaterialIcon";
 
 function sideLinkClass(active: boolean) {

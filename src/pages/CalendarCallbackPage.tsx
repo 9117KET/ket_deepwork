@@ -12,23 +12,22 @@ import { AppChrome } from "../components/layout/AppChrome";
 export function CalendarCallbackPage() {
   const location = useLocation();
   const navigate = useNavigate();
-  const [status, setStatus] = useState<"working" | "ok" | "error">("working");
-  const [message, setMessage] = useState<string>("");
+  const [status, setStatus] = useState<"working" | "ok" | "error">(() => {
+    const params = new URLSearchParams(location.search);
+    return params.get("error") || !params.get("code") ? "error" : "working";
+  });
+  const [message, setMessage] = useState<string>(() => {
+    const params = new URLSearchParams(location.search);
+    const error = params.get("error");
+    if (error) return error;
+    if (!params.get("code")) return "Missing OAuth code.";
+    return "";
+  });
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const code = params.get("code");
-    const error = params.get("error");
-    if (error) {
-      setStatus("error");
-      setMessage(error);
-      return;
-    }
-    if (!code) {
-      setStatus("error");
-      setMessage("Missing OAuth code.");
-      return;
-    }
+    if (!code) return;
 
     (async () => {
       try {

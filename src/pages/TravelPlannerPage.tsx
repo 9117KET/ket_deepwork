@@ -6,12 +6,12 @@
 
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
+import { AppChrome } from "../components/layout/AppChrome";
 import {
-  AppChrome,
   appCardClass,
   appPrimaryButtonClass,
   appSecondaryButtonClass,
-} from "../components/layout/AppChrome";
+} from "../components/layout/appClasses";
 import { MaterialIcon } from "../components/ui/MaterialIcon";
 import type { TravelPlanInput, LifeStage, BudgetPreference } from "../domain/travelTypes";
 import { generateTravelPlan } from "../services/travelPlanService";
