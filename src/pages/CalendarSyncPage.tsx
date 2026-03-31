@@ -96,6 +96,7 @@ export function CalendarSyncPage() {
 
   useEffect(() => {
     if (!isAuthed) return;
+    addLog("auth", `Signed in as ${user?.email ?? user?.id?.slice(0, 8) ?? "unknown"}`, true);
     addLog("calendars-list", "Fetching connected calendars…", true);
     (async () => {
       try {
@@ -113,7 +114,7 @@ export function CalendarSyncPage() {
         setCalendars([]);
       }
     })();
-  }, [isAuthed]);
+  }, [isAuthed, user]);
 
   const handleConnect = async () => {
     setError(null);
