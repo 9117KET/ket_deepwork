@@ -16,15 +16,18 @@ export interface CalendarListItem {
 async function requireOk<T>(result: { data: T | null; error: unknown }): Promise<T> {
   if (result.error) {
     const err = result.error as { message?: string; context?: unknown };
+    // supabase-js also stashes the raw Response at result.response
+    const rawResp =
+      ((result as Record<string, unknown>).response as Response | undefined) ??
+      (err.context as Response | undefined);
     let message = (err as Error).message ?? "Unknown error";
-    // context is the raw Response from FunctionsHttpError — use duck typing
-    const ctx = err.context;
-    if (ctx != null && typeof (ctx as Response).json === "function") {
+    if (rawResp) {
       try {
-        const body = (await (ctx as Response).json()) as { error?: string };
-        if (body.error) message = body.error;
+        const body = (await rawResp.text()) as string;
+        const parsed = JSON.parse(body) as { error?: string };
+        if (parsed.error) message = parsed.error;
       } catch {
-        // ignore JSON parse failures — keep the original message
+        // ignore parse failures
       }
     }
     throw new Error(message);
