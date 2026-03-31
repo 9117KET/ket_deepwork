@@ -8,7 +8,8 @@ export const GOOGLE_SCOPES = [
 ]
 
 export function buildRedirectUri(origin: string): string {
-  return `${origin.replace(/\\/$/, '')}/calendar/callback`
+  const base = origin.endsWith('/') ? origin.slice(0, -1) : origin
+  return `${base}/calendar/callback`
 }
 
 export function json(resBody: unknown, init?: ResponseInit): Response {
