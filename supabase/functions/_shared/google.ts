@@ -12,10 +12,19 @@ export function buildRedirectUri(origin: string): string {
   return `${base}/calendar/callback`
 }
 
+export const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+}
+
+export const CORS_PREFLIGHT = new Response('ok', { headers: CORS_HEADERS })
+
 export function json(resBody: unknown, init?: ResponseInit): Response {
+  const { headers: extraHeaders, ...rest } = init ?? {}
   return new Response(JSON.stringify(resBody), {
-    headers: { 'content-type': 'application/json; charset=utf-8' },
-    ...init,
+    headers: { 'content-type': 'application/json; charset=utf-8', ...CORS_HEADERS, ...(extraHeaders as Record<string, string> | undefined) },
+    ...rest,
   })
 }
 
