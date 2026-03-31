@@ -13,10 +13,19 @@ type PlannerTask = {
   durationMinutes?: number
 }
 
-function dateTimeFromLocal(isoDay: string, hhmm: string): Date {
-  const [y, m, d] = isoDay.split('-').map(Number)
+function localEndDateTime(isoDay: string, hhmm: string, durationMins: number): string {
   const [hh, mm] = hhmm.split(':').map(Number)
-  return new Date(y!, (m ?? 1) - 1, d!, hh ?? 0, mm ?? 0, 0, 0)
+  const endTotal = (hh ?? 0) * 60 + (mm ?? 0) + durationMins
+  const endH = Math.floor(endTotal / 60) % 24
+  const endM = endTotal % 60
+  const overflowDays = Math.floor(endTotal / (24 * 60))
+  if (overflowDays > 0) {
+    const d = new Date(`${isoDay}T00:00:00Z`)
+    d.setUTCDate(d.getUTCDate() + overflowDays)
+    const newDay = d.toISOString().slice(0, 10)
+    return `${newDay}T${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}:00`
+  }
+  return `${isoDay}T${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}:00`
 }
 
 Deno.serve(async (req) => {
@@ -37,10 +46,12 @@ Deno.serve(async (req) => {
     const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET') ?? ''
     const { accessToken } = await getGoogleAccessToken({ refreshToken, clientId, clientSecret })
 
-    const { startDate, endDate } = (await req.json().catch(() => ({}))) as {
+    const { startDate, endDate, timezone } = (await req.json().catch(() => ({}))) as {
       startDate?: string
       endDate?: string
+      timezone?: string
     }
+    const userTimezone = timezone ?? 'UTC'
     const now = new Date()
     const start = startDate ? new Date(`${startDate}T00:00:00`) : new Date(now)
     const end = endDate ? new Date(`${endDate}T23:59:59`) : new Date(now.getTime() + 14 * 864e5)
@@ -67,8 +78,8 @@ Deno.serve(async (req) => {
         if (t.parentId) continue
         if (!t.scheduledAt || !t.durationMinutes || t.durationMinutes <= 0) continue
 
-        const startDt = dateTimeFromLocal(isoDay, t.scheduledAt)
-        const endDt = new Date(startDt.getTime() + t.durationMinutes * 60000)
+        const startDateTime = `${isoDay}T${t.scheduledAt}:00`
+        const endDateTime = localEndDateTime(isoDay, t.scheduledAt, t.durationMinutes)
 
         const { data: link } = await supabase
           .from('calendar_event_links')
@@ -80,8 +91,8 @@ Deno.serve(async (req) => {
 
         const eventBody = {
           summary: t.title,
-          start: { dateTime: startDt.toISOString() },
-          end: { dateTime: endDt.toISOString() },
+          start: { dateTime: startDateTime, timeZone: userTimezone },
+          end: { dateTime: endDateTime, timeZone: userTimezone },
         }
 
         if (!link?.google_event_id) {

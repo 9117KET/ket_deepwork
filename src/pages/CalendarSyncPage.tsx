@@ -21,6 +21,7 @@ import {
   syncFromGoogle,
   syncToGoogle,
   startGoogleOAuth,
+  disconnectGoogle,
   type CalendarListItem,
 } from "../services/calendarSyncService";
 
@@ -59,9 +60,11 @@ export function CalendarSyncPage() {
   const [error, setError] = useState<string | null>(null);
   const [calendars, setCalendars] = useState<CalendarListItem[]>([]);
   const [selectedId, setSelectedId] = useState<string>("");
+  const [savedCalendarName, setSavedCalendarName] = useState<string>("");
   const [savingSelection, setSavingSelection] = useState(false);
   const [syncing, setSyncing] = useState<"pull" | "push" | null>(null);
   const [syncMessage, setSyncMessage] = useState<string>("");
+  const [disconnecting, setDisconnecting] = useState(false);
 
   const isAuthed = Boolean(user);
 
@@ -71,10 +74,16 @@ export function CalendarSyncPage() {
   );
 
   const connected = calendars.length > 0;
+  const calendarSaved = savedCalendarName !== "";
+
+  // Clear transient messages on mount
+  useEffect(() => {
+    setSyncMessage("");
+    setError(null);
+  }, []);
 
   useEffect(() => {
     if (!isAuthed) return;
-    setError(null);
     (async () => {
       try {
         const items = await listGoogleCalendars();
@@ -102,6 +111,24 @@ export function CalendarSyncPage() {
     }
   };
 
+  const handleDisconnect = async () => {
+    if (!confirm("Disconnect Google Calendar? All event links will be removed.")) return;
+    setError(null);
+    setSyncMessage("");
+    setDisconnecting(true);
+    try {
+      await disconnectGoogle();
+      setCalendars([]);
+      setSelectedId("");
+      setSavedCalendarName("");
+      setSyncMessage("Google Calendar disconnected.");
+    } catch (e) {
+      setError((e as Error).message ?? "Failed to disconnect.");
+    } finally {
+      setDisconnecting(false);
+    }
+  };
+
   if (!isAuthed) {
     return (
       <AppChrome headerPositionClass="top-0" mobileActive="planner" maxWidthClass="max-w-xl">
@@ -115,6 +142,9 @@ export function CalendarSyncPage() {
       </AppChrome>
     );
   }
+
+  const step2State = connected ? "current" : "upcoming";
+  const step3State = calendarSaved ? "current" : !connected ? "upcoming" : "upcoming";
 
   return (
     <AppChrome
@@ -136,25 +166,25 @@ export function CalendarSyncPage() {
         <div className="flex flex-wrap items-center gap-4 border-b border-share-outlineVariant/10 bg-share-surfaceContainerHigh/50 px-4 py-4 md:px-8">
           <StepPill step={1} label="Connect" state={connected ? "done" : "current"} />
           <div className="mx-2 hidden h-px min-w-[2rem] flex-1 bg-share-outlineVariant/20 sm:block" />
-          <StepPill step={2} label="Choose" state={connected ? "current" : "upcoming"} />
+          <StepPill step={2} label="Choose" state={calendarSaved ? "done" : step2State} />
           <div className="mx-2 hidden h-px min-w-[2rem] flex-1 bg-share-outlineVariant/20 sm:block" />
-          <StepPill
-            step={3}
-            label="Sync"
-            state={!connected ? "upcoming" : syncing || syncMessage ? "current" : "upcoming"}
-          />
+          <StepPill step={3} label="Sync" state={step3State} />
         </div>
 
         <div className="flex flex-col items-center px-6 py-12 text-center md:px-12">
           <div className="mb-8 rounded-full bg-share-surfaceContainerHighest p-6">
-            <MaterialIcon name="sync_lock" className="text-6xl text-share-primary" />
+            <MaterialIcon
+              name={connected ? "link" : "sync_lock"}
+              className={`text-6xl ${connected ? "text-emerald-400" : "text-share-primary"}`}
+            />
           </div>
           <h2 className="mb-4 font-shareHeadline text-2xl font-bold text-share-onSurface">
-            Sync with Google Calendar
+            {connected ? "Google Calendar connected" : "Sync with Google Calendar"}
           </h2>
           <p className="mb-8 max-w-md leading-relaxed text-share-onSurfaceVariant">
-            Integrate your daily appointments directly into your Life Planner. Access tokens are
-            encrypted on the server.
+            {connected
+              ? "Your account is linked. Choose a calendar below and start syncing."
+              : "Integrate your daily appointments directly into your Life Planner. Access tokens are encrypted on the server."}
           </p>
 
           {error && (
@@ -163,15 +193,27 @@ export function CalendarSyncPage() {
             </p>
           )}
 
-          <button
-            type="button"
-            onClick={handleConnect}
-            disabled={loading}
-            className={`${appPrimaryButtonClass()} flex items-center gap-3 px-10 py-4 text-base shadow-xl shadow-share-primary/10`}
-          >
-            <MaterialIcon name="google" />
-            {loading ? "Opening Google…" : "Connect Google Calendar"}
-          </button>
+          {connected ? (
+            <button
+              type="button"
+              onClick={handleDisconnect}
+              disabled={disconnecting}
+              className={`${appSecondaryButtonClass()} flex items-center gap-2 border-red-500/30 text-red-400 hover:border-red-500/60 hover:bg-red-500/10`}
+            >
+              <MaterialIcon name="link_off" className="text-base" />
+              {disconnecting ? "Disconnecting…" : "Disconnect Google Calendar"}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleConnect}
+              disabled={loading}
+              className={`${appPrimaryButtonClass()} flex items-center gap-3 px-10 py-4 text-base shadow-xl shadow-share-primary/10`}
+            >
+              <MaterialIcon name="google" />
+              {loading ? "Opening Google…" : "Connect Google Calendar"}
+            </button>
+          )}
 
           <div className="mt-10 flex items-center gap-2 text-xs font-medium text-share-onSurfaceVariant">
             <MaterialIcon name="verified_user" filled className="text-sm" />
@@ -206,14 +248,22 @@ export function CalendarSyncPage() {
               >
                 {calendars.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.summary}
+                    {c.summary}{c.primary ? " (primary)" : ""}
                   </option>
                 ))}
               </select>
-              <p className="text-xs text-share-onSurfaceVariant">
-                Primary detected:{" "}
-                <span className="text-share-onSurface">{primary?.summary ?? "—"}</span>
-              </p>
+              {savedCalendarName && (
+                <p className="text-xs text-share-onSurfaceVariant">
+                  Active:{" "}
+                  <span className="font-medium text-share-onSurface">{savedCalendarName}</span>
+                </p>
+              )}
+              {!savedCalendarName && primary && (
+                <p className="text-xs text-share-onSurfaceVariant">
+                  Primary detected:{" "}
+                  <span className="text-share-onSurface">{primary.summary}</span>
+                </p>
+              )}
             </div>
           )}
           <button
@@ -229,7 +279,8 @@ export function CalendarSyncPage() {
                   calendarId: selectedId,
                   calendarSummary: selected?.summary,
                 });
-                setSyncMessage("Saved calendar selection.");
+                setSavedCalendarName(selected?.summary ?? selectedId);
+                setSyncMessage("Calendar selection saved.");
               } catch (e) {
                 setError((e as Error).message ?? "Failed to save selection.");
               } finally {
@@ -253,19 +304,25 @@ export function CalendarSyncPage() {
             <div className="flex items-center justify-between rounded-xl bg-share-surfaceContainerHigh p-4">
               <div className="flex items-center gap-3">
                 <MaterialIcon name="download" className="text-share-onSurfaceVariant" />
-                <span className="text-sm font-medium text-share-onSurface">Sync from Google</span>
+                <div>
+                  <span className="text-sm font-medium text-share-onSurface">Sync from Google</span>
+                  <p className="text-xs text-share-onSurfaceVariant">Import events as planner tasks</p>
+                </div>
               </div>
               <span
-                className={`h-2 w-2 rounded-full ${syncing === "pull" ? "bg-share-primary" : "bg-share-outlineVariant"}`}
+                className={`h-2 w-2 rounded-full ${syncing === "pull" ? "animate-pulse bg-share-primary" : "bg-share-outlineVariant"}`}
               />
             </div>
             <div className="flex items-center justify-between rounded-xl bg-share-surfaceContainerHigh p-4">
               <div className="flex items-center gap-3">
                 <MaterialIcon name="upload" className="text-share-onSurfaceVariant" />
-                <span className="text-sm font-medium text-share-onSurface">Sync to Google</span>
+                <div>
+                  <span className="text-sm font-medium text-share-onSurface">Sync to Google</span>
+                  <p className="text-xs text-share-onSurfaceVariant">Push scheduled tasks to calendar</p>
+                </div>
               </div>
               <span
-                className={`h-2 w-2 rounded-full ${syncing === "push" ? "bg-share-primary" : "bg-share-outlineVariant"}`}
+                className={`h-2 w-2 rounded-full ${syncing === "push" ? "animate-pulse bg-share-primary" : "bg-share-outlineVariant"}`}
               />
             </div>
           </div>
@@ -276,8 +333,10 @@ export function CalendarSyncPage() {
           )}
           <div className="mt-auto">
             <div className="mb-2 flex justify-between text-xs text-share-onSurfaceVariant">
-              <span>Status</span>
-              <span>{connected ? "Connected" : "Disconnected"}</span>
+              <span>Connection</span>
+              <span className={connected ? "text-emerald-400" : "text-share-onSurfaceVariant"}>
+                {connected ? "Active" : "Not connected"}
+              </span>
             </div>
             <div className="h-1 w-full overflow-hidden rounded-full bg-share-surfaceContainerHighest">
               <div
@@ -289,7 +348,7 @@ export function CalendarSyncPage() {
           <div className="flex flex-wrap gap-3">
             <button
               type="button"
-              disabled={!selectedId || syncing !== null}
+              disabled={!calendarSaved || syncing !== null}
               onClick={async () => {
                 setError(null);
                 setSyncMessage("");
@@ -309,7 +368,7 @@ export function CalendarSyncPage() {
             </button>
             <button
               type="button"
-              disabled={!selectedId || syncing !== null}
+              disabled={!calendarSaved || syncing !== null}
               onClick={async () => {
                 setError(null);
                 setSyncMessage("");
@@ -317,7 +376,7 @@ export function CalendarSyncPage() {
                 try {
                   const res = await syncToGoogle();
                   setSyncMessage(
-                    `Created ${res.created}, updated ${res.updated}, skipped ${res.skipped}.`,
+                    `Created ${res.created}, updated ${res.updated}${res.skipped > 0 ? `, skipped ${res.skipped}` : ""}.`,
                   );
                 } catch (e) {
                   setError((e as Error).message ?? "Sync to Google failed.");
@@ -330,6 +389,11 @@ export function CalendarSyncPage() {
               {syncing === "push" ? "Syncing…" : "Sync to Google"}
             </button>
           </div>
+          {!calendarSaved && connected && (
+            <p className="text-xs text-share-onSurfaceVariant">
+              Save a calendar selection in Step 2 to enable sync.
+            </p>
+          )}
         </div>
       </div>
 
