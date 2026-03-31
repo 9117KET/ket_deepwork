@@ -5,7 +5,7 @@
  * Supports view-only and edit (tasks) links; copy-to-clipboard per link.
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { ShareToken } from '../../storage/supabaseSharing'
 import {
   fetchShareTokens,
@@ -43,6 +43,13 @@ export function ShareModal({ userId, isOpen, onClose }: ShareModalProps) {
   const [newPermission, setNewPermission] = useState<'view' | 'edit'>('view')
   const [newLabel, setNewLabel] = useState('')
   const [copied, setCopied] = useState<string | null>(null)
+  const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimeoutRef.current) clearTimeout(copiedTimeoutRef.current)
+    }
+  }, [])
 
   useEffect(() => {
     if (!isOpen) return
@@ -82,7 +89,8 @@ export function ShareModal({ userId, isOpen, onClose }: ShareModalProps) {
 
     const markCopied = () => {
       setCopied(token)
-      setTimeout(() => setCopied(null), 2000)
+      if (copiedTimeoutRef.current) clearTimeout(copiedTimeoutRef.current)
+      copiedTimeoutRef.current = setTimeout(() => setCopied(null), 2000)
     }
 
     // Fallback for when the Clipboard API rejects (e.g. document lost focus

@@ -48,12 +48,14 @@ function App() {
 
   useEffect(() => {
     if (!shareToken) return;
+    let cancelled = false;
     const loadShared = async () => {
       setShareLoading(true);
       const [meta, state] = await Promise.all([
         validateShareToken(shareToken),
         fetchSharedPlannerState(shareToken),
       ]);
+      if (cancelled) return;
       if (!meta || !state) {
         setShareError(true);
       } else {
@@ -63,6 +65,7 @@ function App() {
       setShareLoading(false);
     };
     void loadShared();
+    return () => { cancelled = true; };
   }, [shareToken]);
 
   const sharedStateRef = useRef(sharedState);

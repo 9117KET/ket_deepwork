@@ -288,7 +288,9 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
               })
             }
           },
-        )
+        ).catch((err) => {
+          console.error('[sync] Failed to refetch on visibility change', err)
+        })
       }
     }
 
