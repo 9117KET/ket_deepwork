@@ -17,6 +17,7 @@ Deno.serve(async (req) => {
     if (!code || !origin) throw new Error('Missing code/origin')
 
     const redirectUri = buildRedirectUri(origin)
+    console.log('[oauth-callback] user:', userId.slice(0, 8), '| origin:', origin, '| redirectUri:', redirectUri)
     const body = new URLSearchParams({
       client_id: clientId,
       client_secret: clientSecret,
@@ -30,9 +31,11 @@ Deno.serve(async (req) => {
       headers: { 'content-type': 'application/x-www-form-urlencoded' },
       body,
     })
+    console.log('[oauth-callback] token exchange status:', resp.status)
     if (!resp.ok) throw new Error(`Token exchange failed (${resp.status})`)
     const data = (await resp.json()) as { refresh_token?: string }
     const refreshToken = data.refresh_token
+    console.log('[oauth-callback] has refresh_token:', Boolean(refreshToken))
     if (!refreshToken) {
       // Google does not always return refresh_token if previously granted without prompt=consent.
       throw new Error('No refresh token returned. Try disconnecting and reconnecting with consent.')
@@ -50,9 +53,11 @@ Deno.serve(async (req) => {
       { onConflict: 'user_id' },
     )
     if (error) throw new Error('Failed to save connection')
+    console.log('[oauth-callback] connection saved ok for user:', userId.slice(0, 8))
 
     return json({ ok: true })
   } catch (e) {
+    console.error('[oauth-callback] error:', (e as Error).message)
     return json({ error: (e as Error).message ?? 'Unknown error' }, { status: 400 })
   }
 })

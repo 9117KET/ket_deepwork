@@ -39,6 +39,7 @@ Deno.serve(async (req) => {
       .select('encrypted_refresh_token, selected_calendar_id')
       .eq('user_id', userId)
       .maybeSingle()
+    console.log('[sync-push] user:', userId.slice(0, 8), '| calendar:', conn?.selected_calendar_id ?? 'none')
     if (!conn?.selected_calendar_id) throw new Error('No calendar selected')
 
     const refreshToken = await decryptFromEnvelope(conn.encrypted_refresh_token as string)
@@ -55,6 +56,7 @@ Deno.serve(async (req) => {
     const now = new Date()
     const start = startDate ? new Date(`${startDate}T00:00:00`) : new Date(now)
     const end = endDate ? new Date(`${endDate}T23:59:59`) : new Date(now.getTime() + 14 * 864e5)
+    console.log('[sync-push] timezone:', userTimezone, '| range:', start.toISOString().slice(0, 10), '→', end.toISOString().slice(0, 10))
 
     // Pull planner days in window.
     const { data: dayRows, error } = await supabase
@@ -65,6 +67,7 @@ Deno.serve(async (req) => {
       .lte('date', end.toISOString().slice(0, 10))
       .order('date', { ascending: true })
     if (error) throw new Error('Failed to load planner days')
+    console.log('[sync-push] planner days found:', dayRows?.length ?? 0)
 
     let created = 0
     let updated = 0
@@ -73,6 +76,8 @@ Deno.serve(async (req) => {
     for (const row of (dayRows ?? []) as Array<{ date: string; tasks: unknown }>) {
       const isoDay = row.date
       const tasks = (row.tasks as PlannerTask[] | null) ?? []
+      const schedulable = tasks.filter((t) => !t.parentId && t.scheduledAt && t.durationMinutes && t.durationMinutes > 0)
+      console.log('[sync-push] day:', isoDay, '| total tasks:', tasks.length, '| schedulable:', schedulable.length)
 
       for (const t of tasks) {
         if (t.parentId) continue
@@ -95,6 +100,7 @@ Deno.serve(async (req) => {
           end: { dateTime: endDateTime, timeZone: userTimezone },
         }
 
+        console.log('[sync-push] task:', t.title.slice(0, 40), '| start:', startDateTime, '| existing link:', Boolean(link?.google_event_id))
         if (!link?.google_event_id) {
           const resp = await fetch(
             `${GOOGLE_CALENDAR_BASE}/calendars/${encodeURIComponent(conn.selected_calendar_id)}/events`,
@@ -107,6 +113,7 @@ Deno.serve(async (req) => {
               body: JSON.stringify(eventBody),
             },
           )
+          console.log('[sync-push] CREATE status:', resp.status, 'task:', t.title.slice(0, 30))
           if (!resp.ok) {
             skipped += 1
             continue
@@ -136,8 +143,10 @@ Deno.serve(async (req) => {
             },
             body: JSON.stringify(eventBody),
           })
+          console.log('[sync-push] UPDATE status:', resp.status, 'task:', t.title.slice(0, 30))
           if (resp.status === 412) {
             // Precondition failed: event changed on Google; v1 skips and reports.
+            console.log('[sync-push] 412 conflict — skipping task:', t.title.slice(0, 40))
             skipped += 1
             continue
           }
@@ -157,8 +166,10 @@ Deno.serve(async (req) => {
       }
     }
 
+    console.log('[sync-push] done | created:', created, 'updated:', updated, 'skipped:', skipped)
     return json({ ok: true, created, updated, skipped })
   } catch (e) {
+    console.error('[sync-push] error:', (e as Error).message)
     return json({ error: (e as Error).message ?? 'Unknown error' }, { status: 400 })
   }
 })
