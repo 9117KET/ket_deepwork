@@ -29,7 +29,7 @@ function localEndDateTime(isoDay: string, hhmm: string, durationMins: number): s
 }
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return CORS_PREFLIGHT
+  if (req.method === 'OPTIONS') return CORS_PREFLIGHT()
   try {
     if (req.method !== 'POST') return json({ error: 'Method not allowed' }, { status: 405 })
     const userId = await requireUserId(req)
