@@ -15,12 +15,13 @@ export interface CalendarListItem {
 
 async function requireOk<T>(result: { data: T | null; error: unknown }): Promise<T> {
   if (result.error) {
-    const err = result.error as { message?: string; context?: Response };
+    const err = result.error as { message?: string; context?: unknown };
     let message = (err as Error).message ?? "Unknown error";
-    // Extract the real error body from the edge function response
-    if (err.context instanceof Response) {
+    // context is the raw Response from FunctionsHttpError — use duck typing
+    const ctx = err.context;
+    if (ctx != null && typeof (ctx as Response).json === "function") {
       try {
-        const body = (await err.context.clone().json()) as { error?: string };
+        const body = (await (ctx as Response).json()) as { error?: string };
         if (body.error) message = body.error;
       } catch {
         // ignore JSON parse failures — keep the original message
