@@ -13,8 +13,21 @@ export interface CalendarListItem {
   primary: boolean;
 }
 
-function requireOk<T>(result: { data: T | null; error: unknown }): T {
-  if (result.error) throw result.error;
+async function requireOk<T>(result: { data: T | null; error: unknown }): Promise<T> {
+  if (result.error) {
+    const err = result.error as { message?: string; context?: Response };
+    let message = (err as Error).message ?? "Unknown error";
+    // Extract the real error body from the edge function response
+    if (err.context instanceof Response) {
+      try {
+        const body = (await err.context.clone().json()) as { error?: string };
+        if (body.error) message = body.error;
+      } catch {
+        // ignore JSON parse failures — keep the original message
+      }
+    }
+    throw new Error(message);
+  }
   if (!result.data) throw new Error("No data returned");
   return result.data;
 }
@@ -24,7 +37,7 @@ export async function startGoogleOAuth(): Promise<{ url: string; state: string }
   const res = await supabase.functions.invoke("google-oauth-start", {
     body: { origin },
   });
-  return requireOk(res) as { url: string; state: string };
+  return (await requireOk(res)) as { url: string; state: string };
 }
 
 export async function completeGoogleOAuth(code: string): Promise<void> {
@@ -32,12 +45,12 @@ export async function completeGoogleOAuth(code: string): Promise<void> {
   const res = await supabase.functions.invoke("google-oauth-callback", {
     body: { code, origin },
   });
-  requireOk(res);
+  await requireOk(res);
 }
 
 export async function listGoogleCalendars(): Promise<CalendarListItem[]> {
   const res = await supabase.functions.invoke("google-calendars-list", { body: {} });
-  const data = requireOk(res) as { calendars: CalendarListItem[] };
+  const data = (await requireOk(res)) as { calendars: CalendarListItem[] };
   return data.calendars ?? [];
 }
 
@@ -48,7 +61,7 @@ export async function selectGoogleCalendar(params: {
   const res = await supabase.functions.invoke("google-calendar-select", {
     body: params,
   });
-  requireOk(res);
+  await requireOk(res);
 }
 
 export async function syncFromGoogle(params?: {
@@ -58,7 +71,7 @@ export async function syncFromGoogle(params?: {
   const res = await supabase.functions.invoke("google-sync-pull", {
     body: { ...params, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone },
   });
-  return requireOk(res) as { imported: number };
+  return (await requireOk(res)) as { imported: number };
 }
 
 export async function syncToGoogle(params?: {
@@ -68,11 +81,11 @@ export async function syncToGoogle(params?: {
   const res = await supabase.functions.invoke("google-sync-push", {
     body: { ...params, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone },
   });
-  return requireOk(res) as { created: number; updated: number; skipped: number };
+  return (await requireOk(res)) as { created: number; updated: number; skipped: number };
 }
 
 export async function disconnectGoogle(): Promise<void> {
   const res = await supabase.functions.invoke("google-disconnect", { body: {} });
-  requireOk(res);
+  await requireOk(res);
 }
 
