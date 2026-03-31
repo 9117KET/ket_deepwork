@@ -24,6 +24,7 @@ import {
   disconnectGoogle,
   type CalendarListItem,
 } from "../services/calendarSyncService";
+import { supabase } from "../lib/supabase";
 
 function StepPill({
   step,
@@ -120,6 +121,11 @@ export function CalendarSyncPage() {
     setError(null);
     setSyncMessage("");
     setLoading(true);
+    // Confirm session token is available before invoking the function
+    const { data: { session: dbgSession } } = await supabase.auth.getSession();
+    addLog("session-check", dbgSession?.access_token
+      ? `Token present (${dbgSession.access_token.slice(0, 20)}…)`
+      : "NO SESSION TOKEN — this will 401", Boolean(dbgSession?.access_token));
     addLog("oauth-start", "Requesting Google consent URL…", true);
     try {
       const { url } = await startGoogleOAuth();
