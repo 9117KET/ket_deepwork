@@ -13,15 +13,15 @@ type PlannerTask = {
   durationMinutes?: number
 }
 
-function toLocalIsoDay(d: Date): string {
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
+function toLocalIsoDay(d: Date, timezone: string): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d)
 }
 
-function hhmmFromDate(d: Date): string {
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+function hhmmFromDate(d: Date, timezone: string): string {
+  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: timezone, hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(d)
+  const h = parts.find((p) => p.type === 'hour')?.value ?? '00'
+  const m = parts.find((p) => p.type === 'minute')?.value ?? '00'
+  return `${h}:${m}`
 }
 
 Deno.serve(async (req) => {
@@ -43,10 +43,12 @@ Deno.serve(async (req) => {
     const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET') ?? ''
     const { accessToken } = await getGoogleAccessToken({ refreshToken, clientId, clientSecret })
 
-    const { startDate, endDate } = (await req.json().catch(() => ({}))) as {
+    const { startDate, endDate, timezone } = (await req.json().catch(() => ({}))) as {
       startDate?: string
       endDate?: string
+      timezone?: string
     }
+    const userTimezone = timezone ?? 'UTC'
     const now = new Date()
     const start = startDate ? new Date(`${startDate}T00:00:00`) : new Date(now)
     const end = endDate ? new Date(`${endDate}T23:59:59`) : new Date(now.getTime() + 14 * 864e5)
@@ -80,8 +82,8 @@ Deno.serve(async (req) => {
 
       const startDateObj = new Date(startDt)
       const endDateObj = new Date(endDt)
-      const isoDay = toLocalIsoDay(startDateObj)
-      const scheduledAt = hhmmFromDate(startDateObj)
+      const isoDay = toLocalIsoDay(startDateObj, userTimezone)
+      const scheduledAt = hhmmFromDate(startDateObj, userTimezone)
       const durationMinutes = Math.max(1, Math.round((endDateObj.getTime() - startDateObj.getTime()) / 60000))
 
       // Check if already linked.

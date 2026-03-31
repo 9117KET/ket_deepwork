@@ -56,7 +56,7 @@ export async function syncFromGoogle(params?: {
   endDate?: string;
 }): Promise<{ imported: number }> {
   const res = await supabase.functions.invoke("google-sync-pull", {
-    body: params ?? {},
+    body: { ...params, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone },
   });
   return requireOk(res) as { imported: number };
 }
@@ -66,8 +66,13 @@ export async function syncToGoogle(params?: {
   endDate?: string;
 }): Promise<{ created: number; updated: number; skipped: number }> {
   const res = await supabase.functions.invoke("google-sync-push", {
-    body: params ?? {},
+    body: { ...params, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone },
   });
   return requireOk(res) as { created: number; updated: number; skipped: number };
+}
+
+export async function disconnectGoogle(): Promise<void> {
+  const res = await supabase.functions.invoke("google-disconnect", { body: {} });
+  requireOk(res);
 }
 
