@@ -24,11 +24,13 @@ import {
   deriveActiveDaysFromDays,
 } from "../../domain/dateUtils";
 import {
+  computeBlocksFromWakeSleep,
   getActiveSectionIds,
   getSectionTimeframeLabel,
   getSleepWindowLabel,
   isSleepTime,
 } from "../../domain/sectionTimeBlocks";
+import { DaySetupModal } from "./DaySetupModal";
 import {
   usePersistentState,
   getOrCreateDay,
@@ -613,7 +615,38 @@ export function DayPlanner({
     );
   }, [selectedDay]);
 
-  const MAX_TIME_OFFSET_MINUTES = 3 * 60;
+  const MAX_TIME_OFFSET_MINUTES = 5 * 60;
+
+  // Per-day blocks computed from the user's actual wake/sleep times.
+  // When set, these replace the fixed 5AM–11PM schedule for all time displays.
+  const computedBlocks = useMemo(() => {
+    if (!dayState.wakeTime || !dayState.sleepTarget) return undefined;
+    return computeBlocksFromWakeSleep(dayState.wakeTime, dayState.sleepTarget);
+  }, [dayState]);
+
+  // Modal state: auto-open when today has no wake time; "Edit schedule" forces it open.
+  const [daySetupOpen, setDaySetupOpen] = useState(false);
+  // Track which day the user explicitly skipped so we don't re-prompt automatically.
+  const [daySetupSkippedFor, setDaySetupSkippedFor] = useState<string | null>(null);
+
+  const showDaySetupModal =
+    !shareMode &&
+    selectedDay === todayIso() &&
+    (daySetupOpen || (!dayState.wakeTime && daySetupSkippedFor !== selectedDay));
+
+  const handleDaySetupSave = useCallback(
+    (wakeTime: string, sleepTarget: string) => {
+      updateAppState((prev) => {
+        const existing = getOrCreateDay(prev, selectedDay);
+        return {
+          ...prev,
+          days: { ...prev.days, [selectedDay]: { ...existing, wakeTime, sleepTarget } },
+        };
+      });
+      setDaySetupOpen(false);
+    },
+    [updateAppState, selectedDay],
+  );
 
   const handleAdjustTimeOffset = (deltaMinutes: number) => {
     updateAppState((prev) => {
@@ -716,13 +749,13 @@ export function DayPlanner({
     void tick;
     const now = new Date();
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
-    return getActiveSectionIds(currentMinutes, timeOffsetMinutes);
-  }, [tick, timeOffsetMinutes]);
+    return getActiveSectionIds(currentMinutes, timeOffsetMinutes, computedBlocks);
+  }, [tick, timeOffsetMinutes, computedBlocks]);
   const isSleepTimeNow = useMemo(() => {
     void tick;
     const now = new Date();
-    return isSleepTime(now.getHours() * 60 + now.getMinutes(), timeOffsetMinutes);
-  }, [tick, timeOffsetMinutes]);
+    return isSleepTime(now.getHours() * 60 + now.getMinutes(), timeOffsetMinutes, computedBlocks);
+  }, [tick, timeOffsetMinutes, computedBlocks]);
 
   const timeframeLabelsBySection: Record<TaskSectionId, string | null> = useMemo(() => {
     const labels: Record<TaskSectionId, string | null> = {
@@ -734,10 +767,10 @@ export function DayPlanner({
       nightRoutine: null,
     };
     for (const section of FIXED_SECTIONS) {
-      labels[section.id] = getSectionTimeframeLabel(section.id, timeOffsetMinutes);
+      labels[section.id] = getSectionTimeframeLabel(section.id, timeOffsetMinutes, computedBlocks);
     }
     return labels;
-  }, [timeOffsetMinutes]);
+  }, [timeOffsetMinutes, computedBlocks]);
 
   const lastBeepedRef = useRef<
     Record<string, { start?: boolean; mid?: boolean; end?: boolean }>
@@ -1013,13 +1046,24 @@ export function DayPlanner({
             }`}
             aria-label="Sleep block"
           >
-            <header className="mb-2">
-              <h3 className="text-sm sm:text-base font-semibold text-slate-100">
-                Sleep
-              </h3>
-              <p className="text-xs text-slate-400">
-                Timeframe: {getSleepWindowLabel(timeOffsetMinutes)}
-              </p>
+            <header className="mb-2 flex items-start justify-between gap-2">
+              <div>
+                <h3 className="text-sm sm:text-base font-semibold text-slate-100">
+                  Sleep
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Timeframe: {getSleepWindowLabel(timeOffsetMinutes, computedBlocks)}
+                </p>
+              </div>
+              {!shareMode && (
+                <button
+                  onClick={() => setDaySetupOpen(true)}
+                  className="shrink-0 text-xs text-slate-500 hover:text-sky-400"
+                  title="Edit wake/sleep schedule"
+                >
+                  Edit schedule
+                </button>
+              )}
             </header>
           </section>
         </div>
@@ -1055,6 +1099,19 @@ export function DayPlanner({
             onUpdateSettings={handleTrackingUpdateSettings}
           />
         </div>
+      )}
+
+      {/* Day setup modal: prompts for wake/sleep times on today's fresh planner */}
+      {showDaySetupModal && (
+        <DaySetupModal
+          date={selectedDay}
+          initialWakeTime={dayState.wakeTime}
+          initialSleepTarget={dayState.sleepTarget}
+          prevWakeTime={prevDayState.wakeTime}
+          prevSleepTarget={prevDayState.sleepTarget}
+          onSave={handleDaySetupSave}
+          onSkip={() => { setDaySetupSkippedFor(selectedDay); setDaySetupOpen(false); }}
+        />
       )}
     </div>
   );

@@ -17,12 +17,14 @@ interface PlannerDayRow {
   habit_completions?: unknown
   sleep_hours?: number | null
   mood?: string | null
+  wake_time?: string | null
+  sleep_target_time?: string | null
 }
 
 export async function fetchPlannerState(userId: string): Promise<AppState | null> {
   const { data, error } = await supabase
     .from('planner_days')
-    .select('id, user_id, date, tasks, deep_work_sessions, habit_completions, sleep_hours, mood')
+    .select('id, user_id, date, tasks, deep_work_sessions, habit_completions, sleep_hours, mood, wake_time, sleep_target_time')
     .eq('user_id', userId)
     .order('date', { ascending: true })
 
@@ -44,6 +46,8 @@ export async function fetchPlannerState(userId: string): Promise<AppState | null
       habitCompletions: Object.keys(habitCompletions).length > 0 ? habitCompletions : undefined,
       sleepHours: row.sleep_hours ?? undefined,
       mood: row.mood ?? undefined,
+      wakeTime: row.wake_time ?? undefined,
+      sleepTarget: row.sleep_target_time ?? undefined,
     }
   }
 
@@ -61,6 +65,8 @@ export async function upsertPlannerDays(userId: string, days: AppState['days']):
       habit_completions: day.habitCompletions ?? {},
       sleep_hours: day.sleepHours ?? null,
       mood: day.mood ?? null,
+      wake_time: day.wakeTime ?? null,
+      sleep_target_time: day.sleepTarget ?? null,
     }))
 
   if (payload.length === 0) {
