@@ -16,6 +16,7 @@ import { MaterialIcon } from "../components/ui/MaterialIcon";
 import type { TravelPlanInput, LifeStage, BudgetPreference } from "../domain/travelTypes";
 import { generateTravelPlan } from "../services/travelPlanService";
 import type { TravelPlan } from "../domain/travelTypes";
+import { useAuth } from "../contexts/AuthContext";
 
 const LIFE_STAGES: { value: LifeStage; label: string }[] = [
   { value: "student", label: "Student" },
@@ -40,6 +41,8 @@ const fieldClass =
 
 const labelClass = "text-xs font-bold uppercase tracking-widest text-share-onSurfaceVariant px-1";
 
+const TODAY_ISO = new Date().toISOString().slice(0, 10);
+
 const initialForm: TravelPlanInput = {
   origin: "",
   destination: "",
@@ -48,9 +51,11 @@ const initialForm: TravelPlanInput = {
   lifeStage: "professional",
   budgetPreference: "moderate",
   accommodationPreference: "affordable",
+  startDate: undefined,
 };
 
 export function TravelPlannerPage() {
+  const { user } = useAuth();
   const [form, setForm] = useState<TravelPlanInput>(initialForm);
   const [plan, setPlan] = useState<TravelPlan | null>(null);
   const [loading, setLoading] = useState(false);
@@ -226,18 +231,35 @@ export function TravelPlannerPage() {
                 </div>
               </div>
 
-              <div className="flex flex-col gap-2">
-                <label htmlFor="benefits" className={labelClass}>
-                  Benefits (optional)
-                </label>
-                <input
-                  id="benefits"
-                  type="text"
-                  value={form.benefits ?? ""}
-                  onChange={(e) => setForm((f) => ({ ...f, benefits: e.target.value || undefined }))}
-                  className={fieldClass}
-                  placeholder="e.g. student discount, company policy"
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-2">
+                  <label htmlFor="benefits" className={labelClass}>
+                    Benefits <span className="normal-case font-normal tracking-normal opacity-60">(optional)</span>
+                  </label>
+                  <input
+                    id="benefits"
+                    type="text"
+                    value={form.benefits ?? ""}
+                    onChange={(e) => setForm((f) => ({ ...f, benefits: e.target.value || undefined }))}
+                    className={fieldClass}
+                    placeholder="e.g. student discount"
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label htmlFor="startDate" className={labelClass}>
+                    Start date <span className="normal-case font-normal tracking-normal opacity-60">(optional)</span>
+                  </label>
+                  <input
+                    id="startDate"
+                    type="date"
+                    value={form.startDate ?? ""}
+                    min={TODAY_ISO}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, startDate: e.target.value || undefined }))
+                    }
+                    className={fieldClass}
+                  />
+                </div>
               </div>
 
               {error && (
@@ -246,14 +268,27 @@ export function TravelPlannerPage() {
                 </p>
               )}
 
-              <button
-                type="submit"
-                disabled={loading}
-                className={`${appPrimaryButtonClass()} mt-2 flex w-full items-center justify-center gap-2 py-4 text-base shadow-lg shadow-share-primary/10`}
-              >
-                <MaterialIcon name="auto_awesome" />
-                {loading ? "Generating…" : "Generate plan"}
-              </button>
+              <div className="mt-2 flex flex-col gap-2">
+                <div className="flex items-center gap-1.5 text-[11px] text-share-onSurfaceVariant/60">
+                  <MaterialIcon name="auto_awesome" className="text-xs text-share-primary/60" />
+                  {user ? (
+                    <span>AI-powered · Signed in</span>
+                  ) : (
+                    <span>
+                      AI-powered ·{" "}
+                      <span className="text-share-primary/80">Sign in for real AI results</span>
+                    </span>
+                  )}
+                </div>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className={`${appPrimaryButtonClass()} flex w-full items-center justify-center gap-2 py-4 text-base shadow-lg shadow-share-primary/10`}
+                >
+                  <MaterialIcon name="auto_awesome" />
+                  {loading ? "Generating…" : "Generate plan"}
+                </button>
+              </div>
             </form>
           </section>
 
@@ -304,9 +339,11 @@ export function TravelPlannerPage() {
             <div className="flex flex-col items-center justify-center rounded-3xl border-2 border-dashed border-share-outlineVariant/10 py-12 opacity-80">
               <MaterialIcon name="cloud_sync" className="mb-4 text-4xl text-share-onSurfaceVariant" />
               <p className="text-center font-medium text-share-onSurfaceVariant">
-                Curating your plan…
+                {user ? "Researching destination & generating AI plan…" : "Curating your plan…"}
                 <br />
-                <span className="text-xs">This usually takes just a moment.</span>
+                <span className="text-xs">
+                  {user ? "Fetching live weather, currency, and local data." : "This usually takes just a moment."}
+                </span>
               </p>
             </div>
           )}
@@ -399,6 +436,54 @@ export function TravelPlannerPage() {
                 <h4 className="mb-2 font-bold text-share-onSurface">Getting around</h4>
                 <p className="text-sm text-share-onSurfaceVariant">{plan.gettingAround}</p>
               </div>
+
+              {plan.weatherSummary && (
+                <div className={`${appCardClass()} border-share-outlineVariant/10`}>
+                  <div className="mb-2 flex items-center gap-3">
+                    <div className="rounded-lg bg-share-primary/10 p-2">
+                      <MaterialIcon name="wb_sunny" className="text-share-primary" />
+                    </div>
+                    <h4 className="font-bold text-share-onSurface">Weather outlook</h4>
+                  </div>
+                  <p className="text-sm text-share-onSurfaceVariant">{plan.weatherSummary}</p>
+                </div>
+              )}
+
+              {plan.currencyInfo && (
+                <div className={`${appCardClass()} border-share-outlineVariant/10`}>
+                  <div className="mb-2 flex items-center gap-3">
+                    <div className="rounded-lg bg-share-primary/10 p-2">
+                      <MaterialIcon name="payments" className="text-share-primary" />
+                    </div>
+                    <h4 className="font-bold text-share-onSurface">Currency & money</h4>
+                  </div>
+                  <p className="text-sm text-share-onSurfaceVariant">{plan.currencyInfo}</p>
+                </div>
+              )}
+
+              {plan.visaInfo && (
+                <div className={`${appCardClass()} border-share-outlineVariant/10`}>
+                  <div className="mb-2 flex items-center gap-3">
+                    <div className="rounded-lg bg-share-primary/10 p-2">
+                      <MaterialIcon name="badge" className="text-share-primary" />
+                    </div>
+                    <h4 className="font-bold text-share-onSurface">Entry & visa</h4>
+                  </div>
+                  <p className="text-sm text-share-onSurfaceVariant">{plan.visaInfo}</p>
+                </div>
+              )}
+
+              {plan.budgetBreakdown && (
+                <div className={`${appCardClass()} border-share-outlineVariant/10`}>
+                  <div className="mb-2 flex items-center gap-3">
+                    <div className="rounded-lg bg-share-primary/10 p-2">
+                      <MaterialIcon name="account_balance_wallet" className="text-share-primary" />
+                    </div>
+                    <h4 className="font-bold text-share-onSurface">Budget breakdown</h4>
+                  </div>
+                  <p className="text-sm text-share-onSurfaceVariant">{plan.budgetBreakdown}</p>
+                </div>
+              )}
 
               <div className="flex flex-wrap gap-3">
                 <button type="button" onClick={handleEditAgain} className={appSecondaryButtonClass()}>
