@@ -615,7 +615,6 @@ export function DayPlanner({
     );
   }, [selectedDay]);
 
-  const MAX_TIME_OFFSET_MINUTES = 5 * 60;
 
   // Per-day blocks computed from the user's actual wake/sleep times.
   // When set, these replace the fixed 5AM–11PM schedule for all time displays.
@@ -648,31 +647,6 @@ export function DayPlanner({
     [updateAppState, selectedDay],
   );
 
-  const handleAdjustTimeOffset = (deltaMinutes: number) => {
-    updateAppState((prev) => {
-      const current = prev.timeOffsetMinutes ?? 0;
-      const next = Math.max(
-        -MAX_TIME_OFFSET_MINUTES,
-        Math.min(MAX_TIME_OFFSET_MINUTES, current + deltaMinutes),
-      );
-      if (next === current) return prev;
-      return {
-        ...prev,
-        timeOffsetMinutes: next,
-      };
-    });
-  };
-
-  const handleResetTimeOffset = () => {
-    updateAppState((prev) => {
-      const current = prev.timeOffsetMinutes ?? 0;
-      if (current === 0) return prev;
-      return {
-        ...prev,
-        timeOffsetMinutes: 0,
-      };
-    });
-  };
 
   const handleTrackingUpdateDay = useCallback(
     (isoDate: string, updatedDay: DayState) => {
@@ -947,50 +921,6 @@ export function DayPlanner({
             >
               Clear selection
             </button>
-          </div>
-        )}
-        {/* Time offset controls: owner only */}
-        {!shareMode && (
-          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-            <span className="text-slate-400">
-              Daily timeframe offset.{" "}
-              {timeOffsetMinutes === 0
-                ? "Shift by ±30 minutes as needed."
-                : `Shifted by ${timeOffsetMinutes} minutes from the default blocks.`}
-            </span>
-            <button
-              type="button"
-              onClick={() => handleAdjustTimeOffset(-30)}
-              disabled={timeOffsetMinutes <= -MAX_TIME_OFFSET_MINUTES}
-              className={`rounded border px-2 py-1 ${
-                timeOffsetMinutes <= -MAX_TIME_OFFSET_MINUTES
-                  ? "cursor-not-allowed border-slate-800 bg-slate-900 text-slate-600"
-                  : "border-slate-700 bg-slate-900 text-slate-300 hover:border-sky-600 hover:text-sky-300"
-              }`}
-            >
-              Earlier (-30m)
-            </button>
-            <button
-              type="button"
-              onClick={() => handleAdjustTimeOffset(30)}
-              disabled={timeOffsetMinutes >= MAX_TIME_OFFSET_MINUTES}
-              className={`rounded border px-2 py-1 ${
-                timeOffsetMinutes >= MAX_TIME_OFFSET_MINUTES
-                  ? "cursor-not-allowed border-slate-800 bg-slate-900 text-slate-600"
-                  : "border-slate-700 bg-slate-900 text-slate-300 hover:border-sky-600 hover:text-sky-300"
-              }`}
-            >
-              Later (+30m)
-            </button>
-            {timeOffsetMinutes !== 0 && (
-              <button
-                type="button"
-                onClick={handleResetTimeOffset}
-                className="rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-300 hover:border-sky-600 hover:text-sky-300"
-              >
-                Reset
-              </button>
-            )}
           </div>
         )}
       </div>
