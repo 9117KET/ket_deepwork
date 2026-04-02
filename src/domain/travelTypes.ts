@@ -18,6 +18,8 @@ export interface TravelPlanInput {
   benefits?: string;
   budgetPreference: BudgetPreference;
   accommodationPreference: "cheap" | "affordable" | "comfort";
+  /** ISO date e.g. "2026-04-10" — used for weather forecast window. */
+  startDate?: string;
 }
 
 export interface TravelPlan {
@@ -28,4 +30,8 @@ export interface TravelPlan {
   gettingAround: string;
   contingencies: string;
   summary?: string;
+  weatherSummary?: string;
+  currencyInfo?: string;
+  visaInfo?: string;
+  budgetBreakdown?: string;
 }
