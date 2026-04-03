@@ -53,7 +53,7 @@ function GripIcon() {
   )
 }
 
-/** French/24h time: 1 PM = 13, 2 PM = 14, etc. Always shows 00–23 for hour. */
+/** French/24h time: 1 PM = 13, 2 PM = 14, etc. Always shows 00-23 for hour. */
 function Time24({ value, onChange }: { value: string | undefined; onChange: (v: string | undefined) => void }) {
   const [h, m] = (value ?? '').split(':').map((n) => parseInt(n, 10))
   const hour = Number.isInteger(h) && h >= 0 && h <= 23 ? h : null
@@ -75,7 +75,7 @@ function Time24({ value, onChange }: { value: string | undefined; onChange: (v: 
         className="w-11 rounded border border-slate-700 bg-slate-800 px-1 py-0.5 text-xs text-slate-200"
         title="Heure (24h)"
       >
-        <option value="">—</option>
+        <option value="">None</option>
         {Array.from({ length: 24 }, (_, i) => (
           <option key={i} value={i}>{String(i).padStart(2, '0')}</option>
         ))}
@@ -277,7 +277,7 @@ export function TaskItem({
                 className="w-14 rounded border border-slate-700 bg-slate-800 px-1 py-0.5 text-xs text-slate-200"
                 title="Duration (minutes)"
               >
-                <option value="">—</option>
+                <option value="">None</option>
                 {task.durationMinutes != null &&
                   !DURATION_OPTIONS.includes(task.durationMinutes) && (
                     <option value={task.durationMinutes}>{task.durationMinutes}m</option>

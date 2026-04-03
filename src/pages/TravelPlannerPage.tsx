@@ -420,7 +420,7 @@ export function TravelPlannerPage() {
                     <li key={i} className="text-sm">
                       <span className="font-bold text-share-onSurface">{p.name}</span>
                       {p.description && (
-                        <span className="ml-2 text-share-onSurfaceVariant">— {p.description}</span>
+                        <span className="ml-2 text-share-onSurfaceVariant">{p.description}</span>
                       )}
                     </li>
                   ))}

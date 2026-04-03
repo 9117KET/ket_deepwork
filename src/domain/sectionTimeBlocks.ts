@@ -2,8 +2,8 @@
  * domain/sectionTimeBlocks.ts
  *
  * Time-of-day ranges for each section block. Used to highlight the current
- * block (e.g. Morning routine 5–9, Focus 9–5) so the user sees which part of
- * the day they are in. All times are local; minutes since midnight (0–1439).
+ * block (e.g. Morning routine 5-9, Focus 9-5) so the user sees which part of
+ * the day they are in. All times are local; minutes since midnight (0-1439).
  *
  * Two modes:
  * 1. Static blocks (BLOCKS constant) shifted by a global timeOffsetMinutes (±5h).
@@ -79,7 +79,7 @@ function clampOffsetMinutes(offsetMinutes: number | undefined): number {
   return Math.max(-MAX, Math.min(MAX, Math.trunc(offsetMinutes)))
 }
 
-/** Wrap minutes into the 0–1439 range. */
+/** Wrap minutes into the 0-1439 range. */
 function wrapMinutes(minutes: number): number {
   const m = minutes % (24 * 60)
   return m < 0 ? m + 24 * 60 : m
@@ -111,7 +111,7 @@ function getSectionBlock(sectionId: TaskSectionId): { start: number; end: number
 }
 
 /**
- * Sleep block: 11 PM – 5 AM (crosses midnight) in the default schedule.
+ * Sleep block: 11 PM - 5 AM (crosses midnight) in the default schedule.
  * When computed blocks are provided, sleep is the gap between the last block's
  * end and the first block's start (i.e. sleepTarget → wakeTime).
  */
@@ -180,12 +180,12 @@ export function getSleepWindowLabel(timeOffsetMinutes?: number, blocks?: DayBloc
   if (blocks && blocks.length > 0) {
     const first = blocks[0]!
     const last = blocks[blocks.length - 1]!
-    return `${formatTimeOfDay(last.end)} – ${formatTimeOfDay(first.start)}`
+    return `${formatTimeOfDay(last.end)} - ${formatTimeOfDay(first.start)}`
   }
   const offset = clampOffsetMinutes(timeOffsetMinutes)
   const start = wrapMinutes(MINS.h23 + offset)
   const end = wrapMinutes(MINS.h5 + offset)
-  return `${formatTimeOfDay(start)} – ${formatTimeOfDay(end)}`
+  return `${formatTimeOfDay(start)} - ${formatTimeOfDay(end)}`
 }
 
 /** Human-readable timeframe for a specific section (or null if untimed). */
@@ -197,7 +197,7 @@ export function getSectionTimeframeLabel(
   if (blocks && blocks.length > 0) {
     for (const block of blocks) {
       if (block.sectionIds.includes(sectionId)) {
-        return `${formatTimeOfDay(block.start)} – ${formatTimeOfDay(block.end)}`
+        return `${formatTimeOfDay(block.start)} - ${formatTimeOfDay(block.end)}`
       }
     }
     return null
@@ -207,5 +207,5 @@ export function getSectionTimeframeLabel(
   const offset = clampOffsetMinutes(timeOffsetMinutes)
   const start = wrapMinutes(base.start + offset)
   const end = wrapMinutes(base.end + offset)
-  return `${formatTimeOfDay(start)} – ${formatTimeOfDay(end)}`
+  return `${formatTimeOfDay(start)} - ${formatTimeOfDay(end)}`
 }
