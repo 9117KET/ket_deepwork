@@ -51,36 +51,47 @@ export interface AccountabilityStats {
 
 /**
  * Full accountability picture from the activeDays history.
- * Used by DayHeader to display streak, days missed, and days since launch.
+ * Pass the full `days` record for accurate missed-day counting:
+ * a "missed" day is one where the user had tasks but completed none.
+ * Without `days`, falls back to calendar-based estimation.
  */
-export function computeAccountabilityStats(activeDays: string[]): AccountabilityStats {
-  if (activeDays.length === 0) {
-    return {
-      streak: 0,
-      bestStreak: 0,
-      totalDays: 0,
-      daysActive: 0,
-      daysMissed: 0,
-      firstActiveDate: null,
-    }
+export function computeAccountabilityStats(
+  activeDays: string[],
+  days?: Record<string, DayState | undefined>,
+): AccountabilityStats {
+  const today = todayIso()
+
+  if (activeDays.length === 0 && !days) {
+    return { streak: 0, bestStreak: 0, totalDays: 0, daysActive: 0, daysMissed: 0, firstActiveDate: null }
   }
 
   const sorted = [...new Set(activeDays)].sort()
-  const first = sorted[0]!
-  const today = todayIso()
+  const daysActive = sorted.length
+  const first = sorted[0] ?? null
 
-  // Count calendar days from first active day to today, inclusive.
+  // Total calendar days from first active day to today, inclusive.
   let totalDays = 0
-  let cur = first
-  while (cur <= today) {
-    totalDays++
-    cur = addDays(cur, 1)
+  if (first) {
+    let cur = first
+    while (cur <= today) { totalDays++; cur = addDays(cur, 1) }
   }
 
-  const daysActive = sorted.length
-  // Don't count today as missed if it hasn't ended yet -- the user may still complete tasks.
-  const todayIsActive = sorted.includes(today)
-  const daysMissed = Math.max(0, totalDays - daysActive - (todayIsActive ? 0 : 1))
+  // Missed = days where the user had tasks but completed none (past days only).
+  // This matches the monthly tracker's definition and avoids penalising days
+  // the user never opened the planner.
+  let daysMissed: number
+  if (days) {
+    daysMissed = Object.keys(days)
+      .filter((iso) => iso < today)
+      .filter((iso) => {
+        const day = days[iso]
+        return day && (day.tasks?.length ?? 0) > 0 && !dayCountsForStreak(day)
+      }).length
+  } else {
+    // Fallback: calendar-based, excluding today-not-yet-active
+    const todayIsActive = sorted.includes(today)
+    daysMissed = Math.max(0, totalDays - daysActive - (todayIsActive ? 0 : 1))
+  }
 
   return {
     streak: computeStreak(sorted),
