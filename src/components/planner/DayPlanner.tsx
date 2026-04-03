@@ -703,7 +703,7 @@ export function DayPlanner({
         const [sh, sm] = (dayState.sleepTarget ?? "23:00").split(":").map(Number);
         const wake = (wh ?? 0) * 60 + (wm ?? 0);
         const sleep = (sh ?? 0) * 60 + (sm ?? 0);
-        return sleep > wake ? sleep - wake : sleep + 1440 - wake;
+        return wake > sleep ? wake - sleep : wake + 1440 - sleep;
       })();
 
       const result = applyBlockDurationChange(
@@ -1112,7 +1112,7 @@ export function DayPlanner({
                   const [sh, sm] = (dayState.sleepTarget ?? "23:00").split(":").map(Number);
                   const wake = (wh ?? 0) * 60 + (wm ?? 0);
                   const sleep = (sh ?? 0) * 60 + (sm ?? 0);
-                  return sleep > wake ? sleep - wake : sleep + 1440 - wake;
+                  return wake > sleep ? wake - sleep : wake + 1440 - sleep;
                 })();
                 return (
                   <BlockDurationEditor
@@ -1152,7 +1152,7 @@ export function DayPlanner({
                 const [sh, sm] = (dayState.sleepTarget ?? "23:00").split(":").map(Number);
                 const wake = (wh ?? 0) * 60 + (wm ?? 0);
                 const sleep = (sh ?? 0) * 60 + (sm ?? 0);
-                const sleepMins = sleep > wake ? sleep - wake : sleep + 1440 - wake;
+                const sleepMins = wake > sleep ? wake - sleep : wake + 1440 - sleep;
                 return (
                   <BlockDurationEditor
                     currentDuration={sleepMins}
