@@ -2,8 +2,9 @@
  * components/planner/DaySetupModal.tsx
  *
  * Prompted once per day when the user opens today's planner without having set
- * their schedule. User picks bedtime + sleep duration; wake time is calculated
- * automatically. Times use a 24-hour clock to avoid AM/PM ambiguity.
+ * their schedule. User picks bedtime (last night), wake time, and sleep target
+ * (tonight); actual sleep duration is shown as calculated info.
+ * Times use a 24-hour clock to avoid AM/PM ambiguity.
  */
 
 import { useState } from "react";
@@ -11,13 +12,14 @@ import { useState } from "react";
 interface DaySetupModalProps {
   /** ISO date being set up (e.g. "2026-04-01"), used for display only. */
   date: string;
+  initialBedTime?: string | null;
   initialWakeTime?: string | null;
   initialSleepTarget?: string | null;
-  /** Yesterday's wake time — shown as a one-click "Same as yesterday" shortcut. */
+  /** Yesterday's values — shown as a one-click "Same as yesterday" shortcut. */
+  prevBedTime?: string | null;
   prevWakeTime?: string | null;
-  /** Yesterday's sleep target — paired with prevWakeTime for the shortcut. */
   prevSleepTarget?: string | null;
-  onSave: (wakeTime: string, sleepTarget: string) => void;
+  onSave: (wakeTime: string, sleepTarget: string, bedTime: string) => void;
   onSkip: () => void;
 }
 
@@ -30,21 +32,35 @@ function formatDateLabel(isoDay: string): string {
   }).format(new Date(year!, month! - 1, day!));
 }
 
-/** Add whole hours to a HH:MM time string, wrapping at midnight. */
-function addHours(hhmm: string, hours: number): string {
-  const [h, m] = hhmm.split(":").map(Number);
-  const totalMin = ((h ?? 0) * 60 + (m ?? 0) + hours * 60) % 1440;
-  return `${String(Math.floor(totalMin / 60)).padStart(2, "0")}:${String(totalMin % 60).padStart(2, "0")}`;
-}
 
-/** Infer sleep duration (whole hours, clamped 4–12) from bedtime + wake time. */
-function inferDuration(bedtime: string, wakeTime: string): number {
-  const [bh, bm] = bedtime.split(":").map(Number);
+/**
+ * Actual sleep duration in minutes between bedtime and wake time.
+ * Handles crossing midnight (bed >= wake means bed was the night before).
+ */
+function sleepMinutes(bedTime: string, wakeTime: string): number {
+  const [bh, bm] = bedTime.split(":").map(Number);
   const [wh, wm] = wakeTime.split(":").map(Number);
   const bedMin = (bh ?? 0) * 60 + (bm ?? 0);
   const wakeMin = (wh ?? 0) * 60 + (wm ?? 0);
-  const mins = wakeMin > bedMin ? wakeMin - bedMin : wakeMin + 1440 - bedMin;
+  return wakeMin > bedMin ? wakeMin - bedMin : wakeMin + 1440 - bedMin;
+}
+
+function formatDuration(mins: number): string {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
+}
+
+/** Infer sleep duration in whole hours (clamped 4–12) from actual sleep minutes. */
+function inferDurationHours(mins: number): number {
   return Math.max(4, Math.min(12, Math.round(mins / 60)));
+}
+
+/** Calculate bedtime given wake time and planned sleep duration in hours. */
+function calcSleepTarget(wakeTime: string, sleepDurationHours: number): string {
+  const [wh, wm] = wakeTime.split(":").map(Number);
+  const totalMin = ((wh ?? 0) * 60 + (wm ?? 0) + (24 - sleepDurationHours) * 60) % 1440;
+  return `${String(Math.floor(totalMin / 60)).padStart(2, "0")}:${String(totalMin % 60).padStart(2, "0")}`;
 }
 
 /** 24-hour time picker using two <select> elements (hours 0–23, minutes in 5-min steps). */
@@ -98,30 +114,40 @@ function TimePicker({
 
 export function DaySetupModal({
   date,
+  initialBedTime,
   initialWakeTime,
   initialSleepTarget,
+  prevBedTime,
   prevWakeTime,
   prevSleepTarget,
   onSave,
   onSkip,
 }: DaySetupModalProps) {
-  const initBedtime = initialSleepTarget ?? "23:00";
-  const initDuration =
-    initialWakeTime && initialSleepTarget
-      ? inferDuration(initialSleepTarget, initialWakeTime)
-      : 7;
+  const [bedTime, setBedTime] = useState(initialBedTime ?? "23:00");
+  const [wakeTime, setWakeTime] = useState(initialWakeTime ?? "07:00");
 
-  const [bedtime, setBedtime] = useState(initBedtime);
-  const [sleepDuration, setSleepDuration] = useState(initDuration);
+  const initActualMins = sleepMinutes(initialBedTime ?? "23:00", initialWakeTime ?? "07:00");
+  // If we have a saved sleep target, derive hours from it; otherwise default to actual sleep duration.
+  const initTargetHours = initialSleepTarget && initialWakeTime
+    ? inferDurationHours(sleepMinutes(initialSleepTarget, initialWakeTime))
+    : inferDurationHours(initActualMins);
+  const [targetDurationHours, setTargetDurationHours] = useState(initTargetHours);
 
-  const calculatedWake = addHours(bedtime, sleepDuration);
+  const actualSleepMins = sleepMinutes(bedTime, wakeTime);
+  const actualSleepLabel = formatDuration(actualSleepMins);
+  const calculatedSleepTarget = calcSleepTarget(wakeTime, targetDurationHours);
 
-  const hasPrev =
-    !!prevWakeTime &&
-    /^\d{2}:\d{2}$/.test(prevWakeTime) &&
-    !!prevSleepTarget &&
-    /^\d{2}:\d{2}$/.test(prevSleepTarget);
-  const prevDuration = hasPrev ? inferDuration(prevSleepTarget!, prevWakeTime!) : null;
+  const isValid =
+    /^\d{2}:\d{2}$/.test(prevBedTime ?? "") &&
+    /^\d{2}:\d{2}$/.test(prevWakeTime ?? "") &&
+    /^\d{2}:\d{2}$/.test(prevSleepTarget ?? "");
+  const hasPrev = !!prevBedTime && !!prevWakeTime && !!prevSleepTarget && isValid;
+  const prevSleepLabel = hasPrev
+    ? formatDuration(sleepMinutes(prevBedTime!, prevWakeTime!))
+    : null;
+  const prevTargetHours = hasPrev
+    ? inferDurationHours(sleepMinutes(prevSleepTarget!, prevWakeTime!))
+    : null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 px-4">
@@ -133,12 +159,12 @@ export function DaySetupModal({
 
         {hasPrev && (
           <button
-            onClick={() => onSave(prevWakeTime!, prevSleepTarget!)}
+            onClick={() => onSave(prevWakeTime!, prevSleepTarget!, prevBedTime!)}
             className="mb-4 w-full rounded border border-slate-600 px-4 py-2 text-left text-sm text-slate-300 hover:border-sky-500 hover:text-sky-400"
           >
             <span className="font-medium">Same as yesterday</span>
             <span className="ml-2 text-xs text-slate-500">
-              Bed {prevSleepTarget} · {prevDuration}h sleep → wake {prevWakeTime}
+              Bed {prevBedTime} · wake {prevWakeTime} ({prevSleepLabel}) · target {prevTargetHours}h
             </span>
           </button>
         )}
@@ -149,49 +175,61 @@ export function DaySetupModal({
               htmlFor="day-setup-bed"
               className="mb-2 block text-sm font-medium text-slate-300"
             >
-              Bedtime{" "}
-              <span className="font-normal text-slate-500">
-                (when you go to sleep)
-              </span>
+              Went to bed{" "}
+              <span className="font-normal text-slate-500">(last night)</span>
             </label>
-            <TimePicker id="day-setup-bed" value={bedtime} onChange={setBedtime} />
+            <TimePicker id="day-setup-bed" value={bedTime} onChange={setBedTime} />
           </div>
 
           <div>
             <label
-              htmlFor="day-setup-duration"
+              htmlFor="day-setup-wake"
               className="mb-2 block text-sm font-medium text-slate-300"
             >
-              Sleep duration
+              Woke up{" "}
+              <span className="font-normal text-slate-500">(this morning)</span>
+            </label>
+            <TimePicker id="day-setup-wake" value={wakeTime} onChange={setWakeTime} />
+          </div>
+
+          <div className="rounded border border-slate-700 bg-slate-800/50 px-3 py-2">
+            <p className="text-xs text-slate-400">Actual sleep</p>
+            <p className="mt-0.5 font-mono text-lg font-semibold text-emerald-400">
+              {actualSleepLabel}
+            </p>
+            <p className="mt-0.5 text-xs text-slate-500">
+              {bedTime} → {wakeTime}
+            </p>
+          </div>
+
+          <div>
+            <label
+              htmlFor="day-setup-target"
+              className="mb-2 block text-sm font-medium text-slate-300"
+            >
+              Sleep target{" "}
+              <span className="font-normal text-slate-500">(tonight)</span>
             </label>
             <select
-              id="day-setup-duration"
-              value={sleepDuration}
-              onChange={(e) => setSleepDuration(Number(e.target.value))}
+              id="day-setup-target"
+              value={targetDurationHours}
+              onChange={(e) => setTargetDurationHours(Number(e.target.value))}
               className="rounded border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-sky-500 focus:outline-none"
             >
               {[4, 5, 6, 7, 8, 9, 10, 11, 12].map((h) => (
-                <option key={h} value={h}>
-                  {h} hours
-                </option>
+                <option key={h} value={h}>{h} hours</option>
               ))}
             </select>
-          </div>
-
-          <div className="rounded border border-slate-700 bg-slate-800/50 px-3 py-3">
-            <p className="text-xs text-slate-400">Calculated wake-up time</p>
-            <p className="mt-0.5 font-mono text-xl font-semibold text-sky-400">
-              {calculatedWake}
-            </p>
-            <p className="mt-0.5 text-xs text-slate-500">
-              Bed {bedtime} + {sleepDuration}h sleep
+            <p className="mt-1.5 text-xs text-slate-500">
+              Bed at <span className="font-mono text-slate-300">{calculatedSleepTarget}</span>
+              {" "}({24 - targetDurationHours}h awake)
             </p>
           </div>
         </div>
 
         <div className="mt-5 flex gap-3">
           <button
-            onClick={() => onSave(calculatedWake, bedtime)}
+            onClick={() => onSave(wakeTime, calculatedSleepTarget, bedTime)}
             className="flex-1 rounded bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500"
           >
             Save

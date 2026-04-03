@@ -52,9 +52,11 @@ export interface DayState {
   sleepHours?: number | null;
   /** Mood emoji or code, e.g. "🙂" (null = not set). */
   mood?: string | null;
+  /** Local time user went to bed the previous night (HH:MM 24h), e.g. "23:00" (null = not set). */
+  bedTime?: string | null;
   /** Local time user woke up (HH:MM 24h), e.g. "06:30" (null = not set). */
   wakeTime?: string | null;
-  /** Local time user plans to sleep (HH:MM 24h), e.g. "23:00" (null = not set). */
+  /** Local time user plans to sleep tonight (HH:MM 24h), e.g. "23:00" (null = not set). */
   sleepTarget?: string | null;
 }
 
