@@ -135,6 +135,22 @@ const SECTION_SHORT_LABELS: Record<string, string> = {
   nightRoutine: 'Night',
 }
 
+/** Auto-computed day mode derived from overall task completion %. */
+interface DayMode {
+  emoji: string
+  label: string
+}
+
+function computeDayMode(total: number, completed: number): DayMode | null {
+  if (total === 0) return null
+  const pct = (completed / total) * 100
+  if (pct === 0)  return { emoji: '⚪', label: 'Rest' }
+  if (pct < 40)   return { emoji: '🌱', label: 'Starting' }
+  if (pct < 70)   return { emoji: '⚡', label: 'In Progress' }
+  if (pct < 90)   return { emoji: '🔥', label: 'Strong' }
+  return           { emoji: '🏆', label: 'Elite' }
+}
+
 /**
  * Returns the Tailwind bg class for a block cell based on completion ratio.
  * No tasks   → transparent (show dot only)
@@ -245,6 +261,28 @@ function BlockCompletionGrid({
                       ) : (
                         <span className="text-[9px] leading-none text-amber-300">{Math.round(pct)}%</span>
                       )}
+                    </div>
+                  </td>
+                )
+              })}
+            </tr>
+            {/* Mode row: auto-computed badge from overall completion % */}
+            <tr>
+              <td className="border border-slate-700 bg-slate-950 px-1 py-0.5 font-medium text-slate-400 whitespace-nowrap">
+                Mode
+              </td>
+              {monthDays.map((isoDate) => {
+                const { total, completed } = dayTotals[isoDate] ?? { total: 0, completed: 0 }
+                const mode = computeDayMode(total, completed)
+                const pct = total > 0 ? Math.round((completed / total) * 100) : 0
+                return (
+                  <td
+                    key={isoDate}
+                    className={`${dayBodyCell} bg-slate-950`}
+                    title={mode ? `${mode.label} (${pct}%)` : 'No tasks'}
+                  >
+                    <div className="flex h-6 w-full items-center justify-center text-base leading-none">
+                      {mode ? mode.emoji : <span className="text-slate-600">·</span>}
                     </div>
                   </td>
                 )
