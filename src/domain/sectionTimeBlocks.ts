@@ -12,7 +12,7 @@
  *    When computed blocks are provided, they shadow the static BLOCKS array.
  */
 
-import type { TaskSectionId } from './types'
+import type { TaskSectionId, BlockDurations } from './types'
 
 /** Minutes since midnight. Ranges are [start, end) (end exclusive). */
 const MINS = {
@@ -34,13 +34,14 @@ const BLOCKS: { start: number; end: number; sectionIds: TaskSectionId[] }[] = [
 export type DayBlocks = { start: number; end: number; sectionIds: TaskSectionId[] }[]
 
 /**
- * Derive four dynamic time blocks from a wake time and sleep target.
- * Both inputs are "HH:MM" 24-hour strings (same format as Task.scheduledAt).
+ * Derive five dynamic time blocks from a wake time and sleep target.
+ * Medium and Low priority are now separate blocks (2:1 time split).
  * Layout:
- *   morningRoutine: wakeTime → wakeTime + 2h
- *   highPriority:   wakeTime + 2h → midpoint of awake window
- *   medium+low:     midpoint → sleepTarget - 2h
- *   nightRoutine:   sleepTarget - 2h → sleepTarget
+ *   morningRoutine: wakeTime → wakeTime + ~20% awake
+ *   highPriority:   next ~30% of awake window
+ *   mediumPriority: next ~20% (2/3 of the old combined mid block)
+ *   lowPriority:    next ~10% (1/3 of the old combined mid block)
+ *   nightRoutine:   last ~15% up to sleepTarget
  */
 export function computeBlocksFromWakeSleep(
   wakeTimeHHMM: string,
@@ -48,28 +49,142 @@ export function computeBlocksFromWakeSleep(
 ): DayBlocks {
   const wakeMin = parseHHMM(wakeTimeHHMM)
   const rawSleep = parseHHMM(sleepTargetHHMM)
-  // Handle post-midnight sleep (e.g. wake 6AM, sleep 1AM next day)
   const sleepMin = rawSleep <= wakeMin ? rawSleep + 1440 : rawSleep
   const awake = Math.min(sleepMin - wakeMin, 1439)
 
-  // Proportional allocation so blocks never collapse to zero width.
-  // For normal days (16h) this produces the same 2h / ~6h / ~6h / 2h split.
-  // Caps: morning ≤ 2h, night ≤ 2h. Minimum per block: 30 min.
   const morningDur = Math.max(30, Math.min(120, Math.floor(awake * 0.20)))
   const nightDur   = Math.max(30, Math.min(120, Math.floor(awake * 0.15)))
   const focusDur   = Math.max(0, awake - morningDur - nightDur)
   const highDur    = Math.floor(focusDur / 2)
+  const midLowDur  = focusDur - highDur
+  const mediumDur  = Math.max(15, Math.floor(midLowDur * 2 / 3))
+  const lowDur     = Math.max(15, midLowDur - mediumDur)
 
-  const morningEnd  = wrapMinutes(wakeMin + morningDur)
-  const midpoint    = wrapMinutes(wakeMin + morningDur + highDur)
-  const nightStart  = wrapMinutes(sleepMin - nightDur)
+  let cursor = wakeMin
+  const next = (dur: number) => { const s = cursor; cursor += dur; return { s, e: wrapMinutes(cursor) } }
+  const morning = next(morningDur)
+  const high    = next(highDur)
+  const medium  = next(mediumDur)
+  const low     = next(lowDur)
+  const night   = next(nightDur)
 
   return [
-    { start: wakeMin % 1440, end: morningEnd,       sectionIds: ['morningRoutine'] },
-    { start: morningEnd,     end: midpoint,          sectionIds: ['highPriority'] },
-    { start: midpoint,       end: nightStart,        sectionIds: ['mediumPriority', 'lowPriority'] },
-    { start: nightStart,     end: sleepMin % 1440,   sectionIds: ['nightRoutine'] },
+    { start: wakeMin % 1440, end: morning.e, sectionIds: ['morningRoutine'] },
+    { start: morning.e,      end: high.e,    sectionIds: ['highPriority'] },
+    { start: high.e,         end: medium.e,  sectionIds: ['mediumPriority'] },
+    { start: medium.e,       end: low.e,     sectionIds: ['lowPriority'] },
+    { start: low.e,          end: night.e,   sectionIds: ['nightRoutine'] },
   ]
+}
+
+/**
+ * Compute blocks from manually set per-block durations.
+ * Used when the user has overridden the auto-computed allocation.
+ */
+export function computeBlocksFromDurations(
+  wakeTimeHHMM: string,
+  durations: BlockDurations,
+): DayBlocks {
+  const wakeMin = parseHHMM(wakeTimeHHMM)
+  let cursor = wakeMin
+  const order: [TaskSectionId, number][] = [
+    ['morningRoutine', durations.morningRoutine],
+    ['highPriority',   durations.highPriority],
+    ['mediumPriority', durations.mediumPriority],
+    ['lowPriority',    durations.lowPriority],
+    ['nightRoutine',   durations.nightRoutine],
+  ]
+  return order.map(([sectionId, dur]) => {
+    const start = wrapMinutes(cursor)
+    cursor += dur
+    const end = wrapMinutes(cursor)
+    return { start, end, sectionIds: [sectionId] }
+  })
+}
+
+/** Extract default block durations (minutes) from auto-computed blocks. */
+export function getDefaultBlockDurations(
+  wakeTimeHHMM: string,
+  sleepTargetHHMM: string,
+): BlockDurations {
+  const blocks = computeBlocksFromWakeSleep(wakeTimeHHMM, sleepTargetHHMM)
+  const dur = (b: { start: number; end: number }) =>
+    b.end >= b.start ? b.end - b.start : b.end + 1440 - b.start
+  return {
+    morningRoutine: dur(blocks[0]!),
+    highPriority:   dur(blocks[1]!),
+    mediumPriority: dur(blocks[2]!),
+    lowPriority:    dur(blocks[3]!),
+    nightRoutine:   dur(blocks[4]!),
+  }
+}
+
+export const BLOCK_MIN_MINUTES: Record<keyof BlockDurations, number> = {
+  morningRoutine: 15,
+  highPriority:   30,
+  mediumPriority: 15,
+  lowPriority:    15,
+  nightRoutine:   15,
+}
+
+export const SLEEP_WARN_MINUTES = 7 * 60   // 420 min -- warn below 7h
+export const SLEEP_MIN_MINUTES  = 6 * 60   // 360 min -- hard floor
+
+export const BLOCK_ORDER: (keyof BlockDurations)[] = [
+  'morningRoutine', 'highPriority', 'mediumPriority', 'lowPriority', 'nightRoutine',
+]
+
+/**
+ * Apply a duration change to one block, cascading the delta into adjacent blocks.
+ * Returns the updated durations and (if Night Routine changed) updated sleep minutes.
+ * Returns null if the change is impossible (would violate sleep minimum).
+ */
+export function applyBlockDurationChange(
+  durations: BlockDurations,
+  changedBlock: keyof BlockDurations,
+  newDurationMinutes: number,
+  currentSleepMinutes: number,
+): { durations: BlockDurations; sleepMinutes: number; sleepWarning: boolean } | null {
+  const delta = newDurationMinutes - durations[changedBlock]
+  if (delta === 0) return { durations, sleepMinutes: currentSleepMinutes, sleepWarning: false }
+
+  const result = { ...durations, [changedBlock]: newDurationMinutes }
+  const idx = BLOCK_ORDER.indexOf(changedBlock)
+  let remaining = delta
+
+  // Cascade into subsequent day blocks
+  for (let i = idx + 1; i < BLOCK_ORDER.length && remaining !== 0; i++) {
+    const key = BLOCK_ORDER[i]!
+    if (delta > 0) {
+      // Growing: shrink next block
+      const available = result[key] - BLOCK_MIN_MINUTES[key]
+      const take = Math.min(remaining, available)
+      result[key] -= take
+      remaining -= take
+    } else {
+      // Shrinking: grow next block
+      result[key] += Math.abs(remaining)
+      remaining = 0
+    }
+  }
+
+  // Overflow into sleep block
+  let sleepMinutes = currentSleepMinutes
+  if (remaining > 0) {
+    // Night Routine (or cascaded change) needs to eat into sleep
+    const newSleep = currentSleepMinutes - remaining
+    if (newSleep < SLEEP_MIN_MINUTES) return null  // hard floor -- reject
+    sleepMinutes = newSleep
+  } else if (remaining < 0) {
+    // Night Routine shrunk -- give minutes back to sleep (cap at 12h)
+    sleepMinutes = Math.min(currentSleepMinutes + Math.abs(remaining), 12 * 60)
+  }
+
+  return {
+    durations: result,
+    sleepMinutes,
+    sleepWarning: sleepMinutes < SLEEP_WARN_MINUTES,
+  }
 }
 
 /** Clamp offset so helpers behave even if callers pass something wild. */
