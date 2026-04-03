@@ -239,8 +239,8 @@ export function DayPlanner({
       : dayCompletion.completedCount / dayCompletion.totalCount;
 
   const accountabilityStats = useMemo(
-    () => computeAccountabilityStats(appState.activeDays ?? []),
-    [appState.activeDays],
+    () => computeAccountabilityStats(appState.activeDays ?? [], appState.days),
+    [appState.activeDays, appState.days],
   );
 
   const handleAddTask = (sectionId: TaskSectionId, title: string) => {

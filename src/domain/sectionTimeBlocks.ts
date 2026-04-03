@@ -183,7 +183,7 @@ export function applyBlockDurationChange(
   return {
     durations: result,
     sleepMinutes,
-    sleepWarning: sleepMinutes < SLEEP_WARN_MINUTES,
+    sleepWarning: sleepMinutes < currentSleepMinutes && sleepMinutes < SLEEP_WARN_MINUTES,
   }
 }
 
