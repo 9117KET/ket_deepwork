@@ -5,7 +5,7 @@
  * Manages drag state for reordering within the section.
  */
 
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import type { Task, TaskSection, TaskSectionId } from '../../domain/types'
 import { AddTaskInput } from './AddTaskInput'
 import { TaskItem } from './TaskItem'
@@ -37,6 +37,8 @@ interface SectionColumnProps {
   selectedTaskIds?: Set<string>
   /** Toggle task in multi-selection. */
   onToggleSelect?: (taskId: string) => void
+  /** Optional element rendered in the section header (e.g. Edit schedule button). */
+  headerAction?: ReactNode
 }
 
 type DropPosition = 'above' | 'below'
@@ -59,6 +61,7 @@ export function SectionColumn({
   taskIdsDueNow,
   selectedTaskIds = new Set(),
   onToggleSelect,
+  headerAction,
 }: SectionColumnProps) {
   const [dropTarget, setDropTarget] = useState<{ index: number; position: DropPosition } | null>(
     null,
@@ -89,16 +92,19 @@ export function SectionColumn({
           : 'border-slate-800 bg-slate-900'
       }`}
     >
-      <header className="mb-2">
-        <h3 className="text-sm sm:text-base font-semibold text-slate-100">{section.title}</h3>
-        {timeframeLabel ? (
-          <p className="text-xs text-slate-400">
-            Timeframe: {timeframeLabel}
-            {section.description ? ` (${section.description})` : null}
-          </p>
-        ) : section.description ? (
-          <p className="text-xs text-slate-500">{section.description}</p>
-        ) : null}
+      <header className="mb-2 flex items-start justify-between gap-2">
+        <div>
+          <h3 className="text-sm sm:text-base font-semibold text-slate-100">{section.title}</h3>
+          {timeframeLabel ? (
+            <p className="text-xs text-slate-400">
+              Timeframe: {timeframeLabel}
+              {section.description ? ` (${section.description})` : null}
+            </p>
+          ) : section.description ? (
+            <p className="text-xs text-slate-500">{section.description}</p>
+          ) : null}
+        </div>
+        {headerAction && <div className="shrink-0">{headerAction}</div>}
       </header>
       <div className="space-y-1">
         {tasks.length === 0 ? (
