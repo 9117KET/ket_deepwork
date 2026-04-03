@@ -18,40 +18,52 @@ export interface TourStep {
 
 const TOUR_STEPS: TourStep[] = [
   {
-    id: 'welcome',
+    id: ‘welcome’,
     target: null,
-    title: 'Welcome to Life Planner',
-    body: 'This short tour will show you the main areas. You can skip anytime or go back a step.',
+    title: ‘Welcome to Life Planner’,
+    body: ‘Your all-in-one focus hub: Day Planner, Travel Planner, Financial Planner, and Google Calendar sync — all in one place. This tour covers the Day Planner. Skip anytime or go back a step.’,
   },
   {
-    id: 'date-nav',
-    target: 'date-nav',
-    title: 'Navigate the calendar',
-    body: 'Use Previous / Today / Next to change the day. Your tasks are per day.',
-  },
-  {
-    id: 'fill-day',
-    target: 'fill-day',
-    title: 'Fill your day in one click',
-    body: '“Fill from last [weekday]” copies last week’s same day (e.g. last Thursday). “Copy from yesterday” appears when you don’t have that. Click once to avoid duplicates.',
-  },
-  {
-    id: 'tasks-section',
-    target: 'tasks-section',
-    title: 'Your task sections',
-    body: 'Work top to bottom: 3 must-dos → Morning routine → High / Medium / Low priority → Night routine. Add tasks at the bottom of each section. Set a time and duration so the app can remind you when it’s due.',
-  },
-  {
-    id: 'sidebar',
-    target: 'sidebar',
-    title: 'Weekly overview & timer',
-    body: 'Right side: see this week’s progress and today’s % done, run a deep work timer, and read a short focus reminder. The sidebar stays visible as you scroll.',
-  },
-  {
-    id: 'done',
+    id: ‘day-setup’,
     target: null,
-    title: "You're all set",
-    body: 'Use the Help button anytime to reopen the written guide or restart this tour. Focus on the work.',
+    title: ‘Start each day with a check-in’,
+    body: ‘Each morning you\’ll be asked: when did you go to bed last night, when did you wake up, and how many hours you want to sleep tonight. Your actual sleep is shown automatically and your day blocks are built around your wake and bedtime.’,
+  },
+  {
+    id: ‘date-nav’,
+    target: ‘date-nav’,
+    title: ‘Navigate the calendar’,
+    body: ‘Use Previous / Today / Next to move between days. Each day has its own tasks, sleep data, and deep work sessions. You can view and edit any past or future day.’,
+  },
+  {
+    id: ‘fill-day’,
+    target: ‘fill-day’,
+    title: ‘Fill your day in one click’,
+    body: ‘”Fill from last [weekday]” copies the same day from last week — useful for recurring schedules. “Copy from yesterday” is shown when no prior week data exists. One click, no duplicates.’,
+  },
+  {
+    id: ‘tasks-section’,
+    target: ‘tasks-section’,
+    title: ‘Your task sections’,
+    body: ‘Work top to bottom: 3 MUST Todo tasks → Morning routine → High priority → Medium & Low priority → Night routine. Add tasks inside each section, optionally set a time and duration, and check them off as you go. Completing subtasks automatically completes the parent.’,
+  },
+  {
+    id: ‘sidebar’,
+    target: ‘sidebar’,
+    title: ‘Deep work timer & weekly progress’,
+    body: ‘The sidebar shows this week\’s completion rate and your current streak — a streak counts when you create and complete at least one task on a day. Run a Pomodoro-style deep work timer to log focused sessions. A motivation card refreshes each session.’,
+  },
+  {
+    id: ‘other-features’,
+    target: null,
+    title: ‘More built-in tools’,
+    body: ‘From the top navigation: Track monthly habits, mood, and sleep in the Tracking dashboard. Plan trips with AI-generated itineraries in Travel Planner. Manage budgets in Financial Planner. Connect Google Calendar to pull and push events. Share your planner with anyone via a view or edit link.’,
+  },
+  {
+    id: ‘done’,
+    target: null,
+    title: “You’re all set”,
+    body: ‘Use the Help button anytime to restart this tour. Build your day with intention — start with your 3 MUST Todo tasks and let the blocks guide the rest.’,
   },
 ]
 
