@@ -9,6 +9,7 @@ import { Link, NavLink } from "react-router-dom";
 import { AppChrome } from "../components/layout/AppChrome";
 import { appPrimaryButtonClass } from "../components/layout/appClasses";
 import { MaterialIcon } from "../components/ui/MaterialIcon";
+import { ComingSoonBanner } from "../components/ui/ComingSoonBanner";
 
 function sideLinkClass(active: boolean) {
   return active
@@ -67,6 +68,9 @@ export function FinancialPlannerPage() {
         </aside>
 
         <main className="relative flex min-h-[min(70vh,calc(100vh-8rem))] flex-1 flex-col items-center justify-center overflow-hidden py-8 md:py-12 lg:py-16">
+          <div className="relative z-10 w-full max-w-3xl px-2">
+            <ComingSoonBanner feature="Financial Planner" />
+          </div>
           <div className="pointer-events-none absolute left-1/2 top-1/2 h-[500px] w-[500px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-share-primary/5 blur-[120px]" />
           <section className="relative z-10 w-full max-w-3xl text-center">
             <div className="relative overflow-hidden rounded-xl border border-share-outlineVariant/10 bg-share-surfaceContainerLow p-10 shadow-2xl md:p-16">
