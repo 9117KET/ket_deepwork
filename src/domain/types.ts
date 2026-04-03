@@ -58,6 +58,20 @@ export interface DayState {
   wakeTime?: string | null;
   /** Local time user plans to sleep tonight (HH:MM 24h), e.g. "23:00" (null = not set). */
   sleepTarget?: string | null;
+  /** Per-day manual overrides for time-block durations (minutes). When set, overrides auto-computed blocks. */
+  blockDurations?: BlockDurations | null;
+}
+
+/**
+ * Manual duration overrides for each awake section block (minutes).
+ * All five values must sum to the total awake window (sleepTarget - wakeTime).
+ */
+export interface BlockDurations {
+  morningRoutine: number;
+  highPriority: number;
+  mediumPriority: number;
+  lowPriority: number;
+  nightRoutine: number;
 }
 
 export interface HabitDefinition {

@@ -10,6 +10,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type SetStateAction 
 import {
   FIXED_SECTIONS,
   type AppState,
+  type BlockDurations,
   type DayState,
   type HabitDefinition,
   type Task,
@@ -24,13 +25,21 @@ import {
   deriveActiveDaysFromDays,
 } from "../../domain/dateUtils";
 import {
+  BLOCK_MIN_MINUTES,
+  BLOCK_ORDER,
+  SLEEP_MIN_MINUTES,
+  applyBlockDurationChange,
+  computeBlocksFromDurations,
   computeBlocksFromWakeSleep,
   getActiveSectionIds,
+  getDefaultBlockDurations,
   getSectionTimeframeLabel,
   getSleepWindowLabel,
   isSleepTime,
 } from "../../domain/sectionTimeBlocks";
 import { DaySetupModal } from "./DaySetupModal";
+import { BlockDurationEditor } from "./BlockDurationEditor";
+import { TaskConflictModal } from "./TaskConflictModal";
 import {
   usePersistentState,
   getOrCreateDay,
@@ -616,11 +625,19 @@ export function DayPlanner({
   }, [selectedDay]);
 
 
-  // Per-day blocks computed from the user's actual wake/sleep times.
-  // When set, these replace the fixed 5AM–11PM schedule for all time displays.
+  // Per-day blocks: use manual overrides when present, otherwise auto-compute.
   const computedBlocks = useMemo(() => {
     if (!dayState.wakeTime || !dayState.sleepTarget) return undefined;
+    if (dayState.blockDurations) {
+      return computeBlocksFromDurations(dayState.wakeTime, dayState.blockDurations);
+    }
     return computeBlocksFromWakeSleep(dayState.wakeTime, dayState.sleepTarget);
+  }, [dayState]);
+
+  // Resolved durations for the editor controls (from overrides or auto-computed).
+  const effectiveBlockDurations = useMemo<BlockDurations | null>(() => {
+    if (!dayState.wakeTime || !dayState.sleepTarget) return null;
+    return dayState.blockDurations ?? getDefaultBlockDurations(dayState.wakeTime, dayState.sleepTarget);
   }, [dayState]);
 
   // Modal state: auto-open when today has no wake time; "Edit schedule" forces it open.
@@ -637,14 +654,131 @@ export function DayPlanner({
     (wakeTime: string, sleepTarget: string, bedTime: string) => {
       updateAppState((prev) => {
         const existing = getOrCreateDay(prev, selectedDay);
+        // Clear manual block overrides so blocks recompute from new wake/sleep times.
         return {
           ...prev,
-          days: { ...prev.days, [selectedDay]: { ...existing, bedTime, wakeTime, sleepTarget } },
+          days: { ...prev.days, [selectedDay]: { ...existing, bedTime, wakeTime, sleepTarget, blockDurations: null } },
         };
       });
       setDaySetupOpen(false);
     },
     [updateAppState, selectedDay],
+  );
+
+  // --- Block duration editor state ---
+  const [sleepWarnPending, setSleepWarnPending] = useState<{
+    durations: BlockDurations; newSleepMinutes: number;
+  } | null>(null);
+
+  interface ConflictPending {
+    durations: BlockDurations;
+    newSleepTarget: string | null;
+    blockName: string;
+    newBlockStart: string;
+    newBlockEnd: string;
+    tasks: Task[];
+    nextSectionId: TaskSectionId | null;
+    nextBlockName: string | null;
+  }
+  const [conflictPending, setConflictPending] = useState<ConflictPending | null>(null);
+
+  const applyDurationChange = useCallback(
+    (durations: BlockDurations, newSleepTarget: string | null) => {
+      updateAppState((prev) => {
+        const existing = getOrCreateDay(prev, selectedDay);
+        const patch: Partial<DayState> = { blockDurations: durations };
+        if (newSleepTarget !== null) patch.sleepTarget = newSleepTarget;
+        return { ...prev, days: { ...prev.days, [selectedDay]: { ...existing, ...patch } } };
+      });
+    },
+    [updateAppState, selectedDay],
+  );
+
+  const handleBlockDurationChange = useCallback(
+    (sectionId: keyof BlockDurations, newDurationMinutes: number) => {
+      if (!effectiveBlockDurations || !dayState.wakeTime || !dayState.sleepTarget) return;
+
+      const currentSleepMins = (() => {
+        const [wh, wm] = (dayState.wakeTime ?? "07:00").split(":").map(Number);
+        const [sh, sm] = (dayState.sleepTarget ?? "23:00").split(":").map(Number);
+        const wake = (wh ?? 0) * 60 + (wm ?? 0);
+        const sleep = (sh ?? 0) * 60 + (sm ?? 0);
+        return sleep > wake ? sleep - wake : sleep + 1440 - wake;
+      })();
+
+      const result = applyBlockDurationChange(
+        effectiveBlockDurations,
+        sectionId,
+        newDurationMinutes,
+        currentSleepMins,
+      );
+      if (!result) return; // hard minimum violated
+
+      // Compute new sleep target string if sleep minutes changed
+      const newSleepTarget: string | null = result.sleepMinutes !== currentSleepMins
+        ? (() => {
+            const [wh, wm] = (dayState.wakeTime ?? "07:00").split(":").map(Number);
+            const totalMin = ((wh ?? 0) * 60 + (wm ?? 0) + result.sleepMinutes) % 1440;
+            return `${String(Math.floor(totalMin / 60)).padStart(2, "0")}:${String(totalMin % 60).padStart(2, "0")}`;
+          })()
+        : null;
+
+      // Check for task conflicts in the changed block
+      const blockIdx = BLOCK_ORDER.indexOf(sectionId);
+      const newBlocks = computeBlocksFromDurations(dayState.wakeTime, result.durations);
+      const newBlock = newBlocks[blockIdx];
+
+      if (newBlock) {
+        const blockStartMins = newBlock.start;
+        const blockEndMins = newBlock.end >= newBlock.start ? newBlock.end : newBlock.end + 1440;
+        const conflicts = (dayState.tasks ?? []).filter(
+          (t) =>
+            t.sectionId === sectionId &&
+            t.scheduledAt &&
+            (() => {
+              const [th, tm] = t.scheduledAt!.split(":").map(Number);
+              const taskMin = (th ?? 0) * 60 + (tm ?? 0);
+              const adj = taskMin < blockStartMins ? taskMin + 1440 : taskMin;
+              return adj < blockStartMins || adj >= blockEndMins;
+            })(),
+        );
+
+        if (conflicts.length > 0) {
+          const section = FIXED_SECTIONS.find((s) => s.id === sectionId);
+          const nextId = blockIdx < BLOCK_ORDER.length - 1 ? BLOCK_ORDER[blockIdx + 1] ?? null : null;
+          const nextSection = nextId ? FIXED_SECTIONS.find((s) => s.id === nextId) : null;
+          const fmt = (m: number) =>
+            `${String(Math.floor(m % 1440 / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+
+          // Sleep warn first if applicable
+          if (result.sleepWarning) {
+            setSleepWarnPending({ durations: result.durations, newSleepMinutes: result.sleepMinutes });
+            return;
+          }
+
+          setConflictPending({
+            durations: result.durations,
+            newSleepTarget,
+            blockName: section?.title ?? sectionId,
+            newBlockStart: fmt(newBlock.start),
+            newBlockEnd: fmt(newBlock.end),
+            tasks: conflicts,
+            nextSectionId: nextId as TaskSectionId | null,
+            nextBlockName: nextSection?.title ?? null,
+          });
+          return;
+        }
+      }
+
+      // Sleep warning (no task conflicts)
+      if (result.sleepWarning) {
+        setSleepWarnPending({ durations: result.durations, newSleepMinutes: result.sleepMinutes });
+        return;
+      }
+
+      applyDurationChange(result.durations, newSleepTarget);
+    },
+    [effectiveBlockDurations, dayState, applyDurationChange],
   );
 
 
@@ -965,17 +1099,34 @@ export function DayPlanner({
               onDeleteTask={shareMode === 'view' ? () => undefined : (taskId) => handleDeleteTask(taskId)}
               onUpdateTask={shareMode === 'view' ? () => undefined : handleUpdateTask}
               taskIdsDueNow={taskIdsDueNow}
-              headerAction={
-                !shareMode && (section.id === 'morningRoutine' || section.id === 'nightRoutine') ? (
-                  <button
-                    onClick={() => setDaySetupOpen(true)}
-                    className="text-xs text-slate-500 hover:text-sky-400"
-                    title="Edit wake/sleep schedule"
-                  >
-                    Edit schedule
-                  </button>
-                ) : undefined
-              }
+              headerAction={(() => {
+                if (shareMode || !effectiveBlockDurations) return undefined;
+                const sId = section.id as keyof BlockDurations;
+                if (!(sId in effectiveBlockDurations)) return undefined;
+                const idx = BLOCK_ORDER.indexOf(sId);
+                const isLast = idx === BLOCK_ORDER.length - 1;
+                const nextId = isLast ? null : BLOCK_ORDER[idx + 1];
+                const nextSection = nextId ? FIXED_SECTIONS.find((s) => s.id === nextId) : null;
+                const currentSleepMins = (() => {
+                  const [wh, wm] = (dayState.wakeTime ?? "07:00").split(":").map(Number);
+                  const [sh, sm] = (dayState.sleepTarget ?? "23:00").split(":").map(Number);
+                  const wake = (wh ?? 0) * 60 + (wm ?? 0);
+                  const sleep = (sh ?? 0) * 60 + (sm ?? 0);
+                  return sleep > wake ? sleep - wake : sleep + 1440 - wake;
+                })();
+                return (
+                  <BlockDurationEditor
+                    currentDuration={effectiveBlockDurations[sId]}
+                    minDuration={BLOCK_MIN_MINUTES[sId]}
+                    adjacentLabel={isLast ? "Sleep" : (nextSection?.title ?? "Next block")}
+                    adjacentDuration={isLast ? currentSleepMins : (nextId ? effectiveBlockDurations[nextId] : 0)}
+                    adjacentMin={isLast ? SLEEP_MIN_MINUTES : (nextId ? BLOCK_MIN_MINUTES[nextId] : 0)}
+                    affectsSleep={isLast}
+                    sleepMinutes={currentSleepMins}
+                    onConfirm={(newDur) => handleBlockDurationChange(sId, newDur)}
+                  />
+                );
+              })()}
             />
           ))}
           {/* Sleep block: same style as sections, no tasks, highlights when current time is 11 PM – 5 AM */}
@@ -996,15 +1147,28 @@ export function DayPlanner({
                   Timeframe: {getSleepWindowLabel(timeOffsetMinutes, computedBlocks)}
                 </p>
               </div>
-              {!shareMode && (
-                <button
-                  onClick={() => setDaySetupOpen(true)}
-                  className="shrink-0 text-xs text-slate-500 hover:text-sky-400"
-                  title="Edit wake/sleep schedule"
-                >
-                  Edit schedule
-                </button>
-              )}
+              {!shareMode && effectiveBlockDurations && dayState.wakeTime && dayState.sleepTarget && (() => {
+                const [wh, wm] = (dayState.wakeTime ?? "07:00").split(":").map(Number);
+                const [sh, sm] = (dayState.sleepTarget ?? "23:00").split(":").map(Number);
+                const wake = (wh ?? 0) * 60 + (wm ?? 0);
+                const sleep = (sh ?? 0) * 60 + (sm ?? 0);
+                const sleepMins = sleep > wake ? sleep - wake : sleep + 1440 - wake;
+                return (
+                  <BlockDurationEditor
+                    currentDuration={sleepMins}
+                    minDuration={SLEEP_MIN_MINUTES}
+                    adjacentLabel="Night routine"
+                    adjacentDuration={effectiveBlockDurations.nightRoutine}
+                    adjacentMin={BLOCK_MIN_MINUTES.nightRoutine}
+                    affectsSleep={false}
+                    onConfirm={(newSleepMins) => {
+                      const delta = newSleepMins - sleepMins;
+                      // Adjusting sleep adjusts Night Routine in the opposite direction
+                      handleBlockDurationChange('nightRoutine', effectiveBlockDurations.nightRoutine - delta);
+                    }}
+                  />
+                );
+              })()}
             </header>
           </section>
         </div>
@@ -1054,6 +1218,94 @@ export function DayPlanner({
           prevSleepTarget={prevDayState.sleepTarget}
           onSave={handleDaySetupSave}
           onSkip={() => { setDaySetupSkippedFor(selectedDay); setDaySetupOpen(false); }}
+        />
+      )}
+
+      {/* Sleep warning confirmation */}
+      {sleepWarnPending && dayState.wakeTime && (() => {
+        const { durations, newSleepMinutes } = sleepWarnPending;
+        const [wh, wm] = (dayState.wakeTime ?? "07:00").split(":").map(Number);
+        const totalMin = ((wh ?? 0) * 60 + (wm ?? 0) + newSleepMinutes) % 1440;
+        const newTarget = `${String(Math.floor(totalMin / 60)).padStart(2, "0")}:${String(totalMin % 60).padStart(2, "0")}`;
+        const h = Math.floor(newSleepMinutes / 60);
+        const m = newSleepMinutes % 60;
+        const label = m === 0 ? `${h}h` : `${h}h ${m}m`;
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 px-4">
+            <div className="w-full max-w-sm rounded-xl border border-amber-500/30 bg-slate-900 p-5 shadow-2xl">
+              <div className="mb-4 flex items-start gap-3">
+                <span className="mt-0.5 shrink-0 text-amber-400">
+                  <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                  </svg>
+                </span>
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-100">Sleep will drop to {label}</h3>
+                  <p className="mt-1 text-xs text-slate-400">
+                    Sleep below 7 hours affects focus, memory, and performance. This change will update your bedtime target to {newTarget}.
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    applyDurationChange(durations, newTarget);
+                    setSleepWarnPending(null);
+                  }}
+                  className="flex-1 rounded-lg border border-amber-500/40 bg-amber-500/10 py-2 text-xs font-medium text-amber-300 hover:bg-amber-500/20"
+                >
+                  Apply anyway
+                </button>
+                <button
+                  onClick={() => setSleepWarnPending(null)}
+                  className="flex-1 rounded-lg border border-slate-700 py-2 text-xs font-medium text-slate-400 hover:text-slate-200"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Task conflict modal */}
+      {conflictPending && (
+        <TaskConflictModal
+          blockName={conflictPending.blockName}
+          newStart={conflictPending.newBlockStart}
+          newEnd={conflictPending.newBlockEnd}
+          conflictingTasks={conflictPending.tasks}
+          nextBlockName={conflictPending.nextBlockName}
+          onKeep={() => {
+            applyDurationChange(conflictPending.durations, conflictPending.newSleepTarget);
+            setConflictPending(null);
+          }}
+          onClear={() => {
+            applyDurationChange(conflictPending.durations, conflictPending.newSleepTarget);
+            updateAppState((prev) => {
+              const existing = getOrCreateDay(prev, selectedDay);
+              const tasks = existing.tasks.map((t) =>
+                conflictPending.tasks.some((c) => c.id === t.id)
+                  ? { ...t, scheduledAt: undefined }
+                  : t,
+              );
+              return { ...prev, days: { ...prev.days, [selectedDay]: { ...existing, tasks } } };
+            });
+            setConflictPending(null);
+          }}
+          onMove={conflictPending.nextSectionId ? () => {
+            applyDurationChange(conflictPending.durations, conflictPending.newSleepTarget);
+            updateAppState((prev) => {
+              const existing = getOrCreateDay(prev, selectedDay);
+              const tasks = existing.tasks.map((t) =>
+                conflictPending.tasks.some((c) => c.id === t.id)
+                  ? { ...t, sectionId: conflictPending.nextSectionId!, scheduledAt: undefined }
+                  : t,
+              );
+              return { ...prev, days: { ...prev.days, [selectedDay]: { ...existing, tasks } } };
+            });
+            setConflictPending(null);
+          } : null}
         />
       )}
     </div>
