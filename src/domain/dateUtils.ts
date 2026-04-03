@@ -78,7 +78,9 @@ export function computeAccountabilityStats(activeDays: string[]): Accountability
   }
 
   const daysActive = sorted.length
-  const daysMissed = Math.max(0, totalDays - daysActive)
+  // Don't count today as missed if it hasn't ended yet -- the user may still complete tasks.
+  const todayIsActive = sorted.includes(today)
+  const daysMissed = Math.max(0, totalDays - daysActive - (todayIsActive ? 0 : 1))
 
   return {
     streak: computeStreak(sorted),
