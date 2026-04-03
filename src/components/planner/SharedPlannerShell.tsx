@@ -70,8 +70,8 @@ export function SharedPlannerShell({
 
   const bannerText =
     permission === "edit"
-      ? "Shared planner — you can add, complete, and delete tasks"
-      : "Shared planner — view only";
+      ? "Shared planner: you can add, complete, and delete tasks"
+      : "Shared planner: view only";
 
   return (
     <div className="min-h-screen bg-share-bg font-shareSans text-share-onBg selection:bg-share-primary/30 pb-28 md:pb-24">
@@ -144,7 +144,7 @@ export function SharedPlannerShell({
             <p className="relative mt-3 text-sm text-share-onSurfaceVariant">
               {rootTasks.length > 0
                 ? `${doneRoots} of ${rootTasks.length} top-level tasks done for this day.`
-                : "No tasks yet for this day—open in the app to plan together."}
+                : "No tasks yet for this day. Open the app to plan together."}
             </p>
           </section>
 
@@ -232,7 +232,7 @@ export function SharedPlannerShell({
                 <div className="absolute left-0 top-1 h-4 w-4 rounded-full border-2 border-share-outlineVariant bg-share-surfaceContainer" />
                 <p className="text-xs font-bold text-share-onSurface">Fine-grained history</p>
                 <p className="mt-1 text-[10px] text-share-onSurfaceVariant">
-                  Per-user activity feed is not stored yet—check back later.
+                  Per-user activity feed is not stored yet. Check back later.
                 </p>
               </div>
             </div>

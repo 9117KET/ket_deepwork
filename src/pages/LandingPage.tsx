@@ -1,13 +1,117 @@
 /**
  * pages/LandingPage.tsx
  *
- * Marketing landing — Stitch bento hub, hero glow, focus block, footer.
+ * Marketing landing -- Stitch bento hub, hero glow, focus block, footer.
  */
 
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { AppChrome } from "../components/layout/AppChrome";
 import { appPrimaryButtonClass, appSecondaryButtonClass } from "../components/layout/appClasses";
 import { MaterialIcon } from "../components/ui/MaterialIcon";
+
+const HOW_IT_WORKS_STEPS = [
+  {
+    icon: "bedtime",
+    title: "Start with a morning check-in",
+    body: "Each day begins by logging when you went to bed, when you woke up, and how many hours you want to sleep tonight. Your day blocks are built from this automatically.",
+  },
+  {
+    icon: "checklist",
+    title: "Plan your tasks by priority",
+    body: "Work through six sections top to bottom: 3 MUST Todo tasks, Morning routine, High priority, Medium and Low priority, then Night routine. Each task can carry a time and duration.",
+  },
+  {
+    icon: "timer",
+    title: "Run deep work sessions",
+    body: "Use the built-in Pomodoro timer to log focused work blocks. Your streak grows every day you create and complete at least one task.",
+  },
+  {
+    icon: "insights",
+    title: "Track habits, mood, and sleep",
+    body: "The monthly tracking dashboard gives you a bird's-eye view of sleep, mood, and custom habits. Spot patterns and build consistency over time.",
+  },
+];
+
+function HowItWorksSection() {
+  const [activeStep, setActiveStep] = useState(0);
+  const steps = HOW_IT_WORKS_STEPS;
+  const step = steps[activeStep]!;
+
+  const handleNext = () => {
+    if (activeStep < steps.length - 1) {
+      setActiveStep((s) => s + 1);
+    } else {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
+
+  const handleBack = () => {
+    setActiveStep((s) => Math.max(0, s - 1));
+  };
+
+  return (
+    <div className="relative overflow-hidden rounded-xl border border-share-outlineVariant/10 bg-share-surfaceContainerHighest p-10 text-center md:p-12">
+      <div className="absolute left-0 top-0 h-px w-full bg-gradient-to-r from-transparent via-share-primary/50 to-transparent" />
+
+      <span className="mb-2 inline-block rounded-full border border-share-primary/20 bg-share-primary/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.2em] text-share-primary">
+        How it works
+      </span>
+
+      <p className="mt-2 text-xs font-medium text-share-onSurfaceVariant">
+        {activeStep + 1} of {steps.length}
+      </p>
+
+      <div className="mx-auto mt-8 max-w-xl">
+        <div className="mb-6 flex justify-center">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-share-primary/10 text-share-primary">
+            <MaterialIcon name={step.icon} className="text-4xl" />
+          </div>
+        </div>
+        <h2 className="mb-4 font-shareHeadline text-2xl font-bold text-share-onSurface md:text-3xl">
+          {step.title}
+        </h2>
+        <p className="text-base leading-relaxed text-share-onSurfaceVariant md:text-lg">
+          {step.body}
+        </p>
+      </div>
+
+      <div className="mt-10 flex items-center justify-center gap-4">
+        <button
+          type="button"
+          onClick={handleBack}
+          disabled={activeStep === 0}
+          className={`${appSecondaryButtonClass()} border-share-outlineVariant/30 px-6 py-3 font-bold text-share-onSurface disabled:cursor-not-allowed disabled:opacity-30`}
+        >
+          Back
+        </button>
+        <button
+          type="button"
+          onClick={handleNext}
+          className={`${appPrimaryButtonClass()} px-8 py-3`}
+        >
+          {activeStep === steps.length - 1 ? "Finish" : "Next"}
+        </button>
+      </div>
+
+      <div className="mt-8 flex justify-center gap-2">
+        {steps.map((_, i) => (
+          <button
+            key={i}
+            type="button"
+            onClick={() => setActiveStep(i)}
+            aria-label={`Go to step ${i + 1}`}
+            className={`h-2 rounded-full transition-all duration-300 ${
+              i === activeStep
+                ? "w-6 bg-share-primary"
+                : "w-2 bg-share-outlineVariant/40 hover:bg-share-outlineVariant"
+            }`}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export function LandingPage() {
   return (
@@ -64,7 +168,7 @@ export function LandingPage() {
               <MaterialIcon name="arrow_forward" className="transition-transform group-hover:translate-x-1" />
             </Link>
             <a
-              href="#daily-focus-block"
+              href="#how-it-works"
               className={`${appSecondaryButtonClass()} border-transparent px-8 py-4 text-lg font-bold text-share-primary hover:bg-share-surfaceContainer/60`}
             >
               See how it works
@@ -136,7 +240,7 @@ export function LandingPage() {
                   Travel Planner
                 </h2>
                 <p className="mb-8 max-w-xl text-lg leading-relaxed text-share-onSurfaceVariant">
-                  Plan itineraries with packing lists, places, and tips—organized in high-contrast clarity.
+                  Plan itineraries with packing lists, places, and tips, organized in high-contrast clarity.
                 </p>
                 <span className={`${appPrimaryButtonClass()} inline-flex items-center gap-2 px-8 py-4 text-base`}>
                   Go to Travel
@@ -150,33 +254,8 @@ export function LandingPage() {
           </div>
         </section>
 
-        <section
-          id="daily-focus-block"
-          className="mx-auto mt-28 max-w-4xl scroll-mt-28"
-        >
-          <div className="relative overflow-hidden rounded-xl border border-share-outlineVariant/10 bg-share-surfaceContainerHighest p-10 text-center md:p-12">
-            <div className="absolute left-0 top-0 h-px w-full bg-gradient-to-r from-transparent via-share-primary/50 to-transparent" />
-            <span className="mb-6 block text-xs font-bold uppercase tracking-[0.3em] text-share-primary">
-              Your daily focus block
-            </span>
-            <h2 className="mb-6 font-shareHeadline text-4xl font-black text-share-onSurface md:text-5xl">
-              Design your life with intention.
-            </h2>
-            <p className="mx-auto mb-10 max-w-2xl text-lg text-share-onSurfaceVariant">
-              Prioritize what matters—one block at a time—for total clarity.
-            </p>
-            <div className="flex justify-center gap-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full border border-share-primary/20 text-share-primary">
-                <MaterialIcon name="check_circle" filled />
-              </div>
-              <div className="flex h-12 w-12 items-center justify-center rounded-full border border-share-outlineVariant/30 text-share-outlineVariant">
-                <MaterialIcon name="circle" />
-              </div>
-              <div className="flex h-12 w-12 items-center justify-center rounded-full border border-share-outlineVariant/30 text-share-outlineVariant">
-                <MaterialIcon name="circle" />
-              </div>
-            </div>
-          </div>
+        <section id="how-it-works" className="mx-auto mt-28 max-w-4xl scroll-mt-28">
+          <HowItWorksSection />
         </section>
 
         <footer className="mt-24 border-t border-share-outlineVariant/10 pb-32 pt-12 md:pb-12">
@@ -188,9 +267,9 @@ export function LandingPage() {
               </p>
             </div>
             <div className="flex flex-wrap gap-8">
-              <span className="text-sm font-medium text-slate-500">Privacy</span>
-              <span className="text-sm font-medium text-slate-500">Terms</span>
-              <span className="text-sm font-medium text-slate-500">Support</span>
+              <a href="#" className="text-sm font-medium text-slate-400 transition-colors hover:text-slate-200">Privacy</a>
+              <a href="#" className="text-sm font-medium text-slate-400 transition-colors hover:text-slate-200">Terms</a>
+              <a href="mailto:support@lifeplanner.app" className="text-sm font-medium text-slate-400 transition-colors hover:text-slate-200">Support</a>
             </div>
             <p className="text-sm text-share-onSurfaceVariant">Life Planner</p>
           </div>

@@ -105,7 +105,7 @@ export function FinancialPlannerPage() {
                     onSubmit={(e) => {
                       e.preventDefault();
                       if (!email.trim()) return;
-                      setWaitlistMsg("You're on the list — we'll reach out when this ships.");
+                      setWaitlistMsg("You're on the list. We'll reach out when this ships.");
                       setEmail("");
                     }}
                   >

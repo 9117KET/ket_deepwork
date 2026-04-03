@@ -1,7 +1,7 @@
 /**
  * pages/CalendarSyncPage.tsx
  *
- * Google Calendar connect / choose / sync — Stitch-style step shell + existing behavior.
+ * Google Calendar connect / choose / sync -- Stitch-style step shell + existing behavior.
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -108,7 +108,7 @@ export function CalendarSyncPage() {
           setSelectedId((prev) => prev || nextDefault);
           addLog("calendars-list", `Found ${items.length} calendar(s). Primary: ${items.find((c) => c.primary)?.summary ?? "none"}`, true);
         } else {
-          addLog("calendars-list", "No calendars found — not connected yet.", true);
+          addLog("calendars-list", "No calendars found. Not connected yet.", true);
         }
       } catch (e) {
         addLog("calendars-list", `ERROR: ${(e as Error).message}`, false);
@@ -125,7 +125,7 @@ export function CalendarSyncPage() {
     const { data: { session: dbgSession } } = await supabase.auth.getSession();
     addLog("session-check", dbgSession?.access_token
       ? `Token present (${dbgSession.access_token.slice(0, 20)}…)`
-      : "NO SESSION TOKEN — this will 401", Boolean(dbgSession?.access_token));
+      : "NO SESSION TOKEN - this will 401", Boolean(dbgSession?.access_token));
     addLog("oauth-start", "Requesting Google consent URL…", true);
     try {
       const { url } = await startGoogleOAuth();
@@ -151,7 +151,7 @@ export function CalendarSyncPage() {
       setSelectedId("");
       setSavedCalendarName("");
       setSyncMessage("Google Calendar disconnected.");
-      addLog("disconnect", "Disconnected — event links removed.", true);
+      addLog("disconnect", "Disconnected. Event links removed.", true);
     } catch (e) {
       const msg = (e as Error).message ?? "Failed to disconnect.";
       addLog("disconnect", `ERROR: ${msg}`, false);
@@ -394,7 +394,7 @@ export function CalendarSyncPage() {
                 try {
                   const res = await syncFromGoogle();
                   setSyncMessage(`Imported ${res.imported} new event(s).`);
-                  addLog("sync-pull", `Done — imported: ${res.imported}`, true);
+                  addLog("sync-pull", `Done. Imported: ${res.imported}`, true);
                 } catch (e) {
                   const msg = (e as Error).message ?? "Sync from Google failed.";
                   addLog("sync-pull", `ERROR: ${msg}`, false);
@@ -421,7 +421,7 @@ export function CalendarSyncPage() {
                   setSyncMessage(
                     `Created ${res.created}, updated ${res.updated}${res.skipped > 0 ? `, skipped ${res.skipped}` : ""}.`,
                   );
-                  addLog("sync-push", `Done — created: ${res.created}, updated: ${res.updated}, skipped: ${res.skipped}`, true);
+                  addLog("sync-push", `Done. Created: ${res.created}, updated: ${res.updated}, skipped: ${res.skipped}`, true);
                 } catch (e) {
                   const msg = (e as Error).message ?? "Sync to Google failed.";
                   addLog("sync-push", `ERROR: ${msg}`, false);
@@ -515,7 +515,7 @@ export function CalendarSyncPage() {
           </h2>
           <p className="max-w-2xl leading-relaxed text-share-onSurfaceVariant">
             By syncing Google Calendar, Life Planner can line up focus time with existing
-            commitments so you see one coherent day—not two competing schedules.
+            commitments so you see one coherent day, not two competing schedules.
           </p>
         </div>
         <div className="absolute -bottom-24 -right-24 h-64 w-64 rounded-full bg-share-primary/10 blur-[100px]" />
