@@ -634,12 +634,12 @@ export function DayPlanner({
     (daySetupOpen || (!dayState.wakeTime && daySetupSkippedFor !== selectedDay));
 
   const handleDaySetupSave = useCallback(
-    (wakeTime: string, sleepTarget: string) => {
+    (wakeTime: string, sleepTarget: string, bedTime: string) => {
       updateAppState((prev) => {
         const existing = getOrCreateDay(prev, selectedDay);
         return {
           ...prev,
-          days: { ...prev.days, [selectedDay]: { ...existing, wakeTime, sleepTarget } },
+          days: { ...prev.days, [selectedDay]: { ...existing, bedTime, wakeTime, sleepTarget } },
         };
       });
       setDaySetupOpen(false);
@@ -1035,8 +1035,10 @@ export function DayPlanner({
       {showDaySetupModal && (
         <DaySetupModal
           date={selectedDay}
+          initialBedTime={dayState.bedTime}
           initialWakeTime={dayState.wakeTime}
           initialSleepTarget={dayState.sleepTarget}
+          prevBedTime={prevDayState.bedTime}
           prevWakeTime={prevDayState.wakeTime}
           prevSleepTarget={prevDayState.sleepTarget}
           onSave={handleDaySetupSave}
