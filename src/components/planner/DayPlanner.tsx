@@ -965,6 +965,17 @@ export function DayPlanner({
               onDeleteTask={shareMode === 'view' ? () => undefined : (taskId) => handleDeleteTask(taskId)}
               onUpdateTask={shareMode === 'view' ? () => undefined : handleUpdateTask}
               taskIdsDueNow={taskIdsDueNow}
+              headerAction={
+                !shareMode && (section.id === 'morningRoutine' || section.id === 'nightRoutine') ? (
+                  <button
+                    onClick={() => setDaySetupOpen(true)}
+                    className="text-xs text-slate-500 hover:text-sky-400"
+                    title="Edit wake/sleep schedule"
+                  >
+                    Edit schedule
+                  </button>
+                ) : undefined
+              }
             />
           ))}
           {/* Sleep block: same style as sections, no tasks, highlights when current time is 11 PM – 5 AM */}
