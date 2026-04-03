@@ -45,7 +45,7 @@ const TOUR_STEPS: TourStep[] = [
     id: 'tasks-section',
     target: 'tasks-section',
     title: 'Your task sections',
-    body: 'Work top to bottom: 3 MUST Todo tasks → Morning routine → High priority → Medium & Low priority → Night routine. Add tasks inside each section, optionally set a time and duration, and check them off as you go. Completing subtasks automatically completes the parent.',
+    body: 'Work top to bottom: 3 MUST Todo tasks -> Morning routine -> High priority -> Medium & Low priority -> Night routine. Add tasks inside each section, optionally set a time and duration, and check them off as you go. Completing subtasks automatically completes the parent.',
   },
   {
     id: 'sidebar',
