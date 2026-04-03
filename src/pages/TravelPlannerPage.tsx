@@ -6,6 +6,7 @@
 
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
+import { ComingSoonBanner } from "../components/ui/ComingSoonBanner";
 import { AppChrome } from "../components/layout/AppChrome";
 import {
   appCardClass,
@@ -86,6 +87,7 @@ export function TravelPlannerPage() {
 
   return (
     <AppChrome headerPositionClass="top-0" mobileActive="travel" maxWidthClass="max-w-7xl">
+      <ComingSoonBanner feature="Travel Planner" />
       <div className="mb-10">
         <h1 className="font-shareHeadline text-4xl font-black tracking-tight text-share-onSurface md:text-5xl">
           Travel Planner

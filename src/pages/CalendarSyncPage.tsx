@@ -6,6 +6,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { ComingSoonBanner } from "../components/ui/ComingSoonBanner";
 import { useAuth } from "../contexts/AuthContext";
 import { AppChrome } from "../components/layout/AppChrome";
 import {
@@ -185,6 +186,7 @@ export function CalendarSyncPage() {
       maxWidthClass="max-w-4xl"
       showCalendarLink
     >
+      <ComingSoonBanner feature="Google Calendar Sync" />
       <header className="mb-12">
         <h1 className="font-shareHeadline text-4xl font-extrabold tracking-tight text-share-onSurface">
           Sync your world
