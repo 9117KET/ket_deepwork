@@ -10,8 +10,19 @@ import { useEffect, useRef, useState } from 'react'
 import type { AppState, DayState } from '../domain/types'
 import { todayIso, deriveActiveDaysFromDays } from '../domain/dateUtils'
 import { useAuth } from '../contexts/AuthContext'
-import { fetchPlannerState, upsertPlannerDays } from './supabasePlanner'
-import { fetchUserSettings, upsertUserSettings } from './supabaseUserSettings'
+import { supabase } from '../lib/supabase'
+import {
+  fetchPlannerState,
+  plannerDayRowToDayState,
+  upsertPlannerDays,
+  type PlannerDayRow,
+} from './supabasePlanner'
+import {
+  fetchUserSettings,
+  upsertUserSettings,
+  userSettingsRowToAppStatePatch,
+  type UserSettingsRow,
+} from './supabaseUserSettings'
 
 const STORAGE_KEY = 'deepblock_state_v1'
 /** Legacy key from before the Deepblock rename; used once to migrate existing data. */
@@ -162,24 +173,30 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
         fetchUserSettings(user.id),
       ])
       if (cancelled) return
-      if (remote !== null || settings !== null) {
+
+      const plannerOk = remote !== null
+      const settingsOk = settings !== null
+
+      // Only merge what we successfully fetched. If both fail, keep local cache and do not push upstream.
+      if (plannerOk || settingsOk) {
         setState((prev) => {
-          const prevLegacy = prev as AppState & { lastOpenDate?: string }
-          void settings
-          void prevLegacy
-          const mergedDays = remote?.days ? { ...(prev.days ?? {}), ...remote.days } : prev.days ?? {}
+          const mergedDays = plannerOk
+            ? { ...(prev.days ?? {}), ...remote!.days }
+            : (prev.days ?? {})
           const activeDays = deriveActiveDaysFromDays(mergedDays)
           return {
-            days: remote?.days ? mergedDays : prev.days,
-            timeOffsetMinutes: remote?.timeOffsetMinutes ?? prev.timeOffsetMinutes,
-            habitDefinitions: settings?.habitDefinitions ?? prev.habitDefinitions,
-            monthTitles: settings?.monthTitles ?? prev.monthTitles,
+            days: mergedDays,
+            timeOffsetMinutes: plannerOk ? remote!.timeOffsetMinutes ?? prev.timeOffsetMinutes : prev.timeOffsetMinutes,
+            habitDefinitions: settingsOk ? settings!.habitDefinitions : prev.habitDefinitions,
+            monthTitles: settingsOk ? settings!.monthTitles : prev.monthTitles,
+            blockDurationRatios: settingsOk ? settings!.blockDurationRatios : prev.blockDurationRatios,
             activeDays,
           }
         })
       }
+
       if (!cancelled) {
-        setReadyToSync(true)
+        setReadyToSync(plannerOk || settingsOk)
       }
     }
 
@@ -228,6 +245,7 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
         habitDefinitions: stateRef.current.habitDefinitions ?? [],
         monthTitles: stateRef.current.monthTitles ?? {},
         activeDays: stateRef.current.activeDays ?? [],
+        blockDurationRatios: stateRef.current.blockDurationRatios ?? null,
       })
     }, 800)
 
@@ -237,7 +255,67 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
         settingsSyncTimeoutRef.current = null
       }
     }
-  }, [state.habitDefinitions, state.monthTitles, state.activeDays, user, readyToSync])
+  }, [state.habitDefinitions, state.monthTitles, state.activeDays, state.blockDurationRatios, user, readyToSync])
+
+  // Realtime: apply Supabase writes from other devices/tabs immediately (Postgres Changes).
+  useEffect(() => {
+    if (!user || !readyToSync) return
+
+    const filter = `user_id=eq.${user.id}`
+    const channel = supabase
+      .channel(`planner-realtime-${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'planner_days', filter },
+        (payload) => {
+          if (payload.eventType === 'DELETE') {
+            const oldRow = payload.old as { date?: string } | null
+            const date = oldRow?.date
+            if (!date) return
+            setState((prev) => {
+              const nextDays = { ...prev.days }
+              delete nextDays[date]
+              return {
+                ...prev,
+                days: nextDays,
+                activeDays: deriveActiveDaysFromDays(nextDays),
+              }
+            })
+            return
+          }
+          const row = payload.new as PlannerDayRow
+          if (!row?.date) return
+          const dayState = plannerDayRowToDayState(row)
+          setState((prev) => {
+            const nextDays = { ...prev.days, [row.date]: dayState }
+            return {
+              ...prev,
+              days: nextDays,
+              activeDays: deriveActiveDaysFromDays(nextDays),
+            }
+          })
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'user_settings', filter },
+        (payload) => {
+          if (payload.eventType === 'DELETE') return
+          const row = payload.new as UserSettingsRow
+          if (!row?.user_id) return
+          const patch = userSettingsRowToAppStatePatch(row)
+          setState((prev) => ({
+            ...prev,
+            ...patch,
+          }))
+        },
+      )
+      .subscribe()
+
+    return () => {
+      void supabase.removeChannel(channel)
+    }
+  }, [user, readyToSync])
 
   // Flush pending sync when tab is hidden or page unloads so other devices see changes.
   // Refetch from Supabase when tab becomes visible so this device shows latest (e.g. after editing on phone).
@@ -257,6 +335,7 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
           habitDefinitions: stateRef.current.habitDefinitions ?? [],
           monthTitles: stateRef.current.monthTitles ?? {},
           activeDays: stateRef.current.activeDays ?? [],
+          blockDurationRatios: stateRef.current.blockDurationRatios ?? null,
         })
       }
     }
@@ -273,16 +352,23 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
         Promise.all([fetchPlannerState(user.id), fetchUserSettings(user.id)]).then(
           ([remote, settings]) => {
             if (refetchCancelled) return
-            if (remote !== null || settings !== null) {
+            const plannerOk = remote !== null
+            const settingsOk = settings !== null
+            if (plannerOk || settingsOk) {
               setState((prev) => {
-                const mergedDays = remote?.days ? { ...(prev.days ?? {}), ...remote.days } : prev.days ?? {}
+                const mergedDays = plannerOk
+                  ? { ...(prev.days ?? {}), ...remote!.days }
+                  : (prev.days ?? {})
                 const activeDays = deriveActiveDaysFromDays(mergedDays)
                 return {
                   ...prev,
-                  days: remote?.days ? mergedDays : prev.days,
-                  timeOffsetMinutes: remote?.timeOffsetMinutes ?? prev.timeOffsetMinutes,
-                  habitDefinitions: settings?.habitDefinitions ?? prev.habitDefinitions,
-                  monthTitles: settings?.monthTitles ?? prev.monthTitles,
+                  days: mergedDays,
+                  timeOffsetMinutes: plannerOk
+                    ? remote!.timeOffsetMinutes ?? prev.timeOffsetMinutes
+                    : prev.timeOffsetMinutes,
+                  habitDefinitions: settingsOk ? settings!.habitDefinitions : prev.habitDefinitions,
+                  monthTitles: settingsOk ? settings!.monthTitles : prev.monthTitles,
+                  blockDurationRatios: settingsOk ? settings!.blockDurationRatios : prev.blockDurationRatios,
                   activeDays,
                 }
               })

@@ -12,7 +12,7 @@
  *    When computed blocks are provided, they shadow the static BLOCKS array.
  */
 
-import type { TaskSectionId, BlockDurations } from './types'
+import type { TaskSectionId, BlockDurations, BlockDurationRatios } from './types'
 
 /** Minutes since midnight. Ranges are [start, end) (end exclusive). */
 const MINS = {
@@ -117,6 +117,89 @@ export function getDefaultBlockDurations(
     lowPriority:    dur(blocks[3]!),
     nightRoutine:   dur(blocks[4]!),
   }
+}
+
+/** Length of the awake window in minutes (wake → sleep target). */
+export function computeAwakeMinutes(wakeTimeHHMM: string, sleepTargetHHMM: string): number {
+  const wakeMin = parseHHMM(wakeTimeHHMM)
+  const rawSleep = parseHHMM(sleepTargetHHMM)
+  const sleepMin = rawSleep <= wakeMin ? rawSleep + 1440 : rawSleep
+  return Math.min(sleepMin - wakeMin, 1439)
+}
+
+export function blockDurationsToRatios(d: BlockDurations): BlockDurationRatios {
+  const sum = BLOCK_ORDER.reduce((acc, k) => acc + d[k], 0)
+  if (sum <= 0) {
+    return {
+      morningRoutine: 0.2,
+      highPriority: 0.3,
+      mediumPriority: 0.2,
+      lowPriority: 0.1,
+      nightRoutine: 0.2,
+    }
+  }
+  return {
+    morningRoutine: d.morningRoutine / sum,
+    highPriority: d.highPriority / sum,
+    mediumPriority: d.mediumPriority / sum,
+    lowPriority: d.lowPriority / sum,
+    nightRoutine: d.nightRoutine / sum,
+  }
+}
+
+/**
+ * Turn fractional split into integer minutes per block that sum exactly to `awakeMinutes`
+ * while respecting each block minimum.
+ */
+export function ratiosToBlockDurations(
+  ratios: BlockDurationRatios,
+  awakeMinutes: number,
+): BlockDurations {
+  const keys = BLOCK_ORDER
+  const ideal = keys.map((k) => ratios[k] * awakeMinutes)
+  const d = {} as BlockDurations
+  for (let i = 0; i < keys.length; i++) {
+    const k = keys[i]!
+    d[k] = Math.max(BLOCK_MIN_MINUTES[k], Math.round(ideal[i]!))
+  }
+  let sum = keys.reduce((acc, k) => acc + d[k], 0)
+  let diff = awakeMinutes - sum
+  let guard = 0
+  while (diff !== 0 && guard < 5000) {
+    guard++
+    if (diff > 0) {
+      let best: keyof BlockDurations | null = null
+      let bestSlack = -Infinity
+      for (const k of keys) {
+        const slack = ideal[keys.indexOf(k)]! - d[k]
+        if (slack > bestSlack) {
+          bestSlack = slack
+          best = k
+        }
+      }
+      if (best) d[best] += 1
+      else d.highPriority += 1
+      diff -= 1
+    } else {
+      let best: keyof BlockDurations | null = null
+      let bestSlack = -Infinity
+      for (const k of keys) {
+        if (d[k] <= BLOCK_MIN_MINUTES[k]) continue
+        const slack = d[k] - ideal[keys.indexOf(k)]!
+        if (slack > bestSlack) {
+          bestSlack = slack
+          best = k
+        }
+      }
+      if (best) {
+        d[best] -= 1
+        diff += 1
+      } else {
+        break
+      }
+    }
+  }
+  return d
 }
 
 export const BLOCK_MIN_MINUTES: Record<keyof BlockDurations, number> = {

@@ -5,10 +5,11 @@
  * Mirrors the AppState shape into the `planner_days` table.
  */
 
-import type { AppState, DayState } from '../domain/types'
+import type { AppState, BlockDurations, DayState } from '../domain/types'
 import { supabase } from '../lib/supabase'
 
-interface PlannerDayRow {
+/** Row shape from `planner_days` (API + Realtime payloads). */
+export interface PlannerDayRow {
   id: string
   user_id: string
   date: string
@@ -19,12 +20,34 @@ interface PlannerDayRow {
   mood?: string | null
   wake_time?: string | null
   sleep_target_time?: string | null
+  block_durations?: unknown
+}
+
+/** Map a DB row to client `DayState` (fetch + Realtime). */
+export function plannerDayRowToDayState(row: PlannerDayRow): DayState {
+  const tasks = (row.tasks as DayState['tasks'] | null) ?? []
+  const deepWorkSessions = (row.deep_work_sessions as DayState['deepWorkSessions'] | null) ?? []
+  const habitCompletions = (row.habit_completions as DayState['habitCompletions'] | null) ?? {}
+  const blockDurations = row.block_durations as BlockDurations | null | undefined
+  return {
+    date: row.date,
+    tasks,
+    deepWorkSessions,
+    habitCompletions: Object.keys(habitCompletions).length > 0 ? habitCompletions : undefined,
+    sleepHours: row.sleep_hours ?? undefined,
+    mood: row.mood ?? undefined,
+    wakeTime: row.wake_time ?? undefined,
+    sleepTarget: row.sleep_target_time ?? undefined,
+    blockDurations: blockDurations ?? undefined,
+  }
 }
 
 export async function fetchPlannerState(userId: string): Promise<AppState | null> {
   const { data, error } = await supabase
     .from('planner_days')
-    .select('id, user_id, date, tasks, deep_work_sessions, habit_completions, sleep_hours, mood, wake_time, sleep_target_time')
+    .select(
+      'id, user_id, date, tasks, deep_work_sessions, habit_completions, sleep_hours, mood, wake_time, sleep_target_time, block_durations',
+    )
     .eq('user_id', userId)
     .order('date', { ascending: true })
 
@@ -36,19 +59,7 @@ export async function fetchPlannerState(userId: string): Promise<AppState | null
   const days: AppState['days'] = {}
 
   for (const row of (data ?? []) as PlannerDayRow[]) {
-    const tasks = (row.tasks as DayState['tasks'] | null) ?? []
-    const deepWorkSessions = (row.deep_work_sessions as DayState['deepWorkSessions'] | null) ?? []
-    const habitCompletions = (row.habit_completions as DayState['habitCompletions'] | null) ?? {}
-    days[row.date] = {
-      date: row.date,
-      tasks,
-      deepWorkSessions,
-      habitCompletions: Object.keys(habitCompletions).length > 0 ? habitCompletions : undefined,
-      sleepHours: row.sleep_hours ?? undefined,
-      mood: row.mood ?? undefined,
-      wakeTime: row.wake_time ?? undefined,
-      sleepTarget: row.sleep_target_time ?? undefined,
-    }
+    days[row.date] = plannerDayRowToDayState(row)
   }
 
   return { days, timeOffsetMinutes: undefined }
@@ -67,6 +78,7 @@ export async function upsertPlannerDays(userId: string, days: AppState['days']):
       mood: day.mood ?? null,
       wake_time: day.wakeTime ?? null,
       sleep_target_time: day.sleepTarget ?? null,
+      block_durations: day.blockDurations ?? null,
     }))
 
   if (payload.length === 0) {
