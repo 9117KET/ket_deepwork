@@ -100,26 +100,26 @@ export function BlockDurationEditor({
       </button>
 
       {open && (
-        <div className="absolute right-0 top-7 z-30 w-64 rounded-xl border border-slate-700 bg-slate-900 p-4 shadow-2xl">
+        <div className="absolute right-0 top-7 z-30 w-[min(100vw-2rem,18rem)] min-w-[16rem] rounded-xl border border-slate-700 bg-slate-900 p-4 shadow-2xl">
           {/* Current duration stepper */}
           <p className="mb-3 text-xs font-bold uppercase tracking-widest text-slate-400">
             Duration
           </p>
-          <div className="mb-4 flex items-center justify-between gap-3">
+          <div className="mb-4 flex items-center justify-between gap-2">
             <button
               onClick={() => setDraft((d) => d - STEP)}
               disabled={!canDecrease}
-              className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-700 text-slate-300 hover:border-sky-500 hover:text-sky-400 disabled:opacity-30 disabled:pointer-events-none"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-700 text-slate-300 hover:border-sky-500 hover:text-sky-400 disabled:opacity-30 disabled:pointer-events-none"
             >
               <MaterialIcon name="remove" className="text-base" />
             </button>
-            <span className="min-w-[4rem] text-center font-mono text-lg font-semibold text-slate-100">
+            <span className="min-w-[5.5rem] flex-1 text-center font-mono text-xl font-semibold tabular-nums text-slate-100">
               {formatDur(draft)}
             </span>
             <button
               onClick={() => setDraft((d) => d + STEP)}
               disabled={!canIncrease}
-              className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-700 text-slate-300 hover:border-sky-500 hover:text-sky-400 disabled:opacity-30 disabled:pointer-events-none"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-700 text-slate-300 hover:border-sky-500 hover:text-sky-400 disabled:opacity-30 disabled:pointer-events-none"
             >
               <MaterialIcon name="add" className="text-base" />
             </button>

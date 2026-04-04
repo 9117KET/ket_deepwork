@@ -68,11 +68,11 @@ function Time24({ value, onChange }: { value: string | undefined; onChange: (v: 
   }
 
   return (
-    <span className="flex items-center gap-0.5">
+    <span className="flex items-center gap-1">
       <select
         value={hour ?? ''}
         onChange={(e) => setTime(e.target.value === '' ? null : Number(e.target.value), minute)}
-        className="w-11 rounded border border-slate-700 bg-slate-800 px-1 py-0.5 text-xs text-slate-200"
+        className="min-w-[3.25rem] rounded border border-slate-700 bg-slate-800 px-1.5 py-1 text-sm tabular-nums text-slate-100"
         title="Heure (24h)"
       >
         <option value="">None</option>
@@ -80,11 +80,11 @@ function Time24({ value, onChange }: { value: string | undefined; onChange: (v: 
           <option key={i} value={i}>{String(i).padStart(2, '0')}</option>
         ))}
       </select>
-      <span className="text-slate-500">h</span>
+      <span className="shrink-0 text-sm text-slate-400">h</span>
       <select
         value={minute}
         onChange={(e) => setTime(hour, Number(e.target.value))}
-        className="w-11 rounded border border-slate-700 bg-slate-800 px-1 py-0.5 text-xs text-slate-200"
+        className="min-w-[3.25rem] rounded border border-slate-700 bg-slate-800 px-1.5 py-1 text-sm tabular-nums text-slate-100"
         title="Minute"
       >
         {Array.from({ length: 60 }, (_, i) => (
@@ -258,15 +258,15 @@ export function TaskItem({
           )}
         </label>
         {canEditTime && (
-          <span className="flex shrink-0 items-center gap-1.5">
-            <label className="flex items-center gap-1 text-xs text-slate-400">
+          <span className="flex shrink-0 flex-wrap items-center justify-end gap-x-2 gap-y-1 sm:flex-nowrap">
+            <label className="flex items-center gap-1.5 text-xs text-slate-400">
               <span className="sr-only">Heure (24h, ex. 13h00 = 1 PM)</span>
               <Time24
                 value={task.scheduledAt}
                 onChange={(v) => onUpdateTask?.({ scheduledAt: v })}
               />
             </label>
-            <label className="flex items-center gap-1 text-xs text-slate-400">
+            <label className="flex items-center gap-1.5 text-xs text-slate-400">
               <span className="sr-only">Duration (minutes)</span>
               <select
                 value={task.durationMinutes ?? ''}
@@ -274,10 +274,10 @@ export function TaskItem({
                   const v = e.target.value === '' ? undefined : Number(e.target.value)
                   onUpdateTask?.({ durationMinutes: v })
                 }}
-                className="w-14 rounded border border-slate-700 bg-slate-800 px-1 py-0.5 text-xs text-slate-200"
-                title="Duration (minutes)"
+                className="min-w-[5rem] rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm tabular-nums text-slate-100"
+                title="Planned duration in minutes (optional)"
               >
-                <option value="">None</option>
+                <option value="">— min</option>
                 {task.durationMinutes != null &&
                   !DURATION_OPTIONS.includes(task.durationMinutes) && (
                     <option value={task.durationMinutes}>{task.durationMinutes}m</option>

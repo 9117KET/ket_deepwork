@@ -74,6 +74,9 @@ export interface BlockDurations {
   nightRoutine: number;
 }
 
+/** Fractional split of the awake window across blocks (each 0–1, sum ≈ 1). */
+export type BlockDurationRatios = Record<keyof BlockDurations, number>;
+
 export interface HabitDefinition {
   id: string;
   label: string;
@@ -93,6 +96,11 @@ export interface AppState {
   monthTitles?: Record<string, string>;
   /** ISO dates (YYYY-MM-DD) when the app was opened; streak is computed from this so no days are lost. */
   activeDays?: string[];
+  /**
+   * Default time-block split for every day (derived from proportions of awake time).
+   * When set, days without `blockDurations` use this template scaled to that day's wake/sleep window.
+   */
+  blockDurationRatios?: BlockDurationRatios | null;
 }
 
 export interface WeeklyStatsDaySummary {

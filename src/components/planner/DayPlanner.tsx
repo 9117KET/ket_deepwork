@@ -29,16 +29,19 @@ import {
   BLOCK_ORDER,
   SLEEP_MIN_MINUTES,
   applyBlockDurationChange,
+  blockDurationsToRatios,
+  computeAwakeMinutes,
   computeBlocksFromDurations,
-  computeBlocksFromWakeSleep,
   getActiveSectionIds,
   getDefaultBlockDurations,
   getSectionTimeframeLabel,
   getSleepWindowLabel,
   isSleepTime,
+  ratiosToBlockDurations,
 } from "../../domain/sectionTimeBlocks";
 import { DaySetupModal } from "./DaySetupModal";
 import { BlockDurationEditor } from "./BlockDurationEditor";
+import { BlockDurationScopeModal } from "./BlockDurationScopeModal";
 import { TaskConflictModal } from "./TaskConflictModal";
 import {
   usePersistentState,
@@ -625,20 +628,23 @@ export function DayPlanner({
   }, [selectedDay]);
 
 
-  // Per-day blocks: use manual overrides when present, otherwise auto-compute.
-  const computedBlocks = useMemo(() => {
-    if (!dayState.wakeTime || !dayState.sleepTarget) return undefined;
-    if (dayState.blockDurations) {
-      return computeBlocksFromDurations(dayState.wakeTime, dayState.blockDurations);
-    }
-    return computeBlocksFromWakeSleep(dayState.wakeTime, dayState.sleepTarget);
-  }, [dayState]);
-
-  // Resolved durations for the editor controls (from overrides or auto-computed).
+  // Resolved block minutes: per-day override > global ratio template > wake/sleep defaults.
   const effectiveBlockDurations = useMemo<BlockDurations | null>(() => {
     if (!dayState.wakeTime || !dayState.sleepTarget) return null;
-    return dayState.blockDurations ?? getDefaultBlockDurations(dayState.wakeTime, dayState.sleepTarget);
-  }, [dayState]);
+    if (dayState.blockDurations) return dayState.blockDurations;
+    const ratios = appState.blockDurationRatios;
+    if (ratios) {
+      const awake = computeAwakeMinutes(dayState.wakeTime, dayState.sleepTarget);
+      return ratiosToBlockDurations(ratios, awake);
+    }
+    return getDefaultBlockDurations(dayState.wakeTime, dayState.sleepTarget);
+  }, [dayState, appState.blockDurationRatios]);
+
+  // Per-day timeline blocks derived from effective durations.
+  const computedBlocks = useMemo(() => {
+    if (!dayState.wakeTime || !dayState.sleepTarget || !effectiveBlockDurations) return undefined;
+    return computeBlocksFromDurations(dayState.wakeTime, effectiveBlockDurations);
+  }, [dayState.wakeTime, dayState.sleepTarget, effectiveBlockDurations]);
 
   // Modal state: auto-open when today has no wake time; "Edit schedule" forces it open.
   const [daySetupOpen, setDaySetupOpen] = useState(false);
@@ -682,17 +688,54 @@ export function DayPlanner({
   }
   const [conflictPending, setConflictPending] = useState<ConflictPending | null>(null);
 
-  const applyDurationChange = useCallback(
-    (durations: BlockDurations, newSleepTarget: string | null) => {
-      updateAppState((prev) => {
-        const existing = getOrCreateDay(prev, selectedDay);
-        const patch: Partial<DayState> = { blockDurations: durations };
-        if (newSleepTarget !== null) patch.sleepTarget = newSleepTarget;
-        return { ...prev, days: { ...prev.days, [selectedDay]: { ...existing, ...patch } } };
-      });
-    },
-    [updateAppState, selectedDay],
-  );
+  interface DurationScopePending {
+    durations: BlockDurations;
+    newSleepTarget: string | null;
+    afterApply?: (next: AppState) => AppState;
+  }
+  const [durationScopePending, setDurationScopePending] = useState<DurationScopePending | null>(null);
+
+  const applyDurationScopeToday = useCallback(() => {
+    if (!durationScopePending) return;
+    const { durations, newSleepTarget, afterApply } = durationScopePending;
+    updateAppState((prev) => {
+      const existing = getOrCreateDay(prev, selectedDay);
+      const patch: Partial<DayState> = { blockDurations: durations };
+      if (newSleepTarget !== null) patch.sleepTarget = newSleepTarget;
+      let next: AppState = {
+        ...prev,
+        days: { ...prev.days, [selectedDay]: { ...existing, ...patch } },
+      };
+      if (afterApply) next = afterApply(next);
+      return next;
+    });
+    setDurationScopePending(null);
+  }, [durationScopePending, updateAppState, selectedDay]);
+
+  const applyDurationScopeAllDays = useCallback(() => {
+    if (!durationScopePending) return;
+    const { durations, newSleepTarget, afterApply } = durationScopePending;
+    const ratios = blockDurationsToRatios(durations);
+    updateAppState((prev) => {
+      const nextDays = { ...prev.days };
+      for (const date of Object.keys(nextDays)) {
+        const day = nextDays[date];
+        if (day) nextDays[date] = { ...day, blockDurations: null };
+      }
+      const existing = getOrCreateDay(prev, selectedDay);
+      const dayPatch: Partial<DayState> = { blockDurations: null };
+      if (newSleepTarget !== null) dayPatch.sleepTarget = newSleepTarget;
+      nextDays[selectedDay] = { ...existing, ...dayPatch };
+      let next: AppState = {
+        ...prev,
+        days: nextDays,
+        blockDurationRatios: ratios,
+      };
+      if (afterApply) next = afterApply(next);
+      return next;
+    });
+    setDurationScopePending(null);
+  }, [durationScopePending, updateAppState, selectedDay]);
 
   const handleBlockDurationChange = useCallback(
     (sectionId: keyof BlockDurations, newDurationMinutes: number) => {
@@ -776,9 +819,13 @@ export function DayPlanner({
         return;
       }
 
-      applyDurationChange(result.durations, newSleepTarget);
+      setDurationScopePending({
+        durations: result.durations,
+        newSleepTarget,
+        afterApply: undefined,
+      });
     },
-    [effectiveBlockDurations, dayState, applyDurationChange],
+    [effectiveBlockDurations, dayState],
   );
 
 
@@ -1249,7 +1296,11 @@ export function DayPlanner({
               <div className="flex gap-2">
                 <button
                   onClick={() => {
-                    applyDurationChange(durations, newTarget);
+                    setDurationScopePending({
+                      durations,
+                      newSleepTarget: newTarget,
+                      afterApply: undefined,
+                    });
                     setSleepWarnPending(null);
                   }}
                   className="flex-1 rounded-lg border border-amber-500/40 bg-amber-500/10 py-2 text-xs font-medium text-amber-300 hover:bg-amber-500/20"
@@ -1277,35 +1328,57 @@ export function DayPlanner({
           conflictingTasks={conflictPending.tasks}
           nextBlockName={conflictPending.nextBlockName}
           onKeep={() => {
-            applyDurationChange(conflictPending.durations, conflictPending.newSleepTarget);
+            const c = conflictPending;
+            setDurationScopePending({
+              durations: c.durations,
+              newSleepTarget: c.newSleepTarget,
+              afterApply: undefined,
+            });
             setConflictPending(null);
           }}
           onClear={() => {
-            applyDurationChange(conflictPending.durations, conflictPending.newSleepTarget);
-            updateAppState((prev) => {
-              const existing = getOrCreateDay(prev, selectedDay);
-              const tasks = existing.tasks.map((t) =>
-                conflictPending.tasks.some((c) => c.id === t.id)
-                  ? { ...t, scheduledAt: undefined }
-                  : t,
-              );
-              return { ...prev, days: { ...prev.days, [selectedDay]: { ...existing, tasks } } };
+            const c = conflictPending;
+            const toClear = c.tasks;
+            setDurationScopePending({
+              durations: c.durations,
+              newSleepTarget: c.newSleepTarget,
+              afterApply: (next) => {
+                const existing = getOrCreateDay(next, selectedDay);
+                const tasks = existing.tasks.map((t) =>
+                  toClear.some((x) => x.id === t.id) ? { ...t, scheduledAt: undefined } : t,
+                );
+                return { ...next, days: { ...next.days, [selectedDay]: { ...existing, tasks } } };
+              },
             });
             setConflictPending(null);
           }}
           onMove={conflictPending.nextSectionId ? () => {
-            applyDurationChange(conflictPending.durations, conflictPending.newSleepTarget);
-            updateAppState((prev) => {
-              const existing = getOrCreateDay(prev, selectedDay);
-              const tasks = existing.tasks.map((t) =>
-                conflictPending.tasks.some((c) => c.id === t.id)
-                  ? { ...t, sectionId: conflictPending.nextSectionId!, scheduledAt: undefined }
-                  : t,
-              );
-              return { ...prev, days: { ...prev.days, [selectedDay]: { ...existing, tasks } } };
+            const c = conflictPending;
+            const nid = c.nextSectionId!;
+            const toMove = c.tasks;
+            setDurationScopePending({
+              durations: c.durations,
+              newSleepTarget: c.newSleepTarget,
+              afterApply: (next) => {
+                const existing = getOrCreateDay(next, selectedDay);
+                const tasks = existing.tasks.map((t) =>
+                  toMove.some((x) => x.id === t.id)
+                    ? { ...t, sectionId: nid, scheduledAt: undefined }
+                    : t,
+                );
+                return { ...next, days: { ...next.days, [selectedDay]: { ...existing, tasks } } };
+              },
             });
             setConflictPending(null);
           } : null}
+        />
+      )}
+
+      {durationScopePending && (
+        <BlockDurationScopeModal
+          onThisDayOnly={applyDurationScopeToday}
+          onAllDaysDefault={applyDurationScopeAllDays}
+          onCancel={() => setDurationScopePending(null)}
         />
       )}
     </div>
