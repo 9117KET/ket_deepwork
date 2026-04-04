@@ -162,7 +162,7 @@ export function ratiosToBlockDurations(
     const k = keys[i]!
     d[k] = Math.max(BLOCK_MIN_MINUTES[k], Math.round(ideal[i]!))
   }
-  let sum = keys.reduce((acc, k) => acc + d[k], 0)
+  const sum = keys.reduce((acc, k) => acc + d[k], 0)
   let diff = awakeMinutes - sum
   let guard = 0
   while (diff !== 0 && guard < 5000) {
