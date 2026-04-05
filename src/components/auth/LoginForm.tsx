@@ -7,6 +7,7 @@
 
 import { useState } from 'react'
 import type { FormEvent } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 
 interface LoginFormProps {
@@ -124,6 +125,15 @@ export function LoginForm({ onContinueAsGuest }: LoginFormProps) {
                 : 'Create account'}
           </button>
         </form>
+
+        {mode === 'signup' && (
+          <p className="mt-1 text-center text-xs text-share-onSurfaceVariant">
+            By creating an account you agree to our{' '}
+            <Link to="/terms" className="font-medium text-share-primary hover:underline">Terms</Link>
+            {' '}and{' '}
+            <Link to="/privacy" className="font-medium text-share-primary hover:underline">Privacy Policy</Link>.
+          </p>
+        )}
 
         <div className="mt-4 flex flex-col gap-3 text-xs text-share-onSurfaceVariant sm:flex-row sm:items-center sm:justify-between">
           <button
