@@ -16,11 +16,11 @@ const SECTIONS = [
     items: [
       [
         'Fill from last [weekday]',
-        'Replaces today with the same weekday last week (e.g. last Thursday → this Thursday). Use when you have a repeating weekly pattern. Click once; clicking again just overwrites.',
+        "Replaces today with the same weekday last week (e.g. last Thursday this Thursday). Use when you have a repeating weekly pattern. Click once; clicking again just overwrites.",
       ],
       [
         'Copy from yesterday',
-        'Replaces today with yesterday’s tasks (only shown when there’s no “last same weekday” data). Good for the first week. Click once to avoid duplicates.',
+        "Replaces today with yesterday's tasks (only shown when there's no last-same-weekday data). Good for the first week. Click once to avoid duplicates.",
       ],
     ],
   },
@@ -29,19 +29,19 @@ const SECTIONS = [
     items: [
       [
         'Sections',
-        'Top to bottom: 3 must-dos → Morning routine → High / Medium / Low priority → Night routine. Add tasks in each section; use “Add task” at the bottom of a section.',
+        'Top to bottom: 3 must-dos, Morning routine, High / Medium / Low priority, Night routine. Add tasks in each section using the Add task input at the bottom of a section.',
       ],
       [
         'Time & duration',
-        'Set a start time (clock icon) so the app can remind you. Set duration (dropdown in minutes: 5, 10, 15… up to 120). Both are optional.',
+        'Set a start time (clock icon) so the app can remind you. Set duration (dropdown in minutes: 5, 10, 15 up to 120). Both are optional.',
       ],
       [
         'Due-now reminder',
-        'When the current time matches a task’s start time (today only), that task is highlighted and a short beep plays. Check every ~15 seconds.',
+        "When the current time matches a task's start time (today only), that task is highlighted and a short beep plays. Checked every ~15 seconds.",
       ],
       [
         'Links',
-        'If a task’s title is a full URL (e.g. https://…), it’s shown as a clickable link that opens in a new tab.',
+        "If a task's title is a full URL (e.g. https://...), it's shown as a clickable link that opens in a new tab.",
       ],
       [
         'Reorder',
@@ -49,7 +49,7 @@ const SECTIONS = [
       ],
       [
         'Delete',
-        'Use the ✕ button on the right of a task to remove it.',
+        'Use the X button on the right of a task to remove it.',
       ],
     ],
   },
@@ -58,7 +58,7 @@ const SECTIONS = [
     items: [
       [
         'Weekly overview',
-        'Shows this week’s task completion (bars per day) and today’s percentage done.',
+        "Shows this week's task completion (bars per day) and today's percentage done.",
       ],
       [
         'Deep work timer',
@@ -97,7 +97,7 @@ export function HelpModal({ isOpen, onClose, onStartTour }: HelpModalProps) {
             className="rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-100"
             aria-label="Close help"
           >
-            ✕
+            X
           </button>
         </div>
         <div className="space-y-4 text-sm">
@@ -116,8 +116,16 @@ export function HelpModal({ isOpen, onClose, onStartTour }: HelpModalProps) {
           ))}
         </div>
         <p className="mt-4 text-xs text-slate-500">
-          Data is stored in your browser (localStorage). Use “Copy from yesterday” or “Fill from last
-          [weekday]” once per day to avoid duplicate tasks.
+          Signed-in users sync data to the cloud automatically. Guest data lives in your browser
+          only - sign in to keep it safe across devices. Use Copy from yesterday or Fill from last
+          [weekday] once per day to avoid duplicate tasks.
+        </p>
+        <p className="mt-2 text-xs text-slate-500">
+          Need help?{' '}
+          <a href="/support" className="text-sky-400 underline hover:text-sky-300">
+            Visit the Support page
+          </a>
+          .
         </p>
         {onStartTour && (
           <div className="mt-4 border-t border-slate-700 pt-4">

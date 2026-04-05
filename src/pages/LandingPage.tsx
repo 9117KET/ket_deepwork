@@ -42,6 +42,7 @@ function HowItWorksSection() {
     if (activeStep < steps.length - 1) {
       setActiveStep((s) => s + 1);
     } else {
+      setActiveStep(0);
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
   };
@@ -194,8 +195,8 @@ export function LandingPage() {
                   Organize your daily targets with clear sections and focus blocks. Cut decision fatigue.
                 </p>
               </div>
-              <div className="mt-8 flex items-center justify-between">
-                <span className={`${appPrimaryButtonClass()} inline-flex items-center gap-2 px-6 py-3`}>
+              <div className="mt-8 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <span className={`${appPrimaryButtonClass()} inline-flex items-center justify-center gap-2 px-6 py-3`}>
                   Go to Day Planner
                   <MaterialIcon name="north_east" className="text-base" />
                 </span>
@@ -267,9 +268,9 @@ export function LandingPage() {
               </p>
             </div>
             <div className="flex flex-wrap gap-8">
-              <a href="#" className="text-sm font-medium text-slate-400 transition-colors hover:text-slate-200">Privacy</a>
-              <a href="#" className="text-sm font-medium text-slate-400 transition-colors hover:text-slate-200">Terms</a>
-              <a href="mailto:support@lifeplanner.app" className="text-sm font-medium text-slate-400 transition-colors hover:text-slate-200">Support</a>
+              <Link to="/privacy" className="text-sm font-medium text-slate-400 transition-colors hover:text-slate-200">Privacy</Link>
+              <Link to="/terms" className="text-sm font-medium text-slate-400 transition-colors hover:text-slate-200">Terms</Link>
+              <Link to="/support" className="text-sm font-medium text-slate-400 transition-colors hover:text-slate-200">Support</Link>
             </div>
             <p className="text-sm text-share-onSurfaceVariant">Life Planner</p>
           </div>

@@ -22,6 +22,9 @@ import { TravelPlannerPage } from "./pages/TravelPlannerPage";
 import { FinancialPlannerPage } from "./pages/FinancialPlannerPage";
 import { CalendarSyncPage } from "./pages/CalendarSyncPage";
 import { CalendarCallbackPage } from "./pages/CalendarCallbackPage";
+import { PrivacyPage } from "./pages/PrivacyPage";
+import { TermsPage } from "./pages/TermsPage";
+import { SupportPage } from "./pages/SupportPage";
 
 function App() {
   const [searchParams] = useSearchParams();
@@ -167,6 +170,9 @@ function App() {
       <Route path="/finance" element={<FinancialPlannerPage />} />
       <Route path="/calendar" element={<CalendarSyncPage />} />
       <Route path="/calendar/callback" element={<CalendarCallbackPage />} />
+      <Route path="/privacy" element={<PrivacyPage />} />
+      <Route path="/terms" element={<TermsPage />} />
+      <Route path="/support" element={<SupportPage />} />
     </Routes>
   );
 }

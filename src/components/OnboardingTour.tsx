@@ -63,7 +63,7 @@ const TOUR_STEPS: TourStep[] = [
     id: 'done',
     target: null,
     title: "You're all set",
-    body: 'Use the Help button anytime to restart this tour. Build your day with intention -- start with your 3 MUST Todo tasks and let the blocks guide the rest.',
+    body: 'Use the Help button anytime to restart this tour. If you run into any issues, visit the Support page or email kinlotangir1@gmail.com. Build your day with intention -- start with your 3 MUST Todo tasks and let the blocks guide the rest.',
   },
 ]
 
