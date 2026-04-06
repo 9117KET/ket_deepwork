@@ -154,6 +154,21 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
     writeState(state)
   }, [state])
 
+  // Refs so we can flush pending sync on tab hide/close and always read latest state.
+  const stateRef = useRef(state)
+  const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // When logged in and initial remote load finished, push changes to Supabase with debounce.
+  const settingsSyncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  /**
+   * Dates that have been locally modified but not yet confirmed synced to Supabase.
+   * Any remote data (initial load, realtime, visibility-refetch) for these dates is
+   * ignored until after the next successful upsert + echo window, preventing
+   * optimistic updates from being clobbered by stale server data.
+   */
+  const dirtyDatesRef = useRef<Set<string>>(new Set())
+
   // When signed in, Supabase is source of truth for dates it has; local-only dates are kept so we don't lose progress (e.g. days that never synced).
   // If fetch fails (e.g. offline), keep localStorage as backup.
   useEffect(() => {
@@ -182,7 +197,14 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
       if (plannerOk || settingsOk) {
         setState((prev) => {
           const mergedDays = plannerOk
-            ? { ...(prev.days ?? {}), ...remote!.days }
+            ? (() => {
+                // Prefer local state for any date the user modified while Supabase was loading.
+                const base = { ...(prev.days ?? {}) }
+                for (const [date, ds] of Object.entries(remote!.days)) {
+                  if (!dirtyDatesRef.current.has(date)) base[date] = ds
+                }
+                return base
+              })()
             : (prev.days ?? {})
           const activeDays = deriveActiveDaysFromDays(mergedDays)
           return {
@@ -208,16 +230,6 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
     }
   }, [user, authLoading])
 
-  // Refs so we can flush pending sync on tab hide/close and always read latest state.
-  const stateRef = useRef(state)
-  const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  // When logged in and initial remote load finished, push changes to Supabase with debounce.
-  const settingsSyncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  /** Dates currently being upserted; realtime echoes for these are ignored to prevent
-   *  them from clobbering newer optimistic updates made while the upsert was in-flight. */
-  const syncingDatesRef = useRef<Set<string>>(new Set())
-
   useEffect(() => {
     if (!user || !readyToSync) return
     if (typeof window === 'undefined') return
@@ -228,12 +240,11 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
       syncTimeoutRef.current = null
       const daysSnapshot = { ...stateRef.current.days }
       const syncedDates = Object.keys(daysSnapshot).filter(d => Boolean(daysSnapshot[d]))
-      for (const date of syncedDates) syncingDatesRef.current.add(date)
+      // Keep dirty while upsert is in-flight, then hold 500 ms for the realtime echo to arrive
+      // (so it is still suppressed before we clear dirty and allow future remote merges).
       void upsertPlannerDays(user.id, daysSnapshot).finally(() => {
-        // Hold the block for 500 ms after the upsert so the realtime echo
-        // (which arrives shortly after) is still suppressed.
         setTimeout(() => {
-          for (const date of syncedDates) syncingDatesRef.current.delete(date)
+          for (const date of syncedDates) dirtyDatesRef.current.delete(date)
         }, 500)
       })
     }, 800)
@@ -285,7 +296,7 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
             const oldRow = payload.old as { date?: string } | null
             const date = oldRow?.date
             if (!date) return
-            if (syncingDatesRef.current.has(date)) return
+            if (dirtyDatesRef.current.has(date)) return
             setState((prev) => {
               const nextDays = { ...prev.days }
               delete nextDays[date]
@@ -299,7 +310,7 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
           }
           const row = payload.new as PlannerDayRow
           if (!row?.date) return
-          if (syncingDatesRef.current.has(row.date)) return
+          if (dirtyDatesRef.current.has(row.date)) return
           const dayState = plannerDayRowToDayState(row)
           setState((prev) => {
             const nextDays = { ...prev.days, [row.date]: dayState }
@@ -343,10 +354,9 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
         syncTimeoutRef.current = null
         const daysSnapshot = { ...stateRef.current.days }
         const syncedDates = Object.keys(daysSnapshot).filter(d => Boolean(daysSnapshot[d]))
-        for (const date of syncedDates) syncingDatesRef.current.add(date)
         void upsertPlannerDays(user.id, daysSnapshot).finally(() => {
           setTimeout(() => {
-            for (const date of syncedDates) syncingDatesRef.current.delete(date)
+            for (const date of syncedDates) dirtyDatesRef.current.delete(date)
           }, 500)
         })
       }
@@ -382,7 +392,7 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
                   ? (() => {
                       const base = { ...(prev.days ?? {}) }
                       for (const [date, ds] of Object.entries(remote!.days)) {
-                        if (!syncingDatesRef.current.has(date)) base[date] = ds
+                        if (!dirtyDatesRef.current.has(date)) base[date] = ds
                       }
                       return base
                     })()
@@ -422,7 +432,17 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
   }, [user])
 
   const update = (updater: (prev: AppState) => AppState) => {
-    setState((prev) => updater(prev))
+    setState((prev) => {
+      const next = updater(prev)
+      // Mark any dates the user just modified as dirty so remote data cannot
+      // overwrite them until after the next successful Supabase sync.
+      for (const date of Object.keys(next.days)) {
+        if (next.days[date] !== prev.days[date]) {
+          dirtyDatesRef.current.add(date)
+        }
+      }
+      return next
+    })
   }
 
   return [state, update]
@@ -440,4 +460,3 @@ export function getOrCreateDay(state: AppState, isoDay: string = todayIso()): Da
 
   return day
 }
-
