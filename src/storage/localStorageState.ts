@@ -213,6 +213,9 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
 
   // When logged in and initial remote load finished, push changes to Supabase with debounce.
   const settingsSyncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  /** Dates currently being upserted; realtime echoes for these are ignored to prevent
+   *  them from clobbering newer optimistic updates made while the upsert was in-flight. */
+  const syncingDatesRef = useRef<Set<string>>(new Set())
 
   useEffect(() => {
     if (!user || !readyToSync) return
@@ -222,7 +225,16 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
     if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current)
     syncTimeoutRef.current = setTimeout(() => {
       syncTimeoutRef.current = null
-      void upsertPlannerDays(user.id, stateRef.current.days)
+      const daysSnapshot = { ...stateRef.current.days }
+      const syncedDates = Object.keys(daysSnapshot).filter(d => Boolean(daysSnapshot[d]))
+      for (const date of syncedDates) syncingDatesRef.current.add(date)
+      void upsertPlannerDays(user.id, daysSnapshot).finally(() => {
+        // Hold the block for 500 ms after the upsert so the realtime echo
+        // (which arrives shortly after) is still suppressed.
+        setTimeout(() => {
+          for (const date of syncedDates) syncingDatesRef.current.delete(date)
+        }, 500)
+      })
     }, 800)
 
     return () => {
@@ -272,6 +284,7 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
             const oldRow = payload.old as { date?: string } | null
             const date = oldRow?.date
             if (!date) return
+            if (syncingDatesRef.current.has(date)) return
             setState((prev) => {
               const nextDays = { ...prev.days }
               delete nextDays[date]
@@ -285,6 +298,7 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
           }
           const row = payload.new as PlannerDayRow
           if (!row?.date) return
+          if (syncingDatesRef.current.has(row.date)) return
           const dayState = plannerDayRowToDayState(row)
           setState((prev) => {
             const nextDays = { ...prev.days, [row.date]: dayState }
@@ -326,7 +340,14 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
       if (syncTimeoutRef.current) {
         clearTimeout(syncTimeoutRef.current)
         syncTimeoutRef.current = null
-        void upsertPlannerDays(user.id, stateRef.current.days)
+        const daysSnapshot = { ...stateRef.current.days }
+        const syncedDates = Object.keys(daysSnapshot).filter(d => Boolean(daysSnapshot[d]))
+        for (const date of syncedDates) syncingDatesRef.current.add(date)
+        void upsertPlannerDays(user.id, daysSnapshot).finally(() => {
+          setTimeout(() => {
+            for (const date of syncedDates) syncingDatesRef.current.delete(date)
+          }, 500)
+        })
       }
       if (settingsSyncTimeoutRef.current) {
         clearTimeout(settingsSyncTimeoutRef.current)
@@ -357,7 +378,13 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
             if (plannerOk || settingsOk) {
               setState((prev) => {
                 const mergedDays = plannerOk
-                  ? { ...(prev.days ?? {}), ...remote!.days }
+                  ? (() => {
+                      const base = { ...(prev.days ?? {}) }
+                      for (const [date, ds] of Object.entries(remote!.days)) {
+                        if (!syncingDatesRef.current.has(date)) base[date] = ds
+                      }
+                      return base
+                    })()
                   : (prev.days ?? {})
                 const activeDays = deriveActiveDaysFromDays(mergedDays)
                 return {
