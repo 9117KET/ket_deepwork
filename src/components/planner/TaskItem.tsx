@@ -207,7 +207,6 @@ export function TaskItem({
         />
       )}
       <div
-        role="button"
         tabIndex={0}
         onClickCapture={handleRowClickCapture}
         onKeyDown={(e) => {

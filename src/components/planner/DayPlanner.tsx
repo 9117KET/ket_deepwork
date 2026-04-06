@@ -536,12 +536,12 @@ export function DayPlanner({
   /** Copy tasks from a source day into the selected day (times reset). Used for fill/copy buttons. */
   const handleCopyFromDay = useCallback(
     (sourceDate: string) => {
-      const sourceDayState = getOrCreateDay(appState, sourceDate);
-      if (sourceDayState.tasks.length === 0) return;
-      const newTasks = cloneTasksForDay(sourceDayState.tasks, selectedDay, {
-        resetTimes: true,
-      });
       updateAppState((prev) => {
+        const sourceDayState = getOrCreateDay(prev, sourceDate);
+        if (sourceDayState.tasks.length === 0) return prev;
+        const newTasks = cloneTasksForDay(sourceDayState.tasks, selectedDay, {
+          resetTimes: true,
+        });
         const existingDay = getOrCreateDay(prev, selectedDay);
         return {
           ...prev,
@@ -552,7 +552,7 @@ export function DayPlanner({
         };
       });
     },
-    [appState, selectedDay, updateAppState],
+    [selectedDay, updateAppState],
   );
 
   const handleUpdateTask = (
