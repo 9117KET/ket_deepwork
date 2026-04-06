@@ -162,12 +162,22 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
   const settingsSyncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   /**
-   * Dates that have been locally modified but not yet confirmed synced to Supabase.
-   * Any remote data (initial load, realtime, visibility-refetch) for these dates is
-   * ignored until after the next successful upsert + echo window, preventing
-   * optimistic updates from being clobbered by stale server data.
+   * Per-date write-generation counter.
+   *
+   * Every time `update()` modifies a date, its generation number is incremented.
+   * Every upsert snapshots the current generation for each date it will write.
+   * The `.finally()` handler only removes a date's dirty flag when the generation
+   * at snapshot time still matches the current generation — meaning no further
+   * local edit has happened since the upsert was dispatched.  This prevents the
+   * race where a slow `.finally()` clears a generation that was already bumped
+   * by a new user interaction.
+   *
+   * A date is considered "dirty" (i.e. remote data must not overwrite it) when
+   * its generation value is > 0 (any positive number means a local edit is
+   * pending or in-flight).  Callers check `dirtyGenerations.current.has(date)`
+   * (Map#has) rather than checking the value, so the guard reads naturally.
    */
-  const dirtyDatesRef = useRef<Set<string>>(new Set())
+  const dirtyGenerations = useRef<Map<string, number>>(new Map())
 
   // When signed in, Supabase is source of truth for dates it has; local-only dates are kept so we don't lose progress (e.g. days that never synced).
   // If fetch fails (e.g. offline), keep localStorage as backup.
@@ -201,7 +211,7 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
                 // Prefer local state for any date the user modified while Supabase was loading.
                 const base = { ...(prev.days ?? {}) }
                 for (const [date, ds] of Object.entries(remote!.days)) {
-                  if (!dirtyDatesRef.current.has(date)) base[date] = ds
+                  if (!dirtyGenerations.current.has(date)) base[date] = ds
                 }
                 return base
               })()
@@ -239,13 +249,19 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
     syncTimeoutRef.current = setTimeout(() => {
       syncTimeoutRef.current = null
       const daysSnapshot = { ...stateRef.current.days }
-      const syncedDates = Object.keys(daysSnapshot).filter(d => Boolean(daysSnapshot[d]))
-      // Keep dirty while upsert is in-flight, then hold 500 ms for the realtime echo to arrive
-      // (so it is still suppressed before we clear dirty and allow future remote merges).
+      // Snapshot the current generation for every dirty date.  Only dates that
+      // are in dirtyGenerations are included (i.e. have a pending local edit).
+      // We also upsert all days (to keep server in sync), but we only clear
+      // the dirty flag for dates whose generation hasn't changed by the time
+      // the upsert resolves — ensuring a new edit that fires between the upsert
+      // dispatch and its completion keeps its dirty flag intact.
+      const genSnapshot = new Map(dirtyGenerations.current)
       void upsertPlannerDays(user.id, daysSnapshot).finally(() => {
-        setTimeout(() => {
-          for (const date of syncedDates) dirtyDatesRef.current.delete(date)
-        }, 500)
+        for (const [date, gen] of genSnapshot) {
+          if (dirtyGenerations.current.get(date) === gen) {
+            dirtyGenerations.current.delete(date)
+          }
+        }
       })
     }, 800)
 
@@ -296,7 +312,7 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
             const oldRow = payload.old as { date?: string } | null
             const date = oldRow?.date
             if (!date) return
-            if (dirtyDatesRef.current.has(date)) return
+            if (dirtyGenerations.current.has(date)) return
             setState((prev) => {
               const nextDays = { ...prev.days }
               delete nextDays[date]
@@ -310,7 +326,7 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
           }
           const row = payload.new as PlannerDayRow
           if (!row?.date) return
-          if (dirtyDatesRef.current.has(row.date)) return
+          if (dirtyGenerations.current.has(row.date)) return
           const dayState = plannerDayRowToDayState(row)
           setState((prev) => {
             const nextDays = { ...prev.days, [row.date]: dayState }
@@ -353,11 +369,13 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
         clearTimeout(syncTimeoutRef.current)
         syncTimeoutRef.current = null
         const daysSnapshot = { ...stateRef.current.days }
-        const syncedDates = Object.keys(daysSnapshot).filter(d => Boolean(daysSnapshot[d]))
+        const genSnapshot = new Map(dirtyGenerations.current)
         void upsertPlannerDays(user.id, daysSnapshot).finally(() => {
-          setTimeout(() => {
-            for (const date of syncedDates) dirtyDatesRef.current.delete(date)
-          }, 500)
+          for (const [date, gen] of genSnapshot) {
+            if (dirtyGenerations.current.get(date) === gen) {
+              dirtyGenerations.current.delete(date)
+            }
+          }
         })
       }
       if (settingsSyncTimeoutRef.current) {
@@ -392,7 +410,7 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
                   ? (() => {
                       const base = { ...(prev.days ?? {}) }
                       for (const [date, ds] of Object.entries(remote!.days)) {
-                        if (!dirtyDatesRef.current.has(date)) base[date] = ds
+                        if (!dirtyGenerations.current.has(date)) base[date] = ds
                       }
                       return base
                     })()
@@ -434,11 +452,13 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
   const update = (updater: (prev: AppState) => AppState) => {
     setState((prev) => {
       const next = updater(prev)
-      // Mark any dates the user just modified as dirty so remote data cannot
-      // overwrite them until after the next successful Supabase sync.
+      // Increment the write-generation for every date whose DayState reference
+      // changed.  The upsert's .finally() will only clear a date's dirty flag
+      // when the generation it captured at dispatch time still matches the
+      // current generation — so any subsequent edit keeps its protection.
       for (const date of Object.keys(next.days)) {
         if (next.days[date] !== prev.days[date]) {
-          dirtyDatesRef.current.add(date)
+          dirtyGenerations.current.set(date, (dirtyGenerations.current.get(date) ?? 0) + 1)
         }
       }
       return next
