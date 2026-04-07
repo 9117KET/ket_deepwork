@@ -179,6 +179,22 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
    */
   const dirtyGenerations = useRef<Map<string, number>>(new Map())
 
+  /**
+   * Post-write echo suppression window.
+   *
+   * After .finally() clears a date's dirty flag the realtime channel may
+   * still deliver delayed echoes (e.g. from an earlier upsert in the same
+   * session, or catch-up events after a WebSocket reconnect).  Those echoes
+   * carry stale data and must not overwrite the current local state.
+   *
+   * When dirty is cleared for a date we record an expiry timestamp
+   * (Date.now() + ECHO_SUPPRESS_MS).  The realtime setState updater rejects
+   * any incoming event for that date until the window expires.
+   * 3 s is generous; realistic WebSocket round-trip is < 500 ms.
+   */
+  const echoSuppressUntil = useRef<Map<string, number>>(new Map())
+  const ECHO_SUPPRESS_MS = 3000
+
   // When signed in, Supabase is source of truth for dates it has; local-only dates are kept so we don't lose progress (e.g. days that never synced).
   // If fetch fails (e.g. offline), keep localStorage as backup.
   useEffect(() => {
@@ -257,9 +273,14 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
       // dispatch and its completion keeps its dirty flag intact.
       const genSnapshot = new Map(dirtyGenerations.current)
       void upsertPlannerDays(user.id, daysSnapshot).finally(() => {
+        const now = Date.now()
         for (const [date, gen] of genSnapshot) {
           if (dirtyGenerations.current.get(date) === gen) {
             dirtyGenerations.current.delete(date)
+            // Start the echo-suppression window so delayed realtime events
+            // from this upsert (or earlier upserts) can't overwrite the
+            // current local state after the dirty flag is cleared.
+            echoSuppressUntil.current.set(date, now + ECHO_SUPPRESS_MS)
           }
         }
       })
@@ -316,6 +337,8 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
             // in-flight toggle updaters have already set the dirty flag.
             setState((prev) => {
               if (dirtyGenerations.current.has(date)) return prev
+              const suppressUntil = echoSuppressUntil.current.get(date)
+              if (suppressUntil && Date.now() < suppressUntil) return prev
               const nextDays = { ...prev.days }
               delete nextDays[date]
               return {
@@ -333,9 +356,13 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
           // updater.  This ensures the guard executes after any preceding
           // toggle updater has run and stamped dirtyGenerations, closing the
           // race window where the check ran before React flushed the toggle.
+          // The echo-suppression window provides a second layer of defence
+          // against delayed or out-of-order events arriving after dirty clears.
           const dayState = plannerDayRowToDayState(row)
           setState((prev) => {
             if (dirtyGenerations.current.has(row.date)) return prev
+            const suppressUntil = echoSuppressUntil.current.get(row.date)
+            if (suppressUntil && Date.now() < suppressUntil) return prev
             const nextDays = { ...prev.days, [row.date]: dayState }
             return {
               ...prev,
