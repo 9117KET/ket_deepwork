@@ -312,8 +312,10 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
             const oldRow = payload.old as { date?: string } | null
             const date = oldRow?.date
             if (!date) return
-            if (dirtyGenerations.current.has(date)) return
+            // Guard is checked inside the updater so it runs after any
+            // in-flight toggle updaters have already set the dirty flag.
             setState((prev) => {
+              if (dirtyGenerations.current.has(date)) return prev
               const nextDays = { ...prev.days }
               delete nextDays[date]
               return {
@@ -326,9 +328,14 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
           }
           const row = payload.new as PlannerDayRow
           if (!row?.date) return
-          if (dirtyGenerations.current.has(row.date)) return
+          // Compute the new day state outside the updater (pure transform of
+          // immutable WebSocket data) but perform the dirty check inside the
+          // updater.  This ensures the guard executes after any preceding
+          // toggle updater has run and stamped dirtyGenerations, closing the
+          // race window where the check ran before React flushed the toggle.
           const dayState = plannerDayRowToDayState(row)
           setState((prev) => {
+            if (dirtyGenerations.current.has(row.date)) return prev
             const nextDays = { ...prev.days, [row.date]: dayState }
             return {
               ...prev,
