@@ -10,7 +10,13 @@ import { useEffect, useRef, useState } from 'react'
 import type { Task } from '../../domain/types'
 import { normalizeHhmm } from '../../domain/dateUtils'
 
-const DURATION_OPTIONS = [5, 10, 15, 20, 25, 30, 45, 60, 90, 120]
+const DURATION_OPTIONS = [5, 10, 15, 20, 25, 30, 45, 60, 90, 120, 150, 180, 240, 300, 360, 420, 480]
+
+function formatDuration(minutes: number): string {
+  if (minutes < 60) return `${minutes}m`
+  const h = minutes / 60
+  return Number.isInteger(h) ? `${h}h` : `${Math.floor(h)}h${minutes % 60}m`
+}
 
 interface TaskItemProps {
   task: Task
@@ -274,16 +280,16 @@ export function TaskItem({
                   onUpdateTask?.({ durationMinutes: v })
                 }}
                 className="min-w-[5rem] rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm tabular-nums text-slate-100"
-                title="Planned duration in minutes (optional)"
+                title="Planned duration (optional)"
               >
-                <option value="">— min</option>
+                <option value="">— dur</option>
                 {task.durationMinutes != null &&
                   !DURATION_OPTIONS.includes(task.durationMinutes) && (
-                    <option value={task.durationMinutes}>{task.durationMinutes}m</option>
+                    <option value={task.durationMinutes}>{formatDuration(task.durationMinutes)}</option>
                   )}
                 {DURATION_OPTIONS.map((m) => (
                   <option key={m} value={m}>
-                    {m}m
+                    {formatDuration(m)}
                   </option>
                 ))}
               </select>
