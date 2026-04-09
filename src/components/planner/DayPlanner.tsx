@@ -6,7 +6,7 @@
  */
 
 import type React from "react";
-import { useCallback, useEffect, useMemo, useRef, useState, type SetStateAction } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition, type SetStateAction } from "react";
 import {
   FIXED_SECTIONS,
   type AppState,
@@ -197,20 +197,23 @@ export function DayPlanner({
   const [internalSelectedDay, setInternalSelectedDay] = useState<string>(todayIso);
   const isSelectedDayControlled = selectedDayProp !== undefined;
   const selectedDay = isSelectedDayControlled ? selectedDayProp : internalSelectedDay;
+  const [, startDayTransition] = useTransition();
 
   const setSelectedDay = useCallback(
     (update: SetStateAction<string>) => {
-      if (isSelectedDayControlled) {
-        const next =
-          typeof update === "function"
-            ? (update as (prev: string) => string)(selectedDayProp!)
-            : update;
-        onSelectedDayChange?.(next);
-      } else {
-        setInternalSelectedDay((prev) =>
-          typeof update === "function" ? (update as (p: string) => string)(prev) : update,
-        );
-      }
+      startDayTransition(() => {
+        if (isSelectedDayControlled) {
+          const next =
+            typeof update === "function"
+              ? (update as (prev: string) => string)(selectedDayProp!)
+              : update;
+          onSelectedDayChange?.(next);
+        } else {
+          setInternalSelectedDay((prev) =>
+            typeof update === "function" ? (update as (p: string) => string)(prev) : update,
+          );
+        }
+      });
     },
     [isSelectedDayControlled, selectedDayProp, onSelectedDayChange],
   );
