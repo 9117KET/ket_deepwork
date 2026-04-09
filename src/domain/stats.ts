@@ -3,13 +3,14 @@
  *
  * Functions for computing weekly task completion statistics.
  *
- * Scoring rule (weighted points):
- *   - Each ROOT task contributes a number of possible points based on its section.
+ * Scoring rule (duration × section weighted points):
+ *   - Each ROOT task's base weight = durationMinutes × sectionWeight.
+ *     Tasks without a duration fall back to DEFAULT_TASK_DURATION_MINUTES.
  *   - Leaf root tasks: earn all points if done, else 0.
- *   - Root tasks WITH subtasks: earn a fraction based on subtask completion
- *     (doneSubs / subtaskCount). Parent isDone is ignored for scoring.
- *   - Subtasks add a small capped bonus to the root task's possible points so
- *     completing a structured task feels slightly more rewarding without being gameable.
+ *   - Root tasks WITH subtasks: earn a fraction based on duration-weighted subtask
+ *     completion (doneSubDuration / totalSubDuration). Parent isDone is ignored for scoring.
+ *   - Subtasks add a small capped bonus (numerically negligible at this scale, kept for
+ *     continuity) so completing a structured task feels slightly more rewarding.
  */
 
 import type { AppState, Task, WeeklyStats, WeeklyStatsDaySummary } from './types'
@@ -26,10 +27,13 @@ const SECTION_WEIGHTS: Record<Task['sectionId'], number> = {
 
 const SUBTASK_BONUS_PER_TASK = 0.1
 const SUBTASK_BONUS_CAP = 3
+/** Fallback duration (minutes) for tasks that have no durationMinutes set. */
+const DEFAULT_TASK_DURATION_MINUTES = 30
 
 /**
  * Compute points {total, completed} for a list of tasks.
- * Each root task contributes weighted possible points. Subtask completion drives the fraction earned.
+ * Each root task's weight = durationMinutes × sectionWeight (duration-proportional scoring).
+ * Subtask completion fraction is also duration-weighted.
  */
 function computePoints(tasks: Task[]): { total: number; completed: number } {
   const childrenByParent = new Map<string, Task[]>()
@@ -49,7 +53,9 @@ function computePoints(tasks: Task[]): { total: number; completed: number } {
   let completed = 0
 
   for (const root of roots) {
-    const baseWeight = SECTION_WEIGHTS[root.sectionId] ?? 1
+    const sectionWeight = SECTION_WEIGHTS[root.sectionId] ?? 1
+    const duration = root.durationMinutes ?? DEFAULT_TASK_DURATION_MINUTES
+    const baseWeight = duration * sectionWeight
     const children = childrenByParent.get(root.id) ?? []
 
     if (children.length === 0) {
@@ -59,8 +65,14 @@ function computePoints(tasks: Task[]): { total: number; completed: number } {
       const effectiveWeight =
         baseWeight + Math.min(children.length, SUBTASK_BONUS_CAP) * SUBTASK_BONUS_PER_TASK
       total += effectiveWeight
-      const doneSubs = children.filter((c) => c.isDone).length
-      completed += effectiveWeight * (doneSubs / children.length)
+      const totalSubDuration = children.reduce(
+        (s, c) => s + (c.durationMinutes ?? DEFAULT_TASK_DURATION_MINUTES),
+        0,
+      )
+      const doneSubDuration = children
+        .filter((c) => c.isDone)
+        .reduce((s, c) => s + (c.durationMinutes ?? DEFAULT_TASK_DURATION_MINUTES), 0)
+      completed += effectiveWeight * (doneSubDuration / totalSubDuration)
     }
   }
 
