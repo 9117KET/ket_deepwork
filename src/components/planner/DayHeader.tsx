@@ -7,8 +7,8 @@
 interface DayHeaderProps {
   dateLabel: string
   completionRatio?: number
-  completedPoints?: number
-  totalPoints?: number
+  completedTaskCount?: number
+  totalTaskCount?: number
   /** Current consecutive active days (ending on last active day). */
   streak?: number
   /** Longest consecutive active streak ever; shown with current streak for context. */
@@ -25,8 +25,8 @@ interface DayHeaderProps {
 export function DayHeader({
   dateLabel,
   completionRatio = 0,
-  completedPoints = 0,
-  totalPoints = 0,
+  completedTaskCount = 0,
+  totalTaskCount = 0,
   streak,
   bestStreak,
   daysMissed,
@@ -36,7 +36,7 @@ export function DayHeader({
   onToday,
 }: DayHeaderProps) {
   const percentage =
-    totalPoints <= 0 ? 0 : Math.max(0, Math.min(100, Math.round(completionRatio * 1000) / 10))
+    totalTaskCount <= 0 ? 0 : Math.max(0, Math.min(100, Math.round(completionRatio * 1000) / 10))
   return (
     <div className="mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-between">
       <div>
@@ -77,14 +77,14 @@ export function DayHeader({
           )}
         </div>
         <h2 className="text-xl sm:text-2xl font-semibold tracking-tight">{dateLabel}</h2>
-        {totalPoints > 0 ? (
+        {totalTaskCount > 0 ? (
           <div className="mt-2 max-w-md">
             <div className="flex items-center justify-between text-[11px] text-slate-400">
               <span>
                 Today: <span className="font-medium text-slate-200">{percentage.toFixed(1)}%</span>
               </span>
               <span>
-                {completedPoints.toFixed(1)}/{totalPoints.toFixed(1)} pts
+                {completedTaskCount}/{totalTaskCount} tasks
               </span>
             </div>
             <div className="mt-1 h-1.5 w-full rounded-full bg-slate-900">
