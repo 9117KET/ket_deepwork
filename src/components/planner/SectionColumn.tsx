@@ -24,6 +24,7 @@ interface SectionColumnProps {
   /** Called when a task is dropped in this section at the given insert index (0 = before first task). */
   onDrop?: (insertIndex: number) => void
   onAddTask: (title: string) => void
+  onAddTaskAbove?: (beforeTaskId: string) => void
   onAddTaskBelow?: (afterTaskId: string) => void
   onAddSubtask?: (parentTaskId: string) => void
   onToggleTask: (taskId: string) => void
@@ -53,6 +54,7 @@ export function SectionColumn({
   onDragEnd,
   onDrop,
   onAddTask,
+  onAddTaskAbove,
   onAddTaskBelow,
   onAddSubtask,
   onToggleTask,
@@ -142,6 +144,7 @@ export function SectionColumn({
               onToggleSelect={onToggleSelect ? () => onToggleSelect(task.id) : undefined}
               onToggle={() => onToggleTask(task.id)}
               onDelete={() => onDeleteTask(task.id)}
+              onAddTaskAbove={onAddTaskAbove ? () => onAddTaskAbove(task.id) : undefined}
               onAddTaskBelow={onAddTaskBelow ? () => onAddTaskBelow(task.id) : undefined}
               onAddSubtask={onAddSubtask ? () => onAddSubtask(task.id) : undefined}
               onUpdateTask={(patch) => onUpdateTask(task.id, patch)}

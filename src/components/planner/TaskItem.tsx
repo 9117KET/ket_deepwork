@@ -31,6 +31,7 @@ interface TaskItemProps {
   onToggleSelect?: () => void
   onToggle: () => void
   onDelete: () => void
+  onAddTaskAbove?: () => void
   onAddTaskBelow?: () => void
   onAddSubtask?: () => void
   onUpdateTask?: (patch: { scheduledAt?: string; durationMinutes?: number; title?: string }) => void
@@ -112,6 +113,7 @@ export function TaskItem({
   onToggleSelect,
   onToggle,
   onDelete,
+  onAddTaskAbove,
   onAddTaskBelow,
   onAddSubtask,
   onUpdateTask,
@@ -144,7 +146,7 @@ export function TaskItem({
   const isReorderable = typeof onDragStart === 'function' && typeof onDrop === 'function'
   const canEditTime = typeof onUpdateTask === 'function'
   const showContextMenu = Boolean(
-    onUpdateTask ?? onAddTaskBelow ?? onAddSubtask ?? onDelete,
+    onUpdateTask ?? onAddTaskAbove ?? onAddTaskBelow ?? onAddSubtask ?? onDelete,
   )
 
   const handleDragStart = (e: React.DragEvent) => {
@@ -319,6 +321,16 @@ export function TaskItem({
               }}
             >
               Edit
+            </button>
+          )}
+          {onAddTaskAbove && (
+            <button
+              type="button"
+              role="menuitem"
+              className="w-full px-3 py-1.5 text-left text-sm text-slate-200 hover:bg-slate-700"
+              onClick={() => closeAnd(onAddTaskAbove)}
+            >
+              Add task above
             </button>
           )}
           {onAddTaskBelow && (
