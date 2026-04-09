@@ -241,6 +241,16 @@ export function DayPlanner({
       ? 0
       : dayCompletion.completedCount / dayCompletion.totalCount;
 
+  const rootTasks = useMemo(
+    () => (appState.days[selectedDay]?.tasks ?? []).filter((t) => !t.parentId),
+    [appState, selectedDay],
+  );
+  const completedRootCount = useMemo(
+    () => rootTasks.filter((t) => t.isDone).length,
+    [rootTasks],
+  );
+  const totalRootCount = rootTasks.length;
+
   const accountabilityStats = useMemo(
     () => computeAccountabilityStats(appState.activeDays ?? [], appState.days),
     [appState.activeDays, appState.days],
@@ -586,6 +596,45 @@ export function DayPlanner({
     },
     [selectedDay, updateAppState],
   );
+
+  /**
+   * Append incomplete tasks from yesterday into today's existing plan.
+   * Preserves scheduledAt and durationMinutes. Skips done parents even if
+   * they have incomplete subtasks.
+   */
+  const handleCarryForward = useCallback(() => {
+    const yesterday = addDays(selectedDay, -1);
+    updateAppState((prev) => {
+      const sourceTasks = getOrCreateDay(prev, yesterday).tasks;
+      const incompleteRootIds = new Set(
+        sourceTasks.filter((t) => !t.parentId && !t.isDone).map((t) => t.id),
+      );
+      if (incompleteRootIds.size === 0) return prev;
+
+      const toCarry = sourceTasks.filter(
+        (t) => incompleteRootIds.has(t.id) || (t.parentId != null && incompleteRootIds.has(t.parentId) && !t.isDone),
+      );
+
+      const idMap = new Map<string, string>();
+      const carried = toCarry.map((t) => {
+        const newId = createTaskId();
+        idMap.set(t.id, newId);
+        return { ...t, id: newId, date: selectedDay, isDone: false };
+      }).map((t) => ({
+        ...t,
+        parentId: t.parentId ? (idMap.get(t.parentId) ?? undefined) : undefined,
+      }));
+
+      const existingDay = getOrCreateDay(prev, selectedDay);
+      return {
+        ...prev,
+        days: {
+          ...prev.days,
+          [selectedDay]: { ...existingDay, tasks: [...existingDay.tasks, ...carried] },
+        },
+      };
+    });
+  }, [selectedDay, updateAppState]);
 
   const handleUpdateTask = (
     taskId: string,
@@ -1072,8 +1121,8 @@ export function DayPlanner({
         <DayHeader
           dateLabel={formatDateLabel(selectedDay)}
           completionRatio={dayCompletionRatio}
-          completedPoints={dayCompletion.completedCount}
-          totalPoints={dayCompletion.totalCount}
+          completedTaskCount={completedRootCount}
+          totalTaskCount={totalRootCount}
           streak={accountabilityStats.streak}
           bestStreak={accountabilityStats.bestStreak}
           daysMissed={shareMode ? undefined : accountabilityStats.daysMissed}
@@ -1112,6 +1161,23 @@ export function DayPlanner({
                   {label}
                 </button>
               ))}
+            </div>
+          );
+        })()}
+        {(() => {
+          if (shareMode || dayState.tasks.length === 0) return null;
+          const incompletePrevTasks = prevDayState.tasks.filter((t) => !t.parentId && !t.isDone);
+          if (incompletePrevTasks.length === 0) return null;
+          return (
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+              <button
+                type="button"
+                onClick={handleCarryForward}
+                className="rounded-md border border-slate-700 bg-slate-800 px-2 py-1.5 text-slate-300 hover:border-amber-500 hover:text-amber-300"
+                title="Append incomplete tasks from yesterday to today's plan"
+              >
+                ↑ {incompletePrevTasks.length} incomplete from yesterday — carry forward
+              </button>
             </div>
           );
         })()}

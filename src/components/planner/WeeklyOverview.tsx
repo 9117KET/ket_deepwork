@@ -30,6 +30,9 @@ export function WeeklyOverview({ state, referenceDay }: WeeklyOverviewProps) {
   const today = computeDayCompletion(state, referenceDay)
   const todayRatio = today.totalCount === 0 ? 0 : today.completedCount / today.totalCount
   const todayPercentage = today.totalCount === 0 ? 0 : parseFloat((todayRatio * 100).toFixed(1))
+  const todayRootTasks = (state.days[referenceDay]?.tasks ?? []).filter((t) => !t.parentId)
+  const todayCompletedCount = todayRootTasks.filter((t) => t.isDone).length
+  const todayTotalCount = todayRootTasks.length
 
   const [refYear, refMonth] = referenceDay.split('-').map((part) => Number(part))
 
@@ -139,7 +142,7 @@ export function WeeklyOverview({ state, referenceDay }: WeeklyOverviewProps) {
               <p>
                 You&apos;re{' '}
                 <span className="font-semibold text-sky-400">{todayPercentage.toFixed(1)}%</span> done with
-                today&apos;s plan ({today.completedCount.toFixed(1)}/{today.totalCount.toFixed(1)} points). Nice work. Keep your
+                today&apos;s plan ({todayCompletedCount}/{todayTotalCount} tasks). Nice work. Keep your
                 focus blocks honest and kind to yourself.
               </p>
             )}
