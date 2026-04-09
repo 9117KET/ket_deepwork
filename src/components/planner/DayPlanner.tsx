@@ -317,6 +317,38 @@ export function DayPlanner({
     });
   };
 
+  const handleAddTaskAbove = (
+    sectionId: TaskSectionId,
+    beforeTaskId: string,
+  ) => {
+    const title = window.prompt("Task title:", "New task") ?? "New task";
+    if (title.trim() === "") return;
+    updateAppState((prev) => {
+      const existingDay = getOrCreateDay(prev, selectedDay);
+      const idx = existingDay.tasks.findIndex((t) => t.id === beforeTaskId);
+      if (idx < 0) return prev;
+      const newTask: Task = {
+        id: createTaskId(),
+        title: title.trim(),
+        sectionId,
+        date: selectedDay,
+        isDone: false,
+      };
+      const nextTasks = [
+        ...existingDay.tasks.slice(0, idx),
+        newTask,
+        ...existingDay.tasks.slice(idx),
+      ];
+      return {
+        ...prev,
+        days: {
+          ...prev.days,
+          [selectedDay]: { ...existingDay, tasks: nextTasks },
+        },
+      };
+    });
+  };
+
   const handleAddTaskBelow = (
     sectionId: TaskSectionId,
     afterTaskId: string,
@@ -1138,6 +1170,9 @@ export function DayPlanner({
               selectedTaskIds={shareMode ? new Set<string>() : selectedTaskIds}
               onToggleSelect={shareMode ? () => undefined : handleToggleSelect}
               onAddTask={shareMode === 'view' ? () => undefined : (title) => handleAddTask(section.id, title)}
+              onAddTaskAbove={shareMode === 'view' ? () => undefined : (beforeTaskId) =>
+                handleAddTaskAbove(section.id, beforeTaskId)
+              }
               onAddTaskBelow={shareMode === 'view' ? () => undefined : (afterTaskId) =>
                 handleAddTaskBelow(section.id, afterTaskId)
               }
