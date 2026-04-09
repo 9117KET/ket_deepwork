@@ -606,13 +606,25 @@ export function DayPlanner({
     const yesterday = addDays(selectedDay, -1);
     updateAppState((prev) => {
       const sourceTasks = getOrCreateDay(prev, yesterday).tasks;
-      const incompleteRootIds = new Set(
-        sourceTasks.filter((t) => !t.parentId && !t.isDone).map((t) => t.id),
+      if (sourceTasks.every((t) => t.parentId || t.isDone)) return prev;
+
+      const existingDay = getOrCreateDay(prev, selectedDay);
+      // Build a dedup set from today's existing root tasks (title + sectionId)
+      const existingKeys = new Set(
+        existingDay.tasks
+          .filter((t) => !t.parentId)
+          .map((t) => `${t.sectionId}:${t.title.trim().toLowerCase()}`),
       );
-      if (incompleteRootIds.size === 0) return prev;
+      const dedupedRootIds = new Set(
+        sourceTasks
+          .filter((t) => !t.parentId && !t.isDone)
+          .filter((t) => !existingKeys.has(`${t.sectionId}:${t.title.trim().toLowerCase()}`))
+          .map((t) => t.id),
+      );
+      if (dedupedRootIds.size === 0) return prev;
 
       const toCarry = sourceTasks.filter(
-        (t) => incompleteRootIds.has(t.id) || (t.parentId != null && incompleteRootIds.has(t.parentId) && !t.isDone),
+        (t) => dedupedRootIds.has(t.id) || (t.parentId != null && dedupedRootIds.has(t.parentId) && !t.isDone),
       );
 
       const idMap = new Map<string, string>();
@@ -624,8 +636,6 @@ export function DayPlanner({
         ...t,
         parentId: t.parentId ? (idMap.get(t.parentId) ?? undefined) : undefined,
       }));
-
-      const existingDay = getOrCreateDay(prev, selectedDay);
       return {
         ...prev,
         days: {
@@ -1166,7 +1176,14 @@ export function DayPlanner({
         })()}
         {(() => {
           if (shareMode || dayState.tasks.length === 0) return null;
-          const incompletePrevTasks = prevDayState.tasks.filter((t) => !t.parentId && !t.isDone);
+          const todayKeys = new Set(
+            dayState.tasks
+              .filter((t) => !t.parentId)
+              .map((t) => `${t.sectionId}:${t.title.trim().toLowerCase()}`),
+          );
+          const incompletePrevTasks = prevDayState.tasks.filter(
+            (t) => !t.parentId && !t.isDone && !todayKeys.has(`${t.sectionId}:${t.title.trim().toLowerCase()}`),
+          );
           if (incompletePrevTasks.length === 0) return null;
           return (
             <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
