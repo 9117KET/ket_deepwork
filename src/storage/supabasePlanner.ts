@@ -18,6 +18,7 @@ export interface PlannerDayRow {
   habit_completions?: unknown
   sleep_hours?: number | null
   mood?: string | null
+  bed_time?: string | null
   wake_time?: string | null
   sleep_target_time?: string | null
   block_durations?: unknown
@@ -36,6 +37,7 @@ export function plannerDayRowToDayState(row: PlannerDayRow): DayState {
     habitCompletions: Object.keys(habitCompletions).length > 0 ? habitCompletions : undefined,
     sleepHours: row.sleep_hours ?? undefined,
     mood: row.mood ?? undefined,
+    bedTime: row.bed_time ?? undefined,
     wakeTime: row.wake_time ?? undefined,
     sleepTarget: row.sleep_target_time ?? undefined,
     blockDurations: blockDurations ?? undefined,
@@ -46,7 +48,7 @@ export async function fetchPlannerState(userId: string): Promise<AppState | null
   const { data, error } = await supabase
     .from('planner_days')
     .select(
-      'id, user_id, date, tasks, deep_work_sessions, habit_completions, sleep_hours, mood, wake_time, sleep_target_time, block_durations',
+      'id, user_id, date, tasks, deep_work_sessions, habit_completions, sleep_hours, mood, bed_time, wake_time, sleep_target_time, block_durations',
     )
     .eq('user_id', userId)
     .order('date', { ascending: true })
@@ -76,6 +78,7 @@ export async function upsertPlannerDays(userId: string, days: AppState['days']):
       habit_completions: day.habitCompletions ?? {},
       sleep_hours: day.sleepHours ?? null,
       mood: day.mood ?? null,
+      bed_time: day.bedTime ?? null,
       wake_time: day.wakeTime ?? null,
       sleep_target_time: day.sleepTarget ?? null,
       block_durations: day.blockDurations ?? null,
