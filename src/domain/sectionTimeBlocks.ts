@@ -37,11 +37,11 @@ export type DayBlocks = { start: number; end: number; sectionIds: TaskSectionId[
  * Derive five dynamic time blocks from a wake time and sleep target.
  * Medium and Low priority are now separate blocks (2:1 time split).
  * Layout:
- *   morningRoutine: wakeTime → wakeTime + ~20% awake
- *   highPriority:   next ~30% of awake window
- *   mediumPriority: next ~20% (2/3 of the old combined mid block)
- *   lowPriority:    next ~10% (1/3 of the old combined mid block)
- *   nightRoutine:   last ~15% up to sleepTarget
+ *   morningRoutine: wakeTime → wakeTime + ~10% awake (capped 90 min)
+ *   highPriority:   next ~45% of the focus pool (morning/night subtracted)
+ *   mediumPriority: next ~35% of the focus pool
+ *   lowPriority:    remainder of the focus pool (~20%)
+ *   nightRoutine:   last ~10% awake (capped 90 min) up to sleepTarget
  */
 export function computeBlocksFromWakeSleep(
   wakeTimeHHMM: string,
@@ -52,13 +52,12 @@ export function computeBlocksFromWakeSleep(
   const sleepMin = rawSleep <= wakeMin ? rawSleep + 1440 : rawSleep
   const awake = Math.min(sleepMin - wakeMin, 1439)
 
-  const morningDur = Math.max(30, Math.min(120, Math.floor(awake * 0.20)))
-  const nightDur   = Math.max(30, Math.min(120, Math.floor(awake * 0.15)))
+  const morningDur = Math.max(30, Math.min(90, Math.floor(awake * 0.10)))
+  const nightDur   = Math.max(30, Math.min(90, Math.floor(awake * 0.10)))
   const focusDur   = Math.max(0, awake - morningDur - nightDur)
-  const highDur    = Math.floor(focusDur / 2)
-  const midLowDur  = focusDur - highDur
-  const mediumDur  = Math.max(15, Math.floor(midLowDur * 2 / 3))
-  const lowDur     = Math.max(15, midLowDur - mediumDur)
+  const highDur    = Math.floor(focusDur * 0.45)
+  const mediumDur  = Math.max(15, Math.floor(focusDur * 0.35))
+  const lowDur     = Math.max(15, focusDur - highDur - mediumDur)
 
   let cursor = wakeMin
   const next = (dur: number) => { const s = cursor; cursor += dur; return { s, e: wrapMinutes(cursor) } }

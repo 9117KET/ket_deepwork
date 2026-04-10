@@ -112,7 +112,7 @@ export function DeepWorkTimer({ onSessionComplete }: DeepWorkTimerProps) {
 
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <span className="text-slate-400">Presets:</span>
-          {[25, 45, 60].map((minutesPreset) => (
+          {[15, 25, 30, 45, 50, 60].map((minutesPreset) => (
             <button
               key={minutesPreset}
               type="button"
