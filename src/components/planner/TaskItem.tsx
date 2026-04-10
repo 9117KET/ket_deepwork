@@ -64,47 +64,6 @@ function GripIcon() {
   )
 }
 
-/** French/24h time: 1 PM = 13, 2 PM = 14, etc. Always shows 00-23 for hour. */
-function Time24({ value, onChange }: { value: string | undefined; onChange: (v: string | undefined) => void }) {
-  const [h, m] = (value ?? '').split(':').map((n) => parseInt(n, 10))
-  const hour = Number.isInteger(h) && h >= 0 && h <= 23 ? h : null
-  const minute = Number.isInteger(m) && m >= 0 && m <= 59 ? m : 0
-
-  const setTime = (newH: number | null, newM: number) => {
-    if (newH == null) {
-      onChange(undefined)
-      return
-    }
-    onChange(normalizeHhmm(`${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}`))
-  }
-
-  return (
-    <span className="flex items-center gap-1">
-      <select
-        value={hour ?? ''}
-        onChange={(e) => setTime(e.target.value === '' ? null : Number(e.target.value), minute)}
-        className="min-w-[3.25rem] rounded border border-slate-700 bg-slate-800 px-1.5 py-1 text-sm tabular-nums text-slate-100"
-        title="Heure (24h)"
-      >
-        <option value="">None</option>
-        {Array.from({ length: 24 }, (_, i) => (
-          <option key={i} value={i}>{String(i).padStart(2, '0')}</option>
-        ))}
-      </select>
-      <span className="shrink-0 text-sm text-slate-400">h</span>
-      <select
-        value={minute}
-        onChange={(e) => setTime(hour, Number(e.target.value))}
-        className="min-w-[3.25rem] rounded border border-slate-700 bg-slate-800 px-1.5 py-1 text-sm tabular-nums text-slate-100"
-        title="Minute"
-      >
-        {Array.from({ length: 60 }, (_, i) => (
-          <option key={i} value={i}>{String(i).padStart(2, '0')}</option>
-        ))}
-      </select>
-    </span>
-  )
-}
 
 export function TaskItem({
   task,
@@ -317,37 +276,34 @@ export function TaskItem({
           )}
         </label>
         {canEditTime && (
-          <span className="flex shrink-0 flex-wrap items-center justify-end gap-x-2 gap-y-1 sm:flex-nowrap">
-            <label className="flex items-center gap-1.5 text-xs text-slate-400">
-              <span className="sr-only">Heure (24h, ex. 13h00 = 1 PM)</span>
-              <Time24
-                value={task.scheduledAt}
-                onChange={(v) => onUpdateTask?.({ scheduledAt: v })}
-              />
-            </label>
-            <label className="flex items-center gap-1.5 text-xs text-slate-400">
-              <span className="sr-only">Duration (minutes)</span>
-              <select
-                value={task.durationMinutes ?? ''}
-                onChange={(e) => {
-                  const v = e.target.value === '' ? undefined : Number(e.target.value)
-                  onUpdateTask?.({ durationMinutes: v })
-                }}
-                className="min-w-[5rem] rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm tabular-nums text-slate-100"
-                title="Planned duration (optional)"
-              >
-                <option value="">— dur</option>
-                {task.durationMinutes != null &&
-                  !DURATION_OPTIONS.includes(task.durationMinutes) && (
-                    <option value={task.durationMinutes}>{formatDuration(task.durationMinutes)}</option>
-                  )}
-                {DURATION_OPTIONS.map((m) => (
-                  <option key={m} value={m}>
-                    {formatDuration(m)}
-                  </option>
-                ))}
-              </select>
-            </label>
+          <span className="flex shrink-0 items-center gap-1">
+            <input
+              type="time"
+              value={task.scheduledAt ?? ''}
+              onChange={(e) => {
+                const v = e.target.value
+                onUpdateTask?.({ scheduledAt: v ? normalizeHhmm(v) : undefined })
+              }}
+              className="w-[5.5rem] rounded border border-slate-700 bg-slate-800 px-1 py-0.5 text-xs tabular-nums text-slate-300 [color-scheme:dark]"
+              title="Scheduled time (24h)"
+            />
+            <select
+              value={task.durationMinutes ?? ''}
+              onChange={(e) => {
+                const v = e.target.value === '' ? undefined : Number(e.target.value)
+                onUpdateTask?.({ durationMinutes: v })
+              }}
+              className="rounded border border-slate-700 bg-slate-800 px-1 py-0.5 text-xs tabular-nums text-slate-300"
+              title="Duration (optional)"
+            >
+              <option value="">—</option>
+              {task.durationMinutes != null && !DURATION_OPTIONS.includes(task.durationMinutes) && (
+                <option value={task.durationMinutes}>{formatDuration(task.durationMinutes)}</option>
+              )}
+              {DURATION_OPTIONS.map((m) => (
+                <option key={m} value={m}>{formatDuration(m)}</option>
+              ))}
+            </select>
           </span>
         )}
       </div>
