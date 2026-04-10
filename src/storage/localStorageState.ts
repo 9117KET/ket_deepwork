@@ -145,6 +145,24 @@ function writeState(next: AppState) {
   }
 }
 
+/**
+ * Merge a remote DayState into a local one.
+ * Remote is authoritative for tasks/sessions/mood/sleepHours/habitCompletions,
+ * but we keep local values for scheduling fields (bedTime, wakeTime, sleepTarget,
+ * blockDurations) when remote is null/undefined — this prevents a stale Supabase
+ * row (not yet updated due to a pre-refresh sync race) from wiping out times the
+ * user just set.
+ */
+function mergeRemoteDayState(local: DayState, remote: DayState): DayState {
+  return {
+    ...remote,
+    bedTime: remote.bedTime ?? local.bedTime,
+    wakeTime: remote.wakeTime ?? local.wakeTime,
+    sleepTarget: remote.sleepTarget ?? local.sleepTarget,
+    blockDurations: remote.blockDurations ?? local.blockDurations,
+  }
+}
+
 export function usePersistentState(): [AppState, (updater: (prev: AppState) => AppState) => void] {
   const { user, loading: authLoading } = useAuth()
   const [state, setState] = useState<AppState>(() => readInitialState())
@@ -227,7 +245,9 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
                 // Prefer local state for any date the user modified while Supabase was loading.
                 const base = { ...(prev.days ?? {}) }
                 for (const [date, ds] of Object.entries(remote!.days)) {
-                  if (!dirtyGenerations.current.has(date)) base[date] = ds
+                  if (!ds || dirtyGenerations.current.has(date)) continue
+                  const local = base[date]
+                  base[date] = local ? mergeRemoteDayState(local, ds) : ds
                 }
                 return base
               })()
