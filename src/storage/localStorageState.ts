@@ -259,6 +259,7 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
             habitDefinitions: settingsOk ? settings!.habitDefinitions : prev.habitDefinitions,
             monthTitles: settingsOk ? settings!.monthTitles : prev.monthTitles,
             blockDurationRatios: settingsOk ? settings!.blockDurationRatios : prev.blockDurationRatios,
+            notDoingList: settingsOk ? settings!.notDoingList : prev.notDoingList,
             activeDays,
           }
         })
@@ -327,6 +328,7 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
         monthTitles: stateRef.current.monthTitles ?? {},
         activeDays: stateRef.current.activeDays ?? [],
         blockDurationRatios: stateRef.current.blockDurationRatios ?? null,
+        notDoingList: stateRef.current.notDoingList ?? [],
       })
     }, 800)
 
@@ -336,7 +338,7 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
         settingsSyncTimeoutRef.current = null
       }
     }
-  }, [state.habitDefinitions, state.monthTitles, state.activeDays, state.blockDurationRatios, user, readyToSync])
+  }, [state.habitDefinitions, state.monthTitles, state.activeDays, state.blockDurationRatios, state.notDoingList, user, readyToSync])
 
   // Realtime: apply Supabase writes from other devices/tabs immediately (Postgres Changes).
   useEffect(() => {
@@ -440,6 +442,7 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
           monthTitles: stateRef.current.monthTitles ?? {},
           activeDays: stateRef.current.activeDays ?? [],
           blockDurationRatios: stateRef.current.blockDurationRatios ?? null,
+          notDoingList: stateRef.current.notDoingList ?? [],
         })
       }
     }
@@ -479,6 +482,7 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
                   habitDefinitions: settingsOk ? settings!.habitDefinitions : prev.habitDefinitions,
                   monthTitles: settingsOk ? settings!.monthTitles : prev.monthTitles,
                   blockDurationRatios: settingsOk ? settings!.blockDurationRatios : prev.blockDurationRatios,
+                  notDoingList: settingsOk ? settings!.notDoingList : prev.notDoingList,
                   activeDays,
                 }
               })

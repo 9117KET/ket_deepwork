@@ -312,6 +312,29 @@ function BlockCompletionGrid({
               </tr>
             ))}
             <tr>
+              <td className="border border-slate-700 bg-slate-900 px-1 py-0.5 text-slate-400 whitespace-nowrap">
+                Abandoned
+              </td>
+              {monthDays.map((isoDate) => {
+                const count = state.days[isoDate]?.abandonedTasks?.length ?? 0
+                return (
+                  <td
+                    key={isoDate}
+                    className={`${dayBodyCell} bg-slate-900`}
+                    title={count > 0 ? `${count} task${count === 1 ? '' : 's'} abandoned` : 'None abandoned'}
+                  >
+                    <div className="flex h-6 w-full items-center justify-center">
+                      {count > 0 ? (
+                        <span className="text-[9px] leading-none text-slate-400">{count}</span>
+                      ) : (
+                        <span className="text-slate-600">·</span>
+                      )}
+                    </div>
+                  </td>
+                )
+              })}
+            </tr>
+            <tr>
               <td className="border border-slate-700 bg-slate-900 px-1 py-0.5 font-medium text-slate-400 whitespace-nowrap">
                 Mood
               </td>

@@ -5,7 +5,7 @@
  * Mirrors the AppState shape into the `planner_days` table.
  */
 
-import type { AppState, BlockDurations, DayState } from '../domain/types'
+import type { AppState, AbandonedTask, BlockDurations, DayState, NotDoingItem } from '../domain/types'
 import { supabase } from '../lib/supabase'
 
 /** Row shape from `planner_days` (API + Realtime payloads). */
@@ -22,6 +22,8 @@ export interface PlannerDayRow {
   wake_time?: string | null
   sleep_target_time?: string | null
   block_durations?: unknown
+  not_doing_items?: unknown
+  abandoned_tasks?: unknown
 }
 
 /** Map a DB row to client `DayState` (fetch + Realtime). */
@@ -30,6 +32,8 @@ export function plannerDayRowToDayState(row: PlannerDayRow): DayState {
   const deepWorkSessions = (row.deep_work_sessions as DayState['deepWorkSessions'] | null) ?? []
   const habitCompletions = (row.habit_completions as DayState['habitCompletions'] | null) ?? {}
   const blockDurations = row.block_durations as BlockDurations | null | undefined
+  const notDoingItems = (row.not_doing_items as NotDoingItem[] | null) ?? undefined
+  const abandonedTasks = (row.abandoned_tasks as AbandonedTask[] | null) ?? undefined
   return {
     date: row.date,
     tasks,
@@ -41,6 +45,8 @@ export function plannerDayRowToDayState(row: PlannerDayRow): DayState {
     wakeTime: row.wake_time ?? undefined,
     sleepTarget: row.sleep_target_time ?? undefined,
     blockDurations: blockDurations ?? undefined,
+    notDoingItems: notDoingItems && notDoingItems.length > 0 ? notDoingItems : undefined,
+    abandonedTasks: abandonedTasks && abandonedTasks.length > 0 ? abandonedTasks : undefined,
   }
 }
 
@@ -48,7 +54,7 @@ export async function fetchPlannerState(userId: string): Promise<AppState | null
   const { data, error } = await supabase
     .from('planner_days')
     .select(
-      'id, user_id, date, tasks, deep_work_sessions, habit_completions, sleep_hours, mood, bed_time, wake_time, sleep_target_time, block_durations',
+      'id, user_id, date, tasks, deep_work_sessions, habit_completions, sleep_hours, mood, bed_time, wake_time, sleep_target_time, block_durations, not_doing_items, abandoned_tasks',
     )
     .eq('user_id', userId)
     .order('date', { ascending: true })
@@ -82,6 +88,8 @@ export async function upsertPlannerDays(userId: string, days: AppState['days']):
       wake_time: day.wakeTime ?? null,
       sleep_target_time: day.sleepTarget ?? null,
       block_durations: day.blockDurations ?? null,
+      not_doing_items: day.notDoingItems ?? [],
+      abandoned_tasks: day.abandonedTasks ?? [],
     }))
 
   if (payload.length === 0) {

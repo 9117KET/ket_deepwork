@@ -9,10 +9,12 @@ import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition, type SetStateAction } from "react";
 import {
   FIXED_SECTIONS,
+  type AbandonedTask,
   type AppState,
   type BlockDurations,
   type DayState,
   type HabitDefinition,
+  type NotDoingItem,
   type Task,
   type TaskSectionId,
 } from "../../domain/types";
@@ -40,6 +42,7 @@ import {
   ratiosToBlockDurations,
 } from "../../domain/sectionTimeBlocks";
 import { DaySetupModal } from "./DaySetupModal";
+import { NotDoingPanel } from "./NotDoingPanel";
 import { BlockDurationEditor } from "./BlockDurationEditor";
 import { BlockDurationScopeModal } from "./BlockDurationScopeModal";
 import { TaskConflictModal } from "./TaskConflictModal";
@@ -680,7 +683,9 @@ export function DayPlanner({
       const carried = toCarry.map((t) => {
         const newId = createTaskId();
         idMap.set(t.id, newId);
-        return { ...t, id: newId, date: selectedDay, isDone: false };
+        // Increment postponedCount for root tasks being carried forward.
+        const postponedCount = t.parentId ? (t.postponedCount ?? 0) : (t.postponedCount ?? 0) + 1;
+        return { ...t, id: newId, date: selectedDay, isDone: false, postponedCount };
       }).map((t) => ({
         ...t,
         parentId: t.parentId ? (idMap.get(t.parentId) ?? undefined) : undefined,
@@ -717,6 +722,116 @@ export function DayPlanner({
       };
     });
   };
+
+  /** Move a task to the global not-doing list and remove it from the plan. */
+  const handleMoveToNotDoing = useCallback((taskId: string) => {
+    updateAppState((prev) => {
+      const existingDay = getOrCreateDay(prev, selectedDay);
+      const task = existingDay.tasks.find((t) => t.id === taskId);
+      if (!task) return prev;
+      const descendantIds = getDescendantIds(existingDay.tasks, taskId);
+      const toRemove = new Set([taskId, ...descendantIds]);
+      const nextTasks = existingDay.tasks.filter((t) => !toRemove.has(t.id));
+      const newItem: NotDoingItem = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        text: task.title,
+        createdAt: new Date().toISOString(),
+      };
+      return {
+        ...prev,
+        notDoingList: [...(prev.notDoingList ?? []), newItem],
+        days: { ...prev.days, [selectedDay]: { ...existingDay, tasks: nextTasks } },
+      };
+    });
+  }, [updateAppState, selectedDay]);
+
+  /** Consciously abandon a task (Drucker: abandonment as a success). */
+  const handleAbandonTask = useCallback((taskId: string) => {
+    updateAppState((prev) => {
+      const existingDay = getOrCreateDay(prev, selectedDay);
+      const task = existingDay.tasks.find((t) => t.id === taskId);
+      if (!task) return prev;
+      const descendantIds = getDescendantIds(existingDay.tasks, taskId);
+      const toRemove = new Set([taskId, ...descendantIds]);
+      const nextTasks = existingDay.tasks.filter((t) => !toRemove.has(t.id));
+      const abandoned: AbandonedTask = {
+        id: taskId,
+        title: task.title,
+        sectionId: task.sectionId,
+        abandonedAt: new Date().toISOString(),
+      };
+      return {
+        ...prev,
+        days: {
+          ...prev.days,
+          [selectedDay]: {
+            ...existingDay,
+            tasks: nextTasks,
+            abandonedTasks: [...(existingDay.abandonedTasks ?? []), abandoned],
+          },
+        },
+      };
+    });
+  }, [updateAppState, selectedDay]);
+
+  /** Add an item to the global not-doing list. */
+  const handleAddToNotDoing = useCallback((text: string) => {
+    updateAppState((prev) => {
+      const newItem: NotDoingItem = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        text,
+        createdAt: new Date().toISOString(),
+      };
+      return { ...prev, notDoingList: [...(prev.notDoingList ?? []), newItem] };
+    });
+  }, [updateAppState]);
+
+  /** Remove an item from the global not-doing list. */
+  const handleRemoveFromNotDoing = useCallback((id: string) => {
+    updateAppState((prev) => ({
+      ...prev,
+      notDoingList: (prev.notDoingList ?? []).filter((item) => item.id !== id),
+    }));
+  }, [updateAppState]);
+
+  /** Add a per-day not-doing item. */
+  const handleAddDayNotDoing = useCallback((text: string) => {
+    updateAppState((prev) => {
+      const existingDay = getOrCreateDay(prev, selectedDay);
+      const newItem: NotDoingItem = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        text,
+        createdAt: new Date().toISOString(),
+      };
+      return {
+        ...prev,
+        days: {
+          ...prev.days,
+          [selectedDay]: {
+            ...existingDay,
+            notDoingItems: [...(existingDay.notDoingItems ?? []), newItem],
+          },
+        },
+      };
+    });
+  }, [updateAppState, selectedDay]);
+
+  /** Remove a per-day not-doing item. */
+  const handleRemoveDayNotDoing = useCallback((id: string) => {
+    updateAppState((prev) => {
+      const existingDay = getOrCreateDay(prev, selectedDay);
+      return {
+        ...prev,
+        days: {
+          ...prev.days,
+          [selectedDay]: {
+            ...existingDay,
+            notDoingItems: (existingDay.notDoingItems ?? []).filter((item) => item.id !== id),
+          },
+        },
+      };
+    });
+  }, [updateAppState, selectedDay]);
 
   const tasksBySection: Record<TaskSectionId, Task[]> = useMemo(() => {
     const grouped: Record<TaskSectionId, Task[]> = {
@@ -1315,6 +1430,13 @@ export function DayPlanner({
               taskIdsDueNow={taskIdsDueNow}
               onMoveTaskUp={shareMode === 'view' ? undefined : (taskId) => handleReorderTask(taskId, section.id, 'up')}
               onMoveTaskDown={shareMode === 'view' ? undefined : (taskId) => handleReorderTask(taskId, section.id, 'down')}
+              onMoveToNotDoing={shareMode === 'view' ? undefined : handleMoveToNotDoing}
+              onAbandonTask={shareMode === 'view' ? undefined : handleAbandonTask}
+              overloadThreshold={
+                section.id === 'mustDo' ? 3
+                : section.id === 'highPriority' ? 5
+                : undefined
+              }
               headerAction={(() => {
                 if (shareMode || !effectiveBlockDurations) return undefined;
                 const sId = section.id as keyof BlockDurations;
@@ -1416,6 +1538,17 @@ export function DayPlanner({
               {/* Deep work timer and motivation card: owner only */}
               {!shareMode && <DeepWorkTimer />}
               {!shareMode && <MotivationCard />}
+              {!shareMode && (
+                <NotDoingPanel
+                  globalList={appState.notDoingList ?? []}
+                  dayList={dayState.notDoingItems ?? []}
+                  selectedDay={selectedDay}
+                  onAddGlobal={handleAddToNotDoing}
+                  onRemoveGlobal={handleRemoveFromNotDoing}
+                  onAddDay={handleAddDayNotDoing}
+                  onRemoveDay={handleRemoveDayNotDoing}
+                />
+              )}
             </div>
           </>
         )}

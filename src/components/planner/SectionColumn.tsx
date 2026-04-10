@@ -44,6 +44,15 @@ interface SectionColumnProps {
   onMoveTaskUp?: (taskId: string) => void
   /** Mobile reorder: move a root task down within this section. */
   onMoveTaskDown?: (taskId: string) => void
+  /** Move a task to the global not-doing list. */
+  onMoveToNotDoing?: (taskId: string) => void
+  /** Consciously abandon a task (Drucker). */
+  onAbandonTask?: (taskId: string) => void
+  /**
+   * Max incomplete root tasks before showing an overload nudge.
+   * Undefined = no nudge for this section.
+   */
+  overloadThreshold?: number
 }
 
 type DropPosition = 'above' | 'below'
@@ -70,11 +79,17 @@ export function SectionColumn({
   headerAction,
   onMoveTaskUp,
   onMoveTaskDown,
+  onMoveToNotDoing,
+  onAbandonTask,
+  overloadThreshold,
 }: SectionColumnProps) {
   const [dropTarget, setDropTarget] = useState<{ index: number; position: DropPosition } | null>(
     null,
   )
   const [collapsed, setCollapsed] = useState(false)
+
+  const incompleteRootCount = tasks.filter((t) => !t.parentId && !t.isDone).length
+  const isOverloaded = overloadThreshold !== undefined && incompleteRootCount > overloadThreshold
 
   const handleDragStart = (taskId: string) => {
     onDragStart?.(section.id, taskId)
@@ -117,6 +132,14 @@ export function SectionColumn({
               {collapsed && tasks.length > 0 && (
                 <span className="rounded-full bg-slate-700 px-1.5 py-0.5 text-xs text-slate-300 sm:hidden">
                   {tasks.filter(t => !t.parentId).length}
+                </span>
+              )}
+              {isOverloaded && (
+                <span
+                  className="rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-medium text-amber-400"
+                  title={`${incompleteRootCount} incomplete tasks — trim to stay focused`}
+                >
+                  ⚠ {incompleteRootCount} tasks
                 </span>
               )}
             </div>
@@ -182,6 +205,8 @@ export function SectionColumn({
                 onDragEnd={handleDragEnd}
                 onMoveUp={onMoveTaskUp && rootIdx > 0 ? () => onMoveTaskUp(task.id) : undefined}
                 onMoveDown={onMoveTaskDown && rootIdx >= 0 && rootIdx < roots.length - 1 ? () => onMoveTaskDown(task.id) : undefined}
+                onMoveToNotDoing={onMoveToNotDoing ? () => onMoveToNotDoing(task.id) : undefined}
+                onAbandon={onAbandonTask ? () => onAbandonTask(task.id) : undefined}
               />
             )
           })
