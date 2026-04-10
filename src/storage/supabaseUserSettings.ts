@@ -5,7 +5,7 @@
  * Used when signed in; guests rely on localStorage only.
  */
 
-import type { BlockDurationRatios, HabitDefinition } from '../domain/types'
+import type { BlockDurationRatios, HabitDefinition, NotDoingItem } from '../domain/types'
 import { supabase } from '../lib/supabase'
 
 export interface UserSettingsRow {
@@ -16,6 +16,7 @@ export interface UserSettingsRow {
   last_open_date?: string | null
   active_days?: unknown
   block_duration_ratios?: unknown
+  not_doing_list?: unknown
 }
 
 export interface UserSettings {
@@ -25,6 +26,8 @@ export interface UserSettings {
   activeDays: string[]
   /** Global default block split (scaled per day to wake/sleep window). */
   blockDurationRatios: BlockDurationRatios | null
+  /** Global persistent not-doing commitments (Drucker). */
+  notDoingList: NotDoingItem[]
 }
 
 /** Map a `user_settings` row to app fields (fetch + Realtime). */
@@ -36,13 +39,14 @@ export function userSettingsRowToAppStatePatch(row: UserSettingsRow): UserSettin
     activeDays = [row.last_open_date]
   }
   const blockDurationRatios = (row.block_duration_ratios as BlockDurationRatios | null) ?? null
-  return { habitDefinitions, monthTitles, activeDays, blockDurationRatios }
+  const notDoingList = (row.not_doing_list as NotDoingItem[] | null) ?? []
+  return { habitDefinitions, monthTitles, activeDays, blockDurationRatios, notDoingList }
 }
 
 export async function fetchUserSettings(userId: string): Promise<UserSettings | null> {
   const { data, error } = await supabase
     .from('user_settings')
-    .select('habit_definitions, month_titles, streak, last_open_date, active_days, block_duration_ratios')
+    .select('habit_definitions, month_titles, streak, last_open_date, active_days, block_duration_ratios, not_doing_list')
     .eq('user_id', userId)
     .maybeSingle()
 
@@ -68,6 +72,7 @@ export async function upsertUserSettings(
       month_titles: settings.monthTitles,
       active_days: settings.activeDays,
       block_duration_ratios: settings.blockDurationRatios,
+      not_doing_list: settings.notDoingList,
       updated_at: new Date().toISOString(),
     },
     { onConflict: 'user_id' },

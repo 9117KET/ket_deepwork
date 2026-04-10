@@ -31,6 +31,25 @@ export interface Task {
   scheduledAt?: string;
   /** Planned duration in minutes (for display / future timer link). */
   durationMinutes?: number;
+  /** Number of times this task has been carried forward from a previous day. */
+  postponedCount?: number;
+}
+
+/** A conscious commitment to NOT do something (Drucker's not-to-do list). */
+export interface NotDoingItem {
+  id: string;
+  text: string;
+  /** ISO date when this commitment was made. */
+  createdAt: string;
+}
+
+/** A task that was consciously abandoned (as opposed to silently deleted). */
+export interface AbandonedTask {
+  id: string;
+  title: string;
+  sectionId: TaskSectionId;
+  /** ISO date when the task was abandoned. */
+  abandonedAt: string;
 }
 
 export interface DeepWorkSession {
@@ -48,6 +67,10 @@ export interface DayState {
   deepWorkSessions: DeepWorkSession[];
   /** Habit id -> completed for this day (tracking dashboard). */
   habitCompletions?: Record<string, boolean>;
+  /** Per-day not-doing decisions (Drucker: conscious commitments to not pursue something today). */
+  notDoingItems?: NotDoingItem[];
+  /** Tasks consciously abandoned this day (Drucker: abandonment as a success). */
+  abandonedTasks?: AbandonedTask[];
   /** Sleep duration in hours, e.g. 6, 7, 8 (null = not set). */
   sleepHours?: number | null;
   /** Mood emoji or code, e.g. "🙂" (null = not set). */
@@ -101,6 +124,8 @@ export interface AppState {
    * When set, days without `blockDurations` use this template scaled to that day's wake/sleep window.
    */
   blockDurationRatios?: BlockDurationRatios | null;
+  /** Global persistent not-doing commitments (Drucker: things you've decided to stop doing entirely). */
+  notDoingList?: NotDoingItem[];
 }
 
 export interface WeeklyStatsDaySummary {

@@ -35,6 +35,10 @@ interface TaskItemProps {
   onAddTaskBelow?: () => void
   onAddSubtask?: () => void
   onUpdateTask?: (patch: { scheduledAt?: string; durationMinutes?: number; title?: string }) => void
+  /** Move this task to the not-doing list (global). */
+  onMoveToNotDoing?: () => void
+  /** Consciously abandon this task (Drucker: abandonment as a success). */
+  onAbandon?: () => void
   onDragStart?: () => void
   onDragOver?: (position: 'above' | 'below') => void
   onDragLeave?: () => void
@@ -80,6 +84,8 @@ export function TaskItem({
   onAddTaskBelow,
   onAddSubtask,
   onUpdateTask,
+  onMoveToNotDoing,
+  onAbandon,
   onDragStart,
   onDragOver,
   onDragLeave,
@@ -120,8 +126,9 @@ export function TaskItem({
   const isReorderable = typeof onDragStart === 'function' && typeof onDrop === 'function'
   const canEditTime = typeof onUpdateTask === 'function'
   const showContextMenu = Boolean(
-    onUpdateTask ?? onAddTaskAbove ?? onAddTaskBelow ?? onAddSubtask ?? onDelete,
+    onUpdateTask ?? onAddTaskAbove ?? onAddTaskBelow ?? onAddSubtask ?? onMoveToNotDoing ?? onAbandon ?? onDelete,
   )
+  const postponedCount = task.postponedCount ?? 0
 
   const handleDragStart = (e: React.DragEvent) => {
     try {
@@ -275,6 +282,14 @@ export function TaskItem({
             <span className={`min-w-0 break-words ${textClasses}`}>{task.title}</span>
           )}
         </label>
+        {postponedCount >= 3 && (
+          <span
+            className="shrink-0 rounded bg-amber-500/20 px-1 py-0.5 text-[10px] font-medium text-amber-400 tabular-nums"
+            title={`Postponed ${postponedCount} times — do you still want to do this?`}
+          >
+            ⚠ ×{postponedCount}
+          </span>
+        )}
         {canEditTime && (
           <span className="flex shrink-0 items-center gap-1">
             <input
@@ -359,6 +374,26 @@ export function TaskItem({
               onClick={() => closeAnd(onAddSubtask)}
             >
               Add subtask
+            </button>
+          )}
+          {onMoveToNotDoing && (
+            <button
+              type="button"
+              role="menuitem"
+              className="w-full px-3 py-1.5 text-left text-sm text-amber-300 hover:bg-slate-700"
+              onClick={() => closeAnd(onMoveToNotDoing)}
+            >
+              Move to Not Doing
+            </button>
+          )}
+          {onAbandon && (
+            <button
+              type="button"
+              role="menuitem"
+              className="w-full px-3 py-1.5 text-left text-sm text-slate-400 hover:bg-slate-700"
+              onClick={() => closeAnd(onAbandon)}
+            >
+              Abandon
             </button>
           )}
           {onDelete && (
