@@ -40,6 +40,10 @@ interface TaskItemProps {
   onDragLeave?: () => void
   onDrop?: () => void
   onDragEnd?: () => void
+  /** Mobile: move this task up within its section. Undefined = already first. */
+  onMoveUp?: () => void
+  /** Mobile: move this task down within its section. Undefined = already last. */
+  onMoveDown?: () => void
 }
 
 function GripIcon() {
@@ -122,20 +126,31 @@ export function TaskItem({
   onDragLeave,
   onDrop,
   onDragEnd,
+  onMoveUp,
+  onMoveDown,
 }: TaskItemProps) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
   const gripRef = useRef<HTMLDivElement | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
+  const menuBtnRef = useRef<HTMLButtonElement | null>(null)
 
   useEffect(() => {
     if (!menu) return
-    const close = (e: MouseEvent) => {
+    const close = (e: MouseEvent | TouchEvent) => {
       const target = e.target as Node
-      if (gripRef.current?.contains(target) || menuRef.current?.contains(target)) return
+      if (
+        gripRef.current?.contains(target) ||
+        menuRef.current?.contains(target) ||
+        menuBtnRef.current?.contains(target)
+      ) return
       setMenu(null)
     }
     document.addEventListener('mousedown', close)
-    return () => document.removeEventListener('mousedown', close)
+    document.addEventListener('touchstart', close)
+    return () => {
+      document.removeEventListener('mousedown', close)
+      document.removeEventListener('touchstart', close)
+    }
   }, [menu])
 
   const trimmedTitle = task.title.trim()
@@ -167,6 +182,14 @@ export function TaskItem({
     e.preventDefault()
     e.stopPropagation()
     setMenu({ x: e.clientX, y: e.clientY })
+  }
+
+  const handleMenuButtonClick = () => {
+    if (!showContextMenu) return
+    const rect = menuBtnRef.current?.getBoundingClientRect()
+    if (rect) {
+      setMenu({ x: rect.left, y: rect.bottom + 4 })
+    }
   }
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -223,7 +246,7 @@ export function TaskItem({
             onToggleSelect?.()
           }
         }}
-        className={`flex flex-wrap items-center gap-2 py-1.5 ${isDragging ? 'opacity-50' : ''} ${isDueNow ? 'rounded-md border border-amber-500/70 bg-amber-500/10' : ''} ${isSelected ? 'rounded-md bg-sky-500/20 ring-1 ring-sky-500/50' : ''} ${onToggleSelect ? 'cursor-default' : ''}`}
+        className={`group flex flex-wrap items-center gap-2 py-1.5 ${isDragging ? 'opacity-50' : ''} ${isDueNow ? 'rounded-md border border-amber-500/70 bg-amber-500/10' : ''} ${isSelected ? 'rounded-md bg-sky-500/20 ring-1 ring-sky-500/50' : ''} ${onToggleSelect ? 'cursor-default' : ''}`}
         onDragOver={handleDragOver}
         onDragLeave={onDragLeave}
         onDrop={handleDrop}
@@ -237,18 +260,47 @@ export function TaskItem({
             onDragStart={handleDragStart}
             onDragEnd={onDragEnd}
             onContextMenu={handleContextMenu}
-            className="cursor-grab touch-none rounded p-0.5 text-slate-500 hover:bg-slate-800 hover:text-slate-300 active:cursor-grabbing"
+            className="hidden cursor-grab touch-none rounded p-0.5 text-slate-500 hover:bg-slate-800 hover:text-slate-300 active:cursor-grabbing sm:block"
             aria-label="Drag to reorder; right-click for menu"
           >
             <GripIcon />
           </div>
         ) : null}
+        {showContextMenu && (
+          <button
+            ref={menuBtnRef}
+            type="button"
+            onClick={handleMenuButtonClick}
+            className="shrink-0 rounded p-0.5 text-slate-500 hover:bg-slate-800 hover:text-slate-300 sm:opacity-0 sm:group-hover:opacity-100"
+            aria-label="Task options"
+          >
+            ⋮
+          </button>
+        )}
+        {(onMoveUp !== undefined || onMoveDown !== undefined) && (
+          <span className="flex shrink-0 items-center sm:hidden">
+            <button
+              type="button"
+              onClick={onMoveUp}
+              disabled={onMoveUp === undefined}
+              className="rounded p-0.5 text-slate-500 hover:bg-slate-800 hover:text-slate-300 disabled:opacity-25"
+              aria-label="Move task up"
+            >↑</button>
+            <button
+              type="button"
+              onClick={onMoveDown}
+              disabled={onMoveDown === undefined}
+              className="rounded p-0.5 text-slate-500 hover:bg-slate-800 hover:text-slate-300 disabled:opacity-25"
+              aria-label="Move task down"
+            >↓</button>
+          </span>
+        )}
         <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
           <input
             type="checkbox"
             checked={task.isDone}
             onChange={onToggle}
-            className="h-4 w-4 shrink-0 rounded border-slate-800 bg-slate-900 text-sky-400 focus:ring-sky-500"
+            className="h-5 w-5 shrink-0 rounded border-slate-800 bg-slate-900 text-sky-400 focus:ring-sky-500 sm:h-4 sm:w-4"
           />
           {isUrl ? (
             <a

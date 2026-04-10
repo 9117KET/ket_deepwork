@@ -30,7 +30,7 @@ export function AddTaskInput({ placeholder, onAdd }: AddTaskInputProps) {
         value={value}
         onChange={(event) => setValue(event.target.value)}
         placeholder={placeholder ?? 'Add task'}
-        className="w-full rounded-md border border-slate-800 bg-slate-900 px-3 py-1.5 text-sm text-slate-100 placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+        className="w-full rounded-md border border-slate-800 bg-slate-900 px-3 py-1.5 text-base sm:text-sm text-slate-100 placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
       />
     </form>
   )

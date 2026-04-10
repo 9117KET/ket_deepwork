@@ -40,6 +40,10 @@ interface SectionColumnProps {
   onToggleSelect?: (taskId: string) => void
   /** Optional element rendered in the section header (e.g. Edit schedule button). */
   headerAction?: ReactNode
+  /** Mobile reorder: move a root task up within this section. */
+  onMoveTaskUp?: (taskId: string) => void
+  /** Mobile reorder: move a root task down within this section. */
+  onMoveTaskDown?: (taskId: string) => void
 }
 
 type DropPosition = 'above' | 'below'
@@ -64,10 +68,13 @@ export function SectionColumn({
   selectedTaskIds = new Set(),
   onToggleSelect,
   headerAction,
+  onMoveTaskUp,
+  onMoveTaskDown,
 }: SectionColumnProps) {
   const [dropTarget, setDropTarget] = useState<{ index: number; position: DropPosition } | null>(
     null,
   )
+  const [collapsed, setCollapsed] = useState(false)
 
   const handleDragStart = (taskId: string) => {
     onDragStart?.(section.id, taskId)
@@ -95,20 +102,37 @@ export function SectionColumn({
       }`}
     >
       <header className="mb-2 flex items-start justify-between gap-2">
-        <div>
-          <h3 className="text-sm sm:text-base font-semibold text-slate-100">{section.title}</h3>
-          {timeframeLabel ? (
-            <p className="text-xs text-slate-400">
-              Timeframe: {timeframeLabel}
-              {section.description ? ` (${section.description})` : null}
-            </p>
-          ) : section.description ? (
-            <p className="text-xs text-slate-500">{section.description}</p>
-          ) : null}
+        <div className="flex min-w-0 flex-1 items-start gap-2">
+          <button
+            type="button"
+            onClick={() => setCollapsed((c) => !c)}
+            className="mt-0.5 shrink-0 text-slate-400 hover:text-slate-200 sm:hidden"
+            aria-label={collapsed ? 'Expand section' : 'Collapse section'}
+          >
+            {collapsed ? '▶' : '▼'}
+          </button>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm sm:text-base font-semibold text-slate-100">{section.title}</h3>
+              {collapsed && tasks.length > 0 && (
+                <span className="rounded-full bg-slate-700 px-1.5 py-0.5 text-xs text-slate-300 sm:hidden">
+                  {tasks.filter(t => !t.parentId).length}
+                </span>
+              )}
+            </div>
+            {timeframeLabel ? (
+              <p className="text-xs text-slate-400">
+                Timeframe: {timeframeLabel}
+                {section.description ? ` (${section.description})` : null}
+              </p>
+            ) : section.description ? (
+              <p className="text-xs text-slate-500">{section.description}</p>
+            ) : null}
+          </div>
         </div>
         {headerAction && <div className="shrink-0">{headerAction}</div>}
       </header>
-      <div className="space-y-1">
+      {!collapsed && <div className="space-y-1">
         {tasks.length === 0 ? (
           <div
             className={`min-h-[2.5rem] rounded-md border border-dashed ${
@@ -130,34 +154,40 @@ export function SectionColumn({
           >
             <p className="text-xs text-slate-400 italic">No tasks yet. Drop a task here.</p>
           </div>
-        ) : (
-          tasks.map((task, index) => (
-            <TaskItem
-              key={task.id}
-              task={task}
-              isSubtask={Boolean(task.parentId)}
-              isDragging={draggedTask?.sectionId === section.id && draggedTask?.taskId === task.id}
-              showDropAbove={dropTarget?.index === index && dropTarget?.position === 'above'}
-              showDropBelow={dropTarget?.index === index && dropTarget?.position === 'below'}
-              isDueNow={taskIdsDueNow.has(task.id)}
-              isSelected={selectedTaskIds.has(task.id)}
-              onToggleSelect={onToggleSelect ? () => onToggleSelect(task.id) : undefined}
-              onToggle={() => onToggleTask(task.id)}
-              onDelete={() => onDeleteTask(task.id)}
-              onAddTaskAbove={onAddTaskAbove ? () => onAddTaskAbove(task.id) : undefined}
-              onAddTaskBelow={onAddTaskBelow ? () => onAddTaskBelow(task.id) : undefined}
-              onAddSubtask={onAddSubtask ? () => onAddSubtask(task.id) : undefined}
-              onUpdateTask={(patch) => onUpdateTask(task.id, patch)}
-              onDragStart={() => handleDragStart(task.id)}
-              onDragOver={(position) => handleDragOver(index, position)}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-              onDragEnd={handleDragEnd}
-            />
-          ))
-        )}
-      </div>
-      <AddTaskInput placeholder="Add task" onAdd={onAddTask} />
+        ) : (() => {
+          const roots = tasks.filter((t) => !t.parentId)
+          return tasks.map((task, index) => {
+            const rootIdx = task.parentId ? -1 : roots.findIndex((r) => r.id === task.id)
+            return (
+              <TaskItem
+                key={task.id}
+                task={task}
+                isSubtask={Boolean(task.parentId)}
+                isDragging={draggedTask?.sectionId === section.id && draggedTask?.taskId === task.id}
+                showDropAbove={dropTarget?.index === index && dropTarget?.position === 'above'}
+                showDropBelow={dropTarget?.index === index && dropTarget?.position === 'below'}
+                isDueNow={taskIdsDueNow.has(task.id)}
+                isSelected={selectedTaskIds.has(task.id)}
+                onToggleSelect={onToggleSelect ? () => onToggleSelect(task.id) : undefined}
+                onToggle={() => onToggleTask(task.id)}
+                onDelete={() => onDeleteTask(task.id)}
+                onAddTaskAbove={onAddTaskAbove ? () => onAddTaskAbove(task.id) : undefined}
+                onAddTaskBelow={onAddTaskBelow ? () => onAddTaskBelow(task.id) : undefined}
+                onAddSubtask={onAddSubtask ? () => onAddSubtask(task.id) : undefined}
+                onUpdateTask={(patch) => onUpdateTask(task.id, patch)}
+                onDragStart={() => handleDragStart(task.id)}
+                onDragOver={(position) => handleDragOver(index, position)}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                onDragEnd={handleDragEnd}
+                onMoveUp={onMoveTaskUp && rootIdx > 0 ? () => onMoveTaskUp(task.id) : undefined}
+                onMoveDown={onMoveTaskDown && rootIdx >= 0 && rootIdx < roots.length - 1 ? () => onMoveTaskDown(task.id) : undefined}
+              />
+            )
+          })
+        })()}
+      </div>}
+      {!collapsed && <AddTaskInput placeholder="Add task" onAdd={onAddTask} />}
     </section>
   )
 }

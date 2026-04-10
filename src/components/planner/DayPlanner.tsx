@@ -427,6 +427,52 @@ export function DayPlanner({
     });
   };
 
+  /** Mobile: swap a root task up or down within its section. */
+  const handleReorderTask = useCallback(
+    (taskId: string, sectionId: TaskSectionId, direction: 'up' | 'down') => {
+      updateAppState((prev) => {
+        try {
+          const existingDay = getOrCreateDay(prev, selectedDay);
+          const sectionTasks = getOrderedTasksForSection(
+            existingDay.tasks.filter((t) => t.sectionId === sectionId),
+          );
+          const fromIndex = sectionTasks.findIndex((t) => t.id === taskId);
+          if (fromIndex < 0) return prev;
+          const roots = sectionTasks.filter((t) => !t.parentId);
+          const rootIdx = roots.findIndex((t) => t.id === taskId);
+          if (rootIdx < 0) return prev;
+
+          let toIndex: number;
+          if (direction === 'up') {
+            if (rootIdx === 0) return prev;
+            const prevRoot = roots[rootIdx - 1]!;
+            toIndex = sectionTasks.findIndex((t) => t.id === prevRoot.id);
+          } else {
+            if (rootIdx === roots.length - 1) return prev;
+            const nextRoot = roots[rootIdx + 1]!;
+            toIndex = sectionTasks.findIndex((t) => t.id === nextRoot.id) + 1;
+          }
+
+          const reordered = reorderTasks(sectionTasks, fromIndex, toIndex);
+          let j = 0;
+          const nextTasks = existingDay.tasks.map((t) =>
+            t.sectionId === sectionId ? reordered[j++]! : t,
+          );
+          return {
+            ...prev,
+            days: {
+              ...prev.days,
+              [selectedDay]: { ...existingDay, tasks: nextTasks },
+            },
+          };
+        } catch {
+          return prev;
+        }
+      });
+    },
+    [updateAppState, selectedDay],
+  );
+
   /** Move a task (and its subtasks) to another section at the given insert index. */
   const handleMoveTask = (
     _fromSectionId: TaskSectionId,
@@ -747,8 +793,8 @@ export function DayPlanner({
 
   const showDaySetupModal =
     !shareMode &&
-    selectedDay === todayIso() &&
-    (daySetupOpen || (!dayState.wakeTime && daySetupSkippedFor !== selectedDay));
+    (daySetupOpen ||
+      (selectedDay === todayIso() && !dayState.wakeTime && daySetupSkippedFor !== selectedDay));
 
   const handleDaySetupSave = useCallback(
     (wakeTime: string, sleepTarget: string, bedTime: string) => {
@@ -1267,6 +1313,8 @@ export function DayPlanner({
               onDeleteTask={shareMode === 'view' ? () => undefined : (taskId) => handleDeleteTask(taskId)}
               onUpdateTask={shareMode === 'view' ? () => undefined : handleUpdateTask}
               taskIdsDueNow={taskIdsDueNow}
+              onMoveTaskUp={shareMode === 'view' ? undefined : (taskId) => handleReorderTask(taskId, section.id, 'up')}
+              onMoveTaskDown={shareMode === 'view' ? undefined : (taskId) => handleReorderTask(taskId, section.id, 'down')}
               headerAction={(() => {
                 if (shareMode || !effectiveBlockDurations) return undefined;
                 const sId = section.id as keyof BlockDurations;
@@ -1315,28 +1363,39 @@ export function DayPlanner({
                   Timeframe: {getSleepWindowLabel(timeOffsetMinutes, computedBlocks)}
                 </p>
               </div>
-              {!shareMode && effectiveBlockDurations && dayState.wakeTime && dayState.sleepTarget && (() => {
-                const [wh, wm] = (dayState.wakeTime ?? "07:00").split(":").map(Number);
-                const [sh, sm] = (dayState.sleepTarget ?? "23:00").split(":").map(Number);
-                const wake = (wh ?? 0) * 60 + (wm ?? 0);
-                const sleep = (sh ?? 0) * 60 + (sm ?? 0);
-                const sleepMins = wake > sleep ? wake - sleep : wake + 1440 - sleep;
-                return (
-                  <BlockDurationEditor
-                    currentDuration={sleepMins}
-                    minDuration={SLEEP_MIN_MINUTES}
-                    adjacentLabel="Night routine"
-                    adjacentDuration={effectiveBlockDurations.nightRoutine}
-                    adjacentMin={BLOCK_MIN_MINUTES.nightRoutine}
-                    affectsSleep={false}
-                    onConfirm={(newSleepMins) => {
-                      const delta = newSleepMins - sleepMins;
-                      // Adjusting sleep adjusts Night Routine in the opposite direction
-                      handleBlockDurationChange('nightRoutine', effectiveBlockDurations.nightRoutine - delta);
-                    }}
-                  />
-                );
-              })()}
+              {!shareMode && (
+                <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setDaySetupOpen(true)}
+                    className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-300 hover:border-sky-500 hover:text-sky-300"
+                  >
+                    Edit schedule
+                  </button>
+                  {effectiveBlockDurations && dayState.wakeTime && dayState.sleepTarget && (() => {
+                    const [wh, wm] = (dayState.wakeTime ?? "07:00").split(":").map(Number);
+                    const [sh, sm] = (dayState.sleepTarget ?? "23:00").split(":").map(Number);
+                    const wake = (wh ?? 0) * 60 + (wm ?? 0);
+                    const sleep = (sh ?? 0) * 60 + (sm ?? 0);
+                    const sleepMins = wake > sleep ? wake - sleep : wake + 1440 - sleep;
+                    return (
+                      <BlockDurationEditor
+                        currentDuration={sleepMins}
+                        minDuration={SLEEP_MIN_MINUTES}
+                        adjacentLabel="Night routine"
+                        adjacentDuration={effectiveBlockDurations.nightRoutine}
+                        adjacentMin={BLOCK_MIN_MINUTES.nightRoutine}
+                        affectsSleep={false}
+                        onConfirm={(newSleepMins) => {
+                          const delta = newSleepMins - sleepMins;
+                          // Adjusting sleep adjusts Night Routine in the opposite direction
+                          handleBlockDurationChange('nightRoutine', effectiveBlockDurations.nightRoutine - delta);
+                        }}
+                      />
+                    );
+                  })()}
+                </div>
+              )}
             </header>
           </section>
         </div>
