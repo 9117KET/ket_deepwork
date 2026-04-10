@@ -292,33 +292,39 @@ export function TaskItem({
         )}
         {canEditTime && (
           <span className="flex shrink-0 items-center gap-1">
-            <input
-              type="time"
-              value={task.scheduledAt ?? ''}
-              onChange={(e) => {
-                const v = e.target.value
-                onUpdateTask?.({ scheduledAt: v ? normalizeHhmm(v) : undefined })
-              }}
-              className="w-[5.5rem] rounded border border-slate-700 bg-slate-800 px-1 py-0.5 text-xs tabular-nums text-slate-300 [color-scheme:dark]"
-              title="Scheduled time (24h)"
-            />
-            <select
-              value={task.durationMinutes ?? ''}
-              onChange={(e) => {
-                const v = e.target.value === '' ? undefined : Number(e.target.value)
-                onUpdateTask?.({ durationMinutes: v })
-              }}
-              className="rounded border border-slate-700 bg-slate-800 px-1 py-0.5 text-xs tabular-nums text-slate-300"
-              title="Duration (optional)"
-            >
-              <option value="">—</option>
-              {task.durationMinutes != null && !DURATION_OPTIONS.includes(task.durationMinutes) && (
-                <option value={task.durationMinutes}>{formatDuration(task.durationMinutes)}</option>
-              )}
-              {DURATION_OPTIONS.map((m) => (
-                <option key={m} value={m}>{formatDuration(m)}</option>
-              ))}
-            </select>
+            <label className="flex items-center gap-0.5" title="Scheduled time (24h)">
+              <span className="text-[9px] text-slate-500 sm:hidden">time</span>
+              <input
+                type="time"
+                value={task.scheduledAt ?? ''}
+                onChange={(e) => {
+                  const v = e.target.value
+                  onUpdateTask?.({ scheduledAt: v ? normalizeHhmm(v) : undefined })
+                }}
+                className="w-[4.5rem] rounded border border-slate-700 bg-slate-800 px-1 py-0.5 text-xs tabular-nums text-slate-300 [color-scheme:dark]"
+                aria-label="Scheduled time"
+              />
+            </label>
+            <label className="flex items-center gap-0.5" title="Duration (optional)">
+              <span className="text-[9px] text-slate-500 sm:hidden">dur</span>
+              <select
+                value={task.durationMinutes ?? ''}
+                onChange={(e) => {
+                  const v = e.target.value === '' ? undefined : Number(e.target.value)
+                  onUpdateTask?.({ durationMinutes: v })
+                }}
+                className="rounded border border-slate-700 bg-slate-800 px-1 py-0.5 text-xs tabular-nums text-slate-300"
+                aria-label="Task duration"
+              >
+                <option value="">dur</option>
+                {task.durationMinutes != null && !DURATION_OPTIONS.includes(task.durationMinutes) && (
+                  <option value={task.durationMinutes}>{formatDuration(task.durationMinutes)}</option>
+                )}
+                {DURATION_OPTIONS.map((m) => (
+                  <option key={m} value={m}>{formatDuration(m)}</option>
+                ))}
+              </select>
+            </label>
           </span>
         )}
       </div>

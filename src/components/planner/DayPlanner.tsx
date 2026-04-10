@@ -1530,7 +1530,7 @@ export function DayPlanner({
               aria-hidden="true"
             />
 
-            <div className="space-y-3 lg:sticky lg:top-20" data-tour="sidebar">
+            <div className="space-y-3 lg:sticky lg:top-20 lg:max-h-[calc(100vh-5.5rem)] lg:overflow-y-auto lg:pr-1" data-tour="sidebar">
               <WeeklyOverview
                 state={appState as AppState}
                 referenceDay={selectedDay}

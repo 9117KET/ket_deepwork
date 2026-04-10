@@ -152,10 +152,19 @@ function writeState(next: AppState) {
  * blockDurations) when remote is null/undefined — this prevents a stale Supabase
  * row (not yet updated due to a pre-refresh sync race) from wiping out times the
  * user just set.
+ *
+ * We also preserve local tasks when local has task IDs that remote doesn't know
+ * about yet. This covers the case where the user carries forward tasks (or adds
+ * any tasks) and refreshes before the 800 ms Supabase debounce fires — without
+ * this guard, the stale remote state would wipe out the locally-added tasks.
+ * Once Supabase syncs, remote and local task IDs match, so remote takes over.
  */
 function mergeRemoteDayState(local: DayState, remote: DayState): DayState {
+  const remoteTaskIds = new Set((remote.tasks ?? []).map((t) => t.id))
+  const localHasUnsyncedTasks = (local.tasks ?? []).some((t) => !remoteTaskIds.has(t.id))
   return {
     ...remote,
+    tasks: localHasUnsyncedTasks ? local.tasks : remote.tasks,
     bedTime: remote.bedTime ?? local.bedTime,
     wakeTime: remote.wakeTime ?? local.wakeTime,
     sleepTarget: remote.sleepTarget ?? local.sleepTarget,
@@ -467,7 +476,9 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
                   ? (() => {
                       const base = { ...(prev.days ?? {}) }
                       for (const [date, ds] of Object.entries(remote!.days)) {
-                        if (!dirtyGenerations.current.has(date)) base[date] = ds
+                        if (!ds || dirtyGenerations.current.has(date)) continue
+                        const local = base[date]
+                        base[date] = local ? mergeRemoteDayState(local, ds) : ds
                       }
                       return base
                     })()
