@@ -196,7 +196,7 @@ export function TaskItem({
   }
 
   return (
-    <div className={`relative ${isSubtask ? 'pl-6' : ''}`}>
+    <div className={`relative ${isSubtask ? 'ml-6 border-l-2 border-slate-700 pl-2' : ''}`}>
       {showDropAbove && (
         <div
           className="absolute left-0 right-0 top-0 h-0.5 rounded-full bg-sky-500"
@@ -300,7 +300,7 @@ export function TaskItem({
                   const v = e.target.value
                   onUpdateTask?.({ scheduledAt: v ? normalizeHhmm(v) : undefined })
                 }}
-                className={`w-14 rounded border border-slate-700 bg-slate-800 px-1 py-0.5 text-xs tabular-nums [color-scheme:dark] ${task.scheduledAt ? 'text-slate-300' : 'text-transparent'}`}
+                className={`w-16 rounded border border-slate-700 bg-slate-800 px-1 py-0.5 text-xs tabular-nums [color-scheme:dark] ${task.scheduledAt ? 'text-slate-300' : 'text-transparent'}`}
                 aria-label="Scheduled time"
               />
               {!task.scheduledAt && (
@@ -315,7 +315,7 @@ export function TaskItem({
                 const v = e.target.value === '' ? undefined : Number(e.target.value)
                 onUpdateTask?.({ durationMinutes: v })
               }}
-              className="w-14 rounded border border-slate-700 bg-slate-800 px-1 py-0.5 text-xs tabular-nums text-slate-300"
+              className="w-16 rounded border border-slate-700 bg-slate-800 px-1 py-0.5 text-xs tabular-nums text-slate-300"
               aria-label="Task duration"
               title="Duration (optional)"
             >

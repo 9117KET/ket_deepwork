@@ -181,6 +181,7 @@ export function SectionColumn({
           const roots = tasks.filter((t) => !t.parentId)
           return tasks.map((task, index) => {
             const rootIdx = task.parentId ? -1 : roots.findIndex((r) => r.id === task.id)
+            const isParent = tasks.some((t) => t.parentId === task.id)
             return (
               <TaskItem
                 key={task.id}
@@ -203,8 +204,8 @@ export function SectionColumn({
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
                 onDragEnd={handleDragEnd}
-                onMoveUp={onMoveTaskUp && rootIdx > 0 ? () => onMoveTaskUp(task.id) : undefined}
-                onMoveDown={onMoveTaskDown && rootIdx >= 0 && rootIdx < roots.length - 1 ? () => onMoveTaskDown(task.id) : undefined}
+                onMoveUp={onMoveTaskUp && rootIdx > 0 && !isParent ? () => onMoveTaskUp(task.id) : undefined}
+                onMoveDown={onMoveTaskDown && rootIdx >= 0 && rootIdx < roots.length - 1 && !isParent ? () => onMoveTaskDown(task.id) : undefined}
                 onMoveToNotDoing={onMoveToNotDoing ? () => onMoveToNotDoing(task.id) : undefined}
                 onAbandon={onAbandonTask ? () => onAbandonTask(task.id) : undefined}
               />
