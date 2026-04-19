@@ -451,6 +451,9 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
           setState((prev) => ({
             ...prev,
             ...patch,
+            // Convert null → undefined to satisfy AppState's optional (not nullable) fields
+            deepWorkGoalHoursPerWeek: patch.deepWorkGoalHoursPerWeek ?? undefined,
+            goalCascade: patch.goalCascade ?? undefined,
           }))
         },
       )
@@ -492,6 +495,13 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
           identityStatement: stateRef.current.identityStatement ?? '',
           depthPhilosophy: stateRef.current.depthPhilosophy,
           deepWorkGoalHoursPerWeek: stateRef.current.deepWorkGoalHoursPerWeek ?? null,
+          northStar: stateRef.current.northStar ?? '',
+          goalCascade: stateRef.current.goalCascade ?? null,
+          dayOneThings: stateRef.current.dayOneThings ?? {},
+          weekOneThings: stateRef.current.weekOneThings ?? {},
+          monthOneThings: stateRef.current.monthOneThings ?? {},
+          monthlyReviews: stateRef.current.monthlyReviews ?? {},
+          monthlyReviewQuestions: stateRef.current.monthlyReviewQuestions ?? [],
         })
       }
     }
