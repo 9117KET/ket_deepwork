@@ -33,6 +33,8 @@ export interface Task {
   durationMinutes?: number;
   /** Number of times this task has been carried forward from a previous day. */
   postponedCount?: number;
+  /** True when this task is shallow work (logistical, non-cognitively demanding). */
+  isShallow?: boolean;
 }
 
 /** A conscious commitment to NOT do something (Drucker's not-to-do list). */
@@ -103,6 +105,25 @@ export type BlockDurationRatios = Record<keyof BlockDurations, number>;
 export interface HabitDefinition {
   id: string;
   label: string;
+  /** "After [stackAnchor], I will do this habit." Free-text anchor for habit stacking. */
+  stackAnchor?: string;
+}
+
+/** The ONE Thing goal cascade (Gary Keller): long-horizon goals from life down to 3 months. */
+export interface GoalCascade {
+  life?: string;
+  fiveYear?: string;
+  oneYear?: string;
+  sixMonths?: string;
+  threeMonths?: string;
+}
+
+/** Monthly review answers for The ONE Thing framework. */
+export interface MonthlyReview {
+  /** Free-text answers indexed to the user's monthly review questions. */
+  answers: string[];
+  /** ISO timestamp when the user marked this review complete. */
+  completedAt?: string;
 }
 
 export interface AppState {
@@ -126,6 +147,27 @@ export interface AppState {
   blockDurationRatios?: BlockDurationRatios | null;
   /** Global persistent not-doing commitments (Drucker: things you've decided to stop doing entirely). */
   notDoingList?: NotDoingItem[];
+  /** "I am X" identity declaration (Atomic Habits). Displayed as a daily commitment alongside habits. */
+  identityStatement?: string;
+  /** Cal Newport depth philosophy: how the user structures their deep work time. */
+  depthPhilosophy?: 'rhythmic' | 'journalistic' | 'bimodal';
+  /** Weekly deep work goal in hours (default 20). Used by the scoreboard. */
+  deepWorkGoalHoursPerWeek?: number;
+  // ── The ONE Thing (Gary Keller) ──────────────────────────────────────────────
+  /** Fixed life direction statement — the "North Star" that guides every decision. */
+  northStar?: string;
+  /** Cascading long-horizon goals from life down to 3 months. */
+  goalCascade?: GoalCascade;
+  /** ISO date → the ONE thing for that specific day. */
+  dayOneThings?: Record<string, string>;
+  /** Monday ISO date → the ONE thing for that week. */
+  weekOneThings?: Record<string, string>;
+  /** YYYY-MM → the ONE thing for that month. */
+  monthOneThings?: Record<string, string>;
+  /** YYYY-MM → monthly review answers. */
+  monthlyReviews?: Record<string, MonthlyReview>;
+  /** Customisable monthly review question list (defaults to the 7 standard questions). */
+  monthlyReviewQuestions?: string[];
 }
 
 export interface WeeklyStatsDaySummary {
