@@ -31,7 +31,7 @@ interface SectionColumnProps {
   onDeleteTask: (taskId: string) => void
   onUpdateTask: (
     taskId: string,
-    patch: { scheduledAt?: string; durationMinutes?: number; title?: string },
+    patch: { scheduledAt?: string; durationMinutes?: number; title?: string; isShallow?: boolean },
   ) => void
   taskIdsDueNow: Set<string>
   /** Task ids that are part of multi-selection (Ctrl+Click). */

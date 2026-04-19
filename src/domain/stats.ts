@@ -13,8 +13,8 @@
  *     continuity) so completing a structured task feels slightly more rewarding.
  */
 
-import type { AppState, Task, WeeklyStats, WeeklyStatsDaySummary } from './types'
-import { weekForDay } from './dateUtils'
+import type { AppState, DayState, Task, WeeklyStats, WeeklyStatsDaySummary } from './types'
+import { addDays, weekForDay } from './dateUtils'
 
 const SECTION_WEIGHTS: Record<Task['sectionId'], number> = {
   mustDo: 3.0,
@@ -119,6 +119,81 @@ export function computeDayCompletion(state: AppState, dayIso: string): WeeklySta
  * broken down by section. Only root tasks are counted (parentId absent) —
  * subtasks are owned by their parent's score.
  */
+/**
+ * For each habit id, compute the current consecutive-day streak ending on `untilDate`.
+ * A day counts when `habitCompletions[habitId] === true`.
+ * Caps lookback at 365 days.
+ */
+export function computePerHabitStreaks(
+  days: Record<string, DayState | undefined>,
+  habitIds: string[],
+  untilDate: string,
+): Record<string, number> {
+  const result: Record<string, number> = {}
+  for (const id of habitIds) {
+    let streak = 0
+    let date = untilDate
+    for (let i = 0; i < 365; i++) {
+      const completions = days[date]?.habitCompletions
+      if (completions?.[id] === true) {
+        streak++
+        date = addDays(date, -1)
+      } else {
+        break
+      }
+    }
+    result[id] = streak
+  }
+  return result
+}
+
+/**
+ * Returns habit ids that are "at risk" of being missed twice in a row.
+ * A habit is at risk when: it was NOT completed yesterday AND WAS completed the day before.
+ * This implements the Atomic Habits "never miss twice" rule.
+ */
+export function getAtRiskHabitIds(
+  days: Record<string, DayState | undefined>,
+  habitIds: string[],
+  today: string,
+): Set<string> {
+  const yesterday = addDays(today, -1)
+  const dayBeforeYesterday = addDays(today, -2)
+  const atRisk = new Set<string>()
+  for (const id of habitIds) {
+    const missedYesterday = days[yesterday]?.habitCompletions?.[id] !== true
+    const doneDayBefore = days[dayBeforeYesterday]?.habitCompletions?.[id] === true
+    if (missedYesterday && doneDayBefore) {
+      atRisk.add(id)
+    }
+  }
+  return atRisk
+}
+
+/**
+ * Returns total deep work minutes for a day from completed (not cancelled) sessions.
+ */
+export function computeDailyDeepWorkMinutes(day: DayState | undefined): number {
+  if (!day) return 0
+  return day.deepWorkSessions
+    .filter((s) => s.finishedAt && !s.cancelledAt)
+    .reduce((sum, s) => sum + s.durationMinutes, 0)
+}
+
+/**
+ * Returns deep work hours accumulated across a week (array of 7 ISO dates).
+ */
+export function computeWeeklyDeepWorkHours(
+  days: Record<string, DayState | undefined>,
+  weekDays: string[],
+): number {
+  const totalMinutes = weekDays.reduce(
+    (sum, iso) => sum + computeDailyDeepWorkMinutes(days[iso]),
+    0,
+  )
+  return totalMinutes / 60
+}
+
 export function computeSectionCompletion(
   tasks: Task[],
 ): Partial<Record<Task['sectionId'], { total: number; completed: number }>> {

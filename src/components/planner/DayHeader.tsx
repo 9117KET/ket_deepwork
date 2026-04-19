@@ -20,6 +20,8 @@ interface DayHeaderProps {
   onPrevDay: () => void
   onNextDay: () => void
   onToday: () => void
+  /** Total deep work minutes completed today (from finished sessions). */
+  deepWorkMinutesToday?: number
 }
 
 export function DayHeader({
@@ -34,6 +36,7 @@ export function DayHeader({
   onPrevDay,
   onNextDay,
   onToday,
+  deepWorkMinutesToday,
 }: DayHeaderProps) {
   const percentage =
     totalTaskCount <= 0 ? 0 : Math.max(0, Math.min(100, Math.round(completionRatio * 1000) / 10))
@@ -75,6 +78,15 @@ export function DayHeader({
               {totalDays} day{totalDays !== 1 ? 's' : ''} since 1st use
             </span>
           )}
+          {deepWorkMinutesToday != null && deepWorkMinutesToday > 0 && (() => {
+            const h = Math.floor(deepWorkMinutesToday / 60)
+            const m = deepWorkMinutesToday % 60
+            return (
+              <span className="rounded border border-teal-500/50 bg-teal-500/10 px-2 py-0.5 text-xs font-medium text-teal-300">
+                ⏱ {h > 0 ? `${h}h ` : ''}{m > 0 ? `${m}m` : ''} deep today
+              </span>
+            )
+          })()}
         </div>
         <h2 className="text-xl sm:text-2xl font-semibold tracking-tight">{dateLabel}</h2>
         {totalTaskCount > 0 ? (

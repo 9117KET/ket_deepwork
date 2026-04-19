@@ -34,7 +34,7 @@ interface TaskItemProps {
   onAddTaskAbove?: () => void
   onAddTaskBelow?: () => void
   onAddSubtask?: () => void
-  onUpdateTask?: (patch: { scheduledAt?: string; durationMinutes?: number; title?: string }) => void
+  onUpdateTask?: (patch: { scheduledAt?: string; durationMinutes?: number; title?: string; isShallow?: boolean }) => void
   /** Move this task to the not-doing list (global). */
   onMoveToNotDoing?: () => void
   /** Consciously abandon this task (Drucker: abandonment as a success). */
@@ -281,6 +281,11 @@ export function TaskItem({
           ) : (
             <span className={`min-w-0 break-words ${textClasses}`}>{task.title}</span>
           )}
+          {task.isShallow && (
+            <span className="ml-0.5 shrink-0 rounded border border-amber-500/40 bg-amber-500/10 px-1 py-0.5 text-[10px] text-amber-400">
+              shallow
+            </span>
+          )}
         </label>
         {postponedCount >= 3 && (
           <span
@@ -352,6 +357,16 @@ export function TaskItem({
               }}
             >
               Edit
+            </button>
+          )}
+          {onUpdateTask && (
+            <button
+              type="button"
+              role="menuitem"
+              className="w-full px-3 py-1.5 text-left text-sm text-amber-300 hover:bg-slate-700"
+              onClick={() => closeAnd(() => onUpdateTask?.({ isShallow: !task.isShallow }))}
+            >
+              {task.isShallow ? 'Mark as deep work' : 'Mark as shallow'}
             </button>
           )}
           {onAddTaskAbove && (
