@@ -6,13 +6,15 @@
  */
 
 import type React from "react";
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition, type SetStateAction } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useTransition, type SetStateAction } from "react";
 import {
+  DEFAULT_HABIT_DEFINITIONS,
   FIXED_SECTIONS,
   type AbandonedTask,
   type AppState,
   type BlockDurations,
   type DayState,
+  type DeepWorkSession,
   type HabitDefinition,
   type NotDoingItem,
   type Task,
@@ -50,13 +52,17 @@ import {
   usePersistentState,
   getOrCreateDay,
 } from "../../storage/localStorageState";
-import { computeDayCompletion } from "../../domain/stats";
+import { computeDayCompletion, computePerHabitStreaks, getAtRiskHabitIds, computeDailyDeepWorkMinutes } from "../../domain/stats";
 import { DayHeader } from "./DayHeader";
 import { SectionColumn } from "./SectionColumn";
 import { WeeklyOverview } from "./WeeklyOverview";
 import { MonthlyTrackingDashboard } from "../tracking";
 import { DeepWorkTimer } from "../timer/DeepWorkTimer";
 import { MotivationCard } from "../timer/MotivationCard";
+import { HabitChecklist } from "../habits/HabitChecklist";
+import { HabitEditorModal } from "../habits/HabitEditorModal";
+import { NorthStarCard } from "../goals/NorthStarCard";
+import { OneThingCard } from "../goals/OneThingCard";
 
 function formatDateLabel(isoDay: string): string {
   const [year, month, day] = isoDay.split("-").map((part) => Number(part));
@@ -246,6 +252,11 @@ export function DayPlanner({
     dayCompletion.totalCount === 0
       ? 0
       : dayCompletion.completedCount / dayCompletion.totalCount;
+
+  const deepWorkMinutesToday = useMemo(
+    () => computeDailyDeepWorkMinutes(appState.days[selectedDay]),
+    [appState, selectedDay],
+  );
 
   const rootTasks = useMemo(
     () => (appState.days[selectedDay]?.tasks ?? []).filter((t) => !t.parentId),
@@ -706,6 +717,7 @@ export function DayPlanner({
       scheduledAt?: string;
       durationMinutes?: number;
       title?: string;
+      isShallow?: boolean;
     },
   ) => {
     updateAppState((prev) => {
@@ -722,6 +734,27 @@ export function DayPlanner({
       };
     });
   };
+
+  /** Record a completed deep work session into the current day. */
+  const handleSessionComplete = useCallback((label: string, durationMinutes: number) => {
+    updateAppState((prev) => {
+      const day = getOrCreateDay(prev, selectedDay);
+      const session: DeepWorkSession = {
+        id: `dw-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        label,
+        durationMinutes,
+        startedAt: new Date(Date.now() - durationMinutes * 60_000).toISOString(),
+        finishedAt: new Date().toISOString(),
+      };
+      return {
+        ...prev,
+        days: {
+          ...prev.days,
+          [selectedDay]: { ...day, deepWorkSessions: [...day.deepWorkSessions, session] },
+        },
+      };
+    });
+  }, [selectedDay, updateAppState]);
 
   /** Move a task to the global not-doing list and remove it from the plan. */
   const handleMoveToNotDoing = useCallback((taskId: string) => {
@@ -832,6 +865,91 @@ export function DayPlanner({
       };
     });
   }, [updateAppState, selectedDay]);
+
+  const habits = appState.habitDefinitions ?? DEFAULT_HABIT_DEFINITIONS;
+  const habitIds = useMemo(() => habits.map((h) => h.id), [habits]);
+
+  const habitStreaks = useMemo(
+    () => computePerHabitStreaks(appState.days, habitIds, selectedDay),
+    [appState.days, habitIds, selectedDay],
+  );
+
+  const atRiskHabitIds = useMemo(
+    () => getAtRiskHabitIds(appState.days, habitIds, selectedDay),
+    [appState.days, habitIds, selectedDay],
+  );
+
+  const handleToggleHabit = useCallback(
+    (habitId: string, value: boolean) => {
+      updateAppState((prev) => {
+        const day = getOrCreateDay(prev, selectedDay);
+        return {
+          ...prev,
+          days: {
+            ...prev.days,
+            [selectedDay]: {
+              ...day,
+              habitCompletions: { ...(day.habitCompletions ?? {}), [habitId]: value },
+            },
+          },
+        };
+      });
+    },
+    [updateAppState, selectedDay],
+  );
+
+  const handleSetIdentity = useCallback(
+    (value: string) => {
+      updateAppState((prev) => ({ ...prev, identityStatement: value }));
+    },
+    [updateAppState],
+  );
+
+  const handleSetNorthStar = useCallback(
+    (value: string) => {
+      updateAppState((prev) => ({ ...prev, northStar: value }));
+    },
+    [updateAppState],
+  );
+
+  const handleSetDayOneThing = useCallback(
+    (date: string, value: string) => {
+      updateAppState((prev) => ({
+        ...prev,
+        dayOneThings: { ...(prev.dayOneThings ?? {}), [date]: value },
+      }));
+    },
+    [updateAppState],
+  );
+
+  const handleSetWeekOneThing = useCallback(
+    (weekStart: string, value: string) => {
+      updateAppState((prev) => ({
+        ...prev,
+        weekOneThings: { ...(prev.weekOneThings ?? {}), [weekStart]: value },
+      }));
+    },
+    [updateAppState],
+  );
+
+  const handleSetMonthOneThing = useCallback(
+    (monthKey: string, value: string) => {
+      updateAppState((prev) => ({
+        ...prev,
+        monthOneThings: { ...(prev.monthOneThings ?? {}), [monthKey]: value },
+      }));
+    },
+    [updateAppState],
+  );
+
+  const handleUpdateHabitDefinitions = useCallback(
+    (updatedHabits: HabitDefinition[]) => {
+      updateAppState((prev) => ({ ...prev, habitDefinitions: updatedHabits }));
+    },
+    [updateAppState],
+  );
+
+  const [editHabitsOpen, setEditHabitsOpen] = useState(false);
 
   const tasksBySection: Record<TaskSectionId, Task[]> = useMemo(() => {
     const grouped: Record<TaskSectionId, Task[]> = {
@@ -1095,11 +1213,22 @@ export function DayPlanner({
   );
 
   const handleTrackingUpdateSettings = useCallback(
-    (patch: { habitDefinitions?: HabitDefinition[]; monthTitles?: Record<string, string> }) => {
+    (patch: {
+      habitDefinitions?: HabitDefinition[];
+      monthTitles?: Record<string, string>;
+      depthPhilosophy?: AppState['depthPhilosophy'];
+      deepWorkGoalHoursPerWeek?: number;
+      goalCascade?: AppState['goalCascade'];
+      monthlyReviews?: AppState['monthlyReviews'];
+    }) => {
       updateAppState((prev) => ({
         ...prev,
         habitDefinitions: patch.habitDefinitions ?? prev.habitDefinitions,
         monthTitles: patch.monthTitles ?? prev.monthTitles,
+        depthPhilosophy: patch.depthPhilosophy !== undefined ? patch.depthPhilosophy : prev.depthPhilosophy,
+        deepWorkGoalHoursPerWeek: patch.deepWorkGoalHoursPerWeek !== undefined ? patch.deepWorkGoalHoursPerWeek : prev.deepWorkGoalHoursPerWeek,
+        goalCascade: patch.goalCascade !== undefined ? patch.goalCascade : prev.goalCascade,
+        monthlyReviews: patch.monthlyReviews !== undefined ? patch.monthlyReviews : prev.monthlyReviews,
       }));
     },
     [updateAppState],
@@ -1304,6 +1433,7 @@ export function DayPlanner({
           onPrevDay={() => setSelectedDay((current) => addDays(current, -1))}
           onNextDay={() => setSelectedDay((current) => addDays(current, 1))}
           onToday={() => setSelectedDay(todayIso())}
+          deepWorkMinutesToday={shareMode ? undefined : deepWorkMinutesToday}
         />
         {/* Copy/fill: owner only — don't expose other days' tasks to shared visitors */}
         {!shareMode && dayState.tasks.length === 0 && (() => {
@@ -1403,7 +1533,29 @@ export function DayPlanner({
         }
       >
         <div className="space-y-3" data-tour="tasks-section">
+          {!shareMode && (() => {
+            const shallowMinutesUsed = (appState.days[selectedDay]?.tasks ?? [])
+              .filter((t) => t.isShallow && t.isDone && t.durationMinutes)
+              .reduce((sum, t) => sum + (t.durationMinutes ?? 0), 0)
+            if (shallowMinutesUsed < 120) return null
+            const h = Math.floor(shallowMinutesUsed / 60)
+            const m = shallowMinutesUsed % 60
+            const label = h > 0 ? `${h}h ${m > 0 ? `${m}m` : ''}`.trim() : `${m}m`
+            return (
+              <div className="rounded border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-300">
+                Shallow time: {label} / 2h daily limit — protect your deep work blocks
+              </div>
+            )
+          })()}
           {FIXED_SECTIONS.map((section) => (
+            <Fragment key={section.id}>
+              {!shareMode && section.id === 'highPriority' && appState.depthPhilosophy === 'rhythmic' && (
+                <div className="rounded border border-teal-700 bg-teal-900/30 px-3 py-1.5 text-xs text-teal-300">
+                  Deep Block
+                  {timeframeLabelsBySection['highPriority'] ? ` · ${timeframeLabelsBySection['highPriority']}` : ''}
+                  {' '}· protect this time
+                </div>
+              )}
             <SectionColumn
               key={section.id}
               section={section}
@@ -1466,6 +1618,7 @@ export function DayPlanner({
                 );
               })()}
             />
+            </Fragment>
           ))}
           {/* Sleep block: same style as sections, no tasks, highlights when current time is 11 PM – 5 AM */}
           <section
@@ -1535,8 +1688,38 @@ export function DayPlanner({
                 state={appState as AppState}
                 referenceDay={selectedDay}
               />
+              {!shareMode && (
+                <HabitChecklist
+                  habits={habits}
+                  completions={dayState.habitCompletions ?? {}}
+                  streaks={habitStreaks}
+                  atRiskHabitIds={atRiskHabitIds}
+                  identityStatement={appState.identityStatement ?? ''}
+                  onToggle={handleToggleHabit}
+                  onSetIdentity={handleSetIdentity}
+                  onEditHabits={() => setEditHabitsOpen(true)}
+                />
+              )}
+              {/* The ONE Thing: North Star + ONE Thing card */}
+              {!shareMode && (
+                <NorthStarCard
+                  northStar={appState.northStar ?? ''}
+                  onSetNorthStar={handleSetNorthStar}
+                />
+              )}
+              {!shareMode && (
+                <OneThingCard
+                  selectedDay={selectedDay}
+                  dayOneThings={appState.dayOneThings ?? {}}
+                  weekOneThings={appState.weekOneThings ?? {}}
+                  monthOneThings={appState.monthOneThings ?? {}}
+                  onSetDay={handleSetDayOneThing}
+                  onSetWeek={handleSetWeekOneThing}
+                  onSetMonth={handleSetMonthOneThing}
+                />
+              )}
               {/* Deep work timer and motivation card: owner only */}
-              {!shareMode && <DeepWorkTimer />}
+              {!shareMode && <DeepWorkTimer onSessionComplete={handleSessionComplete} />}
               {!shareMode && <MotivationCard />}
               {!shareMode && (
                 <NotDoingPanel
@@ -1692,6 +1875,14 @@ export function DayPlanner({
           onThisDayOnly={applyDurationScopeToday}
           onAllDaysDefault={applyDurationScopeAllDays}
           onCancel={() => setDurationScopePending(null)}
+        />
+      )}
+
+      {editHabitsOpen && (
+        <HabitEditorModal
+          habits={habits}
+          onSave={handleUpdateHabitDefinitions}
+          onClose={() => setEditHabitsOpen(false)}
         />
       )}
     </div>

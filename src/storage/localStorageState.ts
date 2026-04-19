@@ -82,6 +82,30 @@ function migrateLegacyStreak(state: AppState): AppState {
   return { ...state, activeDays }
 }
 
+/**
+ * Default monthly review questions for The ONE Thing framework.
+ * These are generic prompts applicable to any user — no personal data.
+ * Personal goals (North Star, cascade, ONE things) are entered by each user in the UI.
+ */
+const DEFAULT_MONTHLY_REVIEW_QUESTIONS = [
+  'Did I protect the deep-work block every weekday this month?',
+  'How many quality actions toward my ONE thing did I take? What was the result?',
+  'Is my key skill improving measurably? Am I on track for my 3-month goal?',
+  'What financial or administrative blocker did I resolve this month?',
+  'What is the ONE thing for next month that makes everything else easier or unnecessary?',
+  'What did I park that I need to make sure stays parked?',
+  'What did I almost say yes to that I should have said no to?',
+]
+
+/** Seed generic ONE Thing defaults only when these fields are absent (first run). */
+function seedOneThingDefaults(state: AppState): AppState {
+  if (state.monthlyReviewQuestions !== undefined) return state  // already initialised
+  return {
+    ...state,
+    monthlyReviewQuestions: DEFAULT_MONTHLY_REVIEW_QUESTIONS,
+  }
+}
+
 function readInitialState(): AppState {
   if (typeof window === 'undefined') {
     return EMPTY_STATE
@@ -125,7 +149,7 @@ function readInitialState(): AppState {
     }
   }
 
-  return migrateLegacyStreak(state)
+  return seedOneThingDefaults(migrateLegacyStreak(state))
 }
 
 function writeState(next: AppState) {
@@ -269,6 +293,9 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
             monthTitles: settingsOk ? settings!.monthTitles : prev.monthTitles,
             blockDurationRatios: settingsOk ? settings!.blockDurationRatios : prev.blockDurationRatios,
             notDoingList: settingsOk ? settings!.notDoingList : prev.notDoingList,
+            identityStatement: settingsOk ? settings!.identityStatement : prev.identityStatement,
+            depthPhilosophy: settingsOk ? settings!.depthPhilosophy : prev.depthPhilosophy,
+            deepWorkGoalHoursPerWeek: settingsOk ? (settings!.deepWorkGoalHoursPerWeek ?? prev.deepWorkGoalHoursPerWeek) : prev.deepWorkGoalHoursPerWeek,
             activeDays,
           }
         })
@@ -338,6 +365,16 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
         activeDays: stateRef.current.activeDays ?? [],
         blockDurationRatios: stateRef.current.blockDurationRatios ?? null,
         notDoingList: stateRef.current.notDoingList ?? [],
+        identityStatement: stateRef.current.identityStatement ?? '',
+        depthPhilosophy: stateRef.current.depthPhilosophy,
+        deepWorkGoalHoursPerWeek: stateRef.current.deepWorkGoalHoursPerWeek ?? null,
+        northStar: stateRef.current.northStar ?? '',
+        goalCascade: stateRef.current.goalCascade ?? null,
+        dayOneThings: stateRef.current.dayOneThings ?? {},
+        weekOneThings: stateRef.current.weekOneThings ?? {},
+        monthOneThings: stateRef.current.monthOneThings ?? {},
+        monthlyReviews: stateRef.current.monthlyReviews ?? {},
+        monthlyReviewQuestions: stateRef.current.monthlyReviewQuestions ?? [],
       })
     }, 800)
 
@@ -347,7 +384,7 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
         settingsSyncTimeoutRef.current = null
       }
     }
-  }, [state.habitDefinitions, state.monthTitles, state.activeDays, state.blockDurationRatios, state.notDoingList, user, readyToSync])
+  }, [state.habitDefinitions, state.monthTitles, state.activeDays, state.blockDurationRatios, state.notDoingList, state.identityStatement, state.depthPhilosophy, state.deepWorkGoalHoursPerWeek, state.northStar, state.goalCascade, state.dayOneThings, state.weekOneThings, state.monthOneThings, state.monthlyReviews, state.monthlyReviewQuestions, user, readyToSync])
 
   // Realtime: apply Supabase writes from other devices/tabs immediately (Postgres Changes).
   useEffect(() => {
@@ -452,6 +489,9 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
           activeDays: stateRef.current.activeDays ?? [],
           blockDurationRatios: stateRef.current.blockDurationRatios ?? null,
           notDoingList: stateRef.current.notDoingList ?? [],
+          identityStatement: stateRef.current.identityStatement ?? '',
+          depthPhilosophy: stateRef.current.depthPhilosophy,
+          deepWorkGoalHoursPerWeek: stateRef.current.deepWorkGoalHoursPerWeek ?? null,
         })
       }
     }
@@ -494,6 +534,9 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
                   monthTitles: settingsOk ? settings!.monthTitles : prev.monthTitles,
                   blockDurationRatios: settingsOk ? settings!.blockDurationRatios : prev.blockDurationRatios,
                   notDoingList: settingsOk ? settings!.notDoingList : prev.notDoingList,
+                  identityStatement: settingsOk ? settings!.identityStatement : prev.identityStatement,
+                  depthPhilosophy: settingsOk ? settings!.depthPhilosophy : prev.depthPhilosophy,
+                  deepWorkGoalHoursPerWeek: settingsOk ? (settings!.deepWorkGoalHoursPerWeek ?? prev.deepWorkGoalHoursPerWeek) : prev.deepWorkGoalHoursPerWeek,
                   activeDays,
                 }
               })
