@@ -287,12 +287,16 @@ export function TaskItem({
             </span>
           )}
         </label>
-        {postponedCount >= 3 && (
+        {postponedCount >= 2 && (
           <span
-            className="shrink-0 rounded bg-amber-500/20 px-1 py-0.5 text-[10px] font-medium text-amber-400 tabular-nums"
-            title={`Postponed ${postponedCount} times — do you still want to do this?`}
+            className={`shrink-0 rounded px-1 py-0.5 text-[10px] font-medium tabular-nums ${
+              postponedCount >= 5
+                ? 'bg-red-500/20 text-red-400'
+                : 'bg-amber-500/20 text-amber-400'
+            }`}
+            title={`Carried forward ${postponedCount} day${postponedCount === 1 ? '' : 's'} — do you still want to do this?`}
           >
-            ⚠ ×{postponedCount}
+            ×{postponedCount} stale
           </span>
         )}
         {canEditTime && (

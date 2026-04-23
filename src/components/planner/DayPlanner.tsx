@@ -63,6 +63,7 @@ import { HabitChecklist } from "../habits/HabitChecklist";
 import { HabitEditorModal } from "../habits/HabitEditorModal";
 import { NorthStarCard } from "../goals/NorthStarCard";
 import { OneThingCard } from "../goals/OneThingCard";
+import { WeeklyProjectCard } from "./WeeklyProjectCard";
 
 function formatDateLabel(isoDay: string): string {
   const [year, month, day] = isoDay.split("-").map((part) => Number(part));
@@ -942,6 +943,13 @@ export function DayPlanner({
     [updateAppState],
   );
 
+  const handleUpdateWeeklyProjects = useCallback(
+    (projects: AppState['weeklyProjectRotation']) => {
+      updateAppState((prev) => ({ ...prev, weeklyProjectRotation: projects }));
+    },
+    [updateAppState],
+  );
+
   const handleUpdateHabitDefinitions = useCallback(
     (updatedHabits: HabitDefinition[]) => {
       updateAppState((prev) => ({ ...prev, habitDefinitions: updatedHabits }));
@@ -1716,6 +1724,14 @@ export function DayPlanner({
                   onSetDay={handleSetDayOneThing}
                   onSetWeek={handleSetWeekOneThing}
                   onSetMonth={handleSetMonthOneThing}
+                />
+              )}
+              {/* Weekly project rotation: side commitments pinned to specific days */}
+              {!shareMode && (
+                <WeeklyProjectCard
+                  selectedDate={selectedDay}
+                  projects={appState.weeklyProjectRotation ?? []}
+                  onUpdate={handleUpdateWeeklyProjects}
                 />
               )}
               {/* Deep work timer and motivation card: owner only */}

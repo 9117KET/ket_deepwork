@@ -126,6 +126,21 @@ export interface MonthlyReview {
   completedAt?: string;
 }
 
+/**
+ * A recurring weekly project commitment pinned to a specific day of the week.
+ * Used to track side commitments (e.g. InfradarAI on Monday, Palavar on Wednesday)
+ * without letting them bloat the daily High Priority list every day.
+ */
+export interface WeeklyProjectAssignment {
+  id: string;
+  name: string;
+  /** 1 = Monday, 2 = Tuesday, ..., 7 = Sunday (ISO weekday). */
+  dayOfWeek: 1 | 2 | 3 | 4 | 5 | 6 | 7;
+  description?: string;
+  /** Tailwind color key: "sky" | "amber" | "emerald" | "violet" | "rose". */
+  color?: 'sky' | 'amber' | 'emerald' | 'violet' | 'rose';
+}
+
 export interface AppState {
   days: Record<string, DayState | undefined>;
   /**
@@ -168,6 +183,8 @@ export interface AppState {
   monthlyReviews?: Record<string, MonthlyReview>;
   /** Customisable monthly review question list (defaults to the 7 standard questions). */
   monthlyReviewQuestions?: string[];
+  /** Weekly project commitments pinned to specific days (e.g. InfradarAI on Monday). */
+  weeklyProjectRotation?: WeeklyProjectAssignment[];
 }
 
 export interface WeeklyStatsDaySummary {

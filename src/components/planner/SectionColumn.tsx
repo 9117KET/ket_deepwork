@@ -90,6 +90,8 @@ export function SectionColumn({
 
   const incompleteRootCount = tasks.filter((t) => !t.parentId && !t.isDone).length
   const isOverloaded = overloadThreshold !== undefined && incompleteRootCount > overloadThreshold
+  // Critical overload: more than 2x the threshold — renders a stronger visual warning
+  const isCriticalOverload = overloadThreshold !== undefined && incompleteRootCount > overloadThreshold * 2
 
   const handleDragStart = (taskId: string) => {
     onDragStart?.(section.id, taskId)
@@ -111,7 +113,9 @@ export function SectionColumn({
   return (
     <section
       className={`rounded-lg border p-3 sm:p-4 ${
-        isTimeBlockActive
+        isCriticalOverload
+          ? 'border-red-500/50 bg-red-500/5'
+          : isTimeBlockActive
           ? 'border-amber-500/60 bg-amber-500/10'
           : 'border-slate-800 bg-slate-900'
       }`}
@@ -134,14 +138,21 @@ export function SectionColumn({
                   {tasks.filter(t => !t.parentId).length}
                 </span>
               )}
-              {isOverloaded && (
+              {isCriticalOverload ? (
+                <span
+                  className="rounded bg-red-500/20 px-1.5 py-0.5 text-[10px] font-medium text-red-400"
+                  title={`${incompleteRootCount} tasks — this list is too long to execute. Cut it now.`}
+                >
+                  🔴 {incompleteRootCount} tasks — cut this list
+                </span>
+              ) : isOverloaded ? (
                 <span
                   className="rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-medium text-amber-400"
                   title={`${incompleteRootCount} incomplete tasks — trim to stay focused`}
                 >
                   ⚠ {incompleteRootCount} tasks
                 </span>
-              )}
+              ) : null}
             </div>
             {timeframeLabel ? (
               <p className="text-xs text-slate-400">
