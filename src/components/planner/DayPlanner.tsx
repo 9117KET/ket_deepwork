@@ -646,15 +646,17 @@ export function DayPlanner({
       updateAppState((prev) => {
         const sourceDayState = getOrCreateDay(prev, sourceDate);
         if (sourceDayState.tasks.length === 0) return prev;
-        const newTasks = cloneTasksForDay(sourceDayState.tasks, selectedDay, {
-          resetTimes: true,
-        });
+        // MUSTs are a daily intention, not a template — never copy them from another day.
+        const sourceToCopy = sourceDayState.tasks.filter((t) => t.sectionId !== 'mustDo');
+        const newTasks = cloneTasksForDay(sourceToCopy, selectedDay, { resetTimes: true });
         const existingDay = getOrCreateDay(prev, selectedDay);
+        // Preserve any MUSTs already on the target day (e.g. pre-set from the night before).
+        const existingMustDo = existingDay.tasks.filter((t) => t.sectionId === 'mustDo');
         return {
           ...prev,
           days: {
             ...prev.days,
-            [selectedDay]: { ...existingDay, tasks: newTasks },
+            [selectedDay]: { ...existingDay, tasks: [...existingMustDo, ...newTasks] },
           },
         };
       });
