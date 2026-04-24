@@ -65,6 +65,7 @@ import { NorthStarCard } from "../goals/NorthStarCard";
 import { OneThingCard } from "../goals/OneThingCard";
 import { WeeklyProjectCard } from "./WeeklyProjectCard";
 import { TomorrowMustPanel } from "./TomorrowMustPanel";
+import { MustDoPinnedHeader } from "./MustDoPinnedHeader";
 
 function formatDateLabel(isoDay: string): string {
   const [year, month, day] = isoDay.split("-").map((part) => Number(part));
@@ -1501,6 +1502,14 @@ export function DayPlanner({
           onToday={() => setSelectedDay(todayIso())}
           deepWorkMinutesToday={shareMode ? undefined : deepWorkMinutesToday}
         />
+        {!shareMode && (
+          <MustDoPinnedHeader
+            tasks={tasksBySection['mustDo'] ?? []}
+            onToggle={handleToggleTask}
+            onAdd={(title) => handleAddTask('mustDo', title)}
+            onDelete={handleDeleteTask}
+          />
+        )}
         {/* Copy/fill: owner only — don't expose other days' tasks to shared visitors */}
         {!shareMode && dayState.tasks.length === 0 && (() => {
           const copyOptions: { label: string; sourceDate: string; title?: string }[] = [];
@@ -1613,7 +1622,7 @@ export function DayPlanner({
               </div>
             )
           })()}
-          {FIXED_SECTIONS.map((section) => (
+          {FIXED_SECTIONS.filter(s => s.id !== 'mustDo').map((section) => (
             <Fragment key={section.id}>
               {!shareMode && section.id === 'highPriority' && appState.depthPhilosophy === 'rhythmic' && (
                 <div className="rounded border border-teal-700 bg-teal-900/30 px-3 py-1.5 text-xs text-teal-300">
