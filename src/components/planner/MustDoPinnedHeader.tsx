@@ -25,6 +25,7 @@ const MAX = 3
 export function MustDoPinnedHeader({ tasks, onToggle, onAdd, onDelete }: MustDoPinnedHeaderProps) {
   const [showAdd, setShowAdd] = useState(false)
   const [input, setInput] = useState('')
+  const [doneExpanded, setDoneExpanded] = useState(false)
 
   const rootTasks = tasks.filter(t => !t.parentId)
   const allDone = rootTasks.length > 0 && rootTasks.every(t => t.isDone)
@@ -41,12 +42,52 @@ export function MustDoPinnedHeader({ tasks, onToggle, onAdd, onDelete }: MustDoP
   // ── Collapsed "all done" state ────────────────────────────────────────────
   if (allDone) {
     return (
-      <div className="mt-2 flex items-center gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2">
-        <span className="text-sm">✅</span>
-        <span className="text-xs font-medium text-emerald-400">All MUSTs complete</span>
-        <span className="ml-auto text-[10px] text-slate-500">
-          {rootTasks.length}/{rootTasks.length} done
-        </span>
+      <div className="mt-2 rounded-md border border-emerald-500/30 bg-emerald-500/10">
+        {/* Summary row — always visible, click to expand */}
+        <button
+          type="button"
+          onClick={() => setDoneExpanded(o => !o)}
+          className="flex w-full items-center gap-2 px-3 py-2 text-left"
+        >
+          <span className="text-sm">✅</span>
+          <span className="text-xs font-medium text-emerald-400">All MUSTs complete</span>
+          <span className="ml-auto flex items-center gap-2 text-[10px] text-slate-500">
+            {rootTasks.length}/{rootTasks.length} done
+            <span className="text-[10px] text-emerald-600/70">{doneExpanded ? '▲' : '▼'}</span>
+          </span>
+        </button>
+
+        {/* Expandable task list */}
+        {doneExpanded && (
+          <div className="border-t border-emerald-500/20 px-3 pb-3 pt-2 space-y-1">
+            {rootTasks.map((task, idx) => (
+              <div key={task.id} className="flex items-center gap-2 group">
+                <span className="w-4 shrink-0 text-center text-[10px] font-bold text-emerald-700">
+                  {idx + 1}
+                </span>
+                <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={task.isDone}
+                    onChange={() => onToggle(task.id)}
+                    className="h-4 w-4 shrink-0 rounded border-emerald-700 bg-slate-800 text-emerald-400 focus:ring-emerald-500"
+                  />
+                  <span className="min-w-0 truncate text-sm text-slate-400 line-through decoration-slate-600/60">
+                    {task.title}
+                  </span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => onDelete(task.id)}
+                  className="shrink-0 rounded p-0.5 text-transparent group-hover:text-slate-600 hover:!text-red-400 transition-colors"
+                  aria-label="Remove"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     )
   }
