@@ -23,6 +23,7 @@ const SECTION_WEIGHTS: Record<Task['sectionId'], number> = {
   morningRoutine: 1.0,
   nightRoutine: 1.0,
   lowPriority: 0.5,
+  sideQuest: 0,
 }
 
 const SUBTASK_BONUS_PER_TASK = 0.1

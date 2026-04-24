@@ -11,7 +11,8 @@ export type TaskSectionId =
   | "highPriority"
   | "mediumPriority"
   | "lowPriority"
-  | "nightRoutine";
+  | "nightRoutine"
+  | "sideQuest";
 
 export interface TaskSection {
   id: TaskSectionId;
@@ -228,6 +229,11 @@ export const FIXED_SECTIONS: TaskSection[] = [
     id: "nightRoutine",
     title: "Night routine",
     description: "Wind-down and end-of-day tasks.",
+  },
+  {
+    id: "sideQuest",
+    title: "Side Quest",
+    description: "Curiosity-driven exploration — earned by crushing your core tasks.",
   },
 ];
 
