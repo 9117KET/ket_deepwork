@@ -66,6 +66,7 @@ import { OneThingCard } from "../goals/OneThingCard";
 import { WeeklyProjectCard } from "./WeeklyProjectCard";
 import { TomorrowMustPanel } from "./TomorrowMustPanel";
 import { MustDoPinnedHeader } from "./MustDoPinnedHeader";
+import { SideQuestSection } from "./SideQuestSection";
 
 function formatDateLabel(isoDay: string): string {
   const [year, month, day] = isoDay.split("-").map((part) => Number(part));
@@ -516,6 +517,7 @@ export function DayPlanner({
           mediumPriority: [],
           lowPriority: [],
           nightRoutine: [],
+          sideQuest: [],
         };
         for (const t of nextTasks) {
           const list = bySection[t.sectionId];
@@ -647,8 +649,8 @@ export function DayPlanner({
       updateAppState((prev) => {
         const sourceDayState = getOrCreateDay(prev, sourceDate);
         if (sourceDayState.tasks.length === 0) return prev;
-        // MUSTs are a daily intention, not a template — never copy them from another day.
-        const sourceToCopy = sourceDayState.tasks.filter((t) => t.sectionId !== 'mustDo');
+        // MUSTs and Side Quests are personal — never copy them from another day.
+        const sourceToCopy = sourceDayState.tasks.filter((t) => t.sectionId !== 'mustDo' && t.sectionId !== 'sideQuest');
         const newTasks = cloneTasksForDay(sourceToCopy, selectedDay, { resetTimes: true });
         const existingDay = getOrCreateDay(prev, selectedDay);
         // Preserve any MUSTs already on the target day (e.g. pre-set from the night before).
@@ -1026,6 +1028,7 @@ export function DayPlanner({
       mediumPriority: [],
       lowPriority: [],
       nightRoutine: [],
+      sideQuest: [],
     };
 
     for (const task of dayState.tasks) {
@@ -1371,6 +1374,7 @@ export function DayPlanner({
       mediumPriority: null,
       lowPriority: null,
       nightRoutine: null,
+      sideQuest: null,
     };
     for (const section of FIXED_SECTIONS) {
       labels[section.id] = getSectionTimeframeLabel(section.id, timeOffsetMinutes, computedBlocks);
@@ -1622,7 +1626,7 @@ export function DayPlanner({
               </div>
             )
           })()}
-          {FIXED_SECTIONS.filter(s => s.id !== 'mustDo').map((section) => (
+          {FIXED_SECTIONS.filter(s => s.id !== 'mustDo' && s.id !== 'sideQuest').map((section) => (
             <Fragment key={section.id}>
               {!shareMode && section.id === 'highPriority' && appState.depthPhilosophy === 'rhythmic' && (
                 <div className="rounded border border-teal-700 bg-teal-900/30 px-3 py-1.5 text-xs text-teal-300">
@@ -1693,6 +1697,34 @@ export function DayPlanner({
                 );
               })()}
             />
+            {!shareMode && section.id === 'lowPriority' && (() => {
+              const sq = FIXED_SECTIONS.find(s => s.id === 'sideQuest')!
+              return (
+                <SideQuestSection
+                  dayCompletionRatio={dayCompletionRatio}
+                  section={sq}
+                  tasks={tasksBySection['sideQuest'] ?? []}
+                  draggedTask={draggedTask}
+                  onDragStart={handleDragStart}
+                  onDragEnd={handleDragEnd}
+                  onDrop={(insertIndex) => handleDrop('sideQuest', insertIndex)}
+                  selectedTaskIds={selectedTaskIds}
+                  onToggleSelect={handleToggleSelect}
+                  onAddTask={(title) => handleAddTask('sideQuest', title)}
+                  onAddTaskAbove={(beforeTaskId) => handleAddTaskAbove('sideQuest', beforeTaskId)}
+                  onAddTaskBelow={(afterTaskId) => handleAddTaskBelow('sideQuest', afterTaskId)}
+                  onAddSubtask={handleAddSubtask}
+                  onToggleTask={handleToggleTask}
+                  onDeleteTask={handleDeleteTask}
+                  onUpdateTask={handleUpdateTask}
+                  taskIdsDueNow={taskIdsDueNow}
+                  onMoveTaskUp={(taskId) => handleReorderTask(taskId, 'sideQuest', 'up')}
+                  onMoveTaskDown={(taskId) => handleReorderTask(taskId, 'sideQuest', 'down')}
+                  onMoveToNotDoing={handleMoveToNotDoing}
+                  onAbandonTask={handleAbandonTask}
+                />
+              )
+            })()}
             {!shareMode && section.id === 'nightRoutine' && (
               <TomorrowMustPanel
                 tomorrowDate={tomorrowDate}
