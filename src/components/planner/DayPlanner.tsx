@@ -64,6 +64,7 @@ import { HabitEditorModal } from "../habits/HabitEditorModal";
 import { NorthStarCard } from "../goals/NorthStarCard";
 import { OneThingCard } from "../goals/OneThingCard";
 import { WeeklyProjectCard } from "./WeeklyProjectCard";
+import { TomorrowMustPanel } from "./TomorrowMustPanel";
 
 function formatDateLabel(isoDay: string): string {
   const [year, month, day] = isoDay.split("-").map((part) => Number(part));
@@ -950,6 +951,61 @@ export function DayPlanner({
     [updateAppState],
   );
 
+  const tomorrowDate = useMemo(() => addDays(selectedDay, 1), [selectedDay]);
+
+  const tomorrowMustTasks = useMemo(() =>
+    (appState.days[tomorrowDate]?.tasks ?? []).filter(
+      (t) => t.sectionId === 'mustDo' && !t.parentId,
+    ),
+    [appState.days, tomorrowDate],
+  );
+
+  const handleAddTomorrowMust = useCallback((title: string) => {
+    updateAppState((prev) => {
+      const day = getOrCreateDay(prev, tomorrowDate);
+      const task: Task = {
+        id: `must-tmrw-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        title,
+        sectionId: 'mustDo',
+        date: tomorrowDate,
+        isDone: false,
+      };
+      return {
+        ...prev,
+        days: { ...prev.days, [tomorrowDate]: { ...day, tasks: [...day.tasks, task] } },
+      };
+    });
+  }, [tomorrowDate, updateAppState]);
+
+  const handleDeleteTomorrowMust = useCallback((taskId: string) => {
+    updateAppState((prev) => {
+      const day = getOrCreateDay(prev, tomorrowDate);
+      return {
+        ...prev,
+        days: {
+          ...prev.days,
+          [tomorrowDate]: { ...day, tasks: day.tasks.filter((t) => t.id !== taskId) },
+        },
+      };
+    });
+  }, [tomorrowDate, updateAppState]);
+
+  const handleEditTomorrowMust = useCallback((taskId: string, title: string) => {
+    updateAppState((prev) => {
+      const day = getOrCreateDay(prev, tomorrowDate);
+      return {
+        ...prev,
+        days: {
+          ...prev.days,
+          [tomorrowDate]: {
+            ...day,
+            tasks: day.tasks.map((t) => t.id === taskId ? { ...t, title } : t),
+          },
+        },
+      };
+    });
+  }, [tomorrowDate, updateAppState]);
+
   const handleUpdateHabitDefinitions = useCallback(
     (updatedHabits: HabitDefinition[]) => {
       updateAppState((prev) => ({ ...prev, habitDefinitions: updatedHabits }));
@@ -1626,6 +1682,15 @@ export function DayPlanner({
                 );
               })()}
             />
+            {!shareMode && section.id === 'nightRoutine' && (
+              <TomorrowMustPanel
+                tomorrowDate={tomorrowDate}
+                tasks={tomorrowMustTasks}
+                onAdd={handleAddTomorrowMust}
+                onDelete={handleDeleteTomorrowMust}
+                onEdit={handleEditTomorrowMust}
+              />
+            )}
             </Fragment>
           ))}
           {/* Sleep block: same style as sections, no tasks, highlights when current time is 11 PM – 5 AM */}
