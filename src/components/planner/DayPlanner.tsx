@@ -67,6 +67,7 @@ import { WeeklyProjectCard } from "./WeeklyProjectCard";
 import { TomorrowMustPanel } from "./TomorrowMustPanel";
 import { MustDoPinnedHeader } from "./MustDoPinnedHeader";
 import { SideQuestSection } from "./SideQuestSection";
+import { MobileTabBar, type MobileTab } from "./MobileTabBar";
 
 function formatDateLabel(isoDay: string): string {
   const [year, month, day] = isoDay.split("-").map((part) => Number(part));
@@ -234,6 +235,7 @@ export function DayPlanner({
     [isSelectedDayControlled, selectedDayProp, onSelectedDayChange],
   );
   const [splitRatio, setSplitRatio] = useState(0.68); // fraction of width for task column
+  const [mobileTab, setMobileTab] = useState<MobileTab>('plan');
   const gridRef = useRef<HTMLDivElement | null>(null);
   const dragStateRef = useRef<{
     startX: number;
@@ -1628,7 +1630,7 @@ export function DayPlanner({
               }
         }
       >
-        <div className="space-y-3" data-tour="tasks-section">
+        <div className={`space-y-3${!shareShellLayout && mobileTab !== 'plan' ? ' hidden lg:block' : ''}`} data-tour="tasks-section">
           {!shareMode && (() => {
             const shallowMinutesUsed = (appState.days[selectedDay]?.tasks ?? [])
               .filter((t) => t.isShallow && t.isDone && t.durationMinutes)
@@ -1838,7 +1840,7 @@ export function DayPlanner({
               aria-hidden="true"
             />
 
-            <div className="space-y-3 lg:sticky lg:top-20 lg:max-h-[calc(100vh-5.5rem)] lg:overflow-y-auto lg:pr-1" data-tour="sidebar">
+            <div className="hidden lg:block space-y-3 lg:sticky lg:top-20 lg:max-h-[calc(100vh-5.5rem)] lg:overflow-y-auto lg:pr-1" data-tour="sidebar">
               {/* Deep work timer: most-used active tool — placed first for immediate reach */}
               {!shareMode && <DeepWorkTimer onSessionComplete={handleSessionComplete} />}
               {!shareMode && (
@@ -1901,6 +1903,38 @@ export function DayPlanner({
           </>
         )}
       </div>
+
+      {/* Mobile tab panels — rendered outside the grid so they don't affect desktop layout */}
+      {!shareMode && !shareShellLayout && (
+        <>
+          {mobileTab === 'timer' && (
+            <div className="mt-3 lg:hidden">
+              <DeepWorkTimer onSessionComplete={handleSessionComplete} />
+            </div>
+          )}
+          {mobileTab === 'habits' && (
+            <div className="mt-3 lg:hidden">
+              <HabitChecklist
+                habits={habits}
+                completions={dayState.habitCompletions ?? {}}
+                streaks={habitStreaks}
+                atRiskHabitIds={atRiskHabitIds}
+                identityStatement={appState.identityStatement ?? ''}
+                onToggle={handleToggleHabit}
+                onSetIdentity={handleSetIdentity}
+                onEditHabits={() => setEditHabitsOpen(true)}
+              />
+            </div>
+          )}
+          {mobileTab === 'stats' && (
+            <div className="mt-3 lg:hidden">
+              <WeeklyOverview state={appState as AppState} referenceDay={selectedDay} />
+            </div>
+          )}
+          {/* Spacer so content doesn't hide behind the fixed tab bar */}
+          <div className="h-16 lg:hidden" />
+        </>
+      )}
 
       {/* Monthly tracking: owner only (not shown on shared views) */}
       {!shareMode && (
@@ -2049,6 +2083,11 @@ export function DayPlanner({
           onSave={handleUpdateHabitDefinitions}
           onClose={() => setEditHabitsOpen(false)}
         />
+      )}
+
+      {/* Mobile bottom tab bar — owner only, not shown in shared views */}
+      {!shareMode && !shareShellLayout && (
+        <MobileTabBar activeTab={mobileTab} onTabChange={setMobileTab} />
       )}
     </div>
   );
