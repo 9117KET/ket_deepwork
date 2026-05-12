@@ -183,7 +183,7 @@ function writeState(next: AppState) {
  * this guard, the stale remote state would wipe out the locally-added tasks.
  * Once Supabase syncs, remote and local task IDs match, so remote takes over.
  */
-function mergeRemoteDayState(local: DayState, remote: DayState): DayState {
+export function mergeRemoteDayState(local: DayState, remote: DayState): DayState {
   const remoteTaskIds = new Set((remote.tasks ?? []).map((t) => t.id))
   const localHasUnsyncedTasks = (local.tasks ?? []).some((t) => !remoteTaskIds.has(t.id))
   return {
