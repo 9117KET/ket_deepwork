@@ -13,6 +13,8 @@ import { TaskItem } from './TaskItem'
 interface SectionColumnProps {
   section: TaskSection
   tasks: Task[]
+  /** When true, this section starts collapsed (user can still expand). */
+  defaultCollapsed?: boolean
   /** When true, this section's time block is current (e.g. 5–9 morning, 9–5 focus). */
   isTimeBlockActive?: boolean
   /** Human-readable timeframe label for this section (already adjusted for any global offset). */
@@ -60,6 +62,7 @@ type DropPosition = 'above' | 'below'
 export function SectionColumn({
   section,
   tasks,
+  defaultCollapsed = false,
   isTimeBlockActive = false,
   timeframeLabel = null,
   draggedTask = null,
@@ -86,7 +89,7 @@ export function SectionColumn({
   const [dropTarget, setDropTarget] = useState<{ index: number; position: DropPosition } | null>(
     null,
   )
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapsed, setCollapsed] = useState(defaultCollapsed)
 
   const incompleteRootCount = tasks.filter((t) => !t.parentId && !t.isDone).length
   const isOverloaded = overloadThreshold !== undefined && incompleteRootCount > overloadThreshold

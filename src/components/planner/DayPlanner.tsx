@@ -1656,6 +1656,11 @@ export function DayPlanner({
               key={section.id}
               section={section}
               tasks={tasksBySection[section.id]}
+              defaultCollapsed={
+                section.id === 'morningRoutine' ||
+                section.id === 'mediumPriority' ||
+                section.id === 'lowPriority'
+              }
               isTimeBlockActive={activeSectionIds.includes(section.id)}
               timeframeLabel={timeframeLabelsBySection[section.id]}
               draggedTask={shareMode ? null : draggedTask}
