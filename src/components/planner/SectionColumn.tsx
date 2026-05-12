@@ -151,7 +151,7 @@ export function SectionColumn({
           <button
             type="button"
             onClick={() => setCollapsed((c) => !c)}
-            className="mt-0.5 shrink-0 text-slate-400 hover:text-slate-200 sm:hidden"
+            className="mt-0.5 shrink-0 text-slate-400 hover:text-slate-200"
             aria-label={collapsed ? 'Expand section' : 'Collapse section'}
           >
             {collapsed ? '▶' : '▼'}
@@ -160,8 +160,8 @@ export function SectionColumn({
             <div className="flex items-center gap-2">
               <h3 className="text-sm sm:text-base font-semibold text-slate-100">{section.title}</h3>
               {collapsed && tasks.length > 0 && (
-                <span className="rounded-full bg-slate-700 px-1.5 py-0.5 text-xs text-slate-300 sm:hidden">
-                  {tasks.filter(t => !t.parentId).length}
+                <span className="rounded-full bg-slate-700 px-1.5 py-0.5 text-xs text-slate-300">
+                  {tasks.filter(t => !t.parentId).length} task{tasks.filter(t => !t.parentId).length !== 1 ? 's' : ''}
                 </span>
               )}
               {isCriticalOverload ? (
