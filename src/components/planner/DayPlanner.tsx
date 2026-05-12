@@ -116,7 +116,10 @@ function reorderTasks<T>(arr: T[], fromIndex: number, toIndex: number): T[] {
   if (fromIndex < 0 || toIndex < 0 || fromIndex >= arr.length) return arr;
   const copy = [...arr];
   const [removed] = copy.splice(fromIndex, 1);
-  const insertIdx = Math.min(toIndex, copy.length);
+  // After splicing out fromIndex, every item that was after it shifts down by 1.
+  // When dragging downward (fromIndex < toIndex), toIndex must be adjusted accordingly.
+  const adjustedInsert = fromIndex < toIndex ? toIndex - 1 : toIndex;
+  const insertIdx = Math.min(adjustedInsert, copy.length);
   copy.splice(insertIdx, 0, removed);
   return copy;
 }
@@ -1011,6 +1014,19 @@ export function DayPlanner({
     });
   }, [tomorrowDate, updateAppState]);
 
+  const handleUpdateTomorrowMust = useCallback((taskId: string, patch: { scheduledAt?: string; durationMinutes?: number }) => {
+    updateAppState((prev) => {
+      const day = getOrCreateDay(prev, tomorrowDate);
+      return {
+        ...prev,
+        days: {
+          ...prev.days,
+          [tomorrowDate]: { ...day, tasks: day.tasks.map((t) => t.id === taskId ? { ...t, ...patch } : t) },
+        },
+      };
+    });
+  }, [tomorrowDate, updateAppState]);
+
   const handleUpdateHabitDefinitions = useCallback(
     (updatedHabits: HabitDefinition[]) => {
       updateAppState((prev) => ({ ...prev, habitDefinitions: updatedHabits }));
@@ -1512,10 +1528,11 @@ export function DayPlanner({
             onToggle={handleToggleTask}
             onAdd={(title) => handleAddTask('mustDo', title)}
             onDelete={handleDeleteTask}
+            onUpdate={(id, patch) => handleUpdateTask(id, patch)}
           />
         )}
         {/* Copy/fill: owner only — don't expose other days' tasks to shared visitors */}
-        {!shareMode && dayState.tasks.length === 0 && (() => {
+        {!shareMode && dayState.tasks.filter(t => t.sectionId !== 'mustDo').length === 0 && (() => {
           const copyOptions: { label: string; sourceDate: string; title?: string }[] = [];
           if (lastWeekdayState.tasks.length > 0) {
             copyOptions.push({ label: `Fill from last ${weekdayLabel}`, sourceDate: lastWeekday });
@@ -1732,6 +1749,7 @@ export function DayPlanner({
                 onAdd={handleAddTomorrowMust}
                 onDelete={handleDeleteTomorrowMust}
                 onEdit={handleEditTomorrowMust}
+                onUpdate={handleUpdateTomorrowMust}
               />
             )}
             </Fragment>
@@ -1800,10 +1818,8 @@ export function DayPlanner({
             />
 
             <div className="space-y-3 lg:sticky lg:top-20 lg:max-h-[calc(100vh-5.5rem)] lg:overflow-y-auto lg:pr-1" data-tour="sidebar">
-              <WeeklyOverview
-                state={appState as AppState}
-                referenceDay={selectedDay}
-              />
+              {/* Deep work timer: most-used active tool — placed first for immediate reach */}
+              {!shareMode && <DeepWorkTimer onSessionComplete={handleSessionComplete} />}
               {!shareMode && (
                 <HabitChecklist
                   habits={habits}
@@ -1816,13 +1832,7 @@ export function DayPlanner({
                   onEditHabits={() => setEditHabitsOpen(true)}
                 />
               )}
-              {/* The ONE Thing: North Star + ONE Thing card */}
-              {!shareMode && (
-                <NorthStarCard
-                  northStar={appState.northStar ?? ''}
-                  onSetNorthStar={handleSetNorthStar}
-                />
-              )}
+              {/* The ONE Thing: day/week/month focus — consulted daily */}
               {!shareMode && (
                 <OneThingCard
                   selectedDay={selectedDay}
@@ -1834,6 +1844,18 @@ export function DayPlanner({
                   onSetMonth={handleSetMonthOneThing}
                 />
               )}
+              {/* Weekly overview: glanceable passive stats */}
+              <WeeklyOverview
+                state={appState as AppState}
+                referenceDay={selectedDay}
+              />
+              {/* North Star: long-term vision — reviewed occasionally */}
+              {!shareMode && (
+                <NorthStarCard
+                  northStar={appState.northStar ?? ''}
+                  onSetNorthStar={handleSetNorthStar}
+                />
+              )}
               {/* Weekly project rotation: side commitments pinned to specific days */}
               {!shareMode && (
                 <WeeklyProjectCard
@@ -1842,8 +1864,6 @@ export function DayPlanner({
                   onUpdate={handleUpdateWeeklyProjects}
                 />
               )}
-              {/* Deep work timer and motivation card: owner only */}
-              {!shareMode && <DeepWorkTimer onSessionComplete={handleSessionComplete} />}
               {!shareMode && <MotivationCard />}
               {!shareMode && (
                 <NotDoingPanel

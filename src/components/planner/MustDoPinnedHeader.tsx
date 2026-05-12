@@ -12,17 +12,27 @@
 
 import { useState } from 'react'
 import type { Task } from '../../domain/types'
+import { normalizeHhmm } from '../../domain/dateUtils'
+
+const DURATION_OPTIONS = [5, 10, 15, 20, 25, 30, 45, 60, 90, 120, 150, 180, 240, 300, 360, 420, 480]
+
+function formatDuration(minutes: number): string {
+  if (minutes < 60) return `${minutes}m`
+  const h = minutes / 60
+  return Number.isInteger(h) ? `${h}h` : `${Math.floor(h)}h${minutes % 60}m`
+}
 
 interface MustDoPinnedHeaderProps {
   tasks: Task[]
   onToggle: (taskId: string) => void
   onAdd: (title: string) => void
   onDelete: (taskId: string) => void
+  onUpdate: (taskId: string, patch: { scheduledAt?: string; durationMinutes?: number }) => void
 }
 
 const MAX = 3
 
-export function MustDoPinnedHeader({ tasks, onToggle, onAdd, onDelete }: MustDoPinnedHeaderProps) {
+export function MustDoPinnedHeader({ tasks, onToggle, onAdd, onDelete, onUpdate }: MustDoPinnedHeaderProps) {
   const [showAdd, setShowAdd] = useState(false)
   const [input, setInput] = useState('')
   const [doneExpanded, setDoneExpanded] = useState(false)
@@ -76,6 +86,28 @@ export function MustDoPinnedHeader({ tasks, onToggle, onAdd, onDelete }: MustDoP
                     {task.title}
                   </span>
                 </label>
+                <span className="flex shrink-0 items-center gap-1">
+                  <div className="relative" title="Scheduled time">
+                    <input
+                      type="time"
+                      value={task.scheduledAt ?? ''}
+                      onChange={e => onUpdate(task.id, { scheduledAt: e.target.value ? normalizeHhmm(e.target.value) : undefined })}
+                      className={`w-24 rounded border border-slate-700 bg-slate-800 px-1 py-0.5 text-xs tabular-nums [color-scheme:dark] ${task.scheduledAt ? 'text-slate-300' : 'text-transparent'}`}
+                    />
+                    {!task.scheduledAt && (
+                      <span className="pointer-events-none absolute inset-0 flex items-center px-1 text-xs text-slate-500">time</span>
+                    )}
+                  </div>
+                  <select
+                    value={task.durationMinutes ?? ''}
+                    onChange={e => onUpdate(task.id, { durationMinutes: e.target.value === '' ? undefined : Number(e.target.value) })}
+                    className="w-16 rounded border border-slate-700 bg-slate-800 px-1 py-0.5 text-xs tabular-nums text-slate-300"
+                    title="Duration"
+                  >
+                    <option value="">dur</option>
+                    {DURATION_OPTIONS.map(m => <option key={m} value={m}>{formatDuration(m)}</option>)}
+                  </select>
+                </span>
                 <button
                   type="button"
                   onClick={() => onDelete(task.id)}
@@ -152,6 +184,28 @@ export function MustDoPinnedHeader({ tasks, onToggle, onAdd, onDelete }: MustDoP
                 {task.title}
               </span>
             </label>
+            <span className="flex shrink-0 items-center gap-1">
+              <div className="relative" title="Scheduled time">
+                <input
+                  type="time"
+                  value={task.scheduledAt ?? ''}
+                  onChange={e => onUpdate(task.id, { scheduledAt: e.target.value ? normalizeHhmm(e.target.value) : undefined })}
+                  className={`w-24 rounded border border-slate-700 bg-slate-800 px-1 py-0.5 text-xs tabular-nums [color-scheme:dark] ${task.scheduledAt ? 'text-slate-300' : 'text-transparent'}`}
+                />
+                {!task.scheduledAt && (
+                  <span className="pointer-events-none absolute inset-0 flex items-center px-1 text-xs text-slate-500">time</span>
+                )}
+              </div>
+              <select
+                value={task.durationMinutes ?? ''}
+                onChange={e => onUpdate(task.id, { durationMinutes: e.target.value === '' ? undefined : Number(e.target.value) })}
+                className="w-16 rounded border border-slate-700 bg-slate-800 px-1 py-0.5 text-xs tabular-nums text-slate-300"
+                title="Duration"
+              >
+                <option value="">dur</option>
+                {DURATION_OPTIONS.map(m => <option key={m} value={m}>{formatDuration(m)}</option>)}
+              </select>
+            </span>
             <button
               type="button"
               onClick={() => onDelete(task.id)}

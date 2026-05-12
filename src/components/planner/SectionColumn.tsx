@@ -210,11 +210,11 @@ export function SectionColumn({
                 onAddTaskBelow={onAddTaskBelow ? () => onAddTaskBelow(task.id) : undefined}
                 onAddSubtask={onAddSubtask ? () => onAddSubtask(task.id) : undefined}
                 onUpdateTask={(patch) => onUpdateTask(task.id, patch)}
-                onDragStart={() => handleDragStart(task.id)}
-                onDragOver={(position) => handleDragOver(index, position)}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                onDragEnd={handleDragEnd}
+                onDragStart={!task.parentId ? () => handleDragStart(task.id) : undefined}
+                onDragOver={!task.parentId ? (position) => handleDragOver(index, position) : undefined}
+                onDragLeave={!task.parentId ? handleDragLeave : undefined}
+                onDrop={!task.parentId ? handleDrop : undefined}
+                onDragEnd={!task.parentId ? handleDragEnd : undefined}
                 onMoveUp={onMoveTaskUp && rootIdx > 0 && !isParent ? () => onMoveTaskUp(task.id) : undefined}
                 onMoveDown={onMoveTaskDown && rootIdx >= 0 && rootIdx < roots.length - 1 && !isParent ? () => onMoveTaskDown(task.id) : undefined}
                 onMoveToNotDoing={onMoveToNotDoing ? () => onMoveToNotDoing(task.id) : undefined}

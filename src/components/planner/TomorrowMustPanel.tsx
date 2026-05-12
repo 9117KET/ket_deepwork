@@ -8,6 +8,15 @@
 
 import { useState, useRef, useEffect } from 'react'
 import type { Task } from '../../domain/types'
+import { normalizeHhmm } from '../../domain/dateUtils'
+
+const DURATION_OPTIONS = [5, 10, 15, 20, 25, 30, 45, 60, 90, 120, 150, 180, 240, 300, 360, 420, 480]
+
+function formatDuration(minutes: number): string {
+  if (minutes < 60) return `${minutes}m`
+  const h = minutes / 60
+  return Number.isInteger(h) ? `${h}h` : `${Math.floor(h)}h${minutes % 60}m`
+}
 
 interface TomorrowMustPanelProps {
   tomorrowDate: string
@@ -15,11 +24,12 @@ interface TomorrowMustPanelProps {
   onAdd: (title: string) => void
   onDelete: (taskId: string) => void
   onEdit: (taskId: string, title: string) => void
+  onUpdate: (taskId: string, patch: { scheduledAt?: string; durationMinutes?: number }) => void
 }
 
 const MAX_MUSTS = 3
 
-export function TomorrowMustPanel({ tomorrowDate, tasks, onAdd, onDelete, onEdit }: TomorrowMustPanelProps) {
+export function TomorrowMustPanel({ tomorrowDate, tasks, onAdd, onDelete, onEdit, onUpdate }: TomorrowMustPanelProps) {
   const [open, setOpen] = useState(false)
   const [input, setInput] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -107,7 +117,7 @@ export function TomorrowMustPanel({ tomorrowDate, tasks, onAdd, onDelete, onEdit
           )}
 
           {tasks.map((task, idx) => (
-            <div key={task.id} className="flex items-center gap-2">
+            <div key={task.id} className="flex flex-wrap items-center gap-2">
               <span className="w-4 shrink-0 text-center text-[10px] font-bold text-indigo-400">
                 {idx + 1}
               </span>
@@ -134,6 +144,28 @@ export function TomorrowMustPanel({ tomorrowDate, tasks, onAdd, onDelete, onEdit
                   {task.title}
                 </button>
               )}
+              <span className="flex shrink-0 items-center gap-1">
+                <div className="relative" title="Scheduled time">
+                  <input
+                    type="time"
+                    value={task.scheduledAt ?? ''}
+                    onChange={e => onUpdate(task.id, { scheduledAt: e.target.value ? normalizeHhmm(e.target.value) : undefined })}
+                    className={`w-24 rounded border border-slate-700 bg-slate-900 px-1 py-0.5 text-xs tabular-nums [color-scheme:dark] ${task.scheduledAt ? 'text-slate-300' : 'text-transparent'}`}
+                  />
+                  {!task.scheduledAt && (
+                    <span className="pointer-events-none absolute inset-0 flex items-center px-1 text-xs text-slate-600">time</span>
+                  )}
+                </div>
+                <select
+                  value={task.durationMinutes ?? ''}
+                  onChange={e => onUpdate(task.id, { durationMinutes: e.target.value === '' ? undefined : Number(e.target.value) })}
+                  className="w-16 rounded border border-slate-700 bg-slate-900 px-1 py-0.5 text-xs tabular-nums text-slate-300"
+                  title="Duration"
+                >
+                  <option value="">dur</option>
+                  {DURATION_OPTIONS.map(m => <option key={m} value={m}>{formatDuration(m)}</option>)}
+                </select>
+              </span>
               <button
                 type="button"
                 onClick={() => onDelete(task.id)}
