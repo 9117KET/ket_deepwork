@@ -1643,6 +1643,22 @@ export function DayPlanner({
               </div>
             )
           })()}
+          {/* "Now" time-block indicator — tells the user which block they should be in right now */}
+          {!shareMode && selectedDay === todayIso() && activeSectionIds.length > 0 && (() => {
+            const activeId = activeSectionIds[0] as TaskSectionId
+            const activeSection = FIXED_SECTIONS.find(s => s.id === activeId)
+            const label = timeframeLabelsBySection[activeId]
+            if (!activeSection) return null
+            return (
+              <div className="flex items-center gap-2 rounded border border-teal-700/60 bg-teal-900/20 px-3 py-1.5 text-xs text-teal-300">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-teal-400" />
+                <span>
+                  <span className="font-medium">Now:</span> {activeSection.title}
+                  {label ? ` · ${label}` : ''}
+                </span>
+              </div>
+            )
+          })()}
           {FIXED_SECTIONS.filter(s => s.id !== 'mustDo' && s.id !== 'sideQuest').map((section) => (
             <Fragment key={section.id}>
               {!shareMode && section.id === 'highPriority' && appState.depthPhilosophy === 'rhythmic' && (
