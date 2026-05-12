@@ -91,10 +91,33 @@ export function SectionColumn({
   )
   const [collapsed, setCollapsed] = useState(defaultCollapsed)
 
-  const incompleteRootCount = tasks.filter((t) => !t.parentId && !t.isDone).length
+  const rootTasks = tasks.filter((t) => !t.parentId)
+  const incompleteRootCount = rootTasks.filter((t) => !t.isDone).length
+  const doneRootCount = rootTasks.filter((t) => t.isDone).length
   const isOverloaded = overloadThreshold !== undefined && incompleteRootCount > overloadThreshold
   // Critical overload: more than 2x the threshold — renders a stronger visual warning
   const isCriticalOverload = overloadThreshold !== undefined && incompleteRootCount > overloadThreshold * 2
+
+  // Dynamic description: live stats shown instead of the static section.description string
+  const dynamicDescription = (() => {
+    if (rootTasks.length === 0) return section.description ?? null
+    const estimatedMinutes = tasks
+      .filter((t) => !t.isDone && t.durationMinutes)
+      .reduce((sum, t) => sum + (t.durationMinutes ?? 0), 0)
+    const parts: string[] = []
+    if (doneRootCount > 0) {
+      parts.push(`${doneRootCount}/${rootTasks.length} done`)
+    } else {
+      parts.push(`${rootTasks.length} task${rootTasks.length !== 1 ? 's' : ''}`)
+    }
+    if (estimatedMinutes > 0) {
+      const h = Math.floor(estimatedMinutes / 60)
+      const m = estimatedMinutes % 60
+      const est = h > 0 ? `${h}h${m > 0 ? ` ${m}m` : ''}` : `${m}m`
+      parts.push(`~${est} remaining`)
+    }
+    return parts.join(' · ')
+  })()
 
   const handleDragStart = (taskId: string) => {
     onDragStart?.(section.id, taskId)
@@ -159,11 +182,11 @@ export function SectionColumn({
             </div>
             {timeframeLabel ? (
               <p className="text-xs text-slate-400">
-                Timeframe: {timeframeLabel}
-                {section.description ? ` (${section.description})` : null}
+                {timeframeLabel}
+                {dynamicDescription ? ` · ${dynamicDescription}` : null}
               </p>
-            ) : section.description ? (
-              <p className="text-xs text-slate-500">{section.description}</p>
+            ) : dynamicDescription ? (
+              <p className="text-xs text-slate-500">{dynamicDescription}</p>
             ) : null}
           </div>
         </div>
