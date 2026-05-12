@@ -10,7 +10,7 @@
  * back up, and rewards completion with a clean collapse.
  */
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { Task } from '../../domain/types'
 import { normalizeHhmm } from '../../domain/dateUtils'
 
@@ -33,13 +33,18 @@ interface MustDoPinnedHeaderProps {
 const MAX = 3
 
 export function MustDoPinnedHeader({ tasks, onToggle, onAdd, onDelete, onUpdate }: MustDoPinnedHeaderProps) {
-  const [showAdd, setShowAdd] = useState(false)
-  const [input, setInput] = useState('')
-  const [doneExpanded, setDoneExpanded] = useState(false)
-
   const rootTasks = tasks.filter(t => !t.parentId)
   const allDone = rootTasks.length > 0 && rootTasks.every(t => t.isDone)
   const donePct = rootTasks.length === 0 ? 0 : Math.round((rootTasks.filter(t => t.isDone).length / rootTasks.length) * 100)
+
+  const [showAdd, setShowAdd] = useState(false)
+  const [input, setInput] = useState('')
+  const [doneExpanded, setDoneExpanded] = useState(false)
+  // Auto-collapse task list when all 3 slots are filled; user can re-expand by clicking the header row
+  const [listCollapsed, setListCollapsed] = useState(() => rootTasks.length >= MAX)
+  useEffect(() => {
+    if (rootTasks.length >= MAX) setListCollapsed(true)
+  }, [rootTasks.length])
 
   const handleAdd = () => {
     const trimmed = input.trim()
@@ -127,8 +132,12 @@ export function MustDoPinnedHeader({ tasks, onToggle, onAdd, onDelete, onUpdate 
   // ── Active pinned state ───────────────────────────────────────────────────
   return (
     <div className="mt-2 rounded-lg border border-slate-700 bg-slate-900/95 px-3 py-2 backdrop-blur-sm">
-      {/* Header row */}
-      <div className="mb-2 flex items-center justify-between gap-2">
+      {/* Header row — click to collapse/expand task list */}
+      <button
+        type="button"
+        onClick={() => setListCollapsed(c => !c)}
+        className="mb-1 flex w-full items-center justify-between gap-2 text-left"
+      >
         <div className="flex items-center gap-2">
           <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
             3 MUSTs today
@@ -151,19 +160,22 @@ export function MustDoPinnedHeader({ tasks, onToggle, onAdd, onDelete, onUpdate 
           </span>
           <span className="text-[10px] text-slate-500">{donePct}%</span>
         </div>
-        {rootTasks.length < MAX && !showAdd && (
-          <button
-            type="button"
-            onClick={() => setShowAdd(true)}
-            className="rounded px-1.5 py-0.5 text-[10px] text-slate-500 hover:bg-slate-800 hover:text-slate-300"
-          >
-            + Add
-          </button>
-        )}
-      </div>
+        <div className="flex items-center gap-2">
+          {rootTasks.length < MAX && !showAdd && !listCollapsed && (
+            <span
+              role="button"
+              onClick={e => { e.stopPropagation(); setShowAdd(true) }}
+              className="rounded px-1.5 py-0.5 text-[10px] text-slate-500 hover:bg-slate-800 hover:text-slate-300"
+            >
+              + Add
+            </span>
+          )}
+          <span className="text-[10px] text-slate-600">{listCollapsed ? '▼' : '▲'}</span>
+        </div>
+      </button>
 
-      {/* Task rows */}
-      <div className="space-y-1">
+      {/* Task rows — hidden when collapsed */}
+      {!listCollapsed && <div className="space-y-1">
         {rootTasks.map((task, idx) => (
           <div key={task.id} className="flex items-center gap-2 group">
             <span className="w-4 shrink-0 text-center text-[10px] font-bold text-slate-600">
@@ -259,7 +271,7 @@ export function MustDoPinnedHeader({ tasks, onToggle, onAdd, onDelete, onUpdate 
             </button>
           </div>
         )}
-      </div>
+      </div>}
     </div>
   )
 }
