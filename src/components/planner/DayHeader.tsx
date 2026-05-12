@@ -99,9 +99,9 @@ export function DayHeader({
                 {completedTaskCount}/{totalTaskCount} tasks
               </span>
             </div>
-            <div className="mt-1 h-1.5 w-full rounded-full bg-slate-900">
+            <div className="mt-1 h-2.5 w-full rounded-full bg-slate-800">
               <div
-                className="h-1.5 rounded-full bg-sky-500 transition-[width] duration-300"
+                className="h-2.5 rounded-full bg-sky-500 transition-[width] duration-300"
                 style={{ width: `${percentage}%` }}
               />
             </div>
