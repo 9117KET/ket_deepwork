@@ -5,7 +5,7 @@
  * Manages drag state for reordering within the section.
  */
 
-import { useState, type ReactNode } from 'react'
+import { useState, useEffect, useRef, type ReactNode } from 'react'
 import type { Task, TaskSection, TaskSectionId } from '../../domain/types'
 import { AddTaskInput } from './AddTaskInput'
 import { TaskItem } from './TaskItem'
@@ -94,6 +94,27 @@ export function SectionColumn({
   const rootTasks = tasks.filter((t) => !t.parentId)
   const incompleteRootCount = rootTasks.filter((t) => !t.isDone).length
   const doneRootCount = rootTasks.filter((t) => t.isDone).length
+  const allRootsDone = rootTasks.length > 0 && incompleteRootCount === 0
+
+  // Auto-collapse when all tasks in this section are completed
+  const prevAllDoneRef = useRef(allRootsDone)
+  useEffect(() => {
+    if (!prevAllDoneRef.current && allRootsDone) {
+      const t = setTimeout(() => setCollapsed(true), 0)
+      return () => clearTimeout(t)
+    }
+    prevAllDoneRef.current = allRootsDone
+  }, [allRootsDone])
+
+  // Auto-collapse when this section's time block ends
+  const prevActiveRef = useRef(isTimeBlockActive)
+  useEffect(() => {
+    if (prevActiveRef.current && !isTimeBlockActive) {
+      const t = setTimeout(() => setCollapsed(true), 0)
+      return () => clearTimeout(t)
+    }
+    prevActiveRef.current = isTimeBlockActive
+  }, [isTimeBlockActive])
   const isOverloaded = overloadThreshold !== undefined && incompleteRootCount > overloadThreshold
   // Critical overload: more than 2x the threshold — renders a stronger visual warning
   const isCriticalOverload = overloadThreshold !== undefined && incompleteRootCount > overloadThreshold * 2
