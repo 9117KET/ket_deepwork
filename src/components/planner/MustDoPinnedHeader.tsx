@@ -10,7 +10,7 @@
  * back up, and rewards completion with a clean collapse.
  */
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import type { Task } from '../../domain/types'
 import { normalizeHhmm } from '../../domain/dateUtils'
 
@@ -40,18 +40,19 @@ export function MustDoPinnedHeader({ tasks, onToggle, onAdd, onDelete, onUpdate 
   const [showAdd, setShowAdd] = useState(false)
   const [input, setInput] = useState('')
   const [doneExpanded, setDoneExpanded] = useState(false)
-  // Auto-collapse task list when all 3 slots are filled; user can re-expand by clicking the header row
+  // Collapses when all 3 slots are filled; user can re-expand by clicking the header row.
+  // Triggered in handleAdd (not useEffect) to satisfy react-hooks/set-state-in-effect.
   const [listCollapsed, setListCollapsed] = useState(() => rootTasks.length >= MAX)
-  useEffect(() => {
-    if (rootTasks.length >= MAX) setListCollapsed(true)
-  }, [rootTasks.length])
 
   const handleAdd = () => {
     const trimmed = input.trim()
     if (!trimmed || rootTasks.length >= MAX) return
     onAdd(trimmed)
     setInput('')
-    if (rootTasks.length + 1 >= MAX) setShowAdd(false)
+    if (rootTasks.length + 1 >= MAX) {
+      setShowAdd(false)
+      setListCollapsed(true)
+    }
   }
 
   // ── Collapsed "all done" state ────────────────────────────────────────────

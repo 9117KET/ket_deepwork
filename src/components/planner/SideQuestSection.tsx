@@ -53,10 +53,10 @@ export function SideQuestSection({ dayCompletionRatio, ...columnProps }: SideQue
 
   useEffect(() => {
     if (wasLockedRef.current && !isLocked) {
-      setJustUnlocked(true)
-      const t = setTimeout(() => setJustUnlocked(false), 3000)
       wasLockedRef.current = false
-      return () => clearTimeout(t)
+      const t0 = setTimeout(() => setJustUnlocked(true), 0)
+      const t1 = setTimeout(() => setJustUnlocked(false), 3000)
+      return () => { clearTimeout(t0); clearTimeout(t1) }
     }
     if (isLocked) wasLockedRef.current = true
   }, [isLocked])

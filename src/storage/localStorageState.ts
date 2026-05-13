@@ -196,6 +196,7 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
   // Mark ready once the initial data arrives from Convex
   useEffect(() => {
     if (!isAuthenticated) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setReadyToSync(false)
       return
     }
