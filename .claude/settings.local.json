@@ -5,7 +5,26 @@
       "Bash(npm run:*)",
       "Bash(supabase:*)",
       "Bash(npx supabase:*)",
-      "Bash(openssl rand:*)"
+      "Bash(openssl rand:*)",
+      "Bash(for fn:*)",
+      "Bash(do echo:*)",
+      "Bash(done)",
+      "Bash(find /c/Users/kinlo/OneDrive - Constructor University/Desktop/dev/projects/2026/ket_deepwork/src -iname *wake* -o -iname *setup* -o -iname *setup*)",
+      "Bash(npx tsc:*)",
+      "WebSearch",
+      "Bash(python3 -c \":*)",
+      "Bash(npx eslint:*)",
+      "Bash(gh deployment:*)",
+      "Bash(gh api:*)",
+      "Bash(npx vercel:*)",
+      "Bash(curl:*)",
+      "Bash(vercel --prod)",
+      "Bash(vercel ls:*)",
+      "Bash(vercel alias:*)",
+      "Bash(bash:*)",
+      "Bash(npx vite:*)",
+      "Bash(xargs basename *)",
+      "Bash(cmd *)"
     ]
   }
 }
