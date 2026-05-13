@@ -5,13 +5,13 @@
  * Supports view-only and edit (tasks) links; copy-to-clipboard per link.
  */
 
-import { useEffect, useRef, useState } from 'react'
-import type { ShareToken } from '../../storage/supabaseSharing'
+import { useEffect, useRef, useState } from "react"
+import type { ShareToken } from "../../storage/convexSharing"
 import {
   fetchShareTokens,
   createShareToken,
   deleteShareToken,
-} from '../../storage/supabaseSharing'
+} from "../../storage/convexSharing"
 
 interface ShareModalProps {
   userId: string
@@ -21,17 +21,17 @@ interface ShareModalProps {
 
 function buildShareUrl(token: string): string {
   const url = new URL(window.location.href)
-  url.search = ''
-  url.hash = ''
-  url.searchParams.set('share', token)
+  url.search = ""
+  url.hash = ""
+  url.searchParams.set("share", token)
   return url.toString()
 }
 
 function formatDate(iso: string): string {
   return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
+    month: "short",
+    day: "numeric",
+    year: "numeric",
   }).format(new Date(iso))
 }
 
@@ -40,8 +40,8 @@ export function ShareModal({ userId, isOpen, onClose }: ShareModalProps) {
   const [loading, setLoading] = useState(false)
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
-  const [newPermission, setNewPermission] = useState<'view' | 'edit'>('view')
-  const [newLabel, setNewLabel] = useState('')
+  const [newPermission, setNewPermission] = useState<"view" | "edit">("view")
+  const [newLabel, setNewLabel] = useState("")
   const [copied, setCopied] = useState<string | null>(null)
   const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -55,7 +55,7 @@ export function ShareModal({ userId, isOpen, onClose }: ShareModalProps) {
     if (!isOpen) return
     setLoading(true)
     setCreateError(null)
-    fetchShareTokens(userId)
+    fetchShareTokens()
       .then(setTokens)
       .finally(() => setLoading(false))
   }, [isOpen, userId])
@@ -67,11 +67,7 @@ export function ShareModal({ userId, isOpen, onClose }: ShareModalProps) {
       const created = await createShareToken(userId, newPermission, newLabel.trim() || undefined)
       if (created) {
         setTokens((prev) => [created, ...prev])
-        setNewLabel('')
-      } else {
-        setCreateError(
-          'Could not create link. Make sure the share_tokens table migration has been run in Supabase, then try again.',
-        )
+        setNewLabel("")
       }
     } catch (err) {
       setCreateError(String(err))
@@ -93,17 +89,15 @@ export function ShareModal({ userId, isOpen, onClose }: ShareModalProps) {
       copiedTimeoutRef.current = setTimeout(() => setCopied(null), 2000)
     }
 
-    // Fallback for when the Clipboard API rejects (e.g. document lost focus
-    // due to the modal overlay, or the browser has not yet granted permission).
     const fallbackCopy = () => {
-      const el = document.createElement('textarea')
+      const el = document.createElement("textarea")
       el.value = url
-      el.style.cssText = 'position:fixed;opacity:0;top:0;left:0'
+      el.style.cssText = "position:fixed;opacity:0;top:0;left:0"
       document.body.appendChild(el)
       el.focus()
       el.select()
       try {
-        document.execCommand('copy')
+        document.execCommand("copy")
         markCopied()
       } finally {
         document.body.removeChild(el)
@@ -147,18 +141,18 @@ export function ShareModal({ userId, isOpen, onClose }: ShareModalProps) {
         <div className="mb-5 rounded-md border border-slate-700 bg-slate-950 p-3">
           <p className="text-xs font-medium text-slate-300 mb-2">New link</p>
           <div className="flex flex-wrap gap-2 mb-2">
-            {(['view', 'edit'] as const).map((p) => (
+            {(["view", "edit"] as const).map((p) => (
               <button
                 key={p}
                 type="button"
                 onClick={() => setNewPermission(p)}
                 className={`rounded border px-3 py-1 text-xs font-medium ${
                   newPermission === p
-                    ? 'border-sky-600 bg-sky-600 text-slate-950'
-                    : 'border-slate-600 text-slate-300 hover:border-sky-600 hover:text-sky-300'
+                    ? "border-sky-600 bg-sky-600 text-slate-950"
+                    : "border-slate-600 text-slate-300 hover:border-sky-600 hover:text-sky-300"
                 }`}
               >
-                {p === 'view' ? 'View only' : 'Can edit tasks'}
+                {p === "view" ? "View only" : "Can edit tasks"}
               </button>
             ))}
           </div>
@@ -169,7 +163,7 @@ export function ShareModal({ userId, isOpen, onClose }: ShareModalProps) {
               onChange={(e) => setNewLabel(e.target.value)}
               placeholder="Label (optional, e.g. Team)"
               className="flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-sky-600 focus:outline-none"
-              onKeyDown={(e) => { if (e.key === 'Enter' && !creating) void handleCreate() }}
+              onKeyDown={(e) => { if (e.key === "Enter" && !creating) void handleCreate() }}
             />
             <button
               type="button"
@@ -177,7 +171,7 @@ export function ShareModal({ userId, isOpen, onClose }: ShareModalProps) {
               disabled={creating}
               className="rounded border border-sky-600 bg-sky-600 px-3 py-1.5 text-xs font-medium text-slate-950 hover:bg-sky-500 disabled:opacity-50"
             >
-              {creating ? 'Creating…' : 'Create link'}
+              {creating ? "Creating…" : "Create link"}
             </button>
           </div>
           {createError && (
@@ -203,12 +197,12 @@ export function ShareModal({ userId, isOpen, onClose }: ShareModalProps) {
                     <div className="flex items-center gap-2 flex-wrap">
                       <span
                         className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                          t.permission === 'edit'
-                            ? 'bg-amber-500/20 text-amber-300'
-                            : 'bg-sky-500/20 text-sky-300'
+                          t.permission === "edit"
+                            ? "bg-amber-500/20 text-amber-300"
+                            : "bg-sky-500/20 text-sky-300"
                         }`}
                       >
-                        {t.permission === 'edit' ? 'Edit tasks' : 'View only'}
+                        {t.permission === "edit" ? "Edit tasks" : "View only"}
                       </span>
                       {t.label && (
                         <span className="text-xs text-slate-300 truncate">{t.label}</span>
@@ -226,7 +220,7 @@ export function ShareModal({ userId, isOpen, onClose }: ShareModalProps) {
                     onClick={() => handleCopy(t.token)}
                     className="shrink-0 rounded border border-slate-600 bg-slate-800 px-2 py-1 text-xs text-slate-300 hover:border-sky-600 hover:text-sky-300"
                   >
-                    {copied === t.token ? 'Copied!' : 'Copy'}
+                    {copied === t.token ? "Copied!" : "Copy"}
                   </button>
                   <button
                     type="button"

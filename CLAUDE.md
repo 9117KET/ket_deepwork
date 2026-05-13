@@ -16,18 +16,23 @@ No test runner is configured. CI runs `lint` then `build` on push/PR to `main`.
 ## Environment
 
 Copy `.env.example` to `.env` and fill in:
-- `VITE_SUPABASE_URL`
-- `VITE_SUPABASE_ANON_KEY`
+- `VITE_CONVEX_URL` (from Convex dashboard - deployment URL)
+
+In the Convex dashboard (Project Settings -> Environment Variables) set:
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `GOOGLE_TOKEN_ENCRYPTION_KEY_B64` (32-byte AES key, base64)
+- `SITE_URL` (your deployed URL, e.g. `https://deepblock.vercel.app`)
 
 ## Architecture
 
-**Deepblock** is a React 19 + TypeScript SPA (Vite 7, React Router 7, Tailwind CSS 3) backed by Supabase (PostgreSQL + Auth + Edge Functions).
+**Deepblock** is a React 19 + TypeScript SPA (Vite 7, React Router 7, Tailwind CSS 3) backed by Convex (database + auth + server functions).
 
 ### Data flow
 
 - **Guest users**: state lives in `localStorage` under key `deepblock_state_v1`
-- **Signed-in users**: same localStorage is used as a cache, synced to Supabase (`planner_days` table) via `src/storage/`
-- `src/storage/localStorageState.ts` is the single write gateway — it handles both localStorage and Supabase upserts
+- **Signed-in users**: same localStorage is used as a cache, synced to Convex via `src/storage/`
+- `src/storage/localStorageState.ts` is the single write gateway - it handles both localStorage and Convex upserts
 
 ### Core state shape (`src/domain/types.ts`)
 

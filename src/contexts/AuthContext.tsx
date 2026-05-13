@@ -1,23 +1,20 @@
-/**
- * contexts/AuthContext.tsx
- *
- * Lightweight authentication context backed by Supabase.
- * Exposes the current user and simple sign-in / sign-up / sign-out helpers.
- */
-
 import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
-  useState,
   type ReactNode,
-} from 'react'
-import type { User } from '@supabase/supabase-js'
-import { supabase } from '../lib/supabase'
+} from "react"
+import { useConvexAuth, useQuery } from "convex/react"
+import { useAuthActions } from "@convex-dev/auth/react"
+import { api } from "../../convex/_generated/api"
+
+export interface AppUser {
+  id: string
+  email?: string
+}
 
 interface AuthContextValue {
-  user: User | null
+  user: AppUser | null
   loading: boolean
   signUp: (params: { email: string; password: string }) => Promise<Error | null>
   signIn: (params: { email: string; password: string }) => Promise<Error | null>
@@ -27,81 +24,66 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
-  const [loading, setLoading] = useState(true)
+  const { isAuthenticated, isLoading } = useConvexAuth()
+  const { signIn: convexSignIn, signOut: convexSignOut } = useAuthActions()
 
-  useEffect(() => {
-    let isMounted = true
-
-    const init = async () => {
-      const { data, error } = await supabase.auth.getSession()
-      if (!isMounted) return
-      if (error) {
-        console.error('[auth] Failed to get initial session', error)
-      }
-      setUser(data.session?.user ?? null)
-      setLoading(false)
-    }
-
-    void init()
-
-    const { data } = supabase.auth.onAuthStateChange((_, session) => {
-      setUser(session?.user ?? null)
-    })
-
-    return () => {
-      isMounted = false
-      data.subscription.unsubscribe()
-    }
-  }, [])
-
-  const signUp = useCallback(
-    async ({ email, password }: { email: string; password: string }) => {
-      const { error } = await supabase.auth.signUp({ email, password })
-      if (error) {
-        return error
-      }
-      return null
-    },
-    [],
+  const currentUser = useQuery(
+    api.users.currentUser,
+    isAuthenticated ? {} : "skip",
   )
+
+  const user: AppUser | null =
+    isAuthenticated && currentUser
+      ? { id: currentUser.id, email: currentUser.email ?? undefined }
+      : null
 
   const signIn = useCallback(
     async ({ email, password }: { email: string; password: string }) => {
-      const { error } = await supabase.auth.signInWithPassword({ email, password })
-      if (error) {
-        return error
+      try {
+        await convexSignIn("password", { email, password, flow: "signIn" })
+        return null
+      } catch (e) {
+        return e instanceof Error ? e : new Error(String(e))
       }
-      return null
     },
-    [],
+    [convexSignIn],
+  )
+
+  const signUp = useCallback(
+    async ({ email, password }: { email: string; password: string }) => {
+      try {
+        await convexSignIn("password", { email, password, flow: "signUp" })
+        return null
+      } catch (e) {
+        return e instanceof Error ? e : new Error(String(e))
+      }
+    },
+    [convexSignIn],
   )
 
   const signOut = useCallback(async () => {
-    const { error } = await supabase.auth.signOut()
-    if (error) {
-      return error
+    try {
+      await convexSignOut()
+      return null
+    } catch (e) {
+      return e instanceof Error ? e : new Error(String(e))
     }
-    return null
-  }, [])
+  }, [convexSignOut])
 
-  const value: AuthContextValue = {
-    user,
-    loading,
-    signUp,
-    signIn,
-    signOut,
-  }
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+  return (
+    <AuthContext.Provider
+      value={{ user, loading: isLoading, signIn, signUp, signOut }}
+    >
+      {children}
+    </AuthContext.Provider>
+  )
 }
 
 // eslint-disable-next-line react-refresh/only-export-components
 export function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext)
   if (!ctx) {
-    throw new Error('useAuth must be used within an AuthProvider')
+    throw new Error("useAuth must be used within an AuthProvider")
   }
   return ctx
 }
-

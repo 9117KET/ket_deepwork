@@ -15,7 +15,7 @@ import {
   validateShareToken,
   fetchSharedPlannerState,
   upsertSharedDay,
-} from "./storage/supabaseSharing";
+} from "./storage/convexSharing";
 import { LandingPage } from "./pages/LandingPage";
 import { PlannerPage } from "./pages/PlannerPage";
 import { TravelPlannerPage } from "./pages/TravelPlannerPage";

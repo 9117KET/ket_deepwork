@@ -1,0 +1,68 @@
+import { defineSchema, defineTable } from "convex/server"
+import { v } from "convex/values"
+import { authTables } from "@convex-dev/auth/server"
+
+export default defineSchema({
+  ...authTables,
+
+  plannerDays: defineTable({
+    userId: v.string(),
+    date: v.string(),
+    tasks: v.array(v.any()),
+    deepWorkSessions: v.array(v.any()),
+    habitCompletions: v.optional(v.record(v.string(), v.boolean())),
+    sleepHours: v.optional(v.number()),
+    mood: v.optional(v.string()),
+    bedTime: v.optional(v.string()),
+    wakeTime: v.optional(v.string()),
+    sleepTarget: v.optional(v.string()),
+    blockDurations: v.optional(v.any()),
+    notDoingItems: v.optional(v.array(v.any())),
+    abandonedTasks: v.optional(v.array(v.any())),
+    timeOffsetMinutes: v.optional(v.number()),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_date", ["userId", "date"]),
+
+  userSettings: defineTable({
+    userId: v.string(),
+    habitDefinitions: v.optional(v.array(v.any())),
+    monthTitles: v.optional(v.record(v.string(), v.string())),
+    activeDays: v.optional(v.array(v.string())),
+    blockDurationRatios: v.optional(v.any()),
+    notDoingList: v.optional(v.array(v.any())),
+    identityStatement: v.optional(v.string()),
+    depthPhilosophy: v.optional(v.string()),
+    deepWorkGoalHours: v.optional(v.number()),
+    oneThingData: v.optional(v.any()),
+  })
+    .index("by_user", ["userId"]),
+
+  shareTokens: defineTable({
+    ownerUserId: v.string(),
+    token: v.string(),
+    permission: v.union(v.literal("view"), v.literal("edit")),
+    label: v.optional(v.string()),
+  })
+    .index("by_token", ["token"])
+    .index("by_owner", ["ownerUserId"]),
+
+  googleCalendarConnections: defineTable({
+    userId: v.string(),
+    encryptedRefreshToken: v.string(),
+    selectedCalendarId: v.optional(v.string()),
+    selectedCalendarSummary: v.optional(v.string()),
+  })
+    .index("by_user", ["userId"]),
+
+  calendarEventLinks: defineTable({
+    userId: v.string(),
+    taskId: v.string(),
+    taskDate: v.string(),
+    googleCalendarId: v.string(),
+    googleEventId: v.string(),
+    etag: v.optional(v.string()),
+  })
+    .index("by_user_task", ["userId", "taskDate", "taskId"])
+    .index("by_user_event", ["userId", "googleCalendarId", "googleEventId"]),
+})

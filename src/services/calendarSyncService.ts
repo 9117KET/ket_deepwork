@@ -1,116 +1,64 @@
 /**
  * services/calendarSyncService.ts
  *
- * Frontend wrapper around Supabase Edge Functions for Google Calendar sync.
- * Keeps UI code clean and centralizes request/response shapes.
+ * Frontend wrapper around Convex actions for Google Calendar sync.
+ * Replaces the old Supabase Edge Function invocations.
  */
 
-import { supabase } from "../lib/supabase";
+import { convex } from "../lib/convex"
+import { api } from "../../convex/_generated/api"
 
 export interface CalendarListItem {
-  id: string;
-  summary: string;
-  primary: boolean;
-}
-
-/** Explicitly attach the current session JWT so the Supabase relay accepts it.
- * supabase-js only calls functions.setAuth() on auth state changes, so if
- * the session already exists on page load the header is never set automatically.
- */
-async function authHeaders(): Promise<Record<string, string>> {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session?.access_token) throw new Error("Not signed in");
-  return { Authorization: `Bearer ${session.access_token}` };
-}
-
-async function requireOk<T>(result: { data: T | null; error: unknown }): Promise<T> {
-  if (result.error) {
-    const err = result.error as { message?: string; context?: unknown };
-    const rawResp =
-      ((result as Record<string, unknown>).response as Response | undefined) ??
-      (err.context as Response | undefined);
-    let message = (err as Error).message ?? "Unknown error";
-    if (rawResp) {
-      try {
-        const body = await rawResp.text();
-        const parsed = JSON.parse(body) as { error?: string };
-        if (parsed.error) message = parsed.error;
-      } catch {
-        // ignore parse failures
-      }
-    }
-    throw new Error(message);
-  }
-  if (!result.data) throw new Error("No data returned");
-  return result.data;
+  id: string
+  summary: string
+  primary: boolean
 }
 
 export async function startGoogleOAuth(): Promise<{ url: string; state: string }> {
-  const origin = window.location.origin;
-  const res = await supabase.functions.invoke("google-oauth-start", {
-    body: { origin },
-    headers: await authHeaders(),
-  });
-  return (await requireOk(res)) as { url: string; state: string };
+  const origin = window.location.origin
+  return await convex.action(api.calendar.googleOauthStart, { origin })
 }
 
 export async function completeGoogleOAuth(code: string): Promise<void> {
-  const origin = window.location.origin;
-  const res = await supabase.functions.invoke("google-oauth-callback", {
-    body: { code, origin },
-    headers: await authHeaders(),
-  });
-  await requireOk(res);
+  const origin = window.location.origin
+  await convex.action(api.calendar.googleOauthCallback, { code, origin })
 }
 
 export async function listGoogleCalendars(): Promise<CalendarListItem[]> {
-  const res = await supabase.functions.invoke("google-calendars-list", {
-    body: {},
-    headers: await authHeaders(),
-  });
-  const data = (await requireOk(res)) as { calendars: CalendarListItem[] };
-  return data.calendars ?? [];
+  return await convex.action(api.calendar.listCalendars, {})
 }
 
 export async function selectGoogleCalendar(params: {
-  calendarId: string;
-  calendarSummary?: string;
+  calendarId: string
+  calendarSummary?: string
 }): Promise<void> {
-  const res = await supabase.functions.invoke("google-calendar-select", {
-    body: params,
-    headers: await authHeaders(),
-  });
-  await requireOk(res);
+  await convex.mutation(api.calendar.selectCalendar, {
+    calendarId: params.calendarId,
+    calendarSummary: params.calendarSummary,
+  })
 }
 
 export async function syncFromGoogle(params?: {
-  startDate?: string;
-  endDate?: string;
+  startDate?: string
+  endDate?: string
 }): Promise<{ imported: number }> {
-  const res = await supabase.functions.invoke("google-sync-pull", {
-    body: { ...params, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone },
-    headers: await authHeaders(),
-  });
-  return (await requireOk(res)) as { imported: number };
+  const result = await convex.action(api.calendar.syncFromGoogle, {
+    ...params,
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  })
+  return { imported: (result as { imported: number }).imported }
 }
 
 export async function syncToGoogle(params?: {
-  startDate?: string;
-  endDate?: string;
+  startDate?: string
+  endDate?: string
 }): Promise<{ created: number; updated: number; skipped: number }> {
-  const res = await supabase.functions.invoke("google-sync-push", {
-    body: { ...params, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone },
-    headers: await authHeaders(),
-  });
-  return (await requireOk(res)) as { created: number; updated: number; skipped: number };
+  return await convex.action(api.calendar.syncToGoogle, {
+    ...params,
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  }) as { created: number; updated: number; skipped: number }
 }
 
 export async function disconnectGoogle(): Promise<void> {
-  const res = await supabase.functions.invoke("google-disconnect", {
-    body: {},
-    headers: await authHeaders(),
-  });
-  await requireOk(res);
+  await convex.mutation(api.calendar.disconnectGoogle, {})
 }

@@ -1,33 +1,13 @@
 // @refresh reset
-/**
- * storage/localStorageState.ts
- *
- * Persistence layer: when signed in, Supabase is the single source of truth;
- * localStorage is backup only (e.g. before first fetch or when offline).
- * For guests, state lives only in localStorage.
- */
 
-import { useEffect, useRef, useState } from 'react'
-import type { AppState, DayState } from '../domain/types'
-import { todayIso, deriveActiveDaysFromDays } from '../domain/dateUtils'
-import { useAuth } from '../contexts/AuthContext'
-import { supabase } from '../lib/supabase'
-import {
-  fetchPlannerState,
-  plannerDayRowToDayState,
-  upsertPlannerDays,
-  type PlannerDayRow,
-} from './supabasePlanner'
-import {
-  fetchUserSettings,
-  upsertUserSettings,
-  userSettingsRowToAppStatePatch,
-  type UserSettingsRow,
-} from './supabaseUserSettings'
+import { useEffect, useRef, useState } from "react"
+import { useQuery, useMutation, useConvexAuth } from "convex/react"
+import type { AppState, DayState, AbandonedTask, BlockDurations, NotDoingItem } from "../domain/types"
+import { todayIso, deriveActiveDaysFromDays } from "../domain/dateUtils"
+import { api } from "../../convex/_generated/api"
 
-const STORAGE_KEY = 'deepblock_state_v1'
-/** Legacy key from before the Deepblock rename; used once to migrate existing data. */
-const LEGACY_STORAGE_KEY = 'ket_deepwork_state_v1'
+const STORAGE_KEY = "deepblock_state_v1"
+const LEGACY_STORAGE_KEY = "ket_deepwork_state_v1"
 const SCHEMA_VERSION = 1
 
 interface PersistedStateV1 {
@@ -43,7 +23,7 @@ function safeParse(raw: string | null): PersistedStateV1 | null {
   if (!raw) return null
   try {
     const parsed = JSON.parse(raw) as PersistedStateV1
-    if (typeof parsed.version !== 'number' || typeof parsed.state !== 'object') {
+    if (typeof parsed.version !== "number" || typeof parsed.state !== "object") {
       return null
     }
     return parsed
@@ -53,26 +33,15 @@ function safeParse(raw: string | null): PersistedStateV1 | null {
 }
 
 function migrate(persisted: PersistedStateV1 | null): AppState {
-  if (!persisted) {
-    return EMPTY_STATE
-  }
-
-  if (persisted.version === SCHEMA_VERSION) {
-    return persisted.state
-  }
-
-  // For now we only have v1; future versions can add migration logic here.
+  if (!persisted) return EMPTY_STATE
+  if (persisted.version === SCHEMA_VERSION) return persisted.state
   return persisted.state ?? EMPTY_STATE
 }
 
-/** Recompute activeDays from tasks completion; migrate legacy lastOpenDate. */
 function migrateLegacyStreak(state: AppState): AppState {
   const legacy = state as AppState & { lastOpenDate?: string }
-  // Keep legacy date only as a hint; the derived rule (completed tasks) still applies.
   const baseDays = state.days ?? {}
   const activeDays = deriveActiveDaysFromDays(baseDays)
-  // If we have no derived days but legacy exists *and* that legacy day has a completed task,
-  // allow it to count.
   if (activeDays.length === 0 && legacy.lastOpenDate) {
     const legacyDay = baseDays[legacy.lastOpenDate]
     if (legacyDay && legacyDay.tasks?.some((t) => t.isDone)) {
@@ -82,42 +51,28 @@ function migrateLegacyStreak(state: AppState): AppState {
   return { ...state, activeDays }
 }
 
-/**
- * Default monthly review questions for The ONE Thing framework.
- * These are generic prompts applicable to any user — no personal data.
- * Personal goals (North Star, cascade, ONE things) are entered by each user in the UI.
- */
 const DEFAULT_MONTHLY_REVIEW_QUESTIONS = [
-  'Did I protect the deep-work block every weekday this month?',
-  'How many quality actions toward my ONE thing did I take? What was the result?',
-  'Is my key skill improving measurably? Am I on track for my 3-month goal?',
-  'What financial or administrative blocker did I resolve this month?',
-  'What is the ONE thing for next month that makes everything else easier or unnecessary?',
-  'What did I park that I need to make sure stays parked?',
-  'What did I almost say yes to that I should have said no to?',
+  "Did I protect the deep-work block every weekday this month?",
+  "How many quality actions toward my ONE thing did I take? What was the result?",
+  "Is my key skill improving measurably? Am I on track for my 3-month goal?",
+  "What financial or administrative blocker did I resolve this month?",
+  "What is the ONE thing for next month that makes everything else easier or unnecessary?",
+  "What did I park that I need to make sure stays parked?",
+  "What did I almost say yes to that I should have said no to?",
 ]
 
-/** Seed generic ONE Thing defaults only when these fields are absent (first run). */
 function seedOneThingDefaults(state: AppState): AppState {
-  if (state.monthlyReviewQuestions !== undefined) return state  // already initialised
-  return {
-    ...state,
-    monthlyReviewQuestions: DEFAULT_MONTHLY_REVIEW_QUESTIONS,
-  }
+  if (state.monthlyReviewQuestions !== undefined) return state
+  return { ...state, monthlyReviewQuestions: DEFAULT_MONTHLY_REVIEW_QUESTIONS }
 }
 
 function readInitialState(): AppState {
-  if (typeof window === 'undefined') {
-    return EMPTY_STATE
-  }
+  if (typeof window === "undefined") return EMPTY_STATE
   const raw = window.localStorage.getItem(STORAGE_KEY)
   const parsed = safeParse(raw)
   let state = migrate(parsed)
   state = migrateLegacyStreak(state)
 
-  // One-time migration from ket_deepwork → Deepblock rename.
-  // Note: localStorage is per-origin. Data on localhost never exists on production (different origin).
-  // If legacy key exists here and has data, merge it in so no progress is lost on this browser.
   const legacyRaw = window.localStorage.getItem(LEGACY_STORAGE_KEY)
   const legacyParsed = safeParse(legacyRaw)
   const legacyState = migrate(legacyParsed)
@@ -136,15 +91,12 @@ function readInitialState(): AppState {
     }
     if (merged || Object.keys(currentDays).length === 0) {
       state = { ...state, days: mergedDays }
-      const wrapped: PersistedStateV1 = {
-        version: SCHEMA_VERSION,
-        state,
-      }
+      const wrapped: PersistedStateV1 = { version: SCHEMA_VERSION, state }
       try {
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(wrapped))
         window.localStorage.removeItem(LEGACY_STORAGE_KEY)
       } catch {
-        // If write fails, we still return merged state; next load will retry.
+        // ignore quota/private mode errors
       }
     }
   }
@@ -153,35 +105,47 @@ function readInitialState(): AppState {
 }
 
 function writeState(next: AppState) {
-  if (typeof window === 'undefined') {
-    return
-  }
-
-  const wrapped: PersistedStateV1 = {
-    version: SCHEMA_VERSION,
-    state: next,
-  }
-
+  if (typeof window === "undefined") return
+  const wrapped: PersistedStateV1 = { version: SCHEMA_VERSION, state: next }
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(wrapped))
   } catch {
-    // If storage fails (quota, private mode, etc.) we silently ignore it.
+    // ignore quota/private mode errors
   }
 }
 
+// ─── Map Convex doc to DayState ───────────────────────────────────────────────
+
+function docToDayState(doc: Record<string, unknown>): DayState {
+  const tasks = (doc.tasks as DayState["tasks"] | null) ?? []
+  const deepWorkSessions = (doc.deepWorkSessions as DayState["deepWorkSessions"] | null) ?? []
+  const habitCompletions = (doc.habitCompletions as DayState["habitCompletions"] | null) ?? {}
+  const blockDurations = doc.blockDurations as BlockDurations | null | undefined
+  const notDoingItems = (doc.notDoingItems as NotDoingItem[] | null) ?? undefined
+  const abandonedTasks = (doc.abandonedTasks as AbandonedTask[] | null) ?? undefined
+  return {
+    date: doc.date as string,
+    tasks,
+    deepWorkSessions,
+    habitCompletions: Object.keys(habitCompletions).length > 0 ? habitCompletions : undefined,
+    sleepHours: (doc.sleepHours as number | null) ?? undefined,
+    mood: (doc.mood as string | null) ?? undefined,
+    bedTime: (doc.bedTime as string | null) ?? undefined,
+    wakeTime: (doc.wakeTime as string | null) ?? undefined,
+    sleepTarget: (doc.sleepTarget as string | null) ?? undefined,
+    blockDurations: blockDurations ?? undefined,
+    notDoingItems: notDoingItems && notDoingItems.length > 0 ? notDoingItems : undefined,
+    abandonedTasks: abandonedTasks && abandonedTasks.length > 0 ? abandonedTasks : undefined,
+  }
+}
+
+// ─── Merge remote day into local ──────────────────────────────────────────────
+
 /**
- * Merge a remote DayState into a local one.
- * Remote is authoritative for tasks/sessions/mood/sleepHours/habitCompletions,
- * but we keep local values for scheduling fields (bedTime, wakeTime, sleepTarget,
- * blockDurations) when remote is null/undefined — this prevents a stale Supabase
- * row (not yet updated due to a pre-refresh sync race) from wiping out times the
- * user just set.
- *
- * We also preserve local tasks when local has task IDs that remote doesn't know
- * about yet. This covers the case where the user carries forward tasks (or adds
- * any tasks) and refreshes before the 800 ms Supabase debounce fires — without
- * this guard, the stale remote state would wipe out the locally-added tasks.
- * Once Supabase syncs, remote and local task IDs match, so remote takes over.
+ * Merges remote DayState into local. Remote is authoritative for most fields,
+ * but we keep local values for scheduling fields when remote is null/undefined
+ * (prevents stale server row from wiping out times the user just set), and
+ * we preserve local tasks the server hasn't seen yet.
  */
 export function mergeRemoteDayState(local: DayState, remote: DayState): DayState {
   const remoteTaskIds = new Set((remote.tasks ?? []).map((t) => t.id))
@@ -196,8 +160,10 @@ export function mergeRemoteDayState(local: DayState, remote: DayState): DayState
   }
 }
 
+// ─── usePersistentState ───────────────────────────────────────────────────────
+
 export function usePersistentState(): [AppState, (updater: (prev: AppState) => AppState) => void] {
-  const { user, loading: authLoading } = useAuth()
+  const { isAuthenticated, isLoading: authLoading } = useConvexAuth()
   const [state, setState] = useState<AppState>(() => readInitialState())
   const [readyToSync, setReadyToSync] = useState(false)
 
@@ -205,138 +171,121 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
     writeState(state)
   }, [state])
 
-  // Refs so we can flush pending sync on tab hide/close and always read latest state.
   const stateRef = useRef(state)
-  const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    stateRef.current = state
+  }, [state])
 
-  // When logged in and initial remote load finished, push changes to Supabase with debounce.
+  const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const settingsSyncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  /**
-   * Per-date write-generation counter.
-   *
-   * Every time `update()` modifies a date, its generation number is incremented.
-   * Every upsert snapshots the current generation for each date it will write.
-   * The `.finally()` handler only removes a date's dirty flag when the generation
-   * at snapshot time still matches the current generation — meaning no further
-   * local edit has happened since the upsert was dispatched.  This prevents the
-   * race where a slow `.finally()` clears a generation that was already bumped
-   * by a new user interaction.
-   *
-   * A date is considered "dirty" (i.e. remote data must not overwrite it) when
-   * its generation value is > 0 (any positive number means a local edit is
-   * pending or in-flight).  Callers check `dirtyGenerations.current.has(date)`
-   * (Map#has) rather than checking the value, so the guard reads naturally.
-   */
+  // Per-date write-generation counter for dirty tracking
   const dirtyGenerations = useRef<Map<string, number>>(new Map())
-
-  /**
-   * Post-write echo suppression window.
-   *
-   * After .finally() clears a date's dirty flag the realtime channel may
-   * still deliver delayed echoes (e.g. from an earlier upsert in the same
-   * session, or catch-up events after a WebSocket reconnect).  Those echoes
-   * carry stale data and must not overwrite the current local state.
-   *
-   * When dirty is cleared for a date we record an expiry timestamp
-   * (Date.now() + ECHO_SUPPRESS_MS).  The realtime setState updater rejects
-   * any incoming event for that date until the window expires.
-   * 3 s is generous; realistic WebSocket round-trip is < 500 ms.
-   */
+  // Echo-suppression window: ignore reactive updates for 3s after we clear a dirty flag
   const echoSuppressUntil = useRef<Map<string, number>>(new Map())
   const ECHO_SUPPRESS_MS = 3000
 
-  // When signed in, Supabase is source of truth for dates it has; local-only dates are kept so we don't lose progress (e.g. days that never synced).
-  // If fetch fails (e.g. offline), keep localStorage as backup.
+  // Convex reactive queries - undefined while loading, null/array when ready
+  const remoteDays = useQuery(api.plannerDays.getAll, isAuthenticated ? {} : "skip")
+  const remoteSettings = useQuery(api.userSettings.get, isAuthenticated ? {} : "skip")
+
+  // Convex mutations
+  const upsertManyDays = useMutation(api.plannerDays.upsertMany)
+  const upsertSettings = useMutation(api.userSettings.upsert)
+
+  // Mark ready once the initial data arrives from Convex
   useEffect(() => {
-    let cancelled = false
-
-    if (!user || authLoading) {
-      Promise.resolve().then(() => {
-        if (!cancelled) setReadyToSync(false)
-      })
-      return () => {
-        cancelled = true
-      }
+    if (!isAuthenticated) {
+      setReadyToSync(false)
+      return
     }
-
-    const loadFromSupabase = async () => {
-      const [remote, settings] = await Promise.all([
-        fetchPlannerState(user.id),
-        fetchUserSettings(user.id),
-      ])
-      if (cancelled) return
-
-      const plannerOk = remote !== null
-      const settingsOk = settings !== null
-
-      // Only merge what we successfully fetched. If both fail, keep local cache and do not push upstream.
-      if (plannerOk || settingsOk) {
-        setState((prev) => {
-          const mergedDays = plannerOk
-            ? (() => {
-                // Prefer local state for any date the user modified while Supabase was loading.
-                const base = { ...(prev.days ?? {}) }
-                for (const [date, ds] of Object.entries(remote!.days)) {
-                  if (!ds || dirtyGenerations.current.has(date)) continue
-                  const local = base[date]
-                  base[date] = local ? mergeRemoteDayState(local, ds) : ds
-                }
-                return base
-              })()
-            : (prev.days ?? {})
-          const activeDays = deriveActiveDaysFromDays(mergedDays)
-          return {
-            days: mergedDays,
-            timeOffsetMinutes: plannerOk ? remote!.timeOffsetMinutes ?? prev.timeOffsetMinutes : prev.timeOffsetMinutes,
-            habitDefinitions: settingsOk ? settings!.habitDefinitions : prev.habitDefinitions,
-            monthTitles: settingsOk ? settings!.monthTitles : prev.monthTitles,
-            blockDurationRatios: settingsOk ? settings!.blockDurationRatios : prev.blockDurationRatios,
-            notDoingList: settingsOk ? settings!.notDoingList : prev.notDoingList,
-            identityStatement: settingsOk ? settings!.identityStatement : prev.identityStatement,
-            depthPhilosophy: settingsOk ? settings!.depthPhilosophy : prev.depthPhilosophy,
-            deepWorkGoalHoursPerWeek: settingsOk ? (settings!.deepWorkGoalHoursPerWeek ?? prev.deepWorkGoalHoursPerWeek) : prev.deepWorkGoalHoursPerWeek,
-            activeDays,
-          }
-        })
-      }
-
-      if (!cancelled) {
-        setReadyToSync(plannerOk || settingsOk)
-      }
+    if (remoteDays !== undefined) {
+      setReadyToSync(true)
     }
+  }, [isAuthenticated, remoteDays])
 
-    void loadFromSupabase()
-
-    return () => {
-      cancelled = true
-    }
-  }, [user, authLoading])
-
+  // Apply remote data reactively (covers both initial load and multi-device updates)
   useEffect(() => {
-    if (!user || !readyToSync) return
-    if (typeof window === 'undefined') return
+    if (!isAuthenticated || authLoading) return
+    if (remoteDays === undefined) return
 
-    stateRef.current = state
+    const remoteDayList = remoteDays ?? []
+    const settingsDoc = remoteSettings
+
+    setState((prev) => {
+      const base = { ...(prev.days ?? {}) }
+      for (const doc of remoteDayList) {
+        const date = doc.date as string
+        if (dirtyGenerations.current.has(date)) continue
+        const suppressUntil = echoSuppressUntil.current.get(date)
+        if (suppressUntil && Date.now() < suppressUntil) continue
+        const dayState = docToDayState(doc as Record<string, unknown>)
+        const local = base[date]
+        base[date] = local ? mergeRemoteDayState(local, dayState) : dayState
+      }
+
+      const activeDays = deriveActiveDaysFromDays(base)
+
+      if (settingsDoc) {
+        const ot = (settingsDoc.oneThingData ?? {}) as Record<string, unknown>
+        return {
+          days: base,
+          activeDays,
+          timeOffsetMinutes: prev.timeOffsetMinutes,
+          habitDefinitions: settingsDoc.habitDefinitions ?? prev.habitDefinitions,
+          monthTitles: (settingsDoc.monthTitles as Record<string, string> | undefined) ?? prev.monthTitles,
+          blockDurationRatios: settingsDoc.blockDurationRatios ?? prev.blockDurationRatios,
+          notDoingList: settingsDoc.notDoingList ?? prev.notDoingList,
+          identityStatement: settingsDoc.identityStatement ?? prev.identityStatement,
+          depthPhilosophy: (settingsDoc.depthPhilosophy as AppState["depthPhilosophy"]) ?? prev.depthPhilosophy,
+          deepWorkGoalHoursPerWeek: (settingsDoc.deepWorkGoalHours as number | undefined) ?? prev.deepWorkGoalHoursPerWeek,
+          northStar: (ot.northStar as string | undefined) ?? prev.northStar,
+          goalCascade: (ot.goalCascade as AppState["goalCascade"] | undefined) ?? prev.goalCascade,
+          dayOneThings: (ot.dayOneThings as Record<string, string> | undefined) ?? prev.dayOneThings,
+          weekOneThings: (ot.weekOneThings as Record<string, string> | undefined) ?? prev.weekOneThings,
+          monthOneThings: (ot.monthOneThings as Record<string, string> | undefined) ?? prev.monthOneThings,
+          monthlyReviews: (ot.monthlyReviews as AppState["monthlyReviews"] | undefined) ?? prev.monthlyReviews,
+          monthlyReviewQuestions: (ot.monthlyReviewQuestions as string[] | undefined) ?? prev.monthlyReviewQuestions,
+        }
+      }
+
+      return { ...prev, days: base, activeDays }
+    })
+  }, [remoteDays, remoteSettings, isAuthenticated, authLoading])
+
+  // Debounced sync of planner days to Convex
+  useEffect(() => {
+    if (!isAuthenticated || !readyToSync) return
+    if (typeof window === "undefined") return
+
     if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current)
     syncTimeoutRef.current = setTimeout(() => {
       syncTimeoutRef.current = null
       const daysSnapshot = { ...stateRef.current.days }
-      // Snapshot the current generation for every dirty date.  Only dates that
-      // are in dirtyGenerations are included (i.e. have a pending local edit).
-      // We also upsert all days (to keep server in sync), but we only clear
-      // the dirty flag for dates whose generation hasn't changed by the time
-      // the upsert resolves — ensuring a new edit that fires between the upsert
-      // dispatch and its completion keeps its dirty flag intact.
       const genSnapshot = new Map(dirtyGenerations.current)
-      void upsertPlannerDays(user.id, daysSnapshot).finally(() => {
+      const payload = Object.values(daysSnapshot)
+        .filter((day): day is DayState => Boolean(day))
+        .map((day) => ({
+          date: day.date,
+          tasks: day.tasks ?? [],
+          deepWorkSessions: day.deepWorkSessions ?? [],
+          habitCompletions: day.habitCompletions,
+          sleepHours: day.sleepHours,
+          mood: day.mood,
+          bedTime: day.bedTime,
+          wakeTime: day.wakeTime,
+          sleepTarget: day.sleepTarget,
+          blockDurations: day.blockDurations,
+          notDoingItems: day.notDoingItems,
+          abandonedTasks: day.abandonedTasks,
+          timeOffsetMinutes: stateRef.current.timeOffsetMinutes,
+        }))
+      if (payload.length === 0) return
+      void upsertManyDays({ days: payload }).then(() => {
         const now = Date.now()
         for (const [date, gen] of genSnapshot) {
           if (dirtyGenerations.current.get(date) === gen) {
             dirtyGenerations.current.delete(date)
-            // Start the echo-suppression window so delayed realtime events
-            // from this upsert (or earlier upserts) can't overwrite the
-            // current local state after the dirty flag is cleared.
             echoSuppressUntil.current.set(date, now + ECHO_SUPPRESS_MS)
           }
         }
@@ -349,32 +298,35 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
         syncTimeoutRef.current = null
       }
     }
-  }, [state, user, readyToSync])
+  }, [state, isAuthenticated, readyToSync, upsertManyDays])
 
-  // Sync user_settings (habit definitions, month titles, streak) when they change; debounced.
+  // Debounced sync of user settings to Convex
   useEffect(() => {
-    if (!user || !readyToSync) return
-    if (typeof window === 'undefined') return
+    if (!isAuthenticated || !readyToSync) return
+    if (typeof window === "undefined") return
 
     if (settingsSyncTimeoutRef.current) clearTimeout(settingsSyncTimeoutRef.current)
     settingsSyncTimeoutRef.current = setTimeout(() => {
       settingsSyncTimeoutRef.current = null
-      void upsertUserSettings(user.id, {
-        habitDefinitions: stateRef.current.habitDefinitions ?? [],
-        monthTitles: stateRef.current.monthTitles ?? {},
-        activeDays: stateRef.current.activeDays ?? [],
-        blockDurationRatios: stateRef.current.blockDurationRatios ?? null,
-        notDoingList: stateRef.current.notDoingList ?? [],
-        identityStatement: stateRef.current.identityStatement ?? '',
-        depthPhilosophy: stateRef.current.depthPhilosophy,
-        deepWorkGoalHoursPerWeek: stateRef.current.deepWorkGoalHoursPerWeek ?? null,
-        northStar: stateRef.current.northStar ?? '',
-        goalCascade: stateRef.current.goalCascade ?? null,
-        dayOneThings: stateRef.current.dayOneThings ?? {},
-        weekOneThings: stateRef.current.weekOneThings ?? {},
-        monthOneThings: stateRef.current.monthOneThings ?? {},
-        monthlyReviews: stateRef.current.monthlyReviews ?? {},
-        monthlyReviewQuestions: stateRef.current.monthlyReviewQuestions ?? [],
+      const s = stateRef.current
+      void upsertSettings({
+        habitDefinitions: s.habitDefinitions ?? [],
+        monthTitles: s.monthTitles ?? {},
+        activeDays: s.activeDays ?? [],
+        blockDurationRatios: s.blockDurationRatios ?? null,
+        notDoingList: s.notDoingList ?? [],
+        identityStatement: s.identityStatement ?? "",
+        depthPhilosophy: s.depthPhilosophy,
+        deepWorkGoalHours: s.deepWorkGoalHoursPerWeek ?? undefined,
+        oneThingData: {
+          northStar: s.northStar ?? "",
+          goalCascade: s.goalCascade ?? null,
+          dayOneThings: s.dayOneThings ?? {},
+          weekOneThings: s.weekOneThings ?? {},
+          monthOneThings: s.monthOneThings ?? {},
+          monthlyReviews: s.monthlyReviews ?? {},
+          monthlyReviewQuestions: s.monthlyReviewQuestions ?? [],
+        },
       })
     }, 800)
 
@@ -384,90 +336,30 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
         settingsSyncTimeoutRef.current = null
       }
     }
-  }, [state.habitDefinitions, state.monthTitles, state.activeDays, state.blockDurationRatios, state.notDoingList, state.identityStatement, state.depthPhilosophy, state.deepWorkGoalHoursPerWeek, state.northStar, state.goalCascade, state.dayOneThings, state.weekOneThings, state.monthOneThings, state.monthlyReviews, state.monthlyReviewQuestions, user, readyToSync])
+  }, [
+    state.habitDefinitions,
+    state.monthTitles,
+    state.activeDays,
+    state.blockDurationRatios,
+    state.notDoingList,
+    state.identityStatement,
+    state.depthPhilosophy,
+    state.deepWorkGoalHoursPerWeek,
+    state.northStar,
+    state.goalCascade,
+    state.dayOneThings,
+    state.weekOneThings,
+    state.monthOneThings,
+    state.monthlyReviews,
+    state.monthlyReviewQuestions,
+    isAuthenticated,
+    readyToSync,
+    upsertSettings,
+  ])
 
-  // Realtime: apply Supabase writes from other devices/tabs immediately (Postgres Changes).
+  // Flush pending sync when tab hides or page unloads
   useEffect(() => {
-    if (!user || !readyToSync) return
-
-    const filter = `user_id=eq.${user.id}`
-    const channel = supabase
-      .channel(`planner-realtime-${user.id}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'planner_days', filter },
-        (payload) => {
-          if (payload.eventType === 'DELETE') {
-            const oldRow = payload.old as { date?: string } | null
-            const date = oldRow?.date
-            if (!date) return
-            // Guard is checked inside the updater so it runs after any
-            // in-flight toggle updaters have already set the dirty flag.
-            setState((prev) => {
-              if (dirtyGenerations.current.has(date)) return prev
-              const suppressUntil = echoSuppressUntil.current.get(date)
-              if (suppressUntil && Date.now() < suppressUntil) return prev
-              const nextDays = { ...prev.days }
-              delete nextDays[date]
-              return {
-                ...prev,
-                days: nextDays,
-                activeDays: deriveActiveDaysFromDays(nextDays),
-              }
-            })
-            return
-          }
-          const row = payload.new as PlannerDayRow
-          if (!row?.date) return
-          // Compute the new day state outside the updater (pure transform of
-          // immutable WebSocket data) but perform the dirty check inside the
-          // updater.  This ensures the guard executes after any preceding
-          // toggle updater has run and stamped dirtyGenerations, closing the
-          // race window where the check ran before React flushed the toggle.
-          // The echo-suppression window provides a second layer of defence
-          // against delayed or out-of-order events arriving after dirty clears.
-          const dayState = plannerDayRowToDayState(row)
-          setState((prev) => {
-            if (dirtyGenerations.current.has(row.date)) return prev
-            const suppressUntil = echoSuppressUntil.current.get(row.date)
-            if (suppressUntil && Date.now() < suppressUntil) return prev
-            const nextDays = { ...prev.days, [row.date]: dayState }
-            return {
-              ...prev,
-              days: nextDays,
-              activeDays: deriveActiveDaysFromDays(nextDays),
-            }
-          })
-        },
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'user_settings', filter },
-        (payload) => {
-          if (payload.eventType === 'DELETE') return
-          const row = payload.new as UserSettingsRow
-          if (!row?.user_id) return
-          const patch = userSettingsRowToAppStatePatch(row)
-          setState((prev) => ({
-            ...prev,
-            ...patch,
-            // Convert null → undefined to satisfy AppState's optional (not nullable) fields
-            deepWorkGoalHoursPerWeek: patch.deepWorkGoalHoursPerWeek ?? undefined,
-            goalCascade: patch.goalCascade ?? undefined,
-          }))
-        },
-      )
-      .subscribe()
-
-    return () => {
-      void supabase.removeChannel(channel)
-    }
-  }, [user, readyToSync])
-
-  // Flush pending sync when tab is hidden or page unloads so other devices see changes.
-  // Refetch from Supabase when tab becomes visible so this device shows latest (e.g. after editing on phone).
-  useEffect(() => {
-    if (!user || typeof document === 'undefined') return
+    if (!isAuthenticated || typeof document === "undefined") return
 
     const flushSync = () => {
       if (syncTimeoutRef.current) {
@@ -475,109 +367,81 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
         syncTimeoutRef.current = null
         const daysSnapshot = { ...stateRef.current.days }
         const genSnapshot = new Map(dirtyGenerations.current)
-        void upsertPlannerDays(user.id, daysSnapshot).finally(() => {
-          for (const [date, gen] of genSnapshot) {
-            if (dirtyGenerations.current.get(date) === gen) {
-              dirtyGenerations.current.delete(date)
+        const payload = Object.values(daysSnapshot)
+          .filter((day): day is DayState => Boolean(day))
+          .map((day) => ({
+            date: day.date,
+            tasks: day.tasks ?? [],
+            deepWorkSessions: day.deepWorkSessions ?? [],
+            habitCompletions: day.habitCompletions,
+            sleepHours: day.sleepHours,
+            mood: day.mood,
+            bedTime: day.bedTime,
+            wakeTime: day.wakeTime,
+            sleepTarget: day.sleepTarget,
+            blockDurations: day.blockDurations,
+            notDoingItems: day.notDoingItems,
+            abandonedTasks: day.abandonedTasks,
+            timeOffsetMinutes: stateRef.current.timeOffsetMinutes,
+          }))
+        if (payload.length > 0) {
+          void upsertManyDays({ days: payload }).then(() => {
+            for (const [date, gen] of genSnapshot) {
+              if (dirtyGenerations.current.get(date) === gen) {
+                dirtyGenerations.current.delete(date)
+              }
             }
-          }
-        })
+          })
+        }
       }
       if (settingsSyncTimeoutRef.current) {
         clearTimeout(settingsSyncTimeoutRef.current)
         settingsSyncTimeoutRef.current = null
-        void upsertUserSettings(user.id, {
-          habitDefinitions: stateRef.current.habitDefinitions ?? [],
-          monthTitles: stateRef.current.monthTitles ?? {},
-          activeDays: stateRef.current.activeDays ?? [],
-          blockDurationRatios: stateRef.current.blockDurationRatios ?? null,
-          notDoingList: stateRef.current.notDoingList ?? [],
-          identityStatement: stateRef.current.identityStatement ?? '',
-          depthPhilosophy: stateRef.current.depthPhilosophy,
-          deepWorkGoalHoursPerWeek: stateRef.current.deepWorkGoalHoursPerWeek ?? null,
-          northStar: stateRef.current.northStar ?? '',
-          goalCascade: stateRef.current.goalCascade ?? null,
-          dayOneThings: stateRef.current.dayOneThings ?? {},
-          weekOneThings: stateRef.current.weekOneThings ?? {},
-          monthOneThings: stateRef.current.monthOneThings ?? {},
-          monthlyReviews: stateRef.current.monthlyReviews ?? {},
-          monthlyReviewQuestions: stateRef.current.monthlyReviewQuestions ?? [],
+        const s = stateRef.current
+        void upsertSettings({
+          habitDefinitions: s.habitDefinitions ?? [],
+          monthTitles: s.monthTitles ?? {},
+          activeDays: s.activeDays ?? [],
+          blockDurationRatios: s.blockDurationRatios ?? null,
+          notDoingList: s.notDoingList ?? [],
+          identityStatement: s.identityStatement ?? "",
+          depthPhilosophy: s.depthPhilosophy,
+          deepWorkGoalHours: s.deepWorkGoalHoursPerWeek ?? undefined,
+          oneThingData: {
+            northStar: s.northStar ?? "",
+            goalCascade: s.goalCascade ?? null,
+            dayOneThings: s.dayOneThings ?? {},
+            weekOneThings: s.weekOneThings ?? {},
+            monthOneThings: s.monthOneThings ?? {},
+            monthlyReviews: s.monthlyReviews ?? {},
+            monthlyReviewQuestions: s.monthlyReviewQuestions ?? [],
+          },
         })
       }
     }
 
-    let refetchCancelled = false
-
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') {
+      if (document.visibilityState === "hidden") {
         flushSync()
-        return
       }
-      if (document.visibilityState === 'visible') {
-        refetchCancelled = false
-        Promise.all([fetchPlannerState(user.id), fetchUserSettings(user.id)]).then(
-          ([remote, settings]) => {
-            if (refetchCancelled) return
-            const plannerOk = remote !== null
-            const settingsOk = settings !== null
-            if (plannerOk || settingsOk) {
-              setState((prev) => {
-                const mergedDays = plannerOk
-                  ? (() => {
-                      const base = { ...(prev.days ?? {}) }
-                      for (const [date, ds] of Object.entries(remote!.days)) {
-                        if (!ds || dirtyGenerations.current.has(date)) continue
-                        const local = base[date]
-                        base[date] = local ? mergeRemoteDayState(local, ds) : ds
-                      }
-                      return base
-                    })()
-                  : (prev.days ?? {})
-                const activeDays = deriveActiveDaysFromDays(mergedDays)
-                return {
-                  ...prev,
-                  days: mergedDays,
-                  timeOffsetMinutes: plannerOk
-                    ? remote!.timeOffsetMinutes ?? prev.timeOffsetMinutes
-                    : prev.timeOffsetMinutes,
-                  habitDefinitions: settingsOk ? settings!.habitDefinitions : prev.habitDefinitions,
-                  monthTitles: settingsOk ? settings!.monthTitles : prev.monthTitles,
-                  blockDurationRatios: settingsOk ? settings!.blockDurationRatios : prev.blockDurationRatios,
-                  notDoingList: settingsOk ? settings!.notDoingList : prev.notDoingList,
-                  identityStatement: settingsOk ? settings!.identityStatement : prev.identityStatement,
-                  depthPhilosophy: settingsOk ? settings!.depthPhilosophy : prev.depthPhilosophy,
-                  deepWorkGoalHoursPerWeek: settingsOk ? (settings!.deepWorkGoalHoursPerWeek ?? prev.deepWorkGoalHoursPerWeek) : prev.deepWorkGoalHoursPerWeek,
-                  activeDays,
-                }
-              })
-            }
-          },
-        ).catch((err) => {
-          console.error('[sync] Failed to refetch on visibility change', err)
-        })
-      }
+      // No manual refetch needed - Convex reconnects and reactive queries update automatically
     }
 
     const handleBeforeUnload = () => {
       flushSync()
     }
 
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-    window.addEventListener('beforeunload', handleBeforeUnload)
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+    window.addEventListener("beforeunload", handleBeforeUnload)
     return () => {
-      refetchCancelled = true
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-      window.removeEventListener('beforeunload', handleBeforeUnload)
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
+      window.removeEventListener("beforeunload", handleBeforeUnload)
     }
-  }, [user])
+  }, [isAuthenticated, upsertManyDays, upsertSettings])
 
   const update = (updater: (prev: AppState) => AppState) => {
     setState((prev) => {
       const next = updater(prev)
-      // Increment the write-generation for every date whose DayState reference
-      // changed.  The upsert's .finally() will only clear a date's dirty flag
-      // when the generation it captured at dispatch time still matches the
-      // current generation — so any subsequent edit keeps its protection.
       for (const date of Object.keys(next.days)) {
         if (next.days[date] !== prev.days[date]) {
           dirtyGenerations.current.set(date, (dirtyGenerations.current.get(date) ?? 0) + 1)
@@ -593,12 +457,9 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
 export function getOrCreateDay(state: AppState, isoDay: string = todayIso()): DayState {
   const existing = state.days[isoDay]
   if (existing) return existing
-
-  const day: DayState = {
+  return {
     date: isoDay,
     tasks: [],
     deepWorkSessions: [],
   }
-
-  return day
 }

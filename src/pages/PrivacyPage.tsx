@@ -41,7 +41,7 @@ export function PrivacyPage() {
             <h2>2. What data we collect</h2>
             <p>We collect only what is necessary to provide the service:</p>
             <ul>
-              <li><strong className="text-share-onSurface">Account data</strong> — email address and hashed password, stored via Supabase Auth.</li>
+              <li><strong className="text-share-onSurface">Account data</strong> — email address and hashed password, stored via Convex Auth.</li>
               <li><strong className="text-share-onSurface">Planner data</strong> — tasks, deep work sessions, sleep hours, wake/sleep times, mood entries, and habit completions you enter into the app.</li>
               <li><strong className="text-share-onSurface">Settings</strong> — habit definitions, month titles, block duration preferences, and streak history.</li>
               <li><strong className="text-share-onSurface">Google Calendar tokens</strong> — if you connect Google Calendar, OAuth tokens are stored server-side in our database and are never exposed to the browser. We use them solely to read and write calendar events on your behalf.</li>
@@ -66,7 +66,7 @@ export function PrivacyPage() {
           <section>
             <h2>4. Data storage and security</h2>
             <p>
-              Your data is stored in a Supabase (PostgreSQL) database hosted on infrastructure in the EU. Row-level security (RLS) policies ensure each user can only access their own data. Data in transit is encrypted via TLS. Google Calendar tokens are stored server-side and never transmitted to your browser.
+              Your data is stored in a Convex database. Server-side authorization ensures each user can only access their own data. Data in transit is encrypted via TLS. Google Calendar tokens are stored server-side and never transmitted to your browser.
             </p>
           </section>
 
@@ -108,7 +108,7 @@ export function PrivacyPage() {
           <section>
             <h2>8. Third-party services</h2>
             <ul>
-              <li><strong className="text-share-onSurface">Supabase</strong> — database, authentication, and real-time sync. <a href="https://supabase.com/privacy" className="text-share-primary underline" target="_blank" rel="noreferrer">Supabase Privacy Policy</a>.</li>
+              <li><strong className="text-share-onSurface">Convex</strong> — database, authentication, and real-time sync. <a href="https://www.convex.dev/privacy" className="text-share-primary underline" target="_blank" rel="noreferrer">Convex Privacy Policy</a>.</li>
               <li><strong className="text-share-onSurface">Google</strong> — only if you connect Google Calendar. <a href="https://policies.google.com/privacy" className="text-share-primary underline" target="_blank" rel="noreferrer">Google Privacy Policy</a>.</li>
             </ul>
           </section>

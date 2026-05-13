@@ -1,42 +1,27 @@
 /**
  * services/travelPlanService.ts
  *
- * Signed-in users → Supabase Edge Function (travel-plan-generate) backed by
- * Claude Sonnet + live destination data from RestCountries and Open-Meteo.
+ * Signed-in users → Convex Action (travel-plan-generate, TODO: port from Supabase Edge Function).
  * Guest users → local mock (instant, no API key needed).
  */
 
 import type { TravelPlan, TravelPlanInput } from "../domain/travelTypes";
-import { supabase } from "../lib/supabase";
+import { convex } from "../lib/convex";
+import { api } from "../../convex/_generated/api";
 
 // ── Auth helper ──────────────────────────────────────────────────────────────
 
-async function getAuthHeaders(): Promise<Record<string, string> | null> {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session?.access_token) return null;
-  return { Authorization: `Bearer ${session.access_token}` };
+async function isSignedIn(): Promise<boolean> {
+  const user = await convex.query(api.users.currentUser, {});
+  return Boolean(user);
 }
 
-// ── AI path (signed-in) ──────────────────────────────────────────────────────
+// ── AI path (signed-in, TODO: port travel-plan-generate to Convex Action) ───
 
-async function generateAIPlan(
-  input: TravelPlanInput,
-  headers: Record<string, string>,
-): Promise<TravelPlan> {
-  const res = await supabase.functions.invoke("travel-plan-generate", {
-    body: input,
-    headers,
-  });
-
-  if (res.error) {
-    throw new Error(
-      (res.error as { message?: string }).message ?? "Travel plan generation failed",
-    );
-  }
-
-  return res.data as TravelPlan;
+async function generateAIPlan(input: TravelPlanInput): Promise<TravelPlan> {
+  // TODO: port the travel-plan-generate Edge Function to a Convex Action and call it here.
+  // For now fall through to mock.
+  return generateMockPlan(input);
 }
 
 // ── Mock path (guest) ────────────────────────────────────────────────────────
@@ -100,10 +85,10 @@ async function generateMockPlan(input: TravelPlanInput): Promise<TravelPlan> {
 // ── Public API ───────────────────────────────────────────────────────────────
 
 export async function generateTravelPlan(input: TravelPlanInput): Promise<TravelPlan> {
-  const headers = await getAuthHeaders();
+  const signedIn = await isSignedIn();
 
-  if (headers) {
-    return generateAIPlan(input, headers);
+  if (signedIn) {
+    return generateAIPlan(input);
   }
 
   return generateMockPlan(input);
