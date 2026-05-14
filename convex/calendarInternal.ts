@@ -164,7 +164,6 @@ export const upsertPlannerDay = internalMutation({
     } else {
       await ctx.db.insert("plannerDays", {
         userId,
-        tasks: [],
         deepWorkSessions: [],
         ...rest,
       })
