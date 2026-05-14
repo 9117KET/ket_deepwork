@@ -89,29 +89,35 @@ export function SectionColumn({
   const [dropTarget, setDropTarget] = useState<{ index: number; position: DropPosition } | null>(
     null,
   )
-  const [collapsed, setCollapsed] = useState(defaultCollapsed)
+  const [collapsed, setCollapsed] = useState(() => isTimeBlockActive ? false : defaultCollapsed)
+  const [pendingCollapse, setPendingCollapse] = useState<'done' | 'timeEnd' | null>(null)
+  const collapsedRef = useRef(collapsed)
+  collapsedRef.current = collapsed
 
   const rootTasks = tasks.filter((t) => !t.parentId)
   const incompleteRootCount = rootTasks.filter((t) => !t.isDone).length
   const doneRootCount = rootTasks.filter((t) => t.isDone).length
   const allRootsDone = rootTasks.length > 0 && incompleteRootCount === 0
 
-  // Auto-collapse when all tasks in this section are completed
+  // Prompt to collapse when all tasks are done; dismiss if tasks are unchecked
   const prevAllDoneRef = useRef(allRootsDone)
   useEffect(() => {
     if (!prevAllDoneRef.current && allRootsDone) {
-      const t = setTimeout(() => setCollapsed(true), 0)
-      return () => clearTimeout(t)
+      if (!collapsedRef.current) setPendingCollapse('done')
+    } else if (prevAllDoneRef.current && !allRootsDone) {
+      setPendingCollapse(null)
     }
     prevAllDoneRef.current = allRootsDone
   }, [allRootsDone])
 
-  // Auto-collapse when this section's time block ends
+  // Auto-expand when block becomes active; prompt to collapse when block ends
   const prevActiveRef = useRef(isTimeBlockActive)
   useEffect(() => {
-    if (prevActiveRef.current && !isTimeBlockActive) {
-      const t = setTimeout(() => setCollapsed(true), 0)
-      return () => clearTimeout(t)
+    if (!prevActiveRef.current && isTimeBlockActive) {
+      setCollapsed(false)
+      setPendingCollapse(null)
+    } else if (prevActiveRef.current && !isTimeBlockActive) {
+      if (!collapsedRef.current) setPendingCollapse('timeEnd')
     }
     prevActiveRef.current = isTimeBlockActive
   }, [isTimeBlockActive])
@@ -171,7 +177,7 @@ export function SectionColumn({
         <div className="flex min-w-0 flex-1 items-start gap-2">
           <button
             type="button"
-            onClick={() => setCollapsed((c) => !c)}
+            onClick={() => { setCollapsed((c) => !c); setPendingCollapse(null) }}
             className="mt-0.5 shrink-0 text-slate-400 hover:text-slate-200"
             aria-label={collapsed ? 'Expand section' : 'Collapse section'}
           >
@@ -213,6 +219,29 @@ export function SectionColumn({
         </div>
         {headerAction && <div className="shrink-0">{headerAction}</div>}
       </header>
+      {!collapsed && pendingCollapse && (
+        <div className="mb-2 flex items-center justify-between gap-2 rounded border border-slate-700 bg-slate-800/80 px-3 py-1.5 text-xs text-slate-300">
+          <span>
+            {pendingCollapse === 'done' ? 'All tasks done!' : 'Time block ended.'} Collapse this section?
+          </span>
+          <div className="flex shrink-0 gap-1.5">
+            <button
+              type="button"
+              onClick={() => setPendingCollapse(null)}
+              className="rounded px-2 py-0.5 hover:bg-slate-700"
+            >
+              Keep open
+            </button>
+            <button
+              type="button"
+              onClick={() => { setCollapsed(true); setPendingCollapse(null) }}
+              className="rounded bg-teal-800/60 px-2 py-0.5 text-teal-200 hover:bg-teal-700/60"
+            >
+              Collapse
+            </button>
+          </div>
+        </div>
+      )}
       {!collapsed && <div className="space-y-1">
         {tasks.length === 0 ? (
           <div
