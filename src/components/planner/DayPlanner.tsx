@@ -410,10 +410,16 @@ export function DayPlanner({
           }
 
           const reordered = reorderTasks(sectionTasks, fromIndex, toIndex);
-          let j = 0;
-          const nextTasks = existingDay.tasks.map((t) =>
-            t.sectionId === sectionId ? reordered[j++]! : t,
+          const reorderedIds = new Set(reordered.map(t => t.id));
+          const orphaned = existingDay.tasks.filter(
+            t => t.sectionId === sectionId && !reorderedIds.has(t.id)
           );
+          const nextTasks = [
+            ...existingDay.tasks.filter(t => t.sectionId !== sectionId),
+            ...reordered,
+            ...orphaned,
+          ];
+          if (nextTasks.length !== existingDay.tasks.length) return prev;
           return {
             ...prev,
             days: {
@@ -556,10 +562,15 @@ export function DayPlanner({
             if (fromIndex === safeInsert) return prev;
             const reordered = reorderTasks(sectionTasks, fromIndex, safeInsert);
             if (reordered.length !== sectionTasks.length) return prev;
-            let j = 0;
-            const nextTasks = existingDay.tasks.map((t) =>
-              t.sectionId === fromSectionId ? reordered[j++]! : t,
+            const reorderedIds = new Set(reordered.map(t => t.id));
+            const orphaned = existingDay.tasks.filter(
+              t => t.sectionId === fromSectionId && !reorderedIds.has(t.id)
             );
+            const nextTasks = [
+              ...existingDay.tasks.filter(t => t.sectionId !== fromSectionId),
+              ...reordered,
+              ...orphaned,
+            ];
             if (nextTasks.length !== existingDay.tasks.length) return prev;
             return {
               ...prev,
@@ -983,7 +994,7 @@ export function DayPlanner({
     };
 
     for (const task of dayState.tasks) {
-      grouped[task.sectionId]?.push(task);
+      if (task) grouped[task.sectionId]?.push(task);
     }
 
     for (const key of Object.keys(grouped) as TaskSectionId[]) {
