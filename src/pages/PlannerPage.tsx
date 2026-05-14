@@ -4,7 +4,7 @@
  * Wrapper for the Day Planner: requires auth or guest; AppChrome + DayPlanner + modals.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { useNavigate } from "react-router-dom";
 import { DayPlanner } from "../components/planner/DayPlanner";
 import { HelpModal } from "../components/HelpModal";
@@ -20,6 +20,7 @@ export function PlannerPage() {
   const { user, loading, signOut } = useAuth();
   const navigate = useNavigate();
   const [guest, setGuest] = useState(false);
+  const [, startTransition] = useTransition();
   const [helpOpen, setHelpOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [tourActive, setTourActive] = useState(false);
@@ -70,7 +71,7 @@ export function PlannerPage() {
     return (
       <AppChrome headerPositionClass="top-0" mobileActive="planner" showMobileNav={false}>
         <div className="flex min-h-[calc(100vh-8rem)] items-center justify-center px-4">
-          <LoginForm onContinueAsGuest={() => setGuest(true)} />
+          <LoginForm onContinueAsGuest={() => startTransition(() => setGuest(true))} />
         </div>
       </AppChrome>
     );
