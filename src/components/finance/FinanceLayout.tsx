@@ -14,6 +14,7 @@ export type FinanceTab =
   | 'dashboard'
   | 'richLife'
   | 'spendingPlan'
+  | 'netWorth'
   | 'accounts'
   | 'debts'
   | 'investments'
@@ -28,14 +29,15 @@ interface TabConfig {
 }
 
 const TABS: TabConfig[] = [
-  { id: 'dashboard',    label: 'Dashboard',     icon: 'home',           available: true  },
-  { id: 'richLife',     label: 'Rich Life',      icon: 'favorite',       available: true  },
-  { id: 'spendingPlan', label: 'Spending Plan',  icon: 'donut_small',    available: true  },
-  { id: 'accounts',     label: 'Accounts',       icon: 'account_balance', available: false },
-  { id: 'debts',        label: 'Debts',          icon: 'credit_card',    available: false },
-  { id: 'investments',  label: 'Investments',    icon: 'trending_up',    available: false },
+  { id: 'dashboard',    label: 'Dashboard',     icon: 'home',                  available: true  },
+  { id: 'richLife',     label: 'Rich Life',      icon: 'favorite',              available: true  },
+  { id: 'spendingPlan', label: 'Spending Plan',  icon: 'donut_small',           available: true  },
+  { id: 'netWorth',     label: 'Net Worth',      icon: 'account_balance_wallet', available: true  },
+  { id: 'accounts',     label: 'Accounts',       icon: 'account_balance',       available: true  },
+  { id: 'debts',        label: 'Debts',          icon: 'credit_card',           available: true  },
+  { id: 'investments',  label: 'Investments',    icon: 'trending_up',           available: false },
   { id: 'fire',         label: 'FIRE',           icon: 'local_fire_department', available: false },
-  { id: 'learn',        label: 'Learn',          icon: 'school',         available: true  },
+  { id: 'learn',        label: 'Learn',          icon: 'school',                available: true  },
 ]
 
 interface FinanceLayoutProps {
