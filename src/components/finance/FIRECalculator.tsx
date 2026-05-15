@@ -356,7 +356,7 @@ export function FIRECalculator({ state, onUpdate }: FIRECalculatorProps) {
           <MaterialIcon name="local_fire_department" filled className="text-orange-400 text-[1.5rem] flex-shrink-0 mt-0.5" />
           <div>
             <h2 className="text-sm font-semibold text-share-onBg">
-              <FinanceTerm termId="fire" label="FIRE Calculator" /> — German Edition
+              <FinanceTerm termId="fire" label="FIRE Calculator" /> - German Edition
             </h2>
             <p className="text-xs text-share-onSurfaceVariant mt-1 leading-relaxed">
               Uses real returns (inflation-adjusted), a conservative <FinanceTerm termId="swr" label="SWR of 3.5%" /> for Germany, and accounts for <FinanceTerm termId="abgeltungssteuer" label="Abgeltungssteuer" /> on portfolio withdrawals. All values in today's euros.
@@ -452,7 +452,7 @@ export function FIRECalculator({ state, onUpdate }: FIRECalculatorProps) {
           <InputRow label="Current age" value={inputs.currentAge} onChange={(v) => updateInput('currentAge', v)}
             placeholder="30" min={18} />
           <InputRow label="Target retirement age" value={inputs.targetAge} onChange={(v) => updateInput('targetAge', v)}
-            placeholder="45" min={18} helpText="For reference only — FIRE happens when portfolio hits the number." />
+            placeholder="45" min={18} helpText="For reference only - FIRE happens when portfolio hits the number." />
           <InputRow label="Current portfolio value" value={inputs.currentPortfolio}
             onChange={(v) => updateInput('currentPortfolio', v)} prefix="€" placeholder="50000"
             helpText="ETF depot + other investments" />
@@ -461,7 +461,7 @@ export function FIRECalculator({ state, onUpdate }: FIRECalculatorProps) {
             helpText={cspInvestmentMonthly > 0 ? `Auto-filled from your CSP: €${cspInvestmentMonthly}` : ''} />
           <InputRow label="Monthly expenses in retirement" value={inputs.monthlyExpenses}
             onChange={(v) => updateInput('monthlyExpenses', v)} prefix="€" placeholder="2500"
-            helpText="In today's euros — includes GKV minimum ~€215/month" />
+            helpText="In today's euros - includes GKV minimum ~€215/month" />
         </div>
 
         {/* Advanced settings (collapsible) */}
@@ -504,7 +504,7 @@ export function FIRECalculator({ state, onUpdate }: FIRECalculatorProps) {
 
       {/* German FIRE caveats */}
       <section className="rounded-xl border border-share-outlineVariant/40 bg-share-surfaceContainerLow/50 p-5 space-y-3">
-        <p className="text-xs font-semibold text-share-onBg">German FIRE — key considerations</p>
+        <p className="text-xs font-semibold text-share-onBg">German FIRE - key considerations</p>
         <ul className="space-y-2">
           {[
             {

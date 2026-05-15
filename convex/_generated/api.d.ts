@@ -13,6 +13,7 @@ import type * as _shared_google from "../_shared/google.js";
 import type * as auth from "../auth.js";
 import type * as calendar from "../calendar.js";
 import type * as calendarInternal from "../calendarInternal.js";
+import type * as financialAdvisor from "../financialAdvisor.js";
 import type * as financialSettings from "../financialSettings.js";
 import type * as http from "../http.js";
 import type * as plannerDays from "../plannerDays.js";
@@ -33,6 +34,7 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   calendar: typeof calendar;
   calendarInternal: typeof calendarInternal;
+  financialAdvisor: typeof financialAdvisor;
   financialSettings: typeof financialSettings;
   http: typeof http;
   plannerDays: typeof plannerDays;

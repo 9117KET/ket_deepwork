@@ -45,7 +45,7 @@ export function AutomationChecklist({ state, onUpdate }: AutomationChecklistProp
           <div>
             <h2 className="text-sm font-semibold text-share-onBg">Automation Checklist</h2>
             <p className="text-xs text-share-onSurfaceVariant mt-1 leading-relaxed">
-              Money that moves automatically is money you never spend by accident. Every item below should be on autopilot — set up once, runs forever.
+              Money that moves automatically is money you never spend by accident. Every item below should be on autopilot - set up once, runs forever.
             </p>
           </div>
         </div>
@@ -83,7 +83,7 @@ export function AutomationChecklist({ state, onUpdate }: AutomationChecklistProp
       <section className="rounded-xl border border-share-outlineVariant bg-share-surfaceContainerLow p-5">
         <h3 className="text-sm font-semibold text-share-onBg mb-3">How the money flows</h3>
         <p className="text-xs text-share-onSurfaceVariant mb-4">
-          On payday, money automatically routes itself before you can spend it. The sequence below is Ramit Sethi's automation ladder adapted for Germany.
+          On payday, money automatically routes itself before you can spend it. The sequence below is the automation ladder adapted for Germany.
         </p>
 
         <div className="space-y-2">
@@ -112,7 +112,7 @@ export function AutomationChecklist({ state, onUpdate }: AutomationChecklistProp
       <section className="rounded-xl border border-share-outlineVariant/40 bg-share-surfaceContainerLow/50 p-4">
         <p className="text-xs text-share-onSurfaceVariant leading-relaxed">
           <span className="font-medium text-share-onBg">The key insight: </span>
-          People overestimate their willpower and underestimate systems. A <FinanceTerm termId="dauerauftrag" label="Dauerauftrag" /> that fires on the 2nd of every month is worth more than 12 months of good intentions. Set up each automation once — it compounds forever.
+          People overestimate their willpower and underestimate systems. A <FinanceTerm termId="dauerauftrag" label="Dauerauftrag" /> that fires on the 2nd of every month is worth more than 12 months of good intentions. Set up each automation once - it compounds forever.
         </p>
       </section>
     </div>
@@ -166,7 +166,7 @@ const FLOW_STEPS = [
   },
   {
     label: 'bAV deducted from gross (before payday)',
-    description: 'Your employer withholds bAV contribution before calculating net pay — you never see it arrive.',
+    description: 'Your employer withholds bAV contribution before calculating net pay - you never see it arrive.',
     highlight: false,
   },
   {
@@ -186,7 +186,7 @@ const FLOW_STEPS = [
   },
   {
     label: 'Remainder = guilt-free spending',
-    description: 'Whatever is left after all the above is yours to spend however you like — no tracking needed.',
+    description: 'Whatever is left after all the above is yours to spend however you like - no tracking needed.',
     highlight: true,
   },
 ]

@@ -14,6 +14,7 @@ export type FinanceTab =
   | 'dashboard'
   | 'richLife'
   | 'spendingPlan'
+  | 'expenses'
   | 'netWorth'
   | 'accounts'
   | 'debts'
@@ -21,6 +22,7 @@ export type FinanceTab =
   | 'fire'
   | 'goals'
   | 'journal'
+  | 'advisor'
   | 'learn'
 
 interface TabConfig {
@@ -32,15 +34,17 @@ interface TabConfig {
 
 const TABS: TabConfig[] = [
   { id: 'dashboard',    label: 'Dashboard',     icon: 'home',                  available: true  },
-  { id: 'richLife',     label: 'Rich Life',      icon: 'favorite',              available: true  },
-  { id: 'spendingPlan', label: 'Spending Plan',  icon: 'donut_small',           available: true  },
+  { id: 'expenses',     label: 'Expenses',       icon: 'receipt_long',          available: true  },
+  { id: 'spendingPlan', label: 'Budget',         icon: 'donut_small',           available: true  },
   { id: 'netWorth',     label: 'Net Worth',      icon: 'account_balance_wallet', available: true  },
   { id: 'accounts',     label: 'Accounts',       icon: 'account_balance',       available: true  },
   { id: 'debts',        label: 'Debts',          icon: 'credit_card',           available: true  },
   { id: 'investments',  label: 'Investments',    icon: 'trending_up',           available: true  },
   { id: 'fire',         label: 'FIRE',           icon: 'local_fire_department', available: true  },
   { id: 'goals',        label: 'Goals',          icon: 'flag',                  available: true  },
+  { id: 'richLife',     label: 'Rich Life',      icon: 'favorite',              available: true  },
   { id: 'journal',      label: 'Journal',        icon: 'menu_book',             available: true  },
+  { id: 'advisor',      label: 'Advisor',        icon: 'psychology',            available: true  },
   { id: 'learn',        label: 'Learn',          icon: 'school',                available: true  },
 ]
 
@@ -59,7 +63,7 @@ export function FinanceLayout({ activeTab, onTabChange, children }: FinanceLayou
           Financial Planner
         </h1>
         <p className="mt-1 text-sm text-share-onSurfaceVariant">
-          Your personal money system — built on Ramit Sethi's Conscious Spending framework, adapted for Germany.
+          Your personal money system - built on proven financial principles, adapted for Germany.
         </p>
       </div>
 

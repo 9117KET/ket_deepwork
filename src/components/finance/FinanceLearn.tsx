@@ -29,7 +29,7 @@ export function FinanceLearn() {
           <div>
             <h2 className="text-sm font-semibold text-share-onBg">Financial Glossary</h2>
             <p className="text-xs text-share-onSurfaceVariant mt-1 leading-relaxed">
-              German personal finance terms explained clearly. No jargon, no fluff — just what you need to understand your money system. All amounts and rates are current as of 2025/2026.
+              German personal finance terms explained clearly. No jargon, no fluff - just what you need to understand your money system. All amounts and rates are current as of 2025/2026.
             </p>
           </div>
         </div>
@@ -172,7 +172,7 @@ const RESOURCES = [
   },
   {
     icon: 'menu_book',
-    label: 'I Will Teach You to Be Rich — Ramit Sethi',
+    label: 'I Will Teach You to Be Rich (Personal Finance Book)',
     description: 'The book this planner is built on. 6-week program. Second edition (2019) is the definitive version. Read chapters 1-5 and 8-10 first.',
     url: 'iwillteachyoutoberich.com',
   },
@@ -191,7 +191,7 @@ const RESOURCES = [
   {
     icon: 'calculate',
     label: 'Portfolio Performance (open source)',
-    description: 'Free desktop app for tracking your entire depot — returns, Vorabpauschale, dividends, benchmarks. The standard tool for German ETF investors.',
+    description: 'Free desktop app for tracking your entire depot - returns, Vorabpauschale, dividends, benchmarks. The standard tool for German ETF investors.',
     url: 'portfolio-performance.info',
   },
 ]

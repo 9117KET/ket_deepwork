@@ -441,7 +441,7 @@ export function DebtManager({ state, onUpdate }: DebtManagerProps) {
                   Avalanche
                 </p>
                 <p className="text-[10px] text-share-onSurfaceVariant mt-0.5">
-                  Highest interest first. Mathematically optimal — saves the most money.
+                  Highest interest first. Mathematically optimal - saves the most money.
                 </p>
               </button>
               <button
@@ -557,8 +557,7 @@ export function DebtManager({ state, onUpdate }: DebtManagerProps) {
           {/* Avalanche vs snowball comparison note */}
           <div className="rounded-lg border border-share-outlineVariant/50 bg-share-surfaceContainerHigh p-3">
             <p className="text-[10px] text-share-onSurfaceVariant leading-relaxed">
-              <span className="font-medium text-share-onBg">Ramit's rule: </span>
-              Avalanche saves the most money mathematically. Snowball keeps more people on track psychologically. Both beat paying minimums only — pick the one you will actually stick to.
+              Avalanche saves the most money mathematically. Snowball keeps more people on track psychologically. Both beat paying minimums only - pick the one you will actually stick to.
             </p>
           </div>
         </section>

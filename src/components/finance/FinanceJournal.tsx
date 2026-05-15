@@ -34,7 +34,7 @@ const PROMPTS = [
   'What invisible script about money am I still carrying?',
   'What is one thing I can automate or simplify this week?',
   'How does my spending this month reflect my values?',
-  'What financial goal feels closest right now — and why?',
+  'What financial goal feels closest right now - and why?',
   'What would I do if I had €1,000 extra today?',
 ]
 
@@ -122,7 +122,7 @@ export function FinanceJournal({ state, onUpdate }: FinanceJournalProps) {
       {isWriting ? (
         <section className="rounded-xl border border-share-outlineVariant bg-share-surfaceContainerLow p-5 space-y-3">
           <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold text-share-onBg">New entry — {formatDate(todayIso())}</p>
+            <p className="text-xs font-semibold text-share-onBg">New entry - {formatDate(todayIso())}</p>
             <button type="button" onClick={() => setIsWriting(false)} className="text-share-onSurfaceVariant/50 hover:text-share-onSurfaceVariant">
               <MaterialIcon name="close" className="text-[1rem]" />
             </button>

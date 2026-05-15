@@ -20,6 +20,8 @@ import { FIRECalculator } from '../components/finance/FIRECalculator'
 import { SavingsGoals } from '../components/finance/SavingsGoals'
 import { FinanceJournal } from '../components/finance/FinanceJournal'
 import { ReceiptScanner } from '../components/finance/ReceiptScanner'
+import { ExpenseTracker } from '../components/finance/ExpenseTracker'
+import { FinancialAdvisor } from '../components/finance/FinancialAdvisor'
 import { FinanceLearn } from '../components/finance/FinanceLearn'
 import { useFinancialState } from '../storage/financialStorage'
 import { MaterialIcon } from '../components/ui/MaterialIcon'
@@ -111,6 +113,9 @@ export function FinancialPlannerPage() {
       case 'investments':
         return <InvestmentsTab state={state} onUpdate={update} />
 
+      case 'expenses':
+        return <ExpenseTracker state={state} onUpdate={update} />
+
       case 'fire':
         return <FIRECalculator state={state} onUpdate={update} />
 
@@ -119,6 +124,14 @@ export function FinancialPlannerPage() {
 
       case 'journal':
         return <FinanceJournal state={state} onUpdate={update} />
+
+      case 'advisor':
+        return (
+          <FinancialAdvisor
+            state={state}
+            onSaveHistory={(history) => update((prev) => ({ ...prev, advisorHistory: history }))}
+          />
+        )
 
       case 'learn':
         return <FinanceLearn />

@@ -185,12 +185,12 @@ export function FinanceDashboard({ state, onNavigate }: FinanceDashboardProps) {
 
           {unallocated > 0 && (
             <p className="mt-3 text-xs text-amber-400">
-              €{unallocated.toLocaleString('de-DE')} unallocated this month — add it to a bucket.
+              €{unallocated.toLocaleString('de-DE')} unallocated this month - add it to a bucket.
             </p>
           )}
           {unallocated < 0 && (
             <p className="mt-3 text-xs text-red-400">
-              Over budget by €{Math.abs(unallocated).toLocaleString('de-DE')} — review your fixed costs.
+              Over budget by €{Math.abs(unallocated).toLocaleString('de-DE')} - review your fixed costs.
             </p>
           )}
         </section>
@@ -237,20 +237,19 @@ export function FinanceDashboard({ state, onNavigate }: FinanceDashboardProps) {
 
         {totalWins > 5 && (
           <p className="mt-2 text-xs text-share-onSurfaceVariant/50 text-center">
-            + {totalWins - 5} more big wins — coming in the next section
+            + {totalWins - 5} more big wins - coming in the next section
           </p>
         )}
       </section>
 
-      {/* Ramit's core philosophy reminder */}
+      {/* Core philosophy */}
       <section className="rounded-xl border border-share-outlineVariant/50 bg-share-surfaceContainerLow p-5">
         <h2 className="text-xs font-semibold text-share-onSurfaceVariant uppercase tracking-wide mb-3">
-          The system in one sentence
+          The principle
         </h2>
-        <blockquote className="text-sm text-share-onBg italic border-l-2 border-share-primary pl-3">
-          "Spend extravagantly on the things you love. Cut costs mercilessly on the things you don't. Automate the rest."
-        </blockquote>
-        <p className="text-xs text-share-onSurfaceVariant/60 mt-2">— Ramit Sethi, I Will Teach You to Be Rich</p>
+        <p className="text-sm text-share-onBg border-l-2 border-share-primary pl-3 leading-relaxed">
+          Spend intentionally on the things you value. Cut ruthlessly on the things you don't. Automate everything in between.
+        </p>
       </section>
     </div>
   )

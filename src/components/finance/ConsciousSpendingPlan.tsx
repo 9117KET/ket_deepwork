@@ -188,7 +188,7 @@ export function ConsciousSpendingPlan({ state, onUpdate }: ConsciousSpendingPlan
               Your <FinanceTerm termId="csp" label="Conscious Spending Plan" />
             </h2>
             <p className="text-xs text-share-onSurfaceVariant mt-2 leading-relaxed">
-              Allocate your income into four buckets before spending. Once savings and investments are handled automatically, spend the rest guilt-free — no tracking needed.
+              Allocate your income into four buckets before spending. Once savings and investments are handled automatically, spend the rest guilt-free - no tracking needed.
             </p>
           </div>
         </div>
@@ -361,13 +361,13 @@ export function ConsciousSpendingPlan({ state, onUpdate }: ConsciousSpendingPlan
                 {overTarget && (
                   <p className="text-[10px] text-red-400 mt-1">
                     {bucket === 'fixed'
-                      ? 'Fixed costs over 60% — this is a structural problem. Consider housing cost or income changes.'
-                      : `Over target range — consider reallocating to investments or savings.`}
+                      ? 'Fixed costs over 60% - this is a structural problem. Consider housing cost or income changes.'
+                      : `Over target range - consider reallocating to investments or savings.`}
                   </p>
                 )}
                 {bucket === 'investment' && income > 0 && pct < target.min && (
                   <p className="text-[10px] text-amber-400 mt-1">
-                    Investments below 10% — automating an <FinanceTerm termId="sparplan" label="ETF-Sparplan" /> will fix this.
+                    Investments below 10% - automating an <FinanceTerm termId="sparplan" label="ETF-Sparplan" /> will fix this.
                   </p>
                 )}
               </div>
@@ -545,7 +545,7 @@ export function ConsciousSpendingPlan({ state, onUpdate }: ConsciousSpendingPlan
 
           {unallocated > 0 && (
             <p className="mt-3 text-xs text-amber-400">
-              You have €{unallocated.toLocaleString('de-DE')} unallocated. Add it to Investments or Savings — don't leave it as float in your Girokonto.
+              You have €{unallocated.toLocaleString('de-DE')} unallocated. Add it to Investments or Savings - don't leave it as float in your Girokonto.
             </p>
           )}
         </section>

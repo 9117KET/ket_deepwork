@@ -110,7 +110,7 @@ export function RichLifeVision({ state, onUpdate }: RichLifeVisionProps) {
               What is your <FinanceTerm termId="rich-life" label="Rich Life" />?
             </h2>
             <p className="text-xs text-share-onSurfaceVariant mt-2 leading-relaxed">
-              Before any spreadsheets or savings rates, Ramit Sethi starts with one question: what does a rich life look like to YOU specifically? Not a generic answer — yours. The numbers follow the vision, not the other way around.
+              Before any spreadsheets or savings rates, start with one question: what does a rich life look like to YOU specifically? Not a generic answer - yours. The numbers follow the vision, not the other way around.
             </p>
             <p className="text-xs text-share-onSurfaceVariant mt-2 leading-relaxed">
               Write freely. What would you do if money wasn't a constraint? Where would you live? What experiences would you have? What would you stop worrying about? There are no wrong answers.
@@ -210,7 +210,7 @@ export function RichLifeVision({ state, onUpdate }: RichLifeVisionProps) {
               </span>
             </div>
             <p className="text-[10px] text-share-onSurfaceVariant/50 mt-1">
-              This is your target — your Conscious Spending Plan funds it.
+              This is your target - your Conscious Spending Plan funds it.
             </p>
           </div>
         )}

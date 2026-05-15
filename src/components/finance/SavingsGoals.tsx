@@ -38,14 +38,18 @@ function formatMonths(months: number): string {
   return m > 0 ? `${y}yr ${m}mo` : `${y}yr`
 }
 
-const GOAL_ICONS = ['🎯', '✈️', '🏠', '🚗', '💍', '💊', '📚', '🎓', '🌴', '💻', '🎸', '⛰️', '🐶', '👶']
+const GOAL_ICONS = [
+  'flag', 'flight', 'home', 'directions_car', 'diamond',
+  'health_and_safety', 'menu_book', 'school', 'beach_access', 'laptop',
+  'piano', 'landscape', 'pets', 'child_care',
+]
 
 const PRESET_GOALS = [
-  { label: 'Notgroschen (Emergency Fund)', icon: '🛡️', targetAmount: 9000, monthlyContribution: 200 },
-  { label: 'Urlaub (Vacation)', icon: '✈️', targetAmount: 2000, monthlyContribution: 150 },
-  { label: 'Auto (Car)', icon: '🚗', targetAmount: 8000, monthlyContribution: 300 },
-  { label: 'Anzahlung (Down Payment)', icon: '🏠', targetAmount: 30000, monthlyContribution: 500 },
-  { label: 'Laptop / Tech', icon: '💻', targetAmount: 1500, monthlyContribution: 100 },
+  { label: 'Notgroschen (Emergency Fund)', icon: 'shield', targetAmount: 9000, monthlyContribution: 200 },
+  { label: 'Urlaub (Vacation)', icon: 'flight', targetAmount: 2000, monthlyContribution: 150 },
+  { label: 'Auto (Car)', icon: 'directions_car', targetAmount: 8000, monthlyContribution: 300 },
+  { label: 'Anzahlung (Down Payment)', icon: 'home', targetAmount: 30000, monthlyContribution: 500 },
+  { label: 'Laptop / Tech', icon: 'laptop', targetAmount: 1500, monthlyContribution: 100 },
 ]
 
 interface SavingsGoalsProps {
@@ -208,7 +212,9 @@ export function SavingsGoals({ state, onUpdate }: SavingsGoalsProps) {
               onClick={() => handlePreset(p)}
               className="w-full text-left flex items-center gap-3 rounded-lg border border-share-outlineVariant bg-share-surfaceContainer hover:bg-share-surfaceContainerHigh p-3 transition-colors"
             >
-              <span className="text-lg">{p.icon}</span>
+              <span className="text-share-primary flex-shrink-0">
+                <MaterialIcon name={p.icon} className="text-[1.3rem]" />
+              </span>
               <div className="flex-1">
                 <p className="text-xs font-medium text-share-onBg">{p.label}</p>
                 <p className="text-[10px] text-share-onSurfaceVariant/60">
@@ -232,9 +238,9 @@ export function SavingsGoals({ state, onUpdate }: SavingsGoalsProps) {
             <button
               type="button"
               onClick={() => setShowIconPicker((v) => !v)}
-              className="text-2xl rounded-lg border border-share-outlineVariant bg-share-surfaceContainer px-3 py-2 hover:bg-share-surfaceContainerHigh transition-colors"
+              className="rounded-lg border border-share-outlineVariant bg-share-surfaceContainer px-3 py-2 hover:bg-share-surfaceContainerHigh transition-colors text-share-primary"
             >
-              {form.icon}
+              <MaterialIcon name={form.icon || 'flag'} className="text-[1.4rem]" />
             </button>
             <div className="flex-1 flex items-center gap-2">
               <input
@@ -256,9 +262,9 @@ export function SavingsGoals({ state, onUpdate }: SavingsGoalsProps) {
                   key={icon}
                   type="button"
                   onClick={() => { setForm((p) => ({ ...p, icon })); setShowIconPicker(false) }}
-                  className={`text-xl rounded p-1 hover:bg-share-surfaceContainerHigh transition-colors ${form.icon === icon ? 'bg-share-primary/20' : ''}`}
+                  className={`rounded p-1.5 hover:bg-share-surfaceContainerHigh transition-colors ${form.icon === icon ? 'bg-share-primary/20 text-share-primary' : 'text-share-onSurfaceVariant'}`}
                 >
-                  {icon}
+                  <MaterialIcon name={icon} className="text-[1.2rem]" />
                 </button>
               ))}
             </div>
@@ -394,7 +400,9 @@ function GoalCard({
   return (
     <div className={`rounded-xl border p-4 space-y-3 ${isCompleted ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-share-outlineVariant bg-share-surfaceContainerLow'}`}>
       <div className="flex items-start gap-3">
-        <span className="text-2xl flex-shrink-0">{goal.icon ?? '🎯'}</span>
+        <span className="text-share-primary flex-shrink-0 mt-0.5">
+          <MaterialIcon name={goal.icon ?? 'flag'} className="text-[1.4rem]" />
+        </span>
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2">
             <p className="text-sm font-semibold text-share-onBg">{goal.label}</p>

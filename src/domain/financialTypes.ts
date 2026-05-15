@@ -218,6 +218,32 @@ export interface ParsedReceipt {
   notes: string | null
 }
 
+// ─── Expense transactions ─────────────────────────────────────────────────────
+
+export type TransactionMethod = 'manual' | 'voice' | 'scanned'
+
+export interface FinanceTransaction {
+  id: string
+  date: string           // ISO date YYYY-MM-DD
+  label: string
+  amount: number         // EUR (always positive)
+  bucket: CSPBucket
+  category?: string      // e.g. 'groceries', 'dining', 'transport'
+  method: TransactionMethod
+  notes?: string
+}
+
+/** Keyed by YYYY-MM (month), each month holds its transaction list. */
+export type TransactionsByMonth = Record<string, FinanceTransaction[]>
+
+// ─── AI advisor chat ──────────────────────────────────────────────────────────
+
+export interface AdvisorMessage {
+  role: 'user' | 'assistant'
+  content: string
+  timestamp: string  // ISO
+}
+
 // ─── Finance journal entries ───────────────────────────────────────────────────
 
 export interface FinanceJournalEntry {
@@ -262,6 +288,12 @@ export interface FinancialState {
 
   // FIRE
   fireSettings?: FIRESettings
+
+  // Expense transactions (keyed by YYYY-MM)
+  transactions?: TransactionsByMonth
+
+  // AI advisor conversation history
+  advisorHistory?: AdvisorMessage[]
 
   // Journal
   journalEntries?: FinanceJournalEntry[]
