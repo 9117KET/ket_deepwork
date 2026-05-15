@@ -15,6 +15,8 @@ import { NetWorthTracker } from '../components/finance/NetWorthTracker'
 import { AccountTracker } from '../components/finance/AccountTracker'
 import { AutomationChecklist } from '../components/finance/AutomationChecklist'
 import { DebtManager } from '../components/finance/DebtManager'
+import { InvestmentsTab } from '../components/finance/InvestmentsTab'
+import { FIRECalculator } from '../components/finance/FIRECalculator'
 import { FinanceLearn } from '../components/finance/FinanceLearn'
 import { useFinancialState } from '../storage/financialStorage'
 import { MaterialIcon } from '../components/ui/MaterialIcon'
@@ -69,6 +71,10 @@ export function FinancialPlannerPage() {
         )
       case 'debts':
         return <DebtManager state={state} onUpdate={update} />
+      case 'investments':
+        return <InvestmentsTab state={state} onUpdate={update} />
+      case 'fire':
+        return <FIRECalculator state={state} onUpdate={update} />
       case 'learn':
         return <FinanceLearn />
       default:

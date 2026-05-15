@@ -35,8 +35,8 @@ const TABS: TabConfig[] = [
   { id: 'netWorth',     label: 'Net Worth',      icon: 'account_balance_wallet', available: true  },
   { id: 'accounts',     label: 'Accounts',       icon: 'account_balance',       available: true  },
   { id: 'debts',        label: 'Debts',          icon: 'credit_card',           available: true  },
-  { id: 'investments',  label: 'Investments',    icon: 'trending_up',           available: false },
-  { id: 'fire',         label: 'FIRE',           icon: 'local_fire_department', available: false },
+  { id: 'investments',  label: 'Investments',    icon: 'trending_up',           available: true  },
+  { id: 'fire',         label: 'FIRE',           icon: 'local_fire_department', available: true  },
   { id: 'learn',        label: 'Learn',          icon: 'school',                available: true  },
 ]
 
