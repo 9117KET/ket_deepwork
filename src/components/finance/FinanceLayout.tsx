@@ -19,6 +19,8 @@ export type FinanceTab =
   | 'debts'
   | 'investments'
   | 'fire'
+  | 'goals'
+  | 'journal'
   | 'learn'
 
 interface TabConfig {
@@ -37,6 +39,8 @@ const TABS: TabConfig[] = [
   { id: 'debts',        label: 'Debts',          icon: 'credit_card',           available: true  },
   { id: 'investments',  label: 'Investments',    icon: 'trending_up',           available: true  },
   { id: 'fire',         label: 'FIRE',           icon: 'local_fire_department', available: true  },
+  { id: 'goals',        label: 'Goals',          icon: 'flag',                  available: true  },
+  { id: 'journal',      label: 'Journal',        icon: 'menu_book',             available: true  },
   { id: 'learn',        label: 'Learn',          icon: 'school',                available: true  },
 ]
 

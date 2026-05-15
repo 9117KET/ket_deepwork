@@ -47,6 +47,11 @@ export default defineSchema({
     .index("by_token", ["token"])
     .index("by_owner", ["ownerUserId"]),
 
+  financialSettings: defineTable({
+    userId: v.string(),
+    data: v.any(),
+  }).index("by_user", ["userId"]),
+
   googleCalendarConnections: defineTable({
     userId: v.string(),
     encryptedRefreshToken: v.string(),

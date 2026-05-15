@@ -205,6 +205,19 @@ export interface AutomationItem {
   isSetUp: boolean
 }
 
+// ─── Receipt scanner ──────────────────────────────────────────────────────────
+
+export interface ParsedReceipt {
+  merchant: string | null
+  date: string | null
+  total: number | null
+  currency: string
+  category: string
+  suggestedBucket: CSPBucket
+  items: Array<{ description: string; amount: number }>
+  notes: string | null
+}
+
 // ─── Finance journal entries ───────────────────────────────────────────────────
 
 export interface FinanceJournalEntry {

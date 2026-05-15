@@ -2,10 +2,12 @@
  * storage/financialStorage.ts
  *
  * Persistence for FinancialState.
- * Phase 1: localStorage only. Phase 2 will add Convex sync.
+ * localStorage as primary (instant, offline) + Convex sync when authenticated.
  */
 
 import { useState, useEffect, useRef } from 'react'
+import { useQuery, useMutation, useConvexAuth } from 'convex/react'
+import { api } from '../../convex/_generated/api'
 import type { FinancialState } from '../domain/financialTypes'
 import { DEFAULT_BIG_WINS, DEFAULT_AUTOMATIONS } from '../domain/financialTypes'
 
@@ -45,13 +47,7 @@ function safeParse(raw: string | null): PersistedFinance | null {
   }
 }
 
-function readState(): FinancialState {
-  if (typeof window === 'undefined') return EMPTY_STATE
-  const raw = window.localStorage.getItem(STORAGE_KEY)
-  const parsed = safeParse(raw)
-  if (!parsed) return EMPTY_STATE
-  // Seed defaults for newly added fields
-  const s = parsed.state
+function seedDefaults(s: FinancialState): FinancialState {
   return {
     ...s,
     bigWins: s.bigWins ?? DEFAULT_BIG_WINS.map((w) => ({ ...w })),
@@ -59,6 +55,13 @@ function readState(): FinancialState {
     taxSettings: s.taxSettings ?? EMPTY_STATE.taxSettings,
     fireSettings: { ...EMPTY_STATE.fireSettings, ...s.fireSettings },
   }
+}
+
+function readState(): FinancialState {
+  if (typeof window === 'undefined') return EMPTY_STATE
+  const raw = window.localStorage.getItem(STORAGE_KEY)
+  const parsed = safeParse(raw)
+  return parsed ? seedDefaults(parsed.state) : EMPTY_STATE
 }
 
 function writeState(state: FinancialState): void {
@@ -75,18 +78,58 @@ export function useFinancialState(): [
   FinancialState,
   (updater: (prev: FinancialState) => FinancialState) => void,
 ] {
+  const { isAuthenticated } = useConvexAuth()
   const [state, setState] = useState<FinancialState>(() => readState())
-  const pendingWrite = useRef(false)
+  const remoteDoc = useQuery(api.financialSettings.get, isAuthenticated ? {} : 'skip')
+  const saveToConvex = useMutation(api.financialSettings.save)
+
+  const initialSyncDone = useRef(false)
+  const syncTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const stateRef = useRef(state)
 
   useEffect(() => {
-    if (pendingWrite.current) {
-      writeState(state)
-      pendingWrite.current = false
-    }
+    stateRef.current = state
+    writeState(state)
   }, [state])
 
+  // On first auth, merge remote state (remote wins for fields that exist remotely)
+  useEffect(() => {
+    if (!isAuthenticated || remoteDoc === undefined || initialSyncDone.current) return
+    initialSyncDone.current = true
+    if (remoteDoc?.data && typeof remoteDoc.data === 'object') {
+      const remote = seedDefaults(remoteDoc.data as FinancialState)
+      const hasRemoteContent =
+        remote.csp?.monthlyNetIncome ||
+        (remote.richLifeVision?.trim() ?? '') !== '' ||
+        (remote.portfolio?.length ?? 0) > 0
+      if (hasRemoteContent) {
+        // Use queueMicrotask so setState is not called synchronously inside the effect
+        queueMicrotask(() => setState(() => remote))
+      }
+    }
+  }, [remoteDoc, isAuthenticated])
+
+  // Mark initial sync done even if remote has no data yet
+  useEffect(() => {
+    if (!isAuthenticated || remoteDoc === undefined) return
+    if (!initialSyncDone.current) {
+      initialSyncDone.current = true
+    }
+  }, [remoteDoc, isAuthenticated])
+
+  // Debounced sync to Convex after every state change (when authenticated)
+  useEffect(() => {
+    if (!isAuthenticated) return
+    if (syncTimeout.current) clearTimeout(syncTimeout.current)
+    syncTimeout.current = setTimeout(() => {
+      void saveToConvex({ data: stateRef.current })
+    }, 1200)
+    return () => {
+      if (syncTimeout.current) clearTimeout(syncTimeout.current)
+    }
+  }, [state, isAuthenticated, saveToConvex])
+
   const update = (updater: (prev: FinancialState) => FinancialState) => {
-    pendingWrite.current = true
     setState((prev) => updater(prev))
   }
 
