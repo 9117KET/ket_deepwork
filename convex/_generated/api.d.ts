@@ -19,6 +19,8 @@ import type * as http from "../http.js";
 import type * as plannerDays from "../plannerDays.js";
 import type * as receiptParser from "../receiptParser.js";
 import type * as sharing from "../sharing.js";
+import type * as travel from "../travel.js";
+import type * as travelLogic from "../travelLogic.js";
 import type * as userSettings from "../userSettings.js";
 import type * as users from "../users.js";
 
@@ -40,6 +42,8 @@ declare const fullApi: ApiFromModules<{
   plannerDays: typeof plannerDays;
   receiptParser: typeof receiptParser;
   sharing: typeof sharing;
+  travel: typeof travel;
+  travelLogic: typeof travelLogic;
   userSettings: typeof userSettings;
   users: typeof users;
 }>;

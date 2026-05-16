@@ -7,7 +7,6 @@
  */
 
 import { useMemo } from "react"
-import { useActiveTripStatus } from "./useActiveTripStatus"
 import { buildDayContext } from "../domain/dayContext"
 import type { DayContextData } from "../domain/dayContext"
 import type { AppState } from "../domain/types"

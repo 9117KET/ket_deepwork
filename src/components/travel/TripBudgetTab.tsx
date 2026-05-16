@@ -41,7 +41,7 @@ const STATUS_COLORS = {
   over: { bar: "bg-share-error", text: "text-share-error" },
 }
 
-export function TripBudgetTab({ tripId, budget, durationDays, startDate, aiBreakdownHint, onLogToFinance, bridgedExpenseIds }: Props) {
+export function TripBudgetTab({ tripId, budget, aiBreakdownHint, onLogToFinance, bridgedExpenseIds }: Props) {
   const updateTrip = useMutation(api.travel.update)
   const [setupMode, setSetupMode] = useState(!budget)
   const [totalInput, setTotalInput] = useState(budget ? String(budget.totalBudget) : "")
