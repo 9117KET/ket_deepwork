@@ -1,8 +1,15 @@
-import { mutation, query, action, internalMutation } from "./_generated/server"
+import { mutation, query, action, internalMutation, internalQuery } from "./_generated/server"
 import { internal } from "./_generated/api"
 import { v } from "convex/values"
 import { buildClaudePrompt, buildPackingItems } from "../src/domain/travelPlanLogic"
 import type { CountryInfo, WeatherData } from "../src/domain/travelPlanLogic"
+import {
+  DEFAULT_PREP_TASKS,
+  buildPreTripTasks,
+  buildPreTripTasksPrompt,
+  parseAITaskSpecs,
+  groupTasksByDate,
+} from "../src/domain/preTripTasks"
 
 // ── Queries ──────────────────────────────────────────────────────────────────
 
@@ -154,6 +161,113 @@ export const generatePlan = action({
       dailyPlan: plan.dailyPlan ?? [],
       packingList: buildPackingItems(plan.packingList as string[]),
     })
+  },
+})
+
+// ── Pre-trip planner injection ───────────────────────────────────────────────
+
+export const getPlannerDay = internalQuery({
+  args: { userId: v.string(), date: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("plannerDays")
+      .withIndex("by_user_date", (q) => q.eq("userId", args.userId).eq("date", args.date))
+      .unique()
+  },
+})
+
+export const upsertPlannerDayWithTasks = internalMutation({
+  args: {
+    userId: v.string(),
+    date: v.string(),
+    newTasks: v.array(v.any()),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("plannerDays")
+      .withIndex("by_user_date", (q) => q.eq("userId", args.userId).eq("date", args.date))
+      .unique()
+    if (existing) {
+      const merged = [...(existing.tasks as unknown[]), ...args.newTasks]
+      await ctx.db.patch(existing._id, { tasks: merged })
+    } else {
+      await ctx.db.insert("plannerDays", {
+        userId: args.userId,
+        date: args.date,
+        tasks: args.newTasks,
+        deepWorkSessions: [],
+      })
+    }
+  },
+})
+
+export const injectPreTripTasks = action({
+  args: {
+    tripId: v.id("travelTrips"),
+    destination: v.string(),
+    purpose: v.string(),
+    durationDays: v.number(),
+    lifeStage: v.string(),
+    startDate: v.string(),
+    useAI: v.boolean(),
+  },
+  handler: async (ctx, args): Promise<{ injectedCount: number; datesAffected: number }> => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) throw new Error("Not authenticated")
+    const userId = identity.subject
+
+    const today = new Date().toISOString().slice(0, 10)
+
+    let specs = DEFAULT_PREP_TASKS
+
+    if (args.useAI) {
+      try {
+        const prompt = buildPreTripTasksPrompt(
+          args.destination,
+          args.purpose,
+          args.durationDays,
+          args.lifeStage,
+          args.startDate,
+        )
+        const apiKey = process.env.ANTHROPIC_API_KEY
+        if (apiKey) {
+          const res = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: {
+              "x-api-key": apiKey,
+              "anthropic-version": "2023-06-01",
+              "content-type": "application/json",
+            },
+            body: JSON.stringify({
+              model: "claude-sonnet-4-6",
+              max_tokens: 1024,
+              messages: [{ role: "user", content: prompt }],
+            }),
+          })
+          if (res.ok) {
+            const data = await res.json() as { content: Array<{ type: string; text: string }> }
+            const rawText = data.content.find((c) => c.type === "text")?.text ?? ""
+            const parsed = parseAITaskSpecs(rawText)
+            if (parsed.length >= 4) specs = parsed
+          }
+        }
+      } catch {
+        // Fall back to default tasks if AI call fails
+      }
+    }
+
+    const tasks = buildPreTripTasks(specs, args.startDate, today)
+    const byDate = groupTasksByDate(tasks)
+
+    for (const [date, dateTasks] of Object.entries(byDate)) {
+      await ctx.runMutation(internal.travel.upsertPlannerDayWithTasks, {
+        userId,
+        date,
+        newTasks: dateTasks,
+      })
+    }
+
+    return { injectedCount: tasks.length, datesAffected: Object.keys(byDate).length }
   },
 })
 

@@ -26,11 +26,14 @@ export function TripDetailPage() {
   const navigate = useNavigate()
   const trip = useQuery(api.travel.get, tripId ? { id: tripId as Id<"travelTrips"> } : "skip")
   const generatePlan = useAction(api.travel.generatePlan)
+  const injectPreTripTasks = useAction(api.travel.injectPreTripTasks)
   const updateTrip = useMutation(api.travel.update)
 
   const [activeTab, setActiveTab] = useState<Tab>("overview")
   const [generating, setGenerating] = useState(false)
   const [generateError, setGenerateError] = useState("")
+  const [injecting, setInjecting] = useState(false)
+  const [injectResult, setInjectResult] = useState<{ count: number; dates: number } | null>(null)
   const [notes, setNotes] = useState<string | null>(null)
   const [savingNotes, setSavingNotes] = useState(false)
 
@@ -85,6 +88,26 @@ export function TripDetailPage() {
       setGenerateError((err as Error).message ?? "Failed to generate plan")
     } finally {
       setGenerating(false)
+    }
+  }
+
+  async function handleInjectTasks() {
+    if (!trip?.startDate) return
+    setInjecting(true)
+    setInjectResult(null)
+    try {
+      const result = await injectPreTripTasks({
+        tripId: trip._id,
+        destination: trip.destination,
+        purpose: trip.purpose,
+        durationDays: trip.durationDays,
+        lifeStage: trip.lifeStage,
+        startDate: trip.startDate,
+        useAI: Boolean(trip.generatedPlan),
+      })
+      setInjectResult({ count: result.injectedCount, dates: result.datesAffected })
+    } finally {
+      setInjecting(false)
     }
   }
 
@@ -156,6 +179,30 @@ export function TripDetailPage() {
             </button>
           )}
         </div>
+
+        {trip.startDate && (
+          <button
+            type="button"
+            onClick={() => void handleInjectTasks()}
+            disabled={injecting}
+            title="Add preparation tasks to your Deepblock planner"
+            className="flex items-center gap-1 rounded-xl border border-share-outlineVariant px-3 py-2 text-xs font-medium text-share-onSurfaceVariant hover:text-share-onBg hover:border-share-primary/40 disabled:opacity-50 transition-colors shrink-0"
+          >
+            <MaterialIcon name="add_task" className="text-[0.9rem]" />
+            {injecting ? "Injecting…" : "Add to Planner"}
+          </button>
+        )}
+        {injectResult && (
+          <div className="flex items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-3 py-1.5">
+            <MaterialIcon name="check_circle" className="text-[0.9rem] text-emerald-400" />
+            <span className="text-xs text-emerald-400 font-medium">
+              {injectResult.count} tasks added across {injectResult.dates} days
+            </span>
+            <button type="button" onClick={() => setInjectResult(null)} className="text-emerald-400/60 hover:text-emerald-400">
+              <MaterialIcon name="close" className="text-[0.8rem]" />
+            </button>
+          </div>
+        )}
 
         {generateError && (
           <div className="rounded-xl border border-share-error/20 bg-share-error/5 px-4 py-3">
