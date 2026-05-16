@@ -95,7 +95,7 @@ export function TripItineraryTab({ tripId, dailyPlan, durationDays, startDate }:
   return (
     <div className="space-y-4">
       {days.map((day, dayIndex) => (
-        <div key={dayIndex} className="rounded-2xl border border-share-outlineVariant bg-share-surfaceContainer overflow-hidden">
+        <div key={dayIndex} id={`day-${day.day}`} className="rounded-2xl border border-share-outlineVariant bg-share-surfaceContainer overflow-hidden">
           <div className="flex items-center justify-between px-5 py-3 border-b border-share-outlineVariant bg-share-surfaceContainerLow">
             <div>
               <span className="text-xs font-bold text-share-primary uppercase tracking-wide">

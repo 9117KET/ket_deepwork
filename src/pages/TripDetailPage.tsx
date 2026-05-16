@@ -9,13 +9,16 @@ import { TripOverviewTab } from "../components/travel/TripOverviewTab"
 import { TripItineraryTab } from "../components/travel/TripItineraryTab"
 import { TripPackingTab } from "../components/travel/TripPackingTab"
 import { TripBudgetTab } from "../components/travel/TripBudgetTab"
+import { TripMapTab } from "../components/travel/TripMapTab"
 import type { TripBudget } from "../domain/travelBudget"
+import type { DayPlanWithCoords, PlaceWithCoords } from "../domain/travelMap"
 
-type Tab = "overview" | "itinerary" | "packing" | "budget" | "notes"
+type Tab = "overview" | "itinerary" | "map" | "packing" | "budget" | "notes"
 
 const TABS: Array<{ id: Tab; label: string; icon: string }> = [
   { id: "overview", label: "Overview", icon: "info" },
   { id: "itinerary", label: "Itinerary", icon: "event_note" },
+  { id: "map", label: "Map", icon: "map" },
   { id: "packing", label: "Packing", icon: "backpack" },
   { id: "budget", label: "Budget", icon: "account_balance_wallet" },
   { id: "notes", label: "Notes", icon: "edit_note" },
@@ -268,6 +271,21 @@ export function TripDetailPage() {
             dailyPlan={dailyPlan}
             durationDays={trip.durationDays}
             startDate={trip.startDate}
+          />
+        )}
+
+        {activeTab === "map" && (
+          <TripMapTab
+            tripId={trip._id}
+            dailyPlan={dailyPlan as DayPlanWithCoords[]}
+            placesToVisit={(generatedPlan ? (generatedPlan as Record<string, unknown>).placesToVisit ?? [] : []) as PlaceWithCoords[]}
+            destination={trip.destination}
+            onPinSelect={(day, _actIndex) => {
+              setActiveTab("itinerary")
+              void Promise.resolve().then(() => {
+                document.getElementById(`day-${day}`)?.scrollIntoView({ behavior: "smooth", block: "start" })
+              })
+            }}
           />
         )}
 
