@@ -1,23 +1,21 @@
 import { mutation, query, action, internalMutation, internalQuery } from "./_generated/server"
 import { internal } from "./_generated/api"
 import { v } from "convex/values"
-import { buildClaudePrompt, buildPackingItems } from "../src/domain/travelPlanLogic"
-import type { CountryInfo, WeatherData } from "../src/domain/travelPlanLogic"
 import {
+  buildClaudePrompt,
+  buildPackingItems,
   DEFAULT_PREP_TASKS,
   buildPreTripTasks,
   buildPreTripTasksPrompt,
   parseAITaskSpecs,
   groupTasksByDate,
-} from "../src/domain/preTripTasks"
-import {
   buildHabitAdvisorPrompt,
   parseHabitAdvice,
   buildFallbackAdviceList,
-} from "../src/domain/habitAdvisor"
-import type { HabitDefinition } from "../src/domain/habitAdvisor"
-import { buildTripSystemPrompt, buildApiMessages } from "../src/domain/tripChat"
-import type { TripContext } from "../src/domain/tripChat"
+  buildTripSystemPrompt,
+  buildApiMessages,
+} from "./travelLogic"
+import type { CountryInfo, WeatherData, HabitDefinition, TripContext } from "./travelLogic"
 
 // ── Queries ──────────────────────────────────────────────────────────────────
 
