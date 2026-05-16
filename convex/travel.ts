@@ -21,6 +21,26 @@ import type { TripContext } from "../src/domain/tripChat"
 
 // ── Queries ──────────────────────────────────────────────────────────────────
 
+/** Returns the trip whose date range contains the given ISO date, or null. */
+export const getActiveOnDate = query({
+  args: { date: v.string() },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) return null
+    const userId = identity.subject
+    const trips = await ctx.db
+      .query("travelTrips")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect()
+    return trips.find((t) => {
+      if (!t.startDate) return false
+      if (args.date < t.startDate) return false
+      if (t.endDate && args.date > t.endDate) return false
+      return true
+    }) ?? null
+  },
+})
+
 export const list = query({
   args: {},
   handler: async (ctx) => {

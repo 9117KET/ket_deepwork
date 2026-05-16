@@ -68,6 +68,10 @@ import { TomorrowMustPanel } from "./TomorrowMustPanel";
 import { MustDoPinnedHeader } from "./MustDoPinnedHeader";
 import { SideQuestSection } from "./SideQuestSection";
 import { MobileTabBar, type MobileTab } from "./MobileTabBar";
+import { ActiveTripBanner } from "./ActiveTripBanner";
+import { DaySummaryCard } from "./DaySummaryCard";
+import { useActiveTripStatus } from "../../hooks/useActiveTripStatus";
+import { useDayContext } from "../../hooks/useDayContext";
 import { createTaskId, reorderTasks, getOrderedTasksForSection, getDescendantIds, cloneTasksForDay } from "../../domain/taskUtils";
 
 function formatDateLabel(isoDay: string): string {
@@ -835,6 +839,14 @@ export function DayPlanner({
     [appState.days, habitIds, selectedDay],
   );
 
+  const activeTripStatus = useActiveTripStatus(selectedDay);
+  const travelingToday = activeTripStatus !== null;
+
+  const dayCtx = useDayContext(selectedDay, {
+    appState,
+    habitIds,
+  });
+
   const handleToggleHabit = useCallback(
     (habitId: string, value: boolean) => {
       updateAppState((prev) => {
@@ -1477,6 +1489,10 @@ export function DayPlanner({
             onUpdate={(id, patch) => handleUpdateTask(id, patch)}
           />
         )}
+        {/* Active trip context banner */}
+        {!shareMode && activeTripStatus && (
+          <ActiveTripBanner trip={activeTripStatus} />
+        )}
         {/* Copy/fill: owner only — don't expose other days' tasks to shared visitors */}
         {!shareMode && dayState.tasks.filter(t => t.sectionId !== 'mustDo').length === 0 && (() => {
           const copyOptions: { label: string; sourceDate: string; title?: string }[] = [];
@@ -1777,6 +1793,8 @@ export function DayPlanner({
             />
 
             <div className="hidden lg:block space-y-3 lg:sticky lg:top-20 lg:max-h-[calc(100vh-5.5rem)] lg:overflow-y-auto lg:pr-1" data-tour="sidebar">
+              {/* Cross-section day snapshot */}
+              {!shareMode && <DaySummaryCard ctx={dayCtx} />}
               {/* Deep work timer: most-used active tool — placed first for immediate reach */}
               {!shareMode && <DeepWorkTimer onSessionComplete={handleSessionComplete} />}
               {!shareMode && (
@@ -1789,6 +1807,7 @@ export function DayPlanner({
                   onToggle={handleToggleHabit}
                   onSetIdentity={handleSetIdentity}
                   onEditHabits={() => setEditHabitsOpen(true)}
+                  travelingToday={travelingToday}
                 />
               )}
               {/* The ONE Thing: day/week/month focus — consulted daily */}
@@ -1858,6 +1877,7 @@ export function DayPlanner({
                 identityStatement={appState.identityStatement ?? ''}
                 onToggle={handleToggleHabit}
                 onSetIdentity={handleSetIdentity}
+                travelingToday={travelingToday}
                 onEditHabits={() => setEditHabitsOpen(true)}
               />
             </div>
