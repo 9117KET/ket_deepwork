@@ -10,6 +10,7 @@ import { TripItineraryTab } from "../components/travel/TripItineraryTab"
 import { TripPackingTab } from "../components/travel/TripPackingTab"
 import { TripBudgetTab } from "../components/travel/TripBudgetTab"
 import { TripMapTab } from "../components/travel/TripMapTab"
+import { TripChatAssistant } from "../components/travel/TripChatAssistant"
 import type { TripBudget } from "../domain/travelBudget"
 import type { DayPlanWithCoords, PlaceWithCoords } from "../domain/travelMap"
 
@@ -244,7 +245,14 @@ export function TripDetailPage() {
 
         {/* Tab content */}
         {activeTab === "overview" && generatedPlan && (
-          <TripOverviewTab plan={generatedPlan as never} />
+          <TripOverviewTab
+            plan={generatedPlan as never}
+            tripId={trip._id}
+            dailyPlan={dailyPlan}
+            destination={trip.destination}
+            purpose={trip.purpose}
+            durationDays={trip.durationDays}
+          />
         )}
         {activeTab === "overview" && !generatedPlan && (
           <div className="flex flex-col items-center justify-center py-20 text-share-onSurfaceVariant gap-4">
@@ -323,6 +331,16 @@ export function TripDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Floating chat assistant - shown when plan is generated */}
+      {generatedPlan && (
+        <TripChatAssistant
+          tripId={trip._id}
+          destination={trip.destination}
+          startDate={trip.startDate}
+          durationDays={trip.durationDays}
+        />
+      )}
     </AppChrome>
   )
 }

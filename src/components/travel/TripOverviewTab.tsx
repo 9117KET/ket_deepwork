@@ -1,4 +1,8 @@
 import { MaterialIcon } from "../ui/MaterialIcon"
+import { DeepWorkWindowsCard } from "./DeepWorkWindowsCard"
+import { HabitAdvisorCard } from "./HabitAdvisorCard"
+import type { Id } from "../../../convex/_generated/dataModel"
+import type { DayPlan } from "../../domain/deepWorkWindows"
 
 interface GeneratedPlan {
   summary?: string
@@ -15,9 +19,14 @@ interface GeneratedPlan {
 
 interface Props {
   plan: GeneratedPlan
+  tripId: Id<"travelTrips">
+  dailyPlan: DayPlan[]
+  destination: string
+  purpose: string
+  durationDays: number
 }
 
-export function TripOverviewTab({ plan }: Props) {
+export function TripOverviewTab({ plan, tripId, dailyPlan, destination, purpose, durationDays }: Props) {
   return (
     <div className="space-y-4">
       {plan.summary && (
@@ -90,6 +99,13 @@ export function TripOverviewTab({ plan }: Props) {
           </ul>
         </div>
       )}
+
+      {/* Deepblock-native features */}
+      {dailyPlan.length > 0 && (
+        <DeepWorkWindowsCard tripId={tripId} dailyPlan={dailyPlan} />
+      )}
+
+      <HabitAdvisorCard destination={destination} purpose={purpose} durationDays={durationDays} />
     </div>
   )
 }

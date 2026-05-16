@@ -10,6 +10,14 @@ import {
   parseAITaskSpecs,
   groupTasksByDate,
 } from "../src/domain/preTripTasks"
+import {
+  buildHabitAdvisorPrompt,
+  parseHabitAdvice,
+  buildFallbackAdviceList,
+} from "../src/domain/habitAdvisor"
+import type { HabitDefinition } from "../src/domain/habitAdvisor"
+import { buildTripSystemPrompt, buildApiMessages } from "../src/domain/tripChat"
+import type { TripContext } from "../src/domain/tripChat"
 
 // ── Queries ──────────────────────────────────────────────────────────────────
 
@@ -268,6 +276,130 @@ export const injectPreTripTasks = action({
     }
 
     return { injectedCount: tasks.length, datesAffected: Object.keys(byDate).length }
+  },
+})
+
+// ── Habit continuation advisor ───────────────────────────────────────────────
+
+export const getHabitAdvice = action({
+  args: {
+    destination: v.string(),
+    purpose: v.string(),
+    durationDays: v.number(),
+  },
+  handler: async (ctx, args): Promise<Array<{ habitId: string; label: string; verdict: string; reason: string }>> => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) throw new Error("Not authenticated")
+    const userId = identity.subject
+
+    const settings = await ctx.runQuery(internal.travel.getUserSettings, { userId })
+    const habits: HabitDefinition[] = (settings?.habitDefinitions ?? []) as HabitDefinition[]
+
+    if (habits.length === 0) return []
+
+    const prompt = buildHabitAdvisorPrompt(habits, args.destination, args.purpose, args.durationDays)
+
+    try {
+      const apiKey = process.env.ANTHROPIC_API_KEY
+      if (!apiKey) return buildFallbackAdviceList(habits)
+
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-6",
+          max_tokens: 1024,
+          messages: [{ role: "user", content: prompt }],
+        }),
+      })
+
+      if (!res.ok) return buildFallbackAdviceList(habits)
+
+      const data = await res.json() as { content: Array<{ type: string; text: string }> }
+      const rawText = data.content.find((c) => c.type === "text")?.text ?? ""
+      return parseHabitAdvice(rawText, habits)
+    } catch {
+      return buildFallbackAdviceList(habits)
+    }
+  },
+})
+
+export const getUserSettings = internalQuery({
+  args: { userId: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("userSettings")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .unique()
+  },
+})
+
+// ── Mid-trip chat ────────────────────────────────────────────────────────────
+
+export const chat = action({
+  args: {
+    tripId: v.id("travelTrips"),
+    history: v.array(v.object({ role: v.union(v.literal("user"), v.literal("assistant")), content: v.string() })),
+    message: v.string(),
+  },
+  handler: async (ctx, args): Promise<string> => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) throw new Error("Not authenticated")
+
+    const trip = await ctx.runQuery(internal.travel.getTripInternal, { id: args.tripId, userId: identity.subject })
+    if (!trip) throw new Error("Trip not found")
+
+    const tripCtx: TripContext = {
+      name: trip.name as string,
+      destination: trip.destination as string,
+      purpose: trip.purpose as string,
+      durationDays: trip.durationDays as number,
+      startDate: trip.startDate as string | undefined,
+      budgetPreference: trip.budgetPreference as string,
+    }
+
+    const today = new Date().toISOString().slice(0, 10)
+    const systemPrompt = buildTripSystemPrompt(tripCtx, (trip.dailyPlan ?? []) as never, today)
+    const messages = buildApiMessages(args.history, args.message)
+
+    const apiKey = process.env.ANTHROPIC_API_KEY
+    if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not configured")
+
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 512,
+        system: systemPrompt,
+        messages,
+      }),
+    })
+
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => "(no body)")
+      throw new Error(`Claude API error (${res.status}): ${errBody.slice(0, 200)}`)
+    }
+
+    const data = await res.json() as { content: Array<{ type: string; text: string }> }
+    return data.content.find((c) => c.type === "text")?.text ?? ""
+  },
+})
+
+export const getTripInternal = internalQuery({
+  args: { id: v.id("travelTrips"), userId: v.string() },
+  handler: async (ctx, args) => {
+    const trip = await ctx.db.get(args.id)
+    if (!trip || trip.userId !== args.userId) return null
+    return trip
   },
 })
 
