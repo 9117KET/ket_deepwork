@@ -1,0 +1,291 @@
+import { mutation, query, action, internalMutation } from "./_generated/server"
+import { internal } from "./_generated/api"
+import { v } from "convex/values"
+import { buildClaudePrompt, buildPackingItems } from "../src/domain/travelPlanLogic"
+import type { CountryInfo, WeatherData } from "../src/domain/travelPlanLogic"
+
+// ── Queries ──────────────────────────────────────────────────────────────────
+
+export const list = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) return []
+    const userId = identity.subject
+    return await ctx.db
+      .query("travelTrips")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect()
+  },
+})
+
+export const get = query({
+  args: { id: v.id("travelTrips") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) return null
+    const trip = await ctx.db.get(args.id)
+    if (!trip || trip.userId !== identity.subject) return null
+    return trip
+  },
+})
+
+// ── Mutations ────────────────────────────────────────────────────────────────
+
+export const create = mutation({
+  args: {
+    name: v.string(),
+    destination: v.string(),
+    origin: v.optional(v.string()),
+    startDate: v.optional(v.string()),
+    endDate: v.optional(v.string()),
+    durationDays: v.number(),
+    purpose: v.string(),
+    lifeStage: v.string(),
+    budgetPreference: v.string(),
+    accommodationPreference: v.string(),
+    benefits: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) throw new Error("Not authenticated")
+    return await ctx.db.insert("travelTrips", {
+      ...args,
+      userId: identity.subject,
+      status: "planning",
+    })
+  },
+})
+
+export const update = mutation({
+  args: {
+    id: v.id("travelTrips"),
+    name: v.optional(v.string()),
+    destination: v.optional(v.string()),
+    origin: v.optional(v.string()),
+    startDate: v.optional(v.string()),
+    endDate: v.optional(v.string()),
+    durationDays: v.optional(v.number()),
+    purpose: v.optional(v.string()),
+    lifeStage: v.optional(v.string()),
+    budgetPreference: v.optional(v.string()),
+    accommodationPreference: v.optional(v.string()),
+    benefits: v.optional(v.string()),
+    generatedPlan: v.optional(v.any()),
+    dailyPlan: v.optional(v.array(v.any())),
+    budget: v.optional(v.any()),
+    packingList: v.optional(v.array(v.any())),
+    notes: v.optional(v.string()),
+    status: v.optional(v.union(v.literal("planning"), v.literal("active"), v.literal("completed"))),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) throw new Error("Not authenticated")
+    const trip = await ctx.db.get(args.id)
+    if (!trip || trip.userId !== identity.subject) throw new Error("Not found")
+    const { id, ...patch } = args
+    await ctx.db.patch(id, patch)
+  },
+})
+
+export const remove = mutation({
+  args: { id: v.id("travelTrips") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) throw new Error("Not authenticated")
+    const trip = await ctx.db.get(args.id)
+    if (!trip || trip.userId !== identity.subject) throw new Error("Not found")
+    await ctx.db.delete(args.id)
+  },
+})
+
+export const applyGeneratedPlan = internalMutation({
+  args: {
+    id: v.id("travelTrips"),
+    generatedPlan: v.any(),
+    dailyPlan: v.array(v.any()),
+    packingList: v.array(v.any()),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.id, {
+      generatedPlan: args.generatedPlan,
+      dailyPlan: args.dailyPlan,
+      packingList: args.packingList,
+    })
+  },
+})
+
+// ── AI generation action ─────────────────────────────────────────────────────
+
+export const generatePlan = action({
+  args: {
+    id: v.id("travelTrips"),
+    origin: v.string(),
+    destination: v.string(),
+    purpose: v.string(),
+    durationDays: v.number(),
+    lifeStage: v.string(),
+    budgetPreference: v.string(),
+    accommodationPreference: v.string(),
+    benefits: v.optional(v.string()),
+    startDate: v.optional(v.string()),
+  },
+  handler: async (ctx, args): Promise<void> => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) throw new Error("Not authenticated")
+
+    const cityQuery = args.destination.includes(",")
+      ? args.destination.split(",")[0]!.trim()
+      : args.destination.trim()
+
+    const [countryInfo, coords] = await Promise.all([
+      fetchCountryInfo(args.destination),
+      fetchCoordinates(cityQuery),
+    ])
+
+    const weather = coords ? await fetchWeatherForecast(coords.lat, coords.lon) : null
+
+    const prompt = buildClaudePrompt(args, countryInfo, weather)
+    const plan = await callClaude(prompt)
+
+    await ctx.runMutation(internal.travel.applyGeneratedPlan, {
+      id: args.id,
+      generatedPlan: plan,
+      dailyPlan: plan.dailyPlan ?? [],
+      packingList: buildPackingItems(plan.packingList as string[]),
+    })
+  },
+})
+
+// ── External data fetchers ───────────────────────────────────────────────────
+
+async function fetchCountryInfo(destination: string): Promise<CountryInfo | null> {
+  const countryQuery = destination.includes(",")
+    ? destination.split(",").pop()!.trim()
+    : destination.trim()
+  const url = `https://restcountries.com/v3.1/name/${encodeURIComponent(countryQuery)}?fields=name,capital,currencies,languages,timezones,flags`
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(5000) })
+    if (!res.ok) return null
+    const data = await res.json() as Array<{
+      name: { common: string }
+      capital?: string[]
+      currencies?: Record<string, { name: string; symbol: string }>
+      languages?: Record<string, string>
+      timezones?: string[]
+      flags?: { emoji?: string }
+    }>
+    if (!data.length) return null
+    const c = data[0]
+    const currencyEntry = c.currencies ? Object.entries(c.currencies)[0] : null
+    return {
+      countryName: c.name.common,
+      capital: c.capital?.[0] ?? "unknown",
+      currency: currencyEntry
+        ? `${currencyEntry[1].name} (${currencyEntry[0]}, ${currencyEntry[1].symbol})`
+        : "unknown",
+      languages: c.languages ? Object.values(c.languages) : [],
+      timezone: c.timezones?.[0] ?? "UTC",
+      flagEmoji: c.flags?.emoji ?? "",
+    }
+  } catch {
+    return null
+  }
+}
+
+async function fetchCoordinates(city: string): Promise<{ lat: number; lon: number } | null> {
+  const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=en`
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(5000) })
+    if (!res.ok) return null
+    const data = await res.json() as { results?: Array<{ latitude: number; longitude: number }> }
+    const r = data.results?.[0]
+    return r ? { lat: r.latitude, lon: r.longitude } : null
+  } catch {
+    return null
+  }
+}
+
+async function fetchWeatherForecast(lat: number, lon: number): Promise<WeatherData | null> {
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_mean&timezone=auto&forecast_days=7`
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(5000) })
+    if (!res.ok) return null
+    const data = await res.json() as {
+      daily?: {
+        temperature_2m_max: number[]
+        temperature_2m_min: number[]
+        precipitation_probability_mean: number[]
+      }
+    }
+    if (!data.daily) return null
+    return {
+      maxTemps: data.daily.temperature_2m_max,
+      minTemps: data.daily.temperature_2m_min,
+      precipProbabilities: data.daily.precipitation_probability_mean,
+    }
+  } catch {
+    return null
+  }
+}
+
+// ── Claude API call ──────────────────────────────────────────────────────────
+
+interface GeneratedPlan {
+  packingList: string[]
+  accommodationRecommendation: string
+  placesToVisit: Array<{ name: string; description?: string }>
+  thingsToDo: string[]
+  gettingAround: string
+  contingencies: string
+  summary?: string
+  weatherSummary?: string
+  currencyInfo?: string
+  visaInfo?: string
+  budgetBreakdown?: string
+  dailyPlan?: Array<{
+    day: number
+    theme: string
+    activities: Array<{
+      time: string
+      name: string
+      type: string
+      durationMinutes: number
+      notes?: string
+    }>
+  }>
+}
+
+async function callClaude(prompt: string): Promise<GeneratedPlan> {
+  const apiKey = process.env.ANTHROPIC_API_KEY
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not configured")
+
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-6",
+      max_tokens: 4096,
+      messages: [{ role: "user", content: prompt }],
+    }),
+  })
+
+  if (!res.ok) {
+    const errBody = await res.text().catch(() => "(no body)")
+    throw new Error(`Claude API error (${res.status}): ${errBody.slice(0, 300)}`)
+  }
+
+  const data = await res.json() as { content: Array<{ type: string; text: string }> }
+  const rawText = data.content.find((c) => c.type === "text")?.text ?? ""
+  const cleaned = rawText.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/, "").trim()
+
+  try {
+    return JSON.parse(cleaned) as GeneratedPlan
+  } catch {
+    throw new Error(`Claude returned invalid JSON. Preview: ${rawText.slice(0, 300)}`)
+  }
+}

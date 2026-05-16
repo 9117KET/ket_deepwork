@@ -1,0 +1,255 @@
+import { useState } from "react"
+import { useParams, useNavigate } from "react-router-dom"
+import { useQuery, useAction, useMutation } from "convex/react"
+import { api } from "../../convex/_generated/api"
+import type { Id } from "../../convex/_generated/dataModel"
+import { AppChrome } from "../components/layout/AppChrome"
+import { MaterialIcon } from "../components/ui/MaterialIcon"
+import { TripOverviewTab } from "../components/travel/TripOverviewTab"
+import { TripItineraryTab } from "../components/travel/TripItineraryTab"
+import { TripPackingTab } from "../components/travel/TripPackingTab"
+
+type Tab = "overview" | "itinerary" | "packing" | "notes"
+
+const TABS: Array<{ id: Tab; label: string; icon: string }> = [
+  { id: "overview", label: "Overview", icon: "info" },
+  { id: "itinerary", label: "Itinerary", icon: "event_note" },
+  { id: "packing", label: "Packing", icon: "backpack" },
+  { id: "notes", label: "Notes", icon: "edit_note" },
+]
+
+export function TripDetailPage() {
+  const { tripId } = useParams<{ tripId: string }>()
+  const navigate = useNavigate()
+  const trip = useQuery(api.travel.get, tripId ? { id: tripId as Id<"travelTrips"> } : "skip")
+  const generatePlan = useAction(api.travel.generatePlan)
+  const updateTrip = useMutation(api.travel.update)
+
+  const [activeTab, setActiveTab] = useState<Tab>("overview")
+  const [generating, setGenerating] = useState(false)
+  const [generateError, setGenerateError] = useState("")
+  const [notes, setNotes] = useState<string | null>(null)
+  const [savingNotes, setSavingNotes] = useState(false)
+
+  if (trip === undefined) {
+    return (
+      <AppChrome headerPositionClass="top-0" mobileActive="travel">
+        <div className="flex items-center justify-center py-24 text-share-onSurfaceVariant">
+          <p className="text-sm">Loading…</p>
+        </div>
+      </AppChrome>
+    )
+  }
+
+  if (trip === null) {
+    return (
+      <AppChrome headerPositionClass="top-0" mobileActive="travel">
+        <div className="flex flex-col items-center justify-center py-24 gap-3">
+          <p className="text-sm text-share-onSurfaceVariant">Trip not found.</p>
+          <button
+            type="button"
+            onClick={() => navigate("/travel")}
+            className="text-xs text-share-primary hover:underline"
+          >
+            Back to trips
+          </button>
+        </div>
+      </AppChrome>
+    )
+  }
+
+  const notesValue = notes ?? (trip.notes ?? "")
+
+  async function handleGenerate() {
+    if (!trip) return
+    setGenerating(true)
+    setGenerateError("")
+    try {
+      await generatePlan({
+        id: trip._id,
+        origin: trip.origin ?? "",
+        destination: trip.destination,
+        purpose: trip.purpose,
+        durationDays: trip.durationDays,
+        lifeStage: trip.lifeStage,
+        budgetPreference: trip.budgetPreference,
+        accommodationPreference: trip.accommodationPreference,
+        benefits: trip.benefits,
+        startDate: trip.startDate,
+      })
+      setActiveTab("overview")
+    } catch (err) {
+      setGenerateError((err as Error).message ?? "Failed to generate plan")
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  async function handleSaveNotes() {
+    if (!trip) return
+    setSavingNotes(true)
+    try {
+      await updateTrip({ id: trip._id, notes: notesValue })
+    } finally {
+      setSavingNotes(false)
+    }
+  }
+
+  const generatedPlan = trip.generatedPlan as Record<string, unknown> | undefined
+  const dailyPlan = (trip.dailyPlan ?? []) as Array<{
+    day: number; theme: string; activities: Array<{
+      time: string; name: string; type: string; durationMinutes: number; notes?: string
+    }>
+  }>
+  const packingList = (trip.packingList ?? []) as Array<{ id: string; text: string; checked: boolean; category: string }>
+
+  return (
+    <AppChrome headerPositionClass="top-0" mobileActive="travel" maxWidthClass="max-w-4xl">
+      <div className="space-y-5">
+        {/* Header */}
+        <div className="flex items-start gap-3">
+          <button
+            type="button"
+            onClick={() => navigate("/travel")}
+            className="mt-0.5 rounded-lg p-1.5 text-share-onSurfaceVariant hover:text-share-onBg hover:bg-share-surfaceContainerHigh transition-colors"
+          >
+            <MaterialIcon name="arrow_back" />
+          </button>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-xl font-bold text-share-onBg truncate">{trip.name}</h1>
+            <p className="text-sm text-share-onSurfaceVariant flex items-center gap-1.5 mt-0.5">
+              <MaterialIcon name="flight_takeoff" className="text-[0.95rem]" />
+              {trip.destination}
+              {trip.startDate && (
+                <>
+                  <span className="opacity-40">·</span>
+                  {formatDate(trip.startDate)}
+                  {` (${trip.durationDays} days)`}
+                </>
+              )}
+            </p>
+          </div>
+
+          {!generatedPlan && (
+            <button
+              type="button"
+              onClick={() => void handleGenerate()}
+              disabled={generating}
+              className="flex items-center gap-1.5 rounded-xl bg-share-primary px-4 py-2 text-sm font-bold text-share-onPrimary hover:opacity-90 disabled:opacity-50 transition-opacity shrink-0"
+            >
+              <MaterialIcon name="auto_awesome" className="text-[1rem]" />
+              {generating ? "Generating…" : "Generate AI Plan"}
+            </button>
+          )}
+          {generatedPlan && (
+            <button
+              type="button"
+              onClick={() => void handleGenerate()}
+              disabled={generating}
+              className="flex items-center gap-1 rounded-xl border border-share-outlineVariant px-3 py-2 text-xs font-medium text-share-onSurfaceVariant hover:text-share-onBg hover:border-share-primary/40 disabled:opacity-50 transition-colors shrink-0"
+            >
+              <MaterialIcon name="refresh" className="text-[0.9rem]" />
+              {generating ? "Regenerating…" : "Regenerate"}
+            </button>
+          )}
+        </div>
+
+        {generateError && (
+          <div className="rounded-xl border border-share-error/20 bg-share-error/5 px-4 py-3">
+            <p className="text-sm text-share-error">{generateError}</p>
+          </div>
+        )}
+
+        {generating && (
+          <div className="rounded-xl border border-share-primary/20 bg-share-primary/5 px-4 py-3 flex items-center gap-3">
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-share-primary border-t-transparent" />
+            <p className="text-sm text-share-primary">
+              Fetching live weather + country data, then calling Claude — this takes about 20 seconds…
+            </p>
+          </div>
+        )}
+
+        {/* Tabs */}
+        <div className="flex gap-1 rounded-xl border border-share-outlineVariant bg-share-surfaceContainerLow p-1">
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={[
+                "flex-1 flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-medium transition-colors",
+                activeTab === tab.id
+                  ? "bg-share-surfaceContainerHigh text-share-onBg"
+                  : "text-share-onSurfaceVariant hover:text-share-onBg",
+              ].join(" ")}
+            >
+              <MaterialIcon name={tab.icon} className="text-[0.95rem]" />
+              <span className="hidden sm:inline">{tab.label}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Tab content */}
+        {activeTab === "overview" && generatedPlan && (
+          <TripOverviewTab plan={generatedPlan as never} />
+        )}
+        {activeTab === "overview" && !generatedPlan && (
+          <div className="flex flex-col items-center justify-center py-20 text-share-onSurfaceVariant gap-4">
+            <MaterialIcon name="auto_awesome" className="text-[3rem] opacity-20" />
+            <div className="text-center space-y-1">
+              <p className="text-sm font-medium text-share-onBg">No plan generated yet</p>
+              <p className="text-xs">Click "Generate AI Plan" to get weather data, visa info, budget breakdown, and a day-by-day itinerary.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void handleGenerate()}
+              disabled={generating}
+              className="flex items-center gap-1.5 rounded-xl bg-share-primary px-5 py-2.5 text-sm font-bold text-share-onPrimary hover:opacity-90 disabled:opacity-50 transition-opacity"
+            >
+              <MaterialIcon name="auto_awesome" className="text-[1rem]" />
+              {generating ? "Generating…" : "Generate AI Plan"}
+            </button>
+          </div>
+        )}
+
+        {activeTab === "itinerary" && (
+          <TripItineraryTab
+            tripId={trip._id}
+            dailyPlan={dailyPlan}
+            durationDays={trip.durationDays}
+            startDate={trip.startDate}
+          />
+        )}
+
+        {activeTab === "packing" && (
+          <TripPackingTab tripId={trip._id} packingList={packingList} />
+        )}
+
+        {activeTab === "notes" && (
+          <div className="space-y-3">
+            <textarea
+              value={notesValue}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Trip notes, links, things to remember…"
+              rows={12}
+              className="w-full rounded-2xl border border-share-outlineVariant bg-share-surfaceContainer px-4 py-3 text-sm text-share-onBg placeholder:text-share-onSurfaceVariant/50 focus:border-share-primary focus:outline-none resize-none"
+            />
+            <button
+              type="button"
+              onClick={() => void handleSaveNotes()}
+              disabled={savingNotes}
+              className="rounded-xl bg-share-primary px-4 py-2 text-sm font-bold text-share-onPrimary hover:opacity-90 disabled:opacity-50 transition-opacity"
+            >
+              {savingNotes ? "Saving…" : "Save Notes"}
+            </button>
+          </div>
+        )}
+      </div>
+    </AppChrome>
+  )
+}
+
+function formatDate(iso: string): string {
+  const d = new Date(iso + "T00:00:00")
+  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
+}

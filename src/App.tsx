@@ -19,6 +19,7 @@ import {
 import { LandingPage } from "./pages/LandingPage";
 import { PlannerPage } from "./pages/PlannerPage";
 import { TravelPlannerPage } from "./pages/TravelPlannerPage";
+import { TripDetailPage } from "./pages/TripDetailPage";
 import { FinancialPlannerPage } from "./pages/FinancialPlannerPage";
 import { CalendarSyncPage } from "./pages/CalendarSyncPage";
 import { CalendarCallbackPage } from "./pages/CalendarCallbackPage";
@@ -167,6 +168,7 @@ function App() {
       <Route path="/" element={<LandingPage />} />
       <Route path="/planner" element={<PlannerPage />} />
       <Route path="/travel" element={<TravelPlannerPage />} />
+      <Route path="/travel/:tripId" element={<TripDetailPage />} />
       <Route path="/finance" element={<FinancialPlannerPage />} />
       <Route path="/calendar" element={<CalendarSyncPage />} />
       <Route path="/calendar/callback" element={<CalendarCallbackPage />} />

@@ -52,6 +52,29 @@ export default defineSchema({
     data: v.any(),
   }).index("by_user", ["userId"]),
 
+  travelTrips: defineTable({
+    userId: v.string(),
+    name: v.string(),
+    destination: v.string(),
+    origin: v.optional(v.string()),
+    startDate: v.optional(v.string()),
+    endDate: v.optional(v.string()),
+    durationDays: v.number(),
+    purpose: v.string(),
+    lifeStage: v.string(),
+    budgetPreference: v.string(),
+    accommodationPreference: v.string(),
+    benefits: v.optional(v.string()),
+    generatedPlan: v.optional(v.any()),
+    dailyPlan: v.optional(v.array(v.any())),
+    budget: v.optional(v.any()),
+    packingList: v.optional(v.array(v.any())),
+    notes: v.optional(v.string()),
+    status: v.union(v.literal("planning"), v.literal("active"), v.literal("completed")),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_status", ["userId", "status"]),
+
   googleCalendarConnections: defineTable({
     userId: v.string(),
     encryptedRefreshToken: v.string(),
