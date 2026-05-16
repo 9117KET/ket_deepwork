@@ -8,13 +8,16 @@ import { MaterialIcon } from "../components/ui/MaterialIcon"
 import { TripOverviewTab } from "../components/travel/TripOverviewTab"
 import { TripItineraryTab } from "../components/travel/TripItineraryTab"
 import { TripPackingTab } from "../components/travel/TripPackingTab"
+import { TripBudgetTab } from "../components/travel/TripBudgetTab"
+import type { TripBudget } from "../domain/travelBudget"
 
-type Tab = "overview" | "itinerary" | "packing" | "notes"
+type Tab = "overview" | "itinerary" | "packing" | "budget" | "notes"
 
 const TABS: Array<{ id: Tab; label: string; icon: string }> = [
   { id: "overview", label: "Overview", icon: "info" },
   { id: "itinerary", label: "Itinerary", icon: "event_note" },
   { id: "packing", label: "Packing", icon: "backpack" },
+  { id: "budget", label: "Budget", icon: "account_balance_wallet" },
   { id: "notes", label: "Notes", icon: "edit_note" },
 ]
 
@@ -223,6 +226,16 @@ export function TripDetailPage() {
 
         {activeTab === "packing" && (
           <TripPackingTab tripId={trip._id} packingList={packingList} />
+        )}
+
+        {activeTab === "budget" && (
+          <TripBudgetTab
+            tripId={trip._id}
+            budget={(trip.budget ?? null) as TripBudget | null}
+            durationDays={trip.durationDays}
+            startDate={trip.startDate}
+            aiBreakdownHint={generatedPlan ? (generatedPlan as Record<string, unknown>).budgetBreakdown as string | undefined : undefined}
+          />
         )}
 
         {activeTab === "notes" && (
