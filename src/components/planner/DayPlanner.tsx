@@ -204,6 +204,10 @@ export function DayPlanner({
     [appState, selectedDay],
   );
 
+  // Active trip status - computed early so handleAddTask can reference it
+  const activeTripStatus = useActiveTripStatus(selectedDay);
+  const travelingToday = activeTripStatus !== null;
+
   const rootTasks = useMemo(
     () => (appState.days[selectedDay]?.tasks ?? []).filter((t) => !t.parentId),
     [appState, selectedDay],
@@ -230,6 +234,8 @@ export function DayPlanner({
           sectionId,
           date: selectedDay,
           isDone: false,
+          // Travel days are shallow by default - user can unmark if needed
+          ...(travelingToday ? { isShallow: true } : {}),
         },
       ];
 
@@ -838,9 +844,6 @@ export function DayPlanner({
     () => getAtRiskHabitIds(appState.days, habitIds, selectedDay),
     [appState.days, habitIds, selectedDay],
   );
-
-  const activeTripStatus = useActiveTripStatus(selectedDay);
-  const travelingToday = activeTripStatus !== null;
 
   const dayCtx = useDayContext(selectedDay, {
     appState,

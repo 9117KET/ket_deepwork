@@ -1,8 +1,10 @@
 import { MaterialIcon } from "../ui/MaterialIcon"
 import { DeepWorkWindowsCard } from "./DeepWorkWindowsCard"
 import { HabitAdvisorCard } from "./HabitAdvisorCard"
+import { TripImpactCard } from "./TripImpactCard"
 import type { Id } from "../../../convex/_generated/dataModel"
 import type { DayPlan } from "../../domain/deepWorkWindows"
+import type { DayState } from "../../domain/types"
 
 interface GeneratedPlan {
   summary?: string
@@ -17,6 +19,8 @@ interface GeneratedPlan {
   thingsToDo?: string[]
 }
 
+interface HabitDef { id: string; label: string }
+
 interface Props {
   plan: GeneratedPlan
   tripId: Id<"travelTrips">
@@ -24,11 +28,27 @@ interface Props {
   destination: string
   purpose: string
   durationDays: number
+  startDate?: string
+  endDate?: string
+  status: "planning" | "active" | "completed"
+  plannerDayStates: Record<string, DayState | undefined>
+  habits: HabitDef[]
 }
 
-export function TripOverviewTab({ plan, tripId, dailyPlan, destination, purpose, durationDays }: Props) {
+export function TripOverviewTab({ plan, tripId, dailyPlan, destination, purpose, durationDays, startDate, endDate, status, plannerDayStates, habits }: Props) {
   return (
     <div className="space-y-4">
+      {/* Trip impact summary — shown for active and completed trips */}
+      {startDate && endDate && (
+        <TripImpactCard
+          startDate={startDate}
+          endDate={endDate}
+          status={status}
+          dayStates={plannerDayStates}
+          habits={habits}
+        />
+      )}
+
       {plan.summary && (
         <div className="rounded-2xl border border-share-primary/20 bg-share-primary/5 p-5">
           <p className="text-sm text-share-onBg leading-relaxed">{plan.summary}</p>

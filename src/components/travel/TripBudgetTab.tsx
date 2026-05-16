@@ -20,6 +20,10 @@ interface Props {
   durationDays: number
   startDate?: string
   aiBreakdownHint?: string
+  /** Called when user taps "Log to Finance" on an expense */
+  onLogToFinance?: (expense: Expense) => void
+  /** Ids of expenses already bridged to Finance (to show checkmark) */
+  bridgedExpenseIds?: Set<string>
 }
 
 const CATEGORY_ICONS: Record<BudgetCategory, string> = {
@@ -37,7 +41,7 @@ const STATUS_COLORS = {
   over: { bar: "bg-share-error", text: "text-share-error" },
 }
 
-export function TripBudgetTab({ tripId, budget, durationDays, startDate, aiBreakdownHint }: Props) {
+export function TripBudgetTab({ tripId, budget, durationDays, startDate, aiBreakdownHint, onLogToFinance, bridgedExpenseIds }: Props) {
   const updateTrip = useMutation(api.travel.update)
   const [setupMode, setSetupMode] = useState(!budget)
   const [totalInput, setTotalInput] = useState(budget ? String(budget.totalBudget) : "")
@@ -286,13 +290,33 @@ export function TripBudgetTab({ tripId, budget, durationDays, startDate, aiBreak
                 <span className="text-sm font-semibold text-share-onBg shrink-0">
                   {exp.currency} {exp.amount.toFixed(2)}
                 </span>
-                <button
-                  type="button"
-                  onClick={() => void handleDeleteExpense(exp.id)}
-                  className="hidden group-hover:flex text-share-onSurfaceVariant hover:text-share-error transition-colors"
-                >
-                  <MaterialIcon name="delete_outline" className="text-[0.9rem]" />
-                </button>
+                <div className="hidden group-hover:flex items-center gap-1 shrink-0">
+                  {onLogToFinance && (
+                    bridgedExpenseIds?.has(exp.id) ? (
+                      <span className="flex items-center gap-0.5 text-[10px] text-emerald-400 font-medium">
+                        <MaterialIcon name="check_circle" className="text-[0.85rem]" />
+                        Logged
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => onLogToFinance(exp)}
+                        className="flex items-center gap-0.5 rounded-lg border border-share-outlineVariant px-2 py-1 text-[10px] font-medium text-share-onSurfaceVariant hover:text-share-primary hover:border-share-primary/40 transition-colors"
+                        title="Also log this expense to Finance"
+                      >
+                        <MaterialIcon name="account_balance_wallet" className="text-[0.8rem]" />
+                        Finance
+                      </button>
+                    )
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => void handleDeleteExpense(exp.id)}
+                    className="text-share-onSurfaceVariant hover:text-share-error transition-colors"
+                  >
+                    <MaterialIcon name="delete_outline" className="text-[0.9rem]" />
+                  </button>
+                </div>
               </li>
             ))}
           </ul>

@@ -11,8 +11,12 @@ import { TripPackingTab } from "../components/travel/TripPackingTab"
 import { TripBudgetTab } from "../components/travel/TripBudgetTab"
 import { TripMapTab } from "../components/travel/TripMapTab"
 import { TripChatAssistant } from "../components/travel/TripChatAssistant"
-import type { TripBudget } from "../domain/travelBudget"
+import type { TripBudget, Expense } from "../domain/travelBudget"
 import type { DayPlanWithCoords, PlaceWithCoords } from "../domain/travelMap"
+import { useFinancialState } from "../storage/financialStorage"
+import { buildFinanceTransaction, getMonthKey } from "../domain/financebridge"
+import { usePersistentState } from "../storage/localStorageState"
+import { DEFAULT_HABIT_DEFINITIONS } from "../domain/types"
 
 type Tab = "overview" | "itinerary" | "map" | "packing" | "budget" | "notes"
 
@@ -34,6 +38,8 @@ export function TripDetailPage() {
   const updateTrip = useMutation(api.travel.update)
 
   const [activeTab, setActiveTab] = useState<Tab>("overview")
+  const [financialState, updateFinancialState] = useFinancialState()
+  const [appState] = usePersistentState()
   const [generating, setGenerating] = useState(false)
   const [generateError, setGenerateError] = useState("")
   const [injecting, setInjecting] = useState(false)
@@ -114,6 +120,31 @@ export function TripDetailPage() {
       setInjecting(false)
     }
   }
+
+  function handleLogExpenseToFinance(expense: Expense) {
+    if (!trip) return
+    const tx = buildFinanceTransaction(expense, trip.name)
+    const monthKey = getMonthKey(expense.date)
+    updateFinancialState((prev) => {
+      const existing = prev.transactions?.[monthKey] ?? []
+      if (existing.some((t) => t.id === tx.id)) return prev
+      return {
+        ...prev,
+        transactions: {
+          ...(prev.transactions ?? {}),
+          [monthKey]: [...existing, tx],
+        },
+      }
+    })
+  }
+
+  const bridgedExpenseIds = new Set(
+    Object.values(financialState.transactions ?? {})
+      .flat()
+      .map((t) => t.id)
+      .filter((id) => id.startsWith("travel-bridge-"))
+      .map((id) => id.replace("travel-bridge-", ""))
+  )
 
   async function handleSaveNotes() {
     if (!trip) return
@@ -252,6 +283,11 @@ export function TripDetailPage() {
             destination={trip.destination}
             purpose={trip.purpose}
             durationDays={trip.durationDays}
+            startDate={trip.startDate}
+            endDate={trip.endDate}
+            status={trip.status as "planning" | "active" | "completed"}
+            plannerDayStates={appState.days}
+            habits={appState.habitDefinitions ?? DEFAULT_HABIT_DEFINITIONS}
           />
         )}
         {activeTab === "overview" && !generatedPlan && (
@@ -308,6 +344,8 @@ export function TripDetailPage() {
             durationDays={trip.durationDays}
             startDate={trip.startDate}
             aiBreakdownHint={generatedPlan ? (generatedPlan as Record<string, unknown>).budgetBreakdown as string | undefined : undefined}
+            onLogToFinance={handleLogExpenseToFinance}
+            bridgedExpenseIds={bridgedExpenseIds}
           />
         )}
 
