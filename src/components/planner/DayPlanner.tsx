@@ -71,6 +71,7 @@ import { MobileTabBar, type MobileTab } from "./MobileTabBar";
 import { ActiveTripBanner } from "./ActiveTripBanner";
 import { DaySummaryCard } from "./DaySummaryCard";
 import { useActiveTripStatus } from "../../hooks/useActiveTripStatus";
+import { ErrorBoundary } from "../ErrorBoundary";
 import { useDayContext } from "../../hooks/useDayContext";
 import { createTaskId, reorderTasks, getOrderedTasksForSection, getDescendantIds, cloneTasksForDay } from "../../domain/taskUtils";
 
@@ -204,9 +205,8 @@ export function DayPlanner({
     [appState, selectedDay],
   );
 
-  // Active trip status - computed early so handleAddTask can reference it
-  const activeTripStatus = useActiveTripStatus(selectedDay);
-  const travelingToday = activeTripStatus !== null;
+  // Active trip status - managed via child component to isolate Convex query errors
+  const [travelingToday, setTravelingToday] = useState(false);
 
   const rootTasks = useMemo(
     () => (appState.days[selectedDay]?.tasks ?? []).filter((t) => !t.parentId),
@@ -1498,9 +1498,11 @@ export function DayPlanner({
             onUpdate={(id, patch) => handleUpdateTask(id, patch)}
           />
         )}
-        {/* Active trip context banner */}
-        {!shareMode && activeTripStatus && (
-          <ActiveTripBanner trip={activeTripStatus} />
+        {/* Active trip context banner - isolated so a Convex query error only hides the banner */}
+        {!shareMode && (
+          <ErrorBoundary fallback={null}>
+            <TripStatusBanner date={selectedDay} onTravelingChange={setTravelingToday} />
+          </ErrorBoundary>
         )}
         {/* Copy/fill: owner only — don't expose other days' tasks to shared visitors */}
         {!shareMode && dayState.tasks.filter(t => t.sectionId !== 'mustDo').length === 0 && (() => {
@@ -2056,4 +2058,18 @@ export function DayPlanner({
       )}
     </div>
   );
+}
+
+interface TripStatusBannerProps {
+  date: string
+  onTravelingChange: (traveling: boolean) => void
+}
+
+function TripStatusBanner({ date, onTravelingChange }: TripStatusBannerProps) {
+  const status = useActiveTripStatus(date)
+  useEffect(() => {
+    onTravelingChange(status !== null)
+  }, [status, onTravelingChange])
+  if (!status) return null
+  return <ActiveTripBanner trip={status} />
 }
