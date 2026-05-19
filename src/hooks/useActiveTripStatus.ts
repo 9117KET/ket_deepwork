@@ -22,12 +22,12 @@ export interface ActiveTripStatus {
 }
 
 export function useActiveTripStatus(date?: string): ActiveTripStatus | null {
-  const { isAuthenticated } = useConvexAuth()
+  const { isAuthenticated, isLoading } = useConvexAuth()
   const today = date ?? new Date().toISOString().slice(0, 10)
 
   const trip = useQuery(
     api.travel.getActiveOnDate,
-    isAuthenticated ? { date: today } : "skip",
+    !isLoading && isAuthenticated ? { date: today } : "skip",
   )
 
   if (!trip || !trip.startDate) return null
