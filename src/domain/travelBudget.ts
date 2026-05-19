@@ -79,7 +79,7 @@ export function remainingBudget(budget: TripBudget): number {
 }
 
 export function categoryBudgetStatus(
-  category: BudgetCategory,
+  _category: BudgetCategory,
   spent: number,
   allocated: number,
 ): "ok" | "warning" | "over" {

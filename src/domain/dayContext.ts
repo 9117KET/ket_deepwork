@@ -160,8 +160,8 @@ export function buildDayContext(
     tasks: computeTaskSummary(dayState),
     deepWorkMinutes,
     habitCompletions: computeHabitSummary(dayState, habitIds),
-    mood: dayState?.mood,
-    sleepHours: dayState?.sleepHours,
+    mood: dayState?.mood ?? undefined,
+    sleepHours: dayState?.sleepHours ?? undefined,
     activeTrip,
     expenses,
   }

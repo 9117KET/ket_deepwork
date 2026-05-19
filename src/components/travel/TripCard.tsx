@@ -77,12 +77,12 @@ export function TripCard({ trip, onClick }: Props) {
           <MaterialIcon name={BUDGET_ICON[trip.budgetPreference] ?? "wallet"} className="text-[0.9rem]" />
           {trip.budgetPreference.charAt(0).toUpperCase() + trip.budgetPreference.slice(1)}
         </span>
-        {trip.generatedPlan && (
+        {trip.generatedPlan != null ? (
           <span className="flex items-center gap-1 text-share-primary">
             <MaterialIcon name="auto_awesome" className="text-[0.9rem]" />
             AI plan ready
           </span>
-        )}
+        ) : null}
       </div>
 
       <p className="mt-3 text-xs text-share-onSurfaceVariant/70 line-clamp-1">{trip.purpose}</p>
