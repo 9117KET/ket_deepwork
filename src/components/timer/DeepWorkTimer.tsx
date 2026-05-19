@@ -6,7 +6,7 @@
  * focused block quickly.
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 
 interface DeepWorkTimerProps {
@@ -22,6 +22,11 @@ export function DeepWorkTimer({ onSessionComplete }: DeepWorkTimerProps) {
   const [targetTime, setTargetTime] = useState<number | null>(null)
   const [remainingMs, setRemainingMs] = useState<number>(0)
 
+  const onSessionCompleteRef = useRef(onSessionComplete)
+  useLayoutEffect(() => {
+    onSessionCompleteRef.current = onSessionComplete
+  })
+
   useEffect(() => {
     if (status !== 'running' || targetTime == null) {
       return
@@ -35,16 +40,14 @@ export function DeepWorkTimer({ onSessionComplete }: DeepWorkTimerProps) {
       if (msLeft === 0) {
         setStatus('finished')
         setTargetTime(null)
-        if (onSessionComplete) {
-          onSessionComplete(label, durationMinutes)
-        }
+        onSessionCompleteRef.current?.(label, durationMinutes)
       }
     }
 
     tick()
     const intervalId = window.setInterval(tick, 1000)
     return () => window.clearInterval(intervalId)
-  }, [status, targetTime, label, durationMinutes, onSessionComplete])
+  }, [status, targetTime, label, durationMinutes])
 
   const totalMs = useMemo(() => durationMinutes * 60 * 1000, [durationMinutes])
   const effectiveRemaining = status === 'idle' ? totalMs : remainingMs

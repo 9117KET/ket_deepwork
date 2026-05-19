@@ -1,6 +1,9 @@
 import { mutation, query, action, internalMutation, internalQuery } from "./_generated/server"
 import { internal } from "./_generated/api"
 import { v } from "convex/values"
+
+// process.env is available in Convex Node.js actions; declare for browser tsconfig compatibility
+declare const process: { env: Record<string, string | undefined> }
 import {
   buildClaudePrompt,
   buildPackingItems,
@@ -82,6 +85,9 @@ export const create = mutation({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) throw new Error("Not authenticated")
+    if (args.durationDays < 1 || args.durationDays > 365) throw new Error("durationDays must be 1-365")
+    if (args.name.length > 200) throw new Error("name exceeds 200 character limit")
+    if (args.destination.length > 200) throw new Error("destination exceeds 200 character limit")
     return await ctx.db.insert("travelTrips", {
       ...args,
       userId: identity.subject,
@@ -167,6 +173,9 @@ export const generatePlan = action({
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) throw new Error("Not authenticated")
 
+    const trip = await ctx.runQuery(internal.travel.getTripInternal, { id: args.id, userId: identity.subject })
+    if (!trip) throw new Error("Not found")
+
     const cityQuery = args.destination.includes(",")
       ? args.destination.split(",")[0]!.trim()
       : args.destination.trim()
@@ -241,6 +250,9 @@ export const injectPreTripTasks = action({
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) throw new Error("Not authenticated")
     const userId = identity.subject
+
+    const trip = await ctx.runQuery(internal.travel.getTripInternal, { id: args.tripId, userId })
+    if (!trip) throw new Error("Not found")
 
     const today = new Date().toISOString().slice(0, 10)
 

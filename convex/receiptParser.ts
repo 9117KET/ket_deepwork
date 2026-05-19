@@ -29,7 +29,11 @@ export const parseReceipt = action({
     imageBase64: v.string(),
     mediaType: v.optional(v.string()),
   },
-  handler: async (_ctx, args): Promise<ParsedReceipt> => {
+  handler: async (ctx, args): Promise<ParsedReceipt> => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) throw new Error("Not authenticated")
+    if (args.imageBase64.length > 13_981_013) throw new Error("Image too large (max 10 MB)")
+
     const apiKey = process.env.ANTHROPIC_API_KEY
     if (!apiKey) {
       throw new Error(

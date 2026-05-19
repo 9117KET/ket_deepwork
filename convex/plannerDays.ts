@@ -68,29 +68,3 @@ export const upsertMany = mutation({
   },
 })
 
-export const upsertSharedDay = mutation({
-  args: {
-    ownerUserId: v.string(),
-    date: v.string(),
-    tasks: v.array(v.any()),
-    deepWorkSessions: v.array(v.any()),
-  },
-  handler: async (ctx, args) => {
-    const { ownerUserId, date, tasks, deepWorkSessions } = args
-    const existing = await ctx.db
-      .query("plannerDays")
-      .withIndex("by_user_date", (q) => q.eq("userId", ownerUserId).eq("date", date))
-      .unique()
-    if (existing) {
-      await ctx.db.patch(existing._id, { tasks, deepWorkSessions })
-    } else {
-      await ctx.db.insert("plannerDays", {
-        userId: ownerUserId,
-        date,
-        tasks,
-        deepWorkSessions,
-        habitCompletions: undefined,
-      })
-    }
-  },
-})

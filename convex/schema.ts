@@ -35,6 +35,7 @@ export default defineSchema({
     depthPhilosophy: v.optional(v.string()),
     deepWorkGoalHours: v.optional(v.number()),
     oneThingData: v.optional(v.any()),
+    weeklyProjectRotation: v.optional(v.array(v.any())),
   })
     .index("by_user", ["userId"]),
 

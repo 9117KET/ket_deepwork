@@ -247,6 +247,7 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
           monthOneThings: (ot.monthOneThings as Record<string, string> | undefined) ?? prev.monthOneThings,
           monthlyReviews: (ot.monthlyReviews as AppState["monthlyReviews"] | undefined) ?? prev.monthlyReviews,
           monthlyReviewQuestions: (ot.monthlyReviewQuestions as string[] | undefined) ?? prev.monthlyReviewQuestions,
+          weeklyProjectRotation: (settingsDoc.weeklyProjectRotation as AppState["weeklyProjectRotation"] | undefined) ?? prev.weeklyProjectRotation,
         }
       }
 
@@ -290,7 +291,7 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
             echoSuppressUntil.current.set(date, now + ECHO_SUPPRESS_MS)
           }
         }
-      })
+      }).catch((err: unknown) => console.error("[sync] days sync failed:", err))
     }, 800)
 
     return () => {
@@ -328,7 +329,8 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
           monthlyReviews: s.monthlyReviews ?? {},
           monthlyReviewQuestions: s.monthlyReviewQuestions ?? [],
         },
-      })
+        weeklyProjectRotation: s.weeklyProjectRotation ?? [],
+      }).catch((err: unknown) => console.error("[sync] settings sync failed:", err))
     }, 800)
 
     return () => {
@@ -353,6 +355,7 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
     state.monthOneThings,
     state.monthlyReviews,
     state.monthlyReviewQuestions,
+    state.weeklyProjectRotation,
     isAuthenticated,
     readyToSync,
     upsertSettings,
@@ -392,7 +395,7 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
                 dirtyGenerations.current.delete(date)
               }
             }
-          })
+          }).catch((err: unknown) => console.error("[sync] days flush failed:", err))
         }
       }
       if (settingsSyncTimeoutRef.current) {
@@ -417,7 +420,8 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
             monthlyReviews: s.monthlyReviews ?? {},
             monthlyReviewQuestions: s.monthlyReviewQuestions ?? [],
           },
-        })
+          weeklyProjectRotation: s.weeklyProjectRotation ?? [],
+        }).catch((err: unknown) => console.error("[sync] settings flush failed:", err))
       }
     }
 
