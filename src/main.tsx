@@ -6,15 +6,20 @@ import "./index.css"
 import App from "./App.tsx"
 import { AuthProvider } from "./contexts/AuthContext"
 import { convex } from "./lib/convex"
+import { ErrorBoundary } from "./components/ErrorBoundary"
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <ConvexAuthProvider client={convex}>
-      <BrowserRouter>
-        <AuthProvider>
-          <App />
-        </AuthProvider>
-      </BrowserRouter>
-    </ConvexAuthProvider>
+    <ErrorBoundary>
+      <ConvexAuthProvider client={convex}>
+        <BrowserRouter>
+          <AuthProvider>
+            <ErrorBoundary>
+              <App />
+            </ErrorBoundary>
+          </AuthProvider>
+        </BrowserRouter>
+      </ConvexAuthProvider>
+    </ErrorBoundary>
   </StrictMode>,
 )

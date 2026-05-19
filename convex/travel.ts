@@ -22,7 +22,10 @@ import type { CountryInfo, WeatherData, HabitDefinition, TripContext } from "./t
 
 // ── Queries ──────────────────────────────────────────────────────────────────
 
-/** Returns the trip whose date range contains the given ISO date, or null. */
+/** Returns lightweight trip info for the active trip on a given date, or null.
+ *  Intentionally excludes generatedPlan/dailyPlan/packingList to stay well
+ *  under Convex's 1 MB query-response limit.
+ */
 export const getActiveOnDate = query({
   args: { date: v.string() },
   handler: async (ctx, args) => {
@@ -33,12 +36,23 @@ export const getActiveOnDate = query({
       .query("travelTrips")
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect()
-    return trips.find((t) => {
+    const trip = trips.find((t) => {
       if (!t.startDate) return false
       if (args.date < t.startDate) return false
       if (t.endDate && args.date > t.endDate) return false
       return true
-    }) ?? null
+    })
+    if (!trip) return null
+    return {
+      _id: trip._id,
+      name: trip.name,
+      destination: trip.destination,
+      durationDays: trip.durationDays,
+      budgetPreference: trip.budgetPreference,
+      startDate: trip.startDate,
+      endDate: trip.endDate,
+      status: trip.status,
+    }
   },
 })
 
