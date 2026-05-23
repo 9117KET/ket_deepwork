@@ -20,6 +20,7 @@ export default defineSchema({
     notDoingItems: v.optional(v.array(v.any())),
     abandonedTasks: v.optional(v.array(v.any())),
     timeOffsetMinutes: v.optional(v.number()),
+    sideQuestCompletions: v.optional(v.record(v.string(), v.boolean())),
   })
     .index("by_user", ["userId"])
     .index("by_user_date", ["userId", "date"]),
@@ -36,6 +37,7 @@ export default defineSchema({
     deepWorkGoalHours: v.optional(v.number()),
     oneThingData: v.optional(v.any()),
     weeklyProjectRotation: v.optional(v.array(v.any())),
+    sideQuestDefs: v.optional(v.array(v.any())),
   })
     .index("by_user", ["userId"]),
 

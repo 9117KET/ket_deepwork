@@ -26,6 +26,7 @@ export const upsert = mutation({
     deepWorkGoalHours: v.optional(v.number()),
     oneThingData: v.optional(v.any()),
     weeklyProjectRotation: v.optional(v.array(v.any())),
+    sideQuestDefs: v.optional(v.array(v.any())),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()

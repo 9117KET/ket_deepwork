@@ -18,6 +18,7 @@ import {
   type HabitDefinition,
   type MonthlyReview,
   type NotDoingItem,
+  type SideQuestDef,
   type Task,
   type TaskSectionId,
 } from "../../domain/types";
@@ -69,6 +70,7 @@ import { WeeklyProjectCard } from "./WeeklyProjectCard";
 import { TomorrowMustPanel } from "./TomorrowMustPanel";
 import { MustDoPinnedHeader } from "./MustDoPinnedHeader";
 import { MonthlyReviewBanner } from "../goals/MonthlyReviewBanner";
+import { SideQuestEditorModal } from "./SideQuestEditorModal";
 import { SideQuestSection } from "./SideQuestSection";
 import { MobileTabBar, type MobileTab } from "./MobileTabBar";
 import { ActiveTripBanner } from "./ActiveTripBanner";
@@ -711,6 +713,26 @@ export function DayPlanner({
     }))
   }, [updateAppState])
 
+  const handleToggleSideQuestCompletion = useCallback((id: string, value: boolean) => {
+    updateAppState((prev) => {
+      const day = getOrCreateDay(prev, selectedDay)
+      return {
+        ...prev,
+        days: {
+          ...prev.days,
+          [selectedDay]: {
+            ...day,
+            sideQuestCompletions: { ...(day.sideQuestCompletions ?? {}), [id]: value },
+          },
+        },
+      }
+    })
+  }, [selectedDay, updateAppState])
+
+  const handleSaveSideQuestDefs = useCallback((defs: SideQuestDef[]) => {
+    updateAppState((prev) => ({ ...prev, sideQuestDefs: defs }))
+  }, [updateAppState])
+
   /** Record a completed deep work session into the current day. */
   const handleSessionComplete = useCallback((label: string, durationMinutes: number) => {
     updateAppState((prev) => {
@@ -1006,6 +1028,7 @@ export function DayPlanner({
   );
 
   const [editHabitsOpen, setEditHabitsOpen] = useState(false);
+  const [editSideQuestOpen, setEditSideQuestOpen] = useState(false);
 
   const tasksBySection: Record<TaskSectionId, Task[]> = useMemo(() => {
     const grouped: Record<TaskSectionId, Task[]> = {
@@ -1737,6 +1760,10 @@ export function DayPlanner({
                   dayCompletionRatio={dayCompletionRatio}
                   section={sq}
                   tasks={tasksBySection['sideQuest'] ?? []}
+                  defs={appState.sideQuestDefs ?? []}
+                  completions={dayState.sideQuestCompletions ?? {}}
+                  onToggleCompletion={handleToggleSideQuestCompletion}
+                  onManageDefs={() => setEditSideQuestOpen(true)}
                   draggedTask={draggedTask}
                   onDragStart={handleDragStart}
                   onDragEnd={handleDragEnd}
@@ -2079,6 +2106,14 @@ export function DayPlanner({
           habits={habits}
           onSave={handleUpdateHabitDefinitions}
           onClose={() => setEditHabitsOpen(false)}
+        />
+      )}
+
+      {editSideQuestOpen && (
+        <SideQuestEditorModal
+          defs={appState.sideQuestDefs ?? []}
+          onSave={handleSaveSideQuestDefs}
+          onClose={() => setEditSideQuestOpen(false)}
         />
       )}
 

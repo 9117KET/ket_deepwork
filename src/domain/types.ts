@@ -86,6 +86,8 @@ export interface DayState {
   sleepTarget?: string | null;
   /** Per-day manual overrides for time-block durations (minutes). When set, overrides auto-computed blocks. */
   blockDurations?: BlockDurations | null;
+  /** Side quest def id -> completed for this day. */
+  sideQuestCompletions?: Record<string, boolean>;
 }
 
 /**
@@ -108,6 +110,12 @@ export interface HabitDefinition {
   label: string;
   /** "After [stackAnchor], I will do this habit." Free-text anchor for habit stacking. */
   stackAnchor?: string;
+}
+
+/** A recurring side quest definition — set once, appears every time the section unlocks. */
+export interface SideQuestDef {
+  id: string;
+  title: string;
 }
 
 /** The ONE Thing goal cascade (Gary Keller): long-horizon goals from life down to 3 months. */
@@ -186,6 +194,8 @@ export interface AppState {
   monthlyReviewQuestions?: string[];
   /** Weekly project commitments pinned to specific days (e.g. InfradarAI on Monday). */
   weeklyProjectRotation?: WeeklyProjectAssignment[];
+  /** Recurring side quest definitions — set once, visible on every unlock. */
+  sideQuestDefs?: SideQuestDef[];
 }
 
 export interface WeeklyStatsDaySummary {

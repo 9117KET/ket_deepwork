@@ -28,6 +28,7 @@ const dayArgs = {
   notDoingItems: v.optional(v.array(v.any())),
   abandonedTasks: v.optional(v.array(v.any())),
   timeOffsetMinutes: v.optional(v.number()),
+  sideQuestCompletions: v.optional(v.record(v.string(), v.boolean())),
 }
 
 export const upsert = mutation({

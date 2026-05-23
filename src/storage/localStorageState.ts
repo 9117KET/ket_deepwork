@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import { useQuery, useMutation, useConvexAuth } from "convex/react"
-import type { AppState, DayState, AbandonedTask, BlockDurations, NotDoingItem } from "../domain/types"
+import type { AppState, DayState, AbandonedTask, BlockDurations, NotDoingItem, SideQuestDef } from "../domain/types"
 import { todayIso, deriveActiveDaysFromDays } from "../domain/dateUtils"
 import { api } from "../../convex/_generated/api"
 
@@ -53,6 +53,14 @@ function migrateLegacyStreak(state: AppState): AppState {
   return { ...state, activeDays }
 }
 
+const DEFAULT_SIDE_QUEST_DEFS: SideQuestDef[] = [
+  { id: 'sq-1', title: '🎹 Piano practice' },
+  { id: 'sq-2', title: '🎲 Rubik\'s cube' },
+  { id: 'sq-3', title: '🤖 Explore a new AI tool' },
+  { id: 'sq-4', title: '📰 Scoop - read & curate' },
+  { id: 'sq-5', title: '📚 Read for 20 minutes' },
+]
+
 const DEFAULT_MONTHLY_REVIEW_QUESTIONS = [
   "Did I protect the deep-work block every weekday this month?",
   "How many quality actions toward my ONE thing did I take? What was the result?",
@@ -64,8 +72,13 @@ const DEFAULT_MONTHLY_REVIEW_QUESTIONS = [
 ]
 
 function seedOneThingDefaults(state: AppState): AppState {
-  if (state.monthlyReviewQuestions !== undefined) return state
-  return { ...state, monthlyReviewQuestions: DEFAULT_MONTHLY_REVIEW_QUESTIONS }
+  if (state.monthlyReviewQuestions === undefined) {
+    state = { ...state, monthlyReviewQuestions: DEFAULT_MONTHLY_REVIEW_QUESTIONS }
+  }
+  if (state.sideQuestDefs === undefined) {
+    state = { ...state, sideQuestDefs: DEFAULT_SIDE_QUEST_DEFS }
+  }
+  return state
 }
 
 function readInitialState(): AppState {
@@ -122,6 +135,7 @@ function docToDayState(doc: Record<string, unknown>): DayState {
   const tasks = (doc.tasks as DayState["tasks"] | null) ?? []
   const deepWorkSessions = (doc.deepWorkSessions as DayState["deepWorkSessions"] | null) ?? []
   const habitCompletions = (doc.habitCompletions as DayState["habitCompletions"] | null) ?? {}
+  const sideQuestCompletions = (doc.sideQuestCompletions as DayState["sideQuestCompletions"] | null) ?? undefined
   const blockDurations = doc.blockDurations as BlockDurations | null | undefined
   const notDoingItems = (doc.notDoingItems as NotDoingItem[] | null) ?? undefined
   const abandonedTasks = (doc.abandonedTasks as AbandonedTask[] | null) ?? undefined
@@ -130,6 +144,7 @@ function docToDayState(doc: Record<string, unknown>): DayState {
     tasks,
     deepWorkSessions,
     habitCompletions: Object.keys(habitCompletions).length > 0 ? habitCompletions : undefined,
+    sideQuestCompletions: sideQuestCompletions && Object.keys(sideQuestCompletions).length > 0 ? sideQuestCompletions : undefined,
     sleepHours: (doc.sleepHours as number | null) ?? undefined,
     mood: (doc.mood as string | null) ?? undefined,
     bedTime: (doc.bedTime as string | null) ?? undefined,
@@ -294,6 +309,7 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
           monthlyReviews: (ot.monthlyReviews as AppState["monthlyReviews"] | undefined) ?? prev.monthlyReviews,
           monthlyReviewQuestions: (ot.monthlyReviewQuestions as string[] | undefined) ?? prev.monthlyReviewQuestions,
           weeklyProjectRotation: (settingsDoc.weeklyProjectRotation as AppState["weeklyProjectRotation"] | undefined) ?? prev.weeklyProjectRotation,
+          sideQuestDefs: (settingsDoc.sideQuestDefs as AppState["sideQuestDefs"] | undefined) ?? prev.sideQuestDefs,
         }
       }
 
@@ -327,6 +343,7 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
           notDoingItems: day.notDoingItems,
           abandonedTasks: day.abandonedTasks,
           timeOffsetMinutes: stateRef.current.timeOffsetMinutes,
+          sideQuestCompletions: day.sideQuestCompletions,
         }))
       if (payload.length === 0) return
       void upsertManyDays({ days: payload }).then(() => {
@@ -378,6 +395,7 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
           monthlyReviewQuestions: s.monthlyReviewQuestions ?? [],
         },
         weeklyProjectRotation: s.weeklyProjectRotation ?? [],
+        sideQuestDefs: s.sideQuestDefs ?? [],
       }).then(() => {
         pendingSettings.current = false
         writePendingSettings(false)
@@ -407,6 +425,7 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
     state.monthlyReviews,
     state.monthlyReviewQuestions,
     state.weeklyProjectRotation,
+    state.sideQuestDefs,
     isAuthenticated,
     readyToSync,
     upsertSettings,
@@ -438,6 +457,7 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
             notDoingItems: day.notDoingItems,
             abandonedTasks: day.abandonedTasks,
             timeOffsetMinutes: stateRef.current.timeOffsetMinutes,
+            sideQuestCompletions: day.sideQuestCompletions,
           }))
         if (payload.length > 0) {
           void upsertManyDays({ days: payload }).then(() => {
@@ -474,6 +494,7 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
             monthlyReviewQuestions: s.monthlyReviewQuestions ?? [],
           },
           weeklyProjectRotation: s.weeklyProjectRotation ?? [],
+          sideQuestDefs: s.sideQuestDefs ?? [],
         }).then(() => {
           pendingSettings.current = false
           writePendingSettings(false)
@@ -528,7 +549,8 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
         next.monthOneThings !== prev.monthOneThings ||
         next.monthlyReviews !== prev.monthlyReviews ||
         next.monthlyReviewQuestions !== prev.monthlyReviewQuestions ||
-        next.weeklyProjectRotation !== prev.weeklyProjectRotation
+        next.weeklyProjectRotation !== prev.weeklyProjectRotation ||
+        next.sideQuestDefs !== prev.sideQuestDefs
       )
       if (settingsChanged && !pendingSettings.current) {
         pendingSettings.current = true
