@@ -2,7 +2,7 @@
  * storage/convexSharing.ts
  *
  * Client-side helpers for planner sharing, backed by Convex.
- * Replaces the old supabaseSharing.ts.
+ * Convex-backed implementation for planner sharing.
  */
 
 import type { AppState, DayState } from "../domain/types"
