@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { CheckCircle } from 'lucide-react'
 
@@ -31,9 +31,12 @@ function playCompletionChime() {
   }
 }
 
+const PRESETS = [15, 25, 30, 45, 50, 60]
+
 export function DeepWorkTimer({ onSessionComplete }: DeepWorkTimerProps) {
   const [label, setLabel] = useState('Deep work block')
   const [durationMinutes, setDurationMinutes] = useState(45)
+  const [customInput, setCustomInput] = useState('')
   const [status, setStatus] = useState<TimerStatus>('idle')
   const [targetTime, setTargetTime] = useState<number | null>(null)
   const [remainingMs, setRemainingMs] = useState<number>(0)
@@ -76,6 +79,16 @@ export function DeepWorkTimer({ onSessionComplete }: DeepWorkTimerProps) {
   const handlePreset = (minutesPreset: number) => {
     if (status === 'running') return
     setDurationMinutes(minutesPreset)
+    setCustomInput('')
+  }
+
+  const handleCustomChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value.replace(/\D/g, '').slice(0, 3)
+    setCustomInput(raw)
+    const parsed = parseInt(raw, 10)
+    if (!isNaN(parsed) && parsed >= 1) {
+      setDurationMinutes(parsed)
+    }
   }
 
   const handleStart = (event?: FormEvent) => {
@@ -106,6 +119,7 @@ export function DeepWorkTimer({ onSessionComplete }: DeepWorkTimerProps) {
 
   const isRunning = status === 'running'
   const isIdleOrFinished = status === 'idle' || status === 'finished'
+  const isCustom = !PRESETS.includes(durationMinutes)
 
   const fractionComplete =
     status === 'finished'
@@ -137,14 +151,14 @@ export function DeepWorkTimer({ onSessionComplete }: DeepWorkTimerProps) {
 
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <span className="text-slate-400">Presets:</span>
-          {[15, 25, 30, 45, 50, 60].map((minutesPreset) => (
+          {PRESETS.map((minutesPreset) => (
             <button
               key={minutesPreset}
               type="button"
               disabled={isRunning}
               onClick={() => handlePreset(minutesPreset)}
               className={`rounded-full border px-3 py-1 transition-colors ${
-                durationMinutes === minutesPreset
+                durationMinutes === minutesPreset && !isCustom
                   ? 'border-sky-500 bg-sky-500/10 text-sky-400'
                   : 'border-slate-800 bg-slate-900 text-slate-400 hover:border-sky-500 hover:text-sky-400'
               } ${isRunning ? 'opacity-60' : ''}`}
@@ -152,6 +166,22 @@ export function DeepWorkTimer({ onSessionComplete }: DeepWorkTimerProps) {
               {minutesPreset} min
             </button>
           ))}
+          <input
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            maxLength={3}
+            disabled={isRunning}
+            value={customInput}
+            onChange={handleCustomChange}
+            placeholder="?? min"
+            aria-label="Custom duration in minutes"
+            className={`w-16 rounded-full border px-2 py-1 text-center transition-colors focus:outline-none focus:ring-1 focus:ring-sky-500 ${
+              isCustom
+                ? 'border-sky-500 bg-sky-500/10 text-sky-400'
+                : 'border-slate-800 bg-slate-900 text-slate-400 placeholder:text-slate-600 focus:border-sky-500 focus:text-sky-400'
+            } ${isRunning ? 'opacity-60' : ''}`}
+          />
         </div>
 
         {status === 'finished' ? (
