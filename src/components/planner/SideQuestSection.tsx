@@ -1,30 +1,26 @@
-/**
- * components/planner/SideQuestSection.tsx
- *
- * Renders the Side Quest section below the core daily plan.
- * Locked with a progress overlay until 90% of the day's tasks are complete.
- *
- * When locked:
- *   - Shows progress toward unlock and a quest count teaser ("X quests waiting...")
- *   - "Manage quests" button is always accessible so you can set up your list without seeing it
- *
- * When unlocked:
- *   - Recurring quest defs appear as checkboxes (per-day completions, persistent defs)
- *   - Existing SectionColumn is shown below for ad-hoc tasks
- */
-
 import { useState, useEffect, useRef, type ReactNode } from 'react'
 import type { Task, TaskSection, TaskSectionId, SideQuestDef } from '../../domain/types'
 import { SectionColumn } from './SectionColumn'
+import { getSideQuestRank } from '../../domain/sideQuestAlgorithm'
 
 const UNLOCK_THRESHOLD = 0.9
+
+const CAT_ICON: Record<string, string> = {
+  fun: '🎮',
+  serious: '📚',
+  technical: '⚙',
+}
 
 interface SideQuestSectionProps {
   dayCompletionRatio: number
   section: TaskSection
   tasks: Task[]
   defs: SideQuestDef[]
+  /** IDs of the 3 quests selected for today by the algorithm. */
+  selectedQuestIds: string[]
   completions: Record<string, boolean>
+  xp: number
+  streak: number
   onToggleCompletion: (id: string, value: boolean) => void
   onManageDefs: () => void
   draggedTask?: { sectionId: TaskSectionId; taskId: string } | null
@@ -54,7 +50,10 @@ interface SideQuestSectionProps {
 export function SideQuestSection({
   dayCompletionRatio,
   defs,
+  selectedQuestIds,
   completions,
+  xp,
+  streak,
   onToggleCompletion,
   onManageDefs,
   ...columnProps
@@ -77,15 +76,35 @@ export function SideQuestSection({
     if (isLocked) wasLockedRef.current = true
   }, [isLocked])
 
+  // Quests selected for today, resolved to full defs
+  const todayDefs = selectedQuestIds
+    .map(id => defs.find(d => d.id === id))
+    .filter((d): d is SideQuestDef => Boolean(d))
+
+  const { rank, emoji: rankEmoji, xpToNext } = getSideQuestRank(xp)
+
   return (
     <div className="relative">
-      {/* Unlocked: recurring quest defs + ad-hoc section column */}
       {!isLocked ? (
         <div className="space-y-2">
-          {defs.length > 0 && (
+          {todayDefs.length > 0 && (
             <div className="rounded-lg border border-violet-900/30 bg-slate-900 p-3">
+              {/* Header with rank + streak */}
               <div className="mb-2 flex items-center justify-between">
-                <span className="text-xs font-semibold text-violet-300">📋 Recurring Quests</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-violet-300">📋 Today's Quests</span>
+                  <span
+                    title={xpToNext ? `${xp} XP · ${xpToNext} to next rank` : `${xp} XP · Max rank!`}
+                    className="text-[10px] text-violet-400/60"
+                  >
+                    {rankEmoji} {rank}
+                  </span>
+                  {streak > 0 && (
+                    <span className="text-[10px] text-amber-400/70" title={`${streak}-day quest streak`}>
+                      ⚡ {streak}d
+                    </span>
+                  )}
+                </div>
                 <button
                   type="button"
                   onClick={onManageDefs}
@@ -94,9 +113,11 @@ export function SideQuestSection({
                   ⚙ Edit
                 </button>
               </div>
+
               <div className="space-y-0.5">
-                {defs.map((def) => {
+                {todayDefs.map((def) => {
                   const done = completions[def.id] ?? false
+                  const catIcon = CAT_ICON[def.category ?? 'fun'] ?? '🎮'
                   return (
                     <label
                       key={def.id}
@@ -108,19 +129,28 @@ export function SideQuestSection({
                         onChange={(e) => onToggleCompletion(def.id, e.target.checked)}
                         className="h-4 w-4 shrink-0 rounded border-slate-600 bg-slate-800 text-violet-400 focus:ring-violet-500"
                       />
-                      <span className={`text-sm ${done ? 'text-slate-500 line-through decoration-slate-600/60' : 'text-slate-200'}`}>
+                      <span className={`flex-1 text-sm ${done ? 'text-slate-500 line-through decoration-slate-600/60' : 'text-slate-200'}`}>
                         {def.title}
+                      </span>
+                      <span className="text-[10px] text-slate-600" title={def.category ?? 'fun'}>
+                        {catIcon}
                       </span>
                     </label>
                   )
                 })}
               </div>
+
+              {/* XP progress hint */}
+              {xpToNext !== null && (
+                <p className="mt-2 text-[9px] text-slate-600">
+                  {xpToNext} quest{xpToNext !== 1 ? 's' : ''} to {getSideQuestRank(xp + xpToNext).rank}
+                </p>
+              )}
             </div>
           )}
           <SectionColumn {...columnProps} />
         </div>
       ) : (
-        /* Locked: SectionColumn underneath (hidden by overlay) */
         <SectionColumn {...columnProps} />
       )}
 
@@ -133,14 +163,13 @@ export function SideQuestSection({
             <p className="text-[11px] text-slate-500">
               {needed - pct}% more to unlock · finish your core tasks first
             </p>
-            {defs.length > 0 && (
+            {selectedQuestIds.length > 0 && (
               <p className="text-[11px] text-violet-400/80">
-                {defs.length} quest{defs.length !== 1 ? 's' : ''} waiting...
+                {selectedQuestIds.length} quest{selectedQuestIds.length !== 1 ? 's' : ''} waiting...
               </p>
             )}
           </div>
 
-          {/* Progress bar toward unlock */}
           <div className="w-36">
             <div className="mb-1 flex justify-between text-[10px] text-slate-600">
               <span>{pct}%</span>
@@ -154,7 +183,6 @@ export function SideQuestSection({
             </div>
           </div>
 
-          {/* Manage button accessible even when locked */}
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onManageDefs() }}
@@ -171,8 +199,8 @@ export function SideQuestSection({
           <div className="mt-2 flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-4 py-1.5 text-xs font-semibold text-emerald-300 shadow-lg">
             <span>🎮</span>
             <span>
-              Side Quest unlocked —{' '}
-              {defs.length > 0 ? `${defs.length} quest${defs.length !== 1 ? 's' : ''} await!` : 'go explore!'}
+              Side Quest unlocked -{' '}
+              {todayDefs.length > 0 ? `${todayDefs.length} quest${todayDefs.length !== 1 ? 's' : ''} await!` : 'go explore!'}
             </span>
           </div>
         </div>

@@ -72,6 +72,7 @@ import { MustDoPinnedHeader } from "./MustDoPinnedHeader";
 import { MonthlyReviewBanner } from "../goals/MonthlyReviewBanner";
 import { SideQuestEditorModal } from "./SideQuestEditorModal";
 import { SideQuestSection } from "./SideQuestSection";
+import { getDailyQuestSelection } from "../../domain/sideQuestAlgorithm";
 import { MobileTabBar, type MobileTab } from "./MobileTabBar";
 import { ActiveTripBanner } from "./ActiveTripBanner";
 import { DaySummaryCard } from "./DaySummaryCard";
@@ -716,13 +717,35 @@ export function DayPlanner({
   const handleToggleSideQuestCompletion = useCallback((id: string, value: boolean) => {
     updateAppState((prev) => {
       const day = getOrCreateDay(prev, selectedDay)
+      const currentCompletions = day.sideQuestCompletions ?? {}
+      const wasComplete = currentCompletions[id] ?? false
+      const newCompletions = { ...currentCompletions, [id]: value }
+
+      // XP: tracks actual completions (decrements on untick)
+      const xpDelta = (value && !wasComplete) ? 1 : (!value && wasComplete) ? -1 : 0
+
+      // Streak: earned on first completion today only (not reverted on untick)
+      // Only update when on today's date to prevent retroactive streak manipulation
+      let newStreak = prev.sideQuestStreak ?? 0
+      let newLastStreakDate = prev.sideQuestLastStreakDate
+      if (value && !wasComplete && selectedDay === todayIso() && prev.sideQuestLastStreakDate !== selectedDay) {
+        const yesterday = addDays(selectedDay, -1)
+        newStreak = prev.sideQuestLastStreakDate === yesterday
+          ? (prev.sideQuestStreak ?? 0) + 1
+          : 1
+        newLastStreakDate = selectedDay
+      }
+
       return {
         ...prev,
+        sideQuestXp: Math.max(0, (prev.sideQuestXp ?? 0) + xpDelta),
+        sideQuestStreak: newStreak,
+        sideQuestLastStreakDate: newLastStreakDate,
         days: {
           ...prev.days,
           [selectedDay]: {
             ...day,
-            sideQuestCompletions: { ...(day.sideQuestCompletions ?? {}), [id]: value },
+            sideQuestCompletions: newCompletions,
           },
         },
       }
@@ -1029,6 +1052,11 @@ export function DayPlanner({
 
   const [editHabitsOpen, setEditHabitsOpen] = useState(false);
   const [editSideQuestOpen, setEditSideQuestOpen] = useState(false);
+
+  const todayQuestIds = useMemo(
+    () => getDailyQuestSelection(appState.sideQuestDefs ?? [], appState.days, selectedDay),
+    [appState.sideQuestDefs, appState.days, selectedDay],
+  );
 
   const tasksBySection: Record<TaskSectionId, Task[]> = useMemo(() => {
     const grouped: Record<TaskSectionId, Task[]> = {
@@ -1761,7 +1789,10 @@ export function DayPlanner({
                   section={sq}
                   tasks={tasksBySection['sideQuest'] ?? []}
                   defs={appState.sideQuestDefs ?? []}
+                  selectedQuestIds={todayQuestIds}
                   completions={dayState.sideQuestCompletions ?? {}}
+                  xp={appState.sideQuestXp ?? 0}
+                  streak={appState.sideQuestStreak ?? 0}
                   onToggleCompletion={handleToggleSideQuestCompletion}
                   onManageDefs={() => setEditSideQuestOpen(true)}
                   draggedTask={draggedTask}

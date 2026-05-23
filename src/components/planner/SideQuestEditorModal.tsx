@@ -1,14 +1,6 @@
-/**
- * components/planner/SideQuestEditorModal.tsx
- *
- * Modal for managing the recurring side quest definition list.
- * These definitions appear as checkboxes whenever the Side Quest section unlocks (90%+ day completion).
- * Set them once; they wait for you every time you earn them.
- */
-
 import { useState } from 'react'
 import type React from 'react'
-import type { SideQuestDef } from '../../domain/types'
+import type { SideQuestDef, SideQuestCategory } from '../../domain/types'
 
 interface SideQuestEditorModalProps {
   defs: SideQuestDef[]
@@ -20,12 +12,23 @@ function createSideQuestId(): string {
   return `sq-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
 }
 
+const CATEGORY_OPTIONS: { value: SideQuestCategory; icon: string; label: string; color: string }[] = [
+  { value: 'fun', icon: '🎮', label: 'Fun', color: 'border-violet-500 bg-violet-500/20 text-violet-300' },
+  { value: 'serious', icon: '📚', label: 'Serious', color: 'border-amber-500 bg-amber-500/20 text-amber-300' },
+  { value: 'technical', icon: '⚙', label: 'Technical', color: 'border-sky-500 bg-sky-500/20 text-sky-300' },
+]
+
 export function SideQuestEditorModal({ defs, onSave, onClose }: SideQuestEditorModalProps) {
   const [draft, setDraft] = useState<SideQuestDef[]>(() => defs.map((d) => ({ ...d })))
   const [newTitle, setNewTitle] = useState('')
+  const [newCategory, setNewCategory] = useState<SideQuestCategory>('fun')
 
   const handleTitleChange = (id: string, title: string) => {
     setDraft((prev) => prev.map((d) => (d.id === id ? { ...d, title } : d)))
+  }
+
+  const handleCategoryChange = (id: string, category: SideQuestCategory) => {
+    setDraft((prev) => prev.map((d) => (d.id === id ? { ...d, category } : d)))
   }
 
   const handleMoveUp = (index: number) => {
@@ -53,7 +56,7 @@ export function SideQuestEditorModal({ defs, onSave, onClose }: SideQuestEditorM
   const handleAdd = () => {
     const title = newTitle.trim()
     if (!title) return
-    setDraft((prev) => [...prev, { id: createSideQuestId(), title }])
+    setDraft((prev) => [...prev, { id: createSideQuestId(), title, category: newCategory }])
     setNewTitle('')
   }
 
@@ -68,12 +71,12 @@ export function SideQuestEditorModal({ defs, onSave, onClose }: SideQuestEditorM
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 px-4">
-      <div className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-900 shadow-2xl">
+      <div className="w-full max-w-lg rounded-xl border border-slate-700 bg-slate-900 shadow-2xl">
         <header className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
           <div>
             <h2 className="text-sm font-semibold text-slate-100">Edit Side Quests</h2>
             <p className="mt-0.5 text-[10px] text-slate-500">
-              Set them once — they appear every time you hit 90%.
+              Set them once - they appear every time you hit 90%. One quest per category is picked daily.
             </p>
           </div>
           <button
@@ -86,67 +89,120 @@ export function SideQuestEditorModal({ defs, onSave, onClose }: SideQuestEditorM
           </button>
         </header>
 
-        <div className="max-h-[60vh] overflow-y-auto px-4 py-3">
+        {/* Category legend */}
+        <div className="flex gap-2 border-b border-slate-800 px-4 py-2">
+          {CATEGORY_OPTIONS.map((opt) => (
+            <span key={opt.value} className={`flex items-center gap-1 rounded border px-2 py-0.5 text-[10px] ${opt.color}`}>
+              {opt.icon} {opt.label}
+            </span>
+          ))}
+        </div>
+
+        <div className="max-h-[55vh] overflow-y-auto px-4 py-3">
           <ul className="space-y-2">
-            {draft.map((def, index) => (
-              <li key={def.id} className="flex items-center gap-1.5 rounded border border-slate-800 bg-slate-950 p-2">
-                <div className="flex flex-col">
-                  <button
-                    type="button"
-                    onClick={() => handleMoveUp(index)}
-                    disabled={index === 0}
-                    className="text-xs text-slate-600 hover:text-slate-300 disabled:opacity-30"
-                    aria-label="Move up"
-                  >
-                    ▲
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleMoveDown(index)}
-                    disabled={index === draft.length - 1}
-                    className="text-xs text-slate-600 hover:text-slate-300 disabled:opacity-30"
-                    aria-label="Move down"
-                  >
-                    ▼
-                  </button>
-                </div>
+            {draft.map((def, index) => {
+              const cat = def.category ?? 'fun'
+              const catOpt = CATEGORY_OPTIONS.find(o => o.value === cat)!
+              return (
+                <li key={def.id} className="rounded border border-slate-800 bg-slate-950 p-2">
+                  <div className="flex items-center gap-1.5">
+                    <div className="flex flex-col">
+                      <button
+                        type="button"
+                        onClick={() => handleMoveUp(index)}
+                        disabled={index === 0}
+                        className="text-xs text-slate-600 hover:text-slate-300 disabled:opacity-30"
+                        aria-label="Move up"
+                      >
+                        ▲
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleMoveDown(index)}
+                        disabled={index === draft.length - 1}
+                        className="text-xs text-slate-600 hover:text-slate-300 disabled:opacity-30"
+                        aria-label="Move down"
+                      >
+                        ▼
+                      </button>
+                    </div>
 
-                <input
-                  type="text"
-                  value={def.title}
-                  onChange={(e) => handleTitleChange(def.id, e.target.value)}
-                  placeholder="Quest name"
-                  className="flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm text-slate-100 placeholder:text-slate-600 focus:border-violet-600 focus:outline-none"
-                />
+                    <input
+                      type="text"
+                      value={def.title}
+                      onChange={(e) => handleTitleChange(def.id, e.target.value)}
+                      placeholder="Quest name"
+                      className="flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm text-slate-100 placeholder:text-slate-600 focus:border-violet-600 focus:outline-none"
+                    />
 
-                <button
-                  type="button"
-                  onClick={() => handleDelete(def.id)}
-                  className="text-xs text-slate-600 hover:text-red-400"
-                  aria-label="Delete quest"
-                >
-                  ✕
-                </button>
-              </li>
-            ))}
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(def.id)}
+                      className="text-xs text-slate-600 hover:text-red-400"
+                      aria-label="Delete quest"
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  {/* Category chips */}
+                  <div className="mt-1.5 flex gap-1 pl-7">
+                    {CATEGORY_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => handleCategoryChange(def.id, opt.value)}
+                        className={`rounded border px-1.5 py-0.5 text-[10px] transition-colors ${
+                          cat === opt.value
+                            ? opt.color
+                            : 'border-slate-700 text-slate-500 hover:border-slate-600 hover:text-slate-400'
+                        }`}
+                      >
+                        {opt.icon} {opt.label}
+                      </button>
+                    ))}
+                    <span className="ml-auto text-[9px] text-slate-600 self-center">{catOpt.icon} {catOpt.label}</span>
+                  </div>
+                </li>
+              )
+            })}
           </ul>
 
-          <div className="mt-3 flex gap-2">
-            <input
-              type="text"
-              value={newTitle}
-              onChange={(e) => setNewTitle(e.target.value)}
-              onKeyDown={handleAddKeyDown}
-              placeholder="Add a quest... e.g. 🎸 Guitar practice"
-              className="flex-1 rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100 placeholder:text-slate-600 focus:border-violet-600 focus:outline-none"
-            />
-            <button
-              type="button"
-              onClick={handleAdd}
-              className="rounded border border-slate-600 bg-slate-800 px-3 py-1.5 text-xs text-slate-300 hover:border-violet-600 hover:text-violet-300"
-            >
-              Add
-            </button>
+          <div className="mt-3 space-y-1.5">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                onKeyDown={handleAddKeyDown}
+                placeholder="Add a quest... e.g. 🎸 Guitar practice"
+                className="flex-1 rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100 placeholder:text-slate-600 focus:border-violet-600 focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={handleAdd}
+                className="rounded border border-slate-600 bg-slate-800 px-3 py-1.5 text-xs text-slate-300 hover:border-violet-600 hover:text-violet-300"
+              >
+                Add
+              </button>
+            </div>
+            <div className="flex gap-1 pl-1">
+              <span className="text-[10px] text-slate-600 self-center mr-1">Category:</span>
+              {CATEGORY_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setNewCategory(opt.value)}
+                  className={`rounded border px-1.5 py-0.5 text-[10px] transition-colors ${
+                    newCategory === opt.value
+                      ? opt.color
+                      : 'border-slate-700 text-slate-500 hover:border-slate-600 hover:text-slate-400'
+                  }`}
+                >
+                  {opt.icon} {opt.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 

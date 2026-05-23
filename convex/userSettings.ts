@@ -27,6 +27,9 @@ export const upsert = mutation({
     oneThingData: v.optional(v.any()),
     weeklyProjectRotation: v.optional(v.array(v.any())),
     sideQuestDefs: v.optional(v.array(v.any())),
+    sideQuestXp: v.optional(v.number()),
+    sideQuestStreak: v.optional(v.number()),
+    sideQuestLastStreakDate: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()

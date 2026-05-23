@@ -112,10 +112,14 @@ export interface HabitDefinition {
   stackAnchor?: string;
 }
 
+export type SideQuestCategory = 'fun' | 'serious' | 'technical';
+
 /** A recurring side quest definition — set once, appears every time the section unlocks. */
 export interface SideQuestDef {
   id: string;
   title: string;
+  /** Category used by the daily selection algorithm to pick one quest per type. */
+  category?: SideQuestCategory;
 }
 
 /** The ONE Thing goal cascade (Gary Keller): long-horizon goals from life down to 3 months. */
@@ -196,6 +200,12 @@ export interface AppState {
   weeklyProjectRotation?: WeeklyProjectAssignment[];
   /** Recurring side quest definitions — set once, visible on every unlock. */
   sideQuestDefs?: SideQuestDef[];
+  /** Cumulative XP earned from completing side quests. */
+  sideQuestXp?: number;
+  /** Consecutive days with at least one side quest completed. */
+  sideQuestStreak?: number;
+  /** ISO date of the last day the quest streak was updated. */
+  sideQuestLastStreakDate?: string;
 }
 
 export interface WeeklyStatsDaySummary {

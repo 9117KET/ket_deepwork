@@ -54,11 +54,12 @@ function migrateLegacyStreak(state: AppState): AppState {
 }
 
 const DEFAULT_SIDE_QUEST_DEFS: SideQuestDef[] = [
-  { id: 'sq-1', title: '🎹 Piano practice' },
-  { id: 'sq-2', title: '🎲 Rubik\'s cube' },
-  { id: 'sq-3', title: '🤖 Explore a new AI tool' },
-  { id: 'sq-4', title: '📰 Scoop - read & curate' },
-  { id: 'sq-5', title: '📚 Read for 20 minutes' },
+  { id: 'sq-1', title: '🎹 Piano practice', category: 'fun' },
+  { id: 'sq-2', title: '🎲 Rubik\'s cube', category: 'fun' },
+  { id: 'sq-3', title: '🤖 Explore a new AI tool', category: 'technical' },
+  { id: 'sq-4', title: '🔧 Work on a side project', category: 'technical' },
+  { id: 'sq-5', title: '📰 Scoop - read & curate', category: 'serious' },
+  { id: 'sq-6', title: '📚 Read for 20 minutes', category: 'serious' },
 ]
 
 const DEFAULT_MONTHLY_REVIEW_QUESTIONS = [
@@ -310,6 +311,9 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
           monthlyReviewQuestions: (ot.monthlyReviewQuestions as string[] | undefined) ?? prev.monthlyReviewQuestions,
           weeklyProjectRotation: (settingsDoc.weeklyProjectRotation as AppState["weeklyProjectRotation"] | undefined) ?? prev.weeklyProjectRotation,
           sideQuestDefs: (settingsDoc.sideQuestDefs as AppState["sideQuestDefs"] | undefined) ?? prev.sideQuestDefs,
+          sideQuestXp: (settingsDoc.sideQuestXp as number | undefined) ?? prev.sideQuestXp,
+          sideQuestStreak: (settingsDoc.sideQuestStreak as number | undefined) ?? prev.sideQuestStreak,
+          sideQuestLastStreakDate: (settingsDoc.sideQuestLastStreakDate as string | undefined) ?? prev.sideQuestLastStreakDate,
         }
       }
 
@@ -396,6 +400,9 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
         },
         weeklyProjectRotation: s.weeklyProjectRotation ?? [],
         sideQuestDefs: s.sideQuestDefs ?? [],
+        sideQuestXp: s.sideQuestXp ?? 0,
+        sideQuestStreak: s.sideQuestStreak ?? 0,
+        sideQuestLastStreakDate: s.sideQuestLastStreakDate,
       }).then(() => {
         pendingSettings.current = false
         writePendingSettings(false)
@@ -426,6 +433,9 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
     state.monthlyReviewQuestions,
     state.weeklyProjectRotation,
     state.sideQuestDefs,
+    state.sideQuestXp,
+    state.sideQuestStreak,
+    state.sideQuestLastStreakDate,
     isAuthenticated,
     readyToSync,
     upsertSettings,
@@ -550,7 +560,10 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
         next.monthlyReviews !== prev.monthlyReviews ||
         next.monthlyReviewQuestions !== prev.monthlyReviewQuestions ||
         next.weeklyProjectRotation !== prev.weeklyProjectRotation ||
-        next.sideQuestDefs !== prev.sideQuestDefs
+        next.sideQuestDefs !== prev.sideQuestDefs ||
+        next.sideQuestXp !== prev.sideQuestXp ||
+        next.sideQuestStreak !== prev.sideQuestStreak ||
+        next.sideQuestLastStreakDate !== prev.sideQuestLastStreakDate
       )
       if (settingsChanged && !pendingSettings.current) {
         pendingSettings.current = true
