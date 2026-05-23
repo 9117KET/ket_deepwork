@@ -8,6 +8,8 @@ import { api } from "../../convex/_generated/api"
 
 const STORAGE_KEY = "deepblock_state_v1"
 const LEGACY_STORAGE_KEY = "ket_deepwork_state_v1"
+const PENDING_DATES_KEY = "deepblock_pending_dates_v1"
+const PENDING_SETTINGS_KEY = "deepblock_pending_settings_v1"
 const SCHEMA_VERSION = 1
 
 interface PersistedStateV1 {
@@ -160,6 +162,46 @@ export function mergeRemoteDayState(local: DayState, remote: DayState): DayState
   }
 }
 
+// ─── Pending-sync persistence (survives page reloads) ────────────────────────
+// Tracks ISO dates / settings that have local changes not yet confirmed synced.
+// Without this, a page reload after a failed sync would let stale Convex data
+// overwrite local deletions / edits (tasks, completions, sessions, etc.).
+
+function readPendingDates(): Set<string> {
+  if (typeof window === "undefined") return new Set()
+  const raw = window.localStorage.getItem(PENDING_DATES_KEY)
+  if (!raw) return new Set()
+  try {
+    const arr = JSON.parse(raw) as unknown
+    return new Set(Array.isArray(arr) ? (arr as string[]) : [])
+  } catch {
+    return new Set()
+  }
+}
+
+function writePendingDates(dates: Set<string>) {
+  if (typeof window === "undefined") return
+  try {
+    window.localStorage.setItem(PENDING_DATES_KEY, JSON.stringify([...dates]))
+  } catch { /* storage unavailable */ }
+}
+
+function readPendingSettings(): boolean {
+  if (typeof window === "undefined") return false
+  return window.localStorage.getItem(PENDING_SETTINGS_KEY) === "1"
+}
+
+function writePendingSettings(pending: boolean) {
+  if (typeof window === "undefined") return
+  try {
+    if (pending) {
+      window.localStorage.setItem(PENDING_SETTINGS_KEY, "1")
+    } else {
+      window.localStorage.removeItem(PENDING_SETTINGS_KEY)
+    }
+  } catch { /* storage unavailable */ }
+}
+
 // ─── usePersistentState ───────────────────────────────────────────────────────
 
 export function usePersistentState(): [AppState, (updater: (prev: AppState) => AppState) => void] {
@@ -179,11 +221,14 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
   const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const settingsSyncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Per-date write-generation counter for dirty tracking
+  // Per-date write-generation counter for dirty tracking (in-memory, current session)
   const dirtyGenerations = useRef<Map<string, number>>(new Map())
   // Echo-suppression window: ignore reactive updates for 3s after we clear a dirty flag
   const echoSuppressUntil = useRef<Map<string, number>>(new Map())
   const ECHO_SUPPRESS_MS = 3000
+  // Persisted pending-sync sets - survive page reloads after a failed sync
+  const pendingDates = useRef<Set<string>>(readPendingDates())
+  const pendingSettings = useRef(readPendingSettings())
 
   // Convex reactive queries - undefined while loading, null/array when ready
   const remoteDays = useQuery(api.plannerDays.getAll, isAuthenticated ? {} : "skip")
@@ -218,6 +263,7 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
       for (const doc of remoteDayList) {
         const date = doc.date as string
         if (dirtyGenerations.current.has(date)) continue
+        if (pendingDates.current.has(date)) continue
         const suppressUntil = echoSuppressUntil.current.get(date)
         if (suppressUntil && Date.now() < suppressUntil) continue
         const dayState = docToDayState(doc as Record<string, unknown>)
@@ -227,7 +273,7 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
 
       const activeDays = deriveActiveDaysFromDays(base)
 
-      if (settingsDoc) {
+      if (settingsDoc && !pendingSettings.current) {
         const ot = (settingsDoc.oneThingData ?? {}) as Record<string, unknown>
         return {
           days: base,
@@ -289,8 +335,10 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
           if (dirtyGenerations.current.get(date) === gen) {
             dirtyGenerations.current.delete(date)
             echoSuppressUntil.current.set(date, now + ECHO_SUPPRESS_MS)
+            pendingDates.current.delete(date)
           }
         }
+        writePendingDates(pendingDates.current)
       }).catch((err: unknown) => console.error("[sync] days sync failed:", err))
     }, 800)
 
@@ -330,6 +378,9 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
           monthlyReviewQuestions: s.monthlyReviewQuestions ?? [],
         },
         weeklyProjectRotation: s.weeklyProjectRotation ?? [],
+      }).then(() => {
+        pendingSettings.current = false
+        writePendingSettings(false)
       }).catch((err: unknown) => console.error("[sync] settings sync failed:", err))
     }, 800)
 
@@ -393,8 +444,10 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
             for (const [date, gen] of genSnapshot) {
               if (dirtyGenerations.current.get(date) === gen) {
                 dirtyGenerations.current.delete(date)
+                pendingDates.current.delete(date)
               }
             }
+            writePendingDates(pendingDates.current)
           }).catch((err: unknown) => console.error("[sync] days flush failed:", err))
         }
       }
@@ -421,6 +474,9 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
             monthlyReviewQuestions: s.monthlyReviewQuestions ?? [],
           },
           weeklyProjectRotation: s.weeklyProjectRotation ?? [],
+        }).then(() => {
+          pendingSettings.current = false
+          writePendingSettings(false)
         }).catch((err: unknown) => console.error("[sync] settings flush failed:", err))
       }
     }
@@ -447,11 +503,38 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
   const update = (updater: (prev: AppState) => AppState) => {
     setState((prev) => {
       const next = updater(prev)
+      let datesChanged = false
       for (const date of Object.keys(next.days)) {
         if (next.days[date] !== prev.days[date]) {
           dirtyGenerations.current.set(date, (dirtyGenerations.current.get(date) ?? 0) + 1)
+          pendingDates.current.add(date)
+          datesChanged = true
         }
       }
+      if (datesChanged) writePendingDates(pendingDates.current)
+
+      const settingsChanged = (
+        next.habitDefinitions !== prev.habitDefinitions ||
+        next.monthTitles !== prev.monthTitles ||
+        next.blockDurationRatios !== prev.blockDurationRatios ||
+        next.notDoingList !== prev.notDoingList ||
+        next.identityStatement !== prev.identityStatement ||
+        next.depthPhilosophy !== prev.depthPhilosophy ||
+        next.deepWorkGoalHoursPerWeek !== prev.deepWorkGoalHoursPerWeek ||
+        next.northStar !== prev.northStar ||
+        next.goalCascade !== prev.goalCascade ||
+        next.dayOneThings !== prev.dayOneThings ||
+        next.weekOneThings !== prev.weekOneThings ||
+        next.monthOneThings !== prev.monthOneThings ||
+        next.monthlyReviews !== prev.monthlyReviews ||
+        next.monthlyReviewQuestions !== prev.monthlyReviewQuestions ||
+        next.weeklyProjectRotation !== prev.weeklyProjectRotation
+      )
+      if (settingsChanged && !pendingSettings.current) {
+        pendingSettings.current = true
+        writePendingSettings(true)
+      }
+
       return next
     })
   }

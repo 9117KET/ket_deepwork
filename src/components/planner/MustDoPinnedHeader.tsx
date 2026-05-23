@@ -27,7 +27,7 @@ interface MustDoPinnedHeaderProps {
   onToggle: (taskId: string) => void
   onAdd: (title: string) => void
   onDelete: (taskId: string) => void
-  onUpdate: (taskId: string, patch: { scheduledAt?: string; durationMinutes?: number }) => void
+  onUpdate: (taskId: string, patch: { scheduledAt?: string; durationMinutes?: number; title?: string }) => void
 }
 
 const MAX = 3
@@ -43,6 +43,14 @@ export function MustDoPinnedHeader({ tasks, onToggle, onAdd, onDelete, onUpdate 
   // Collapses when all 3 slots are filled; user can re-expand by clicking the header row.
   // Triggered in handleAdd (not useEffect) to satisfy react-hooks/set-state-in-effect.
   const [listCollapsed, setListCollapsed] = useState(() => rootTasks.length >= MAX)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editingTitle, setEditingTitle] = useState('')
+
+  const commitTitleEdit = (taskId: string) => {
+    const trimmed = editingTitle.trim()
+    if (trimmed) onUpdate(taskId, { title: trimmed })
+    setEditingId(null)
+  }
 
   const handleAdd = () => {
     const trimmed = input.trim()
@@ -88,9 +96,27 @@ export function MustDoPinnedHeader({ tasks, onToggle, onAdd, onDelete, onUpdate 
                     onChange={() => onToggle(task.id)}
                     className="h-4 w-4 shrink-0 rounded border-emerald-700 bg-slate-800 text-emerald-400 focus:ring-emerald-500"
                   />
-                  <span className="min-w-0 truncate text-sm text-slate-400 line-through decoration-slate-600/60">
-                    {task.title}
-                  </span>
+                  {editingId === task.id ? (
+                    <input
+                      autoFocus
+                      type="text"
+                      value={editingTitle}
+                      onChange={e => setEditingTitle(e.target.value)}
+                      onBlur={() => commitTitleEdit(task.id)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') commitTitleEdit(task.id)
+                        if (e.key === 'Escape') setEditingId(null)
+                      }}
+                      className="min-w-0 flex-1 rounded border border-sky-500 bg-slate-800 px-1 py-0.5 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                    />
+                  ) : (
+                    <span
+                      onClick={() => { setEditingId(task.id); setEditingTitle(task.title) }}
+                      className="min-w-0 truncate text-sm cursor-text text-slate-400 line-through decoration-slate-600/60"
+                    >
+                      {task.title}
+                    </span>
+                  )}
                 </label>
                 <span className="flex shrink-0 items-center gap-1">
                   <div className="relative" title="Scheduled time">
@@ -189,13 +215,31 @@ export function MustDoPinnedHeader({ tasks, onToggle, onAdd, onDelete, onUpdate 
                 onChange={() => onToggle(task.id)}
                 className="h-4 w-4 shrink-0 rounded border-slate-700 bg-slate-800 text-emerald-400 focus:ring-emerald-500"
               />
-              <span className={`min-w-0 truncate text-sm ${
-                task.isDone
-                  ? 'text-slate-500 line-through decoration-slate-600/60'
-                  : 'text-slate-100'
-              }`}>
-                {task.title}
-              </span>
+              {editingId === task.id ? (
+                <input
+                  autoFocus
+                  type="text"
+                  value={editingTitle}
+                  onChange={e => setEditingTitle(e.target.value)}
+                  onBlur={() => commitTitleEdit(task.id)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') commitTitleEdit(task.id)
+                    if (e.key === 'Escape') setEditingId(null)
+                  }}
+                  className="min-w-0 flex-1 rounded border border-sky-500 bg-slate-800 px-1 py-0.5 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                />
+              ) : (
+                <span
+                  onClick={() => { setEditingId(task.id); setEditingTitle(task.title) }}
+                  className={`min-w-0 truncate text-sm cursor-text ${
+                    task.isDone
+                      ? 'text-slate-500 line-through decoration-slate-600/60'
+                      : 'text-slate-100'
+                  }`}
+                >
+                  {task.title}
+                </span>
+              )}
             </label>
             <span className="flex shrink-0 items-center gap-1">
               <div className="relative" title="Scheduled time">
