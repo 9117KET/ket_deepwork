@@ -9,6 +9,7 @@
 
 import { useRef, useState } from 'react'
 import type { NotDoingItem } from '../../domain/types'
+import { ChevronRight, ChevronDown } from 'lucide-react'
 
 interface NotDoingPanelProps {
   globalList: NotDoingItem[]
@@ -98,7 +99,7 @@ export function NotDoingPanel({
               {globalList.length + dayList.length}
             </span>
           )}
-          <span className="text-slate-500 text-xs">{collapsed ? '▶' : '▼'}</span>
+          {collapsed ? <ChevronRight className="h-3.5 w-3.5 text-slate-500" /> : <ChevronDown className="h-3.5 w-3.5 text-slate-500" />}
         </div>
       </header>
 

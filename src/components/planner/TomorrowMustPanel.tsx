@@ -9,6 +9,7 @@
 import { useState, useRef, useEffect } from 'react'
 import type { Task } from '../../domain/types'
 import { normalizeHhmm } from '../../domain/dateUtils'
+import { Moon, ChevronUp, ChevronDown, X } from 'lucide-react'
 
 const DURATION_OPTIONS = [5, 10, 15, 20, 25, 30, 45, 60, 90, 120, 150, 180, 240, 300, 360, 420, 480]
 
@@ -81,14 +82,14 @@ export function TomorrowMustPanel({ tomorrowDate, tasks, onAdd, onDelete, onEdit
         className="flex w-full items-center justify-between gap-2 text-left"
       >
         <div className="flex items-center gap-2">
-          <span className="text-base">🌙</span>
+          <Moon className="h-4 w-4 shrink-0 text-indigo-400" />
           <div>
             <p className="text-xs font-semibold text-indigo-300">
               Set tomorrow's MUSTs
             </p>
             <p className="text-[10px] text-slate-500">
-              {tomorrowLabel} · {tasks.length}/{MAX_MUSTS} set
-              {allSet ? ' — ready ✓' : noneSet ? ' — not set yet' : ''}
+              {tomorrowLabel}, {tasks.length}/{MAX_MUSTS} set
+              {allSet ? ' - ready' : noneSet ? ' - not set yet' : ''}
             </p>
           </div>
         </div>
@@ -104,7 +105,7 @@ export function TomorrowMustPanel({ tomorrowDate, tasks, onAdd, onDelete, onEdit
               />
             ))}
           </span>
-          <span className="text-xs text-slate-500">{open ? '▲' : '▼'}</span>
+          {open ? <ChevronUp className="h-4 w-4 text-slate-500" /> : <ChevronDown className="h-4 w-4 text-slate-500" />}
         </div>
       </button>
 
@@ -172,7 +173,7 @@ export function TomorrowMustPanel({ tomorrowDate, tasks, onAdd, onDelete, onEdit
                 className="shrink-0 rounded p-0.5 text-slate-600 hover:text-red-400"
                 aria-label="Remove"
               >
-                ✕
+                <X className="h-3.5 w-3.5" />
               </button>
             </div>
           ))}

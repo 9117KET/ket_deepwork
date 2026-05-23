@@ -13,6 +13,7 @@
 import { useState } from 'react'
 import type { Task } from '../../domain/types'
 import { normalizeHhmm } from '../../domain/dateUtils'
+import { CheckCircle2, ChevronUp, ChevronDown, X } from 'lucide-react'
 
 const DURATION_OPTIONS = [5, 10, 15, 20, 25, 30, 45, 60, 90, 120, 150, 180, 240, 300, 360, 420, 480]
 
@@ -73,11 +74,11 @@ export function MustDoPinnedHeader({ tasks, onToggle, onAdd, onDelete, onUpdate 
           onClick={() => setDoneExpanded(o => !o)}
           className="flex w-full items-center gap-2 px-3 py-2 text-left"
         >
-          <span className="text-sm">✅</span>
+          <CheckCircle2 className="h-4 w-4 text-emerald-400" />
           <span className="text-xs font-medium text-emerald-400">All MUSTs complete</span>
           <span className="ml-auto flex items-center gap-2 text-[10px] text-slate-500">
             {rootTasks.length}/{rootTasks.length} done
-            <span className="text-[10px] text-emerald-600/70">{doneExpanded ? '▲' : '▼'}</span>
+            {doneExpanded ? <ChevronUp className="h-3.5 w-3.5 text-emerald-600/70" /> : <ChevronDown className="h-3.5 w-3.5 text-emerald-600/70" />}
           </span>
         </button>
 
@@ -197,7 +198,7 @@ export function MustDoPinnedHeader({ tasks, onToggle, onAdd, onDelete, onUpdate 
               + Add
             </span>
           )}
-          <span className="text-[10px] text-slate-600">{listCollapsed ? '▼' : '▲'}</span>
+          {listCollapsed ? <ChevronDown className="h-3.5 w-3.5 text-slate-600" /> : <ChevronUp className="h-3.5 w-3.5 text-slate-600" />}
         </div>
       </button>
 
@@ -269,7 +270,7 @@ export function MustDoPinnedHeader({ tasks, onToggle, onAdd, onDelete, onUpdate 
               className="shrink-0 rounded p-0.5 text-transparent group-hover:text-slate-600 hover:!text-red-400 transition-colors"
               aria-label="Remove"
             >
-              ✕
+              <X className="h-3.5 w-3.5" />
             </button>
           </div>
         ))}

@@ -8,6 +8,7 @@
 import { useState } from 'react'
 import type React from 'react'
 import type { HabitDefinition } from '../../domain/types'
+import { ChevronUp, ChevronDown, X } from 'lucide-react'
 
 interface HabitEditorModalProps {
   habits: HabitDefinition[]
@@ -84,7 +85,7 @@ export function HabitEditorModal({ habits, onSave, onClose }: HabitEditorModalPr
             className="text-slate-500 hover:text-slate-300"
             aria-label="Close"
           >
-            ✕
+            <X className="h-4 w-4" />
           </button>
         </header>
 
@@ -98,19 +99,19 @@ export function HabitEditorModal({ habits, onSave, onClose }: HabitEditorModalPr
                       type="button"
                       onClick={() => handleMoveUp(index)}
                       disabled={index === 0}
-                      className="text-xs text-slate-600 hover:text-slate-300 disabled:opacity-30"
+                      className="text-slate-600 hover:text-slate-300 disabled:opacity-30"
                       aria-label="Move up"
                     >
-                      ▲
+                      <ChevronUp className="h-3.5 w-3.5" />
                     </button>
                     <button
                       type="button"
                       onClick={() => handleMoveDown(index)}
                       disabled={index === draft.length - 1}
-                      className="text-xs text-slate-600 hover:text-slate-300 disabled:opacity-30"
+                      className="text-slate-600 hover:text-slate-300 disabled:opacity-30"
                       aria-label="Move down"
                     >
-                      ▼
+                      <ChevronDown className="h-3.5 w-3.5" />
                     </button>
                   </div>
 
@@ -125,10 +126,10 @@ export function HabitEditorModal({ habits, onSave, onClose }: HabitEditorModalPr
                   <button
                     type="button"
                     onClick={() => handleDelete(habit.id)}
-                    className="text-xs text-slate-600 hover:text-red-400"
+                    className="text-slate-600 hover:text-red-400"
                     aria-label="Delete habit"
                   >
-                    ✕
+                    <X className="h-3.5 w-3.5" />
                   </button>
                 </div>
 

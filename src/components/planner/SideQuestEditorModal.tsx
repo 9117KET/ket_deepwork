@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type React from 'react'
 import type { SideQuestDef, SideQuestCategory } from '../../domain/types'
+import { ChevronUp, ChevronDown, X, Gamepad2, BookOpen, Wrench } from 'lucide-react'
 
 interface SideQuestEditorModalProps {
   defs: SideQuestDef[]
@@ -12,10 +13,12 @@ function createSideQuestId(): string {
   return `sq-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
 }
 
-const CATEGORY_OPTIONS: { value: SideQuestCategory; icon: string; label: string; color: string }[] = [
-  { value: 'fun', icon: '🎮', label: 'Fun', color: 'border-violet-500 bg-violet-500/20 text-violet-300' },
-  { value: 'serious', icon: '📚', label: 'Serious', color: 'border-amber-500 bg-amber-500/20 text-amber-300' },
-  { value: 'technical', icon: '⚙', label: 'Technical', color: 'border-sky-500 bg-sky-500/20 text-sky-300' },
+type LucideIconComponent = React.ComponentType<{ className?: string }>
+
+const CATEGORY_OPTIONS: { value: SideQuestCategory; Icon: LucideIconComponent; label: string; activeColor: string }[] = [
+  { value: 'fun', Icon: Gamepad2, label: 'Fun', activeColor: 'border-violet-500 bg-violet-500/20 text-violet-300' },
+  { value: 'serious', Icon: BookOpen, label: 'Serious', activeColor: 'border-amber-500 bg-amber-500/20 text-amber-300' },
+  { value: 'technical', Icon: Wrench, label: 'Technical', activeColor: 'border-sky-500 bg-sky-500/20 text-sky-300' },
 ]
 
 export function SideQuestEditorModal({ defs, onSave, onClose }: SideQuestEditorModalProps) {
@@ -85,15 +88,15 @@ export function SideQuestEditorModal({ defs, onSave, onClose }: SideQuestEditorM
             className="text-slate-500 hover:text-slate-300"
             aria-label="Close"
           >
-            ✕
+            <X className="h-4 w-4" />
           </button>
         </header>
 
         {/* Category legend */}
         <div className="flex gap-2 border-b border-slate-800 px-4 py-2">
           {CATEGORY_OPTIONS.map((opt) => (
-            <span key={opt.value} className={`flex items-center gap-1 rounded border px-2 py-0.5 text-[10px] ${opt.color}`}>
-              {opt.icon} {opt.label}
+            <span key={opt.value} className={`flex items-center gap-1 rounded border px-2 py-0.5 text-[10px] ${opt.activeColor}`}>
+              <opt.Icon className="h-3 w-3" /> {opt.label}
             </span>
           ))}
         </div>
@@ -111,19 +114,19 @@ export function SideQuestEditorModal({ defs, onSave, onClose }: SideQuestEditorM
                         type="button"
                         onClick={() => handleMoveUp(index)}
                         disabled={index === 0}
-                        className="text-xs text-slate-600 hover:text-slate-300 disabled:opacity-30"
+                        className="text-slate-600 hover:text-slate-300 disabled:opacity-30"
                         aria-label="Move up"
                       >
-                        ▲
+                        <ChevronUp className="h-3.5 w-3.5" />
                       </button>
                       <button
                         type="button"
                         onClick={() => handleMoveDown(index)}
                         disabled={index === draft.length - 1}
-                        className="text-xs text-slate-600 hover:text-slate-300 disabled:opacity-30"
+                        className="text-slate-600 hover:text-slate-300 disabled:opacity-30"
                         aria-label="Move down"
                       >
-                        ▼
+                        <ChevronDown className="h-3.5 w-3.5" />
                       </button>
                     </div>
 
@@ -138,10 +141,10 @@ export function SideQuestEditorModal({ defs, onSave, onClose }: SideQuestEditorM
                     <button
                       type="button"
                       onClick={() => handleDelete(def.id)}
-                      className="text-xs text-slate-600 hover:text-red-400"
+                      className="text-slate-600 hover:text-red-400"
                       aria-label="Delete quest"
                     >
-                      ✕
+                      <X className="h-3.5 w-3.5" />
                     </button>
                   </div>
 
@@ -152,16 +155,18 @@ export function SideQuestEditorModal({ defs, onSave, onClose }: SideQuestEditorM
                         key={opt.value}
                         type="button"
                         onClick={() => handleCategoryChange(def.id, opt.value)}
-                        className={`rounded border px-1.5 py-0.5 text-[10px] transition-colors ${
+                        className={`flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] transition-colors ${
                           cat === opt.value
-                            ? opt.color
+                            ? opt.activeColor
                             : 'border-slate-700 text-slate-500 hover:border-slate-600 hover:text-slate-400'
                         }`}
                       >
-                        {opt.icon} {opt.label}
+                        <opt.Icon className="h-3 w-3" /> {opt.label}
                       </button>
                     ))}
-                    <span className="ml-auto text-[9px] text-slate-600 self-center">{catOpt.icon} {catOpt.label}</span>
+                    <span className="ml-auto flex items-center gap-0.5 text-[9px] text-slate-600 self-center">
+                      <catOpt.Icon className="h-3 w-3" /> {catOpt.label}
+                    </span>
                   </div>
                 </li>
               )
@@ -175,7 +180,7 @@ export function SideQuestEditorModal({ defs, onSave, onClose }: SideQuestEditorM
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
                 onKeyDown={handleAddKeyDown}
-                placeholder="Add a quest... e.g. 🎸 Guitar practice"
+                placeholder="Add a quest... e.g. Guitar practice"
                 className="flex-1 rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100 placeholder:text-slate-600 focus:border-violet-600 focus:outline-none"
               />
               <button
@@ -186,20 +191,20 @@ export function SideQuestEditorModal({ defs, onSave, onClose }: SideQuestEditorM
                 Add
               </button>
             </div>
-            <div className="flex gap-1 pl-1">
-              <span className="text-[10px] text-slate-600 self-center mr-1">Category:</span>
+            <div className="flex items-center gap-1 pl-1">
+              <span className="text-[10px] text-slate-600 mr-1">Category:</span>
               {CATEGORY_OPTIONS.map((opt) => (
                 <button
                   key={opt.value}
                   type="button"
                   onClick={() => setNewCategory(opt.value)}
-                  className={`rounded border px-1.5 py-0.5 text-[10px] transition-colors ${
+                  className={`flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] transition-colors ${
                     newCategory === opt.value
-                      ? opt.color
+                      ? opt.activeColor
                       : 'border-slate-700 text-slate-500 hover:border-slate-600 hover:text-slate-400'
                   }`}
                 >
-                  {opt.icon} {opt.label}
+                  <opt.Icon className="h-3 w-3" /> {opt.label}
                 </button>
               ))}
             </div>

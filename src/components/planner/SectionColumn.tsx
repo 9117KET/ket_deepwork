@@ -9,6 +9,7 @@ import { useState, useEffect, useRef, type ReactNode } from 'react'
 import type { Task, TaskSection, TaskSectionId } from '../../domain/types'
 import { AddTaskInput } from './AddTaskInput'
 import { TaskItem } from './TaskItem'
+import { ChevronRight, ChevronDown, AlertTriangle } from 'lucide-react'
 
 interface SectionColumnProps {
   section: TaskSection
@@ -143,7 +144,7 @@ export function SectionColumn({
       const est = h > 0 ? `${h}h${m > 0 ? ` ${m}m` : ''}` : `${m}m`
       parts.push(`~${est} remaining`)
     }
-    return parts.join(' · ')
+    return parts.join(' / ')
   })()
 
   const handleDragStart = (taskId: string) => {
@@ -181,7 +182,7 @@ export function SectionColumn({
             className="mt-0.5 shrink-0 text-slate-400 hover:text-slate-200"
             aria-label={collapsed ? 'Expand section' : 'Collapse section'}
           >
-            {collapsed ? '▶' : '▼'}
+            {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </button>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
@@ -193,24 +194,24 @@ export function SectionColumn({
               )}
               {isCriticalOverload ? (
                 <span
-                  className="rounded bg-red-500/20 px-1.5 py-0.5 text-[10px] font-medium text-red-400"
-                  title={`${incompleteRootCount} tasks — this list is too long to execute. Cut it now.`}
+                  className="flex items-center gap-1 rounded bg-red-500/20 px-1.5 py-0.5 text-[10px] font-medium text-red-400"
+                  title={`${incompleteRootCount} tasks - this list is too long to execute. Cut it now.`}
                 >
-                  🔴 {incompleteRootCount} tasks — cut this list
+                  <AlertTriangle className="h-3 w-3" /> {incompleteRootCount} tasks - cut this list
                 </span>
               ) : isOverloaded ? (
                 <span
-                  className="rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-medium text-amber-400"
-                  title={`${incompleteRootCount} incomplete tasks — trim to stay focused`}
+                  className="flex items-center gap-1 rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-medium text-amber-400"
+                  title={`${incompleteRootCount} incomplete tasks - trim to stay focused`}
                 >
-                  ⚠ {incompleteRootCount} tasks
+                  <AlertTriangle className="h-3 w-3" /> {incompleteRootCount} tasks
                 </span>
               ) : null}
             </div>
             {timeframeLabel ? (
               <p className="text-xs text-slate-400">
                 {timeframeLabel}
-                {dynamicDescription ? ` · ${dynamicDescription}` : null}
+                {dynamicDescription ? ` / ${dynamicDescription}` : null}
               </p>
             ) : dynamicDescription ? (
               <p className="text-xs text-slate-500">{dynamicDescription}</p>

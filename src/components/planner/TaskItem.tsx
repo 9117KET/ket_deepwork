@@ -9,6 +9,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Task } from '../../domain/types'
 import { normalizeHhmm } from '../../domain/dateUtils'
+import { ArrowUp, ArrowDown, MoreVertical } from 'lucide-react'
 
 const DURATION_OPTIONS = [5, 10, 15, 20, 25, 30, 45, 60, 90, 120, 150, 180, 240, 300, 360, 420, 480]
 
@@ -240,7 +241,7 @@ export function TaskItem({
             className="shrink-0 rounded p-0.5 text-slate-500 hover:bg-slate-800 hover:text-slate-300 sm:opacity-0 sm:group-hover:opacity-100"
             aria-label="Task options"
           >
-            ⋮
+            <MoreVertical className="h-4 w-4" />
           </button>
         )}
         {(onMoveUp !== undefined || onMoveDown !== undefined) && (
@@ -251,14 +252,14 @@ export function TaskItem({
               disabled={onMoveUp === undefined}
               className="rounded p-0.5 text-slate-500 hover:bg-slate-800 hover:text-slate-300 disabled:opacity-25"
               aria-label="Move task up"
-            >↑</button>
+            ><ArrowUp className="h-3 w-3" /></button>
             <button
               type="button"
               onClick={onMoveDown}
               disabled={onMoveDown === undefined}
               className="rounded p-0.5 text-slate-500 hover:bg-slate-800 hover:text-slate-300 disabled:opacity-25"
               aria-label="Move task down"
-            >↓</button>
+            ><ArrowDown className="h-3 w-3" /></button>
           </span>
         )}
         <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">

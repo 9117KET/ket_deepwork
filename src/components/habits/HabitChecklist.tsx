@@ -9,6 +9,7 @@
 import { useState } from 'react'
 import type React from 'react'
 import type { HabitDefinition } from '../../domain/types'
+import { Plane, Check, AlertTriangle, Flame } from 'lucide-react'
 
 interface HabitChecklistProps {
   habits: HabitDefinition[]
@@ -92,8 +93,8 @@ export function HabitChecklist({
         <>
           {/* Travel context note */}
           {travelingToday && (
-            <p className="mb-2 rounded bg-teal-500/10 border border-teal-500/20 px-2 py-1 text-xs text-teal-300">
-              ✈️ You&apos;re traveling — at-risk alerts paused.
+            <p className="mb-2 flex items-center gap-1.5 rounded bg-teal-500/10 border border-teal-500/20 px-2 py-1 text-xs text-teal-300">
+              <Plane className="h-3.5 w-3.5 shrink-0" /> You&apos;re traveling - at-risk alerts paused.
             </p>
           )}
           {/* Identity statement */}
@@ -150,7 +151,7 @@ export function HabitChecklist({
                     }`}
                     aria-label={done ? `Uncheck ${habit.label}` : `Check ${habit.label}`}
                   >
-                    {done && '✓'}
+                    {done && <Check className="h-3 w-3" />}
                   </button>
 
                   <div className="min-w-0 flex-1">
@@ -169,15 +170,15 @@ export function HabitChecklist({
                   <div className="flex shrink-0 items-center gap-1.5">
                     {atRisk && (
                       <span
-                        className="text-xs text-amber-400"
-                        title="You missed yesterday — don't miss twice"
+                        className="text-amber-400"
+                        title="You missed yesterday - don't miss twice"
                       >
-                        ⚠
+                        <AlertTriangle className="h-3.5 w-3.5" />
                       </span>
                     )}
                     {streak > 0 && (
-                      <span className="text-xs text-orange-400" title={`${streak}-day streak`}>
-                        🔥{streak}
+                      <span className="flex items-center gap-0.5 text-xs text-orange-400" title={`${streak}-day streak`}>
+                        <Flame className="h-3 w-3" />{streak}
                       </span>
                     )}
                   </div>

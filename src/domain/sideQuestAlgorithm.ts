@@ -99,14 +99,13 @@ export function getDailyQuestSelection(
 
 export interface SideQuestRank {
   rank: string
-  emoji: string
   xpToNext: number | null
 }
 
 export function getSideQuestRank(xp: number): SideQuestRank {
-  if (xp < 5) return { rank: 'Curious', emoji: '🌱', xpToNext: 5 - xp }
-  if (xp < 15) return { rank: 'Explorer', emoji: '🗺', xpToNext: 15 - xp }
-  if (xp < 30) return { rank: 'Adventurer', emoji: '⚔', xpToNext: 30 - xp }
-  if (xp < 50) return { rank: 'Champion', emoji: '🏆', xpToNext: 50 - xp }
-  return { rank: 'Legendary', emoji: '⭐', xpToNext: null }
+  if (xp < 5) return { rank: 'Curious', xpToNext: 5 - xp }
+  if (xp < 15) return { rank: 'Explorer', xpToNext: 15 - xp }
+  if (xp < 30) return { rank: 'Adventurer', xpToNext: 30 - xp }
+  if (xp < 50) return { rank: 'Champion', xpToNext: 50 - xp }
+  return { rank: 'Legendary', xpToNext: null }
 }

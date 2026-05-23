@@ -1,28 +1,18 @@
-/**
- * components/planner/DayHeader.tsx
- *
- * Displays the current day and provides navigation between days.
- */
+import { Flame, Timer, Zap, Calendar, Scale } from 'lucide-react'
 
 interface DayHeaderProps {
   dateLabel: string
   completionRatio?: number
   completedTaskCount?: number
   totalTaskCount?: number
-  /** Current consecutive active days (ending on last active day). */
   streak?: number
-  /** Longest consecutive active streak ever; shown with current streak for context. */
   bestStreak?: number
-  /** Calendar days between first use and today that were missed. */
   daysMissed?: number
-  /** Total calendar days since first use (for accountability context). */
   totalDays?: number
   onPrevDay: () => void
   onNextDay: () => void
   onToday: () => void
-  /** Total deep work minutes completed today (from finished sessions). */
   deepWorkMinutesToday?: number
-  /** Active Cal Newport depth philosophy, shown as a chip in the header. */
   depthPhilosophy?: 'rhythmic' | 'journalistic' | 'bimodal'
 }
 
@@ -49,9 +39,10 @@ export function DayHeader({
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
           <p className="text-xs uppercase tracking-wide text-sky-300/80">Today&apos;s plan</p>
           {streak != null && streak > 0 && (
-            <span className="rounded border border-amber-500/50 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-200">
-              🔥 {streak} day streak
-              {bestStreak != null && bestStreak > 0 && streak >= bestStreak ? ' · best' : ''}
+            <span className="flex items-center gap-1 rounded border border-amber-500/50 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-200">
+              <Flame className="h-3 w-3" />
+              {streak} day streak
+              {bestStreak != null && bestStreak > 0 && streak >= bestStreak ? ' (best)' : ''}
             </span>
           )}
           {bestStreak != null &&
@@ -85,14 +76,21 @@ export function DayHeader({
             const h = Math.floor(deepWorkMinutesToday / 60)
             const m = deepWorkMinutesToday % 60
             return (
-              <span className="rounded border border-teal-500/50 bg-teal-500/10 px-2 py-0.5 text-xs font-medium text-teal-300">
-                ⏱ {h > 0 ? `${h}h ` : ''}{m > 0 ? `${m}m` : ''} deep today
+              <span className="flex items-center gap-1 rounded border border-teal-500/50 bg-teal-500/10 px-2 py-0.5 text-xs font-medium text-teal-300">
+                <Timer className="h-3 w-3" />
+                {h > 0 ? `${h}h ` : ''}{m > 0 ? `${m}m` : ''} deep today
               </span>
             )
           })()}
           {depthPhilosophy && (
-            <span className="rounded border border-violet-500/40 bg-violet-500/10 px-2 py-0.5 text-[10px] font-medium text-violet-300">
-              {depthPhilosophy === 'rhythmic' ? '⚡ Rhythmic' : depthPhilosophy === 'journalistic' ? '📅 Journalistic' : '⚖ Bimodal'}
+            <span className="flex items-center gap-1 rounded border border-violet-500/40 bg-violet-500/10 px-2 py-0.5 text-[10px] font-medium text-violet-300">
+              {depthPhilosophy === 'rhythmic' ? (
+                <><Zap className="h-3 w-3" /> Rhythmic</>
+              ) : depthPhilosophy === 'journalistic' ? (
+                <><Calendar className="h-3 w-3" /> Journalistic</>
+              ) : (
+                <><Scale className="h-3 w-3" /> Bimodal</>
+              )}
             </span>
           )}
         </div>
@@ -142,4 +140,3 @@ export function DayHeader({
     </div>
   )
 }
-

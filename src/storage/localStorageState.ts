@@ -54,12 +54,12 @@ function migrateLegacyStreak(state: AppState): AppState {
 }
 
 const DEFAULT_SIDE_QUEST_DEFS: SideQuestDef[] = [
-  { id: 'sq-1', title: '🎹 Piano practice', category: 'fun' },
-  { id: 'sq-2', title: '🎲 Rubik\'s cube', category: 'fun' },
-  { id: 'sq-3', title: '🤖 Explore a new AI tool', category: 'technical' },
-  { id: 'sq-4', title: '🔧 Work on a side project', category: 'technical' },
-  { id: 'sq-5', title: '📰 Scoop - read & curate', category: 'serious' },
-  { id: 'sq-6', title: '📚 Read for 20 minutes', category: 'serious' },
+  { id: 'sq-1', title: 'Piano practice', category: 'fun' },
+  { id: 'sq-2', title: "Rubik's cube", category: 'fun' },
+  { id: 'sq-3', title: 'Explore a new AI tool', category: 'technical' },
+  { id: 'sq-4', title: 'Work on a side project', category: 'technical' },
+  { id: 'sq-5', title: 'Scoop - read & curate', category: 'serious' },
+  { id: 'sq-6', title: 'Read for 20 minutes', category: 'serious' },
 ]
 
 const DEFAULT_MONTHLY_REVIEW_QUESTIONS = [
