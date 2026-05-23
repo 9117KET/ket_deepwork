@@ -111,7 +111,7 @@ export function MustDoPinnedHeader({ tasks, onToggle, onAdd, onDelete, onUpdate 
                     />
                   ) : (
                     <span
-                      onClick={() => { setEditingId(task.id); setEditingTitle(task.title) }}
+                      onClick={e => { e.preventDefault(); e.stopPropagation(); setEditingId(task.id); setEditingTitle(task.title) }}
                       className="min-w-0 truncate text-sm cursor-text text-slate-400 line-through decoration-slate-600/60"
                     >
                       {task.title}
@@ -230,7 +230,7 @@ export function MustDoPinnedHeader({ tasks, onToggle, onAdd, onDelete, onUpdate 
                 />
               ) : (
                 <span
-                  onClick={() => { setEditingId(task.id); setEditingTitle(task.title) }}
+                  onClick={e => { e.preventDefault(); e.stopPropagation(); setEditingId(task.id); setEditingTitle(task.title) }}
                   className={`min-w-0 truncate text-sm cursor-text ${
                     task.isDone
                       ? 'text-slate-500 line-through decoration-slate-600/60'
