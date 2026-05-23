@@ -22,6 +22,8 @@ interface DayHeaderProps {
   onToday: () => void
   /** Total deep work minutes completed today (from finished sessions). */
   deepWorkMinutesToday?: number
+  /** Active Cal Newport depth philosophy, shown as a chip in the header. */
+  depthPhilosophy?: 'rhythmic' | 'journalistic' | 'bimodal'
 }
 
 export function DayHeader({
@@ -37,6 +39,7 @@ export function DayHeader({
   onNextDay,
   onToday,
   deepWorkMinutesToday,
+  depthPhilosophy,
 }: DayHeaderProps) {
   const percentage =
     totalTaskCount <= 0 ? 0 : Math.max(0, Math.min(100, Math.round(completionRatio * 1000) / 10))
@@ -87,6 +90,11 @@ export function DayHeader({
               </span>
             )
           })()}
+          {depthPhilosophy && (
+            <span className="rounded border border-violet-500/40 bg-violet-500/10 px-2 py-0.5 text-[10px] font-medium text-violet-300">
+              {depthPhilosophy === 'rhythmic' ? '⚡ Rhythmic' : depthPhilosophy === 'journalistic' ? '📅 Journalistic' : '⚖ Bimodal'}
+            </span>
+          )}
         </div>
         <h2 className="text-xl sm:text-2xl font-semibold tracking-tight">{dateLabel}</h2>
         {totalTaskCount > 0 ? (

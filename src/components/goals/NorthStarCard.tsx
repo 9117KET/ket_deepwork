@@ -16,7 +16,7 @@ interface NorthStarCardProps {
 }
 
 export function NorthStarCard({ northStar, onSetNorthStar }: NorthStarCardProps) {
-  const [collapsed, setCollapsed] = useState(true)
+  const [collapsed, setCollapsed] = useState(false)
   const [editing, setEditing] = useState(false)
   // draft is initialised from prop when edit mode opens; no useEffect needed
   const [draft, setDraft] = useState('')

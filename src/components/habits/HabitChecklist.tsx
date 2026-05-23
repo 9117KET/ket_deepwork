@@ -60,18 +60,23 @@ export function HabitChecklist({
   return (
     <div className="rounded-lg border border-slate-800 bg-slate-900 p-3 sm:p-4">
       <header className="mb-2 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
           <button
             type="button"
             onClick={() => setCollapsed((c) => !c)}
-            className="text-left text-sm font-semibold text-slate-100 hover:text-sky-300"
+            className="shrink-0 text-left text-sm font-semibold text-slate-100 hover:text-sky-300"
             aria-expanded={!collapsed}
           >
             Daily Habits
           </button>
-          <span className="text-xs text-slate-500">
+          <span className="shrink-0 text-xs text-slate-500">
             {doneCount}/{totalCount}
           </span>
+          {collapsed && identityStatement && (
+            <span className="min-w-0 truncate text-[10px] italic text-slate-500">
+              &ldquo;{identityStatement}&rdquo;
+            </span>
+          )}
         </div>
         <button
           type="button"

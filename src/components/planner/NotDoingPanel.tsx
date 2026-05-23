@@ -92,7 +92,14 @@ export function NotDoingPanel({
         <h3 className="text-xs font-semibold uppercase tracking-wider text-red-400/80">
           Not Doing
         </h3>
-        <span className="text-slate-500 text-xs">{collapsed ? '▶' : '▼'}</span>
+        <div className="flex items-center gap-1.5">
+          {collapsed && (globalList.length + dayList.length) > 0 && (
+            <span className="rounded-full bg-slate-700 px-1.5 py-0.5 text-[10px] text-slate-400">
+              {globalList.length + dayList.length}
+            </span>
+          )}
+          <span className="text-slate-500 text-xs">{collapsed ? '▶' : '▼'}</span>
+        </div>
       </header>
 
       {!collapsed && (

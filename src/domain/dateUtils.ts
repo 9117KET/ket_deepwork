@@ -246,6 +246,16 @@ export function daysInMonth(monthId: string): string[] {
 }
 
 /**
+ * Returns true when isoDate falls within the last N days of its month.
+ * Used to trigger the monthly review reminder.
+ */
+export function isEndOfMonth(isoDate: string, daysFromEnd = 3): boolean {
+  const parts = isoDate.split('-').map(Number)
+  const lastDay = new Date(parts[0]!, parts[1]!, 0).getDate()
+  return Number(parts[2]) >= lastDay - daysFromEnd + 1
+}
+
+/**
  * Normalize time string to HH:mm for storage and comparison.
  * Handles "9:0" -> "09:00" so persistence and due-now checks are consistent.
  */

@@ -16,6 +16,7 @@ import {
   type DayState,
   type DeepWorkSession,
   type HabitDefinition,
+  type MonthlyReview,
   type NotDoingItem,
   type Task,
   type TaskSectionId,
@@ -23,6 +24,7 @@ import {
 import {
   addDays,
   todayIso,
+  toMonthId,
   sameWeekdayLastWeek,
   normalizeHhmm,
   computeAccountabilityStats,
@@ -66,6 +68,7 @@ import { OneThingCard } from "../goals/OneThingCard";
 import { WeeklyProjectCard } from "./WeeklyProjectCard";
 import { TomorrowMustPanel } from "./TomorrowMustPanel";
 import { MustDoPinnedHeader } from "./MustDoPinnedHeader";
+import { MonthlyReviewBanner } from "../goals/MonthlyReviewBanner";
 import { SideQuestSection } from "./SideQuestSection";
 import { MobileTabBar, type MobileTab } from "./MobileTabBar";
 import { ActiveTripBanner } from "./ActiveTripBanner";
@@ -700,6 +703,13 @@ export function DayPlanner({
       };
     });
   };
+
+  const handleUpdateMonthlyReview = useCallback((monthKey: string, review: MonthlyReview) => {
+    updateAppState((prev) => ({
+      ...prev,
+      monthlyReviews: { ...(prev.monthlyReviews ?? {}), [monthKey]: review },
+    }))
+  }, [updateAppState])
 
   /** Record a completed deep work session into the current day. */
   const handleSessionComplete = useCallback((label: string, durationMinutes: number) => {
@@ -1488,6 +1498,7 @@ export function DayPlanner({
           onNextDay={() => setSelectedDay((current) => addDays(current, 1))}
           onToday={() => setSelectedDay(todayIso())}
           deepWorkMinutesToday={shareMode ? undefined : deepWorkMinutesToday}
+          depthPhilosophy={shareMode ? undefined : appState.depthPhilosophy}
         />
         {!shareMode && (
           <MustDoPinnedHeader
@@ -1498,6 +1509,25 @@ export function DayPlanner({
             onUpdate={(id, patch) => handleUpdateTask(id, patch)}
           />
         )}
+        {!shareMode && (
+          <MonthlyReviewBanner
+            selectedDay={selectedDay}
+            review={appState.monthlyReviews?.[toMonthId(selectedDay)]}
+            questions={appState.monthlyReviewQuestions ?? []}
+            onUpdate={handleUpdateMonthlyReview}
+          />
+        )}
+        {!shareMode && (() => {
+          const goal = appState.goalCascade?.threeMonths ?? appState.goalCascade?.oneYear
+          if (!goal) return null
+          const label = appState.goalCascade?.threeMonths ? '3-month' : '1-year'
+          return (
+            <div className="mt-1 rounded border border-slate-700/50 bg-slate-900/60 px-3 py-1.5 text-xs text-slate-400">
+              <span className="text-slate-500">{label} goal: </span>
+              <span className="text-slate-300">{goal}</span>
+            </div>
+          )
+        })()}
         {/* Active trip context banner - isolated so a Convex query error only hides the banner */}
         {!shareMode && (
           <ErrorBoundary fallback={null}>
