@@ -10,15 +10,10 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useTransit
 import {
   DEFAULT_HABIT_DEFINITIONS,
   FIXED_SECTIONS,
-  type AbandonedTask,
   type AppState,
   type BlockDurations,
   type DayState,
-  type DeepWorkSession,
   type HabitDefinition,
-  type MonthlyReview,
-  type NotDoingItem,
-  type SideQuestDef,
   type Task,
   type TaskSectionId,
 } from "../../domain/types";
@@ -27,30 +22,20 @@ import {
   todayIso,
   toMonthId,
   sameWeekdayLastWeek,
-  normalizeHhmm,
   computeAccountabilityStats,
-  deriveActiveDaysFromDays,
 } from "../../domain/dateUtils";
 import {
   BLOCK_MIN_MINUTES,
   BLOCK_ORDER,
   SLEEP_MIN_MINUTES,
-  applyBlockDurationChange,
-  blockDurationsToRatios,
-  computeAwakeMinutes,
-  computeBlocksFromDurations,
-  getActiveSectionIds,
-  getDefaultBlockDurations,
-  getSectionTimeframeLabel,
   getSleepWindowLabel,
-  isSleepTime,
-  ratiosToBlockDurations,
 } from "../../domain/sectionTimeBlocks";
-import { DaySetupModal } from "./DaySetupModal";
+import { useTaskHandlers } from "../../hooks/useTaskHandlers";
+import { useDayBlockEditor } from "../../hooks/useDayBlockEditor";
+import { useTimeAwareness } from "../../hooks/useTimeAwareness";
+import { PlannerModals } from "./PlannerModals";
 import { NotDoingPanel } from "./NotDoingPanel";
 import { BlockDurationEditor } from "./BlockDurationEditor";
-import { BlockDurationScopeModal } from "./BlockDurationScopeModal";
-import { TaskConflictModal } from "./TaskConflictModal";
 import {
   usePersistentState,
   getOrCreateDay,
@@ -63,14 +48,12 @@ import { MonthlyTrackingDashboard } from "../tracking";
 import { DeepWorkTimer } from "../timer/DeepWorkTimer";
 import { MotivationCard } from "../timer/MotivationCard";
 import { HabitChecklist } from "../habits/HabitChecklist";
-import { HabitEditorModal } from "../habits/HabitEditorModal";
 import { NorthStarCard } from "../goals/NorthStarCard";
 import { OneThingCard } from "../goals/OneThingCard";
 import { WeeklyProjectCard } from "./WeeklyProjectCard";
 import { TomorrowMustPanel } from "./TomorrowMustPanel";
 import { MustDoPinnedHeader } from "./MustDoPinnedHeader";
 import { MonthlyReviewBanner } from "../goals/MonthlyReviewBanner";
-import { SideQuestEditorModal } from "./SideQuestEditorModal";
 import { SideQuestSection } from "./SideQuestSection";
 import { getDailyQuestSelection } from "../../domain/sideQuestAlgorithm";
 import { MobileTabBar, type MobileTab } from "./MobileTabBar";
@@ -79,7 +62,7 @@ import { DaySummaryCard } from "./DaySummaryCard";
 import { useActiveTripStatus } from "../../hooks/useActiveTripStatus";
 import { ErrorBoundary } from "../ErrorBoundary";
 import { useDayContext } from "../../hooks/useDayContext";
-import { createTaskId, reorderTasks, getOrderedTasksForSection, getDescendantIds, cloneTasksForDay } from "../../domain/taskUtils";
+import { getOrderedTasksForSection } from "../../domain/taskUtils";
 
 function formatDateLabel(isoDay: string): string {
   const [year, month, day] = isoDay.split("-").map((part) => Number(part));
@@ -118,9 +101,6 @@ function getLastDayWithTasks(state: AppState, beforeDate: string): string | null
   }
   return last;
 }
-
-// createTaskId, reorderTasks, getOrderedTasksForSection, getDescendantIds, cloneTasksForDay
-// are imported from ../../domain/taskUtils
 
 interface DayPlannerProps {
   /**
@@ -229,664 +209,56 @@ export function DayPlanner({
     [appState.activeDays, appState.days],
   );
 
-  const handleAddTask = (sectionId: TaskSectionId, title: string) => {
-    updateAppState((prev) => {
-      const existingDay = getOrCreateDay(prev, selectedDay);
-      const nextTasks: Task[] = [
-        ...existingDay.tasks,
-        {
-          id: createTaskId(),
-          title,
-          sectionId,
-          date: selectedDay,
-          isDone: false,
-          // Travel days are shallow by default - user can unmark if needed
-          ...(travelingToday ? { isShallow: true } : {}),
-        },
-      ];
+  // --- Extracted hooks ---
+  const taskHandlers = useTaskHandlers(updateAppState, selectedDay, travelingToday);
+  const {
+    draggedTask,
+    setSelectedTaskIds,
+    selectedTaskIds,
+    handleToggleSelect,
+    handleDeleteSelected,
+    handleDragStart,
+    handleDragEnd,
+    handleDrop,
+    handleAddTask,
+    handleToggleTask,
+    handleDeleteTask,
+    handleAddTaskAbove,
+    handleAddTaskBelow,
+    handleAddSubtask,
+    handleReorderTask,
+    handleCopyFromDay,
+    handleCarryForward,
+    handleUpdateTask,
+    handleUpdateMonthlyReview,
+    handleToggleSideQuestCompletion,
+    handleSaveSideQuestDefs,
+    handleSessionComplete,
+    handleMoveToNotDoing,
+    handleAbandonTask,
+    handleAddToNotDoing,
+    handleRemoveFromNotDoing,
+    handleAddDayNotDoing,
+    handleRemoveDayNotDoing,
+    handleAddTomorrowMust,
+    handleDeleteTomorrowMust,
+    handleEditTomorrowMust,
+    handleUpdateTomorrowMust,
+  } = taskHandlers;
 
-      return {
-        ...prev,
-        days: {
-          ...prev.days,
-          [selectedDay]: {
-            ...existingDay,
-            tasks: nextTasks,
-          },
-        },
-      };
-    });
-  };
-
-  const handleToggleTask = (taskId: string) => {
-    updateAppState((prev) => {
-      const existingDay = getOrCreateDay(prev, selectedDay);
-      const task = existingDay.tasks.find((t) => t.id === taskId);
-      const becomingDone = task ? !task.isDone : false;
-      const descendantIds =
-        becomingDone && task
-          ? getDescendantIds(existingDay.tasks, taskId)
-          : new Set<string>();
-      const nextTasks = existingDay.tasks.map((t) => {
-        if (t.id === taskId) return { ...t, isDone: !t.isDone };
-        if (descendantIds.has(t.id)) return { ...t, isDone: true };
-        return t;
-      });
-      const nextDays = {
-        ...prev.days,
-        [selectedDay]: { ...existingDay, tasks: nextTasks },
-      };
-      return {
-        ...prev,
-        days: nextDays,
-        activeDays: deriveActiveDaysFromDays(nextDays),
-      };
-    });
-  };
-
-  const handleDeleteTask = (taskId: string) => {
-    updateAppState((prev) => {
-      const existingDay = getOrCreateDay(prev, selectedDay);
-      const descendantIds = getDescendantIds(existingDay.tasks, taskId);
-      const toRemove = new Set([taskId, ...descendantIds]);
-      const nextTasks = existingDay.tasks.filter((t) => !toRemove.has(t.id));
-      const nextDays = {
-        ...prev.days,
-        [selectedDay]: { ...existingDay, tasks: nextTasks },
-      };
-      return {
-        ...prev,
-        days: nextDays,
-        activeDays: deriveActiveDaysFromDays(nextDays),
-      };
-    });
-  };
-
-  const handleAddTaskAbove = (
-    sectionId: TaskSectionId,
-    beforeTaskId: string,
-  ) => {
-    const title = window.prompt("Task title:", "New task") ?? "New task";
-    if (title.trim() === "") return;
-    updateAppState((prev) => {
-      const existingDay = getOrCreateDay(prev, selectedDay);
-      const idx = existingDay.tasks.findIndex((t) => t.id === beforeTaskId);
-      if (idx < 0) return prev;
-      const newTask: Task = {
-        id: createTaskId(),
-        title: title.trim(),
-        sectionId,
-        date: selectedDay,
-        isDone: false,
-      };
-      const nextTasks = [
-        ...existingDay.tasks.slice(0, idx),
-        newTask,
-        ...existingDay.tasks.slice(idx),
-      ];
-      return {
-        ...prev,
-        days: {
-          ...prev.days,
-          [selectedDay]: { ...existingDay, tasks: nextTasks },
-        },
-      };
-    });
-  };
-
-  const handleAddTaskBelow = (
-    sectionId: TaskSectionId,
-    afterTaskId: string,
-  ) => {
-    const title = window.prompt("Task title:", "New task") ?? "New task";
-    if (title.trim() === "") return;
-    updateAppState((prev) => {
-      const existingDay = getOrCreateDay(prev, selectedDay);
-      const idx = existingDay.tasks.findIndex((t) => t.id === afterTaskId);
-      const after = existingDay.tasks[idx];
-      if (idx < 0 || !after) return prev;
-      const newTask: Task = {
-        id: createTaskId(),
-        title: title.trim(),
-        sectionId,
-        date: selectedDay,
-        isDone: false,
-      };
-      const nextTasks = [
-        ...existingDay.tasks.slice(0, idx + 1),
-        newTask,
-        ...existingDay.tasks.slice(idx + 1),
-      ];
-      return {
-        ...prev,
-        days: {
-          ...prev.days,
-          [selectedDay]: { ...existingDay, tasks: nextTasks },
-        },
-      };
-    });
-  };
-
-  const handleAddSubtask = (parentTaskId: string) => {
-    const title =
-      window.prompt("Subtask title:", "New subtask") ?? "New subtask";
-    if (title.trim() === "") return;
-    updateAppState((prev) => {
-      const existingDay = getOrCreateDay(prev, selectedDay);
-      const idx = existingDay.tasks.findIndex((t) => t.id === parentTaskId);
-      const parent = existingDay.tasks[idx];
-      if (idx < 0 || !parent) return prev;
-      const newTask: Task = {
-        id: createTaskId(),
-        title: title.trim(),
-        sectionId: parent.sectionId,
-        date: parent.date,
-        isDone: false,
-        parentId: parentTaskId,
-      };
-      const nextTasks = [
-        ...existingDay.tasks.slice(0, idx + 1),
-        newTask,
-        ...existingDay.tasks.slice(idx + 1),
-      ];
-      return {
-        ...prev,
-        days: {
-          ...prev.days,
-          [selectedDay]: { ...existingDay, tasks: nextTasks },
-        },
-      };
-    });
-  };
-
-  /** Mobile: swap a root task up or down within its section. */
-  const handleReorderTask = useCallback(
-    (taskId: string, sectionId: TaskSectionId, direction: 'up' | 'down') => {
-      updateAppState((prev) => {
-        try {
-          const existingDay = getOrCreateDay(prev, selectedDay);
-          const sectionTasks = getOrderedTasksForSection(
-            existingDay.tasks.filter((t) => t.sectionId === sectionId),
-          );
-          const fromIndex = sectionTasks.findIndex((t) => t.id === taskId);
-          if (fromIndex < 0) return prev;
-          const roots = sectionTasks.filter((t) => !t.parentId);
-          const rootIdx = roots.findIndex((t) => t.id === taskId);
-          if (rootIdx < 0) return prev;
-
-          let toIndex: number;
-          if (direction === 'up') {
-            if (rootIdx === 0) return prev;
-            const prevRoot = roots[rootIdx - 1]!;
-            toIndex = sectionTasks.findIndex((t) => t.id === prevRoot.id);
-          } else {
-            if (rootIdx === roots.length - 1) return prev;
-            const nextRoot = roots[rootIdx + 1]!;
-            toIndex = sectionTasks.findIndex((t) => t.id === nextRoot.id) + 1;
-          }
-
-          const reordered = reorderTasks(sectionTasks, fromIndex, toIndex);
-          const reorderedIds = new Set(reordered.map(t => t.id));
-          const orphaned = existingDay.tasks.filter(
-            t => t.sectionId === sectionId && !reorderedIds.has(t.id)
-          );
-          const nextTasks = [
-            ...existingDay.tasks.filter(t => t.sectionId !== sectionId),
-            ...reordered,
-            ...orphaned,
-          ];
-          if (nextTasks.length !== existingDay.tasks.length) return prev;
-          return {
-            ...prev,
-            days: {
-              ...prev.days,
-              [selectedDay]: { ...existingDay, tasks: nextTasks },
-            },
-          };
-        } catch {
-          return prev;
-        }
-      });
-    },
-    [updateAppState, selectedDay],
+  const blockEditor = useDayBlockEditor(
+    dayState,
+    appState.blockDurationRatios,
+    selectedDay,
+    updateAppState,
+    shareMode,
   );
+  const { effectiveBlockDurations, computedBlocks, setDaySetupOpen, handleBlockDurationChange } = blockEditor;
 
-  /** Move a task (and its subtasks) to another section at the given insert index. */
-  const handleMoveTask = (
-    _fromSectionId: TaskSectionId,
-    taskId: string,
-    toSectionId: TaskSectionId,
-    insertIndex: number,
-  ) => {
-    updateAppState((prev) => {
-      try {
-        const existingDay = getOrCreateDay(prev, selectedDay);
-        const task = existingDay.tasks.find((t) => t.id === taskId);
-        if (!task) return prev;
-        const descendantIds = getDescendantIds(existingDay.tasks, taskId);
-        const toMoveIds = new Set([taskId, ...descendantIds]);
-        const nextTasks = existingDay.tasks.filter((t) => !toMoveIds.has(t.id));
-        const toMoveOrdered = getOrderedTasksForSection(
-          existingDay.tasks.filter((t) => toMoveIds.has(t.id)),
-        );
-        const movedTasks = toMoveOrdered.map((t) => ({ ...t, sectionId: toSectionId }));
-        const bySection: Record<TaskSectionId, Task[]> = {
-          mustDo: [],
-          morningRoutine: [],
-          highPriority: [],
-          mediumPriority: [],
-          lowPriority: [],
-          nightRoutine: [],
-          sideQuest: [],
-        };
-        for (const t of nextTasks) {
-          const list = bySection[t.sectionId];
-          if (list) list.push(t);
-        }
-        const targetList = bySection[toSectionId] ?? [];
-        const orderedTarget = getOrderedTasksForSection(targetList);
-        const safeInsert = Math.max(0, Math.min(insertIndex, orderedTarget.length));
-        const merged = [
-          ...orderedTarget.slice(0, safeInsert),
-          ...movedTasks,
-          ...orderedTarget.slice(safeInsert),
-        ];
-        bySection[toSectionId] = merged;
-        const flat = FIXED_SECTIONS.flatMap((s) => bySection[s.id] ?? []);
-        if (flat.length !== existingDay.tasks.length) return prev;
-        return {
-          ...prev,
-          days: {
-            ...prev.days,
-            [selectedDay]: { ...existingDay, tasks: flat },
-          },
-        };
-      } catch {
-        return prev;
-      }
-    });
-  };
+  const { taskIdsDueNow, activeSectionIds, isSleepTimeNow, timeframeLabelsBySection } =
+    useTimeAwareness(appState, timeOffsetMinutes, computedBlocks);
 
-  const [draggedTask, setDraggedTask] = useState<{
-    sectionId: TaskSectionId;
-    taskId: string;
-  } | null>(null);
-
-  /** Ref holds current drag payload so handleDrop always has it (avoids stale closure in production when drop runs after state was cleared). */
-  const draggedTaskRef = useRef<{
-    sectionId: TaskSectionId;
-    taskId: string;
-  } | null>(null);
-
-  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
-
-  const handleToggleSelect = (taskId: string) => {
-    setSelectedTaskIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(taskId)) next.delete(taskId);
-      else next.add(taskId);
-      return next;
-    });
-  };
-
-  const handleDeleteSelected = () => {
-    if (selectedTaskIds.size === 0) return;
-    updateAppState((prev) => {
-      const existingDay = getOrCreateDay(prev, selectedDay);
-      const toRemove = new Set<string>(selectedTaskIds);
-      for (const id of selectedTaskIds) {
-        getDescendantIds(existingDay.tasks, id).forEach((desc) => toRemove.add(desc));
-      }
-      const nextTasks = existingDay.tasks.filter((t) => !toRemove.has(t.id));
-      return {
-        ...prev,
-        days: {
-          ...prev.days,
-          [selectedDay]: { ...existingDay, tasks: nextTasks },
-        },
-      };
-    });
-    setSelectedTaskIds(new Set());
-  };
-
-  const handleDragStart = (sectionId: TaskSectionId, taskId: string) => {
-    draggedTaskRef.current = { sectionId, taskId };
-    setDraggedTask({ sectionId, taskId });
-  };
-
-  const handleDragEnd = () => {
-    draggedTaskRef.current = null;
-    setDraggedTask(null);
-  };
-
-  const handleDrop = (targetSectionId: TaskSectionId, insertIndex: number) => {
-    const payload = draggedTaskRef.current ?? draggedTask;
-    try {
-      if (!payload) return;
-      const fromSectionId = payload.sectionId;
-      const taskId = payload.taskId;
-      if (fromSectionId === targetSectionId) {
-        updateAppState((prev) => {
-          try {
-            const existingDay = getOrCreateDay(prev, selectedDay);
-            const sectionTasks = getOrderedTasksForSection(
-              existingDay.tasks.filter((t) => t.sectionId === fromSectionId),
-            );
-            const fromIndex = sectionTasks.findIndex((t) => t.id === taskId);
-            if (fromIndex < 0) return prev;
-            const safeInsert = Math.max(0, Math.min(insertIndex, sectionTasks.length));
-            if (fromIndex === safeInsert) return prev;
-            const reordered = reorderTasks(sectionTasks, fromIndex, safeInsert);
-            if (reordered.length !== sectionTasks.length) return prev;
-            const reorderedIds = new Set(reordered.map(t => t.id));
-            const orphaned = existingDay.tasks.filter(
-              t => t.sectionId === fromSectionId && !reorderedIds.has(t.id)
-            );
-            const nextTasks = [
-              ...existingDay.tasks.filter(t => t.sectionId !== fromSectionId),
-              ...reordered,
-              ...orphaned,
-            ];
-            if (nextTasks.length !== existingDay.tasks.length) return prev;
-            return {
-              ...prev,
-              days: {
-                ...prev.days,
-                [selectedDay]: { ...existingDay, tasks: nextTasks },
-              },
-            };
-          } catch {
-            return prev;
-          }
-        });
-      } else {
-        handleMoveTask(fromSectionId, taskId, targetSectionId, insertIndex);
-      }
-    } finally {
-      draggedTaskRef.current = null;
-      setDraggedTask(null);
-    }
-  };
-
-  /** Copy tasks from a source day into the selected day (times reset). Used for fill/copy buttons. */
-  const handleCopyFromDay = useCallback(
-    (sourceDate: string) => {
-      updateAppState((prev) => {
-        const sourceDayState = getOrCreateDay(prev, sourceDate);
-        if (sourceDayState.tasks.length === 0) return prev;
-        // MUSTs and Side Quests are personal — never copy them from another day.
-        const sourceToCopy = sourceDayState.tasks.filter((t) => t.sectionId !== 'mustDo' && t.sectionId !== 'sideQuest');
-        const newTasks = cloneTasksForDay(sourceToCopy, selectedDay, { resetTimes: true });
-        const existingDay = getOrCreateDay(prev, selectedDay);
-        // Preserve any MUSTs already on the target day (e.g. pre-set from the night before).
-        const existingMustDo = existingDay.tasks.filter((t) => t.sectionId === 'mustDo');
-        return {
-          ...prev,
-          days: {
-            ...prev.days,
-            [selectedDay]: { ...existingDay, tasks: [...existingMustDo, ...newTasks] },
-          },
-        };
-      });
-    },
-    [selectedDay, updateAppState],
-  );
-
-  /**
-   * Append incomplete tasks from yesterday into today's existing plan.
-   * Preserves scheduledAt and durationMinutes. Skips done parents even if
-   * they have incomplete subtasks.
-   */
-  const handleCarryForward = useCallback(() => {
-    const yesterday = addDays(selectedDay, -1);
-    updateAppState((prev) => {
-      const sourceTasks = getOrCreateDay(prev, yesterday).tasks;
-      if (sourceTasks.every((t) => t.parentId || t.isDone)) return prev;
-
-      const existingDay = getOrCreateDay(prev, selectedDay);
-      // Build a dedup set from today's existing root tasks (title + sectionId)
-      const existingKeys = new Set(
-        existingDay.tasks
-          .filter((t) => !t.parentId)
-          .map((t) => `${t.sectionId}:${t.title.trim().toLowerCase()}`),
-      );
-      const dedupedRootIds = new Set(
-        sourceTasks
-          .filter((t) => !t.parentId && !t.isDone)
-          .filter((t) => !existingKeys.has(`${t.sectionId}:${t.title.trim().toLowerCase()}`))
-          .map((t) => t.id),
-      );
-      if (dedupedRootIds.size === 0) return prev;
-
-      const toCarry = sourceTasks.filter(
-        (t) => dedupedRootIds.has(t.id) || (t.parentId != null && dedupedRootIds.has(t.parentId) && !t.isDone),
-      );
-
-      const idMap = new Map<string, string>();
-      const carried = toCarry.map((t) => {
-        const newId = createTaskId();
-        idMap.set(t.id, newId);
-        // Increment postponedCount for root tasks being carried forward.
-        const postponedCount = t.parentId ? (t.postponedCount ?? 0) : (t.postponedCount ?? 0) + 1;
-        return { ...t, id: newId, date: selectedDay, isDone: false, postponedCount };
-      }).map((t) => ({
-        ...t,
-        parentId: t.parentId ? (idMap.get(t.parentId) ?? undefined) : undefined,
-      }));
-      return {
-        ...prev,
-        days: {
-          ...prev.days,
-          [selectedDay]: { ...existingDay, tasks: [...existingDay.tasks, ...carried] },
-        },
-      };
-    });
-  }, [selectedDay, updateAppState]);
-
-  const handleUpdateTask = (
-    taskId: string,
-    patch: {
-      scheduledAt?: string;
-      durationMinutes?: number;
-      title?: string;
-      isShallow?: boolean;
-    },
-  ) => {
-    updateAppState((prev) => {
-      const existingDay = getOrCreateDay(prev, selectedDay);
-      const nextTasks = existingDay.tasks.map((task) =>
-        task.id === taskId ? { ...task, ...patch } : task,
-      );
-      return {
-        ...prev,
-        days: {
-          ...prev.days,
-          [selectedDay]: { ...existingDay, tasks: nextTasks },
-        },
-      };
-    });
-  };
-
-  const handleUpdateMonthlyReview = useCallback((monthKey: string, review: MonthlyReview) => {
-    updateAppState((prev) => ({
-      ...prev,
-      monthlyReviews: { ...(prev.monthlyReviews ?? {}), [monthKey]: review },
-    }))
-  }, [updateAppState])
-
-  const handleToggleSideQuestCompletion = useCallback((id: string, value: boolean) => {
-    updateAppState((prev) => {
-      const day = getOrCreateDay(prev, selectedDay)
-      const currentCompletions = day.sideQuestCompletions ?? {}
-      const wasComplete = currentCompletions[id] ?? false
-      const newCompletions = { ...currentCompletions, [id]: value }
-
-      // XP: tracks actual completions (decrements on untick)
-      const xpDelta = (value && !wasComplete) ? 1 : (!value && wasComplete) ? -1 : 0
-
-      // Streak: earned on first completion today only (not reverted on untick)
-      // Only update when on today's date to prevent retroactive streak manipulation
-      let newStreak = prev.sideQuestStreak ?? 0
-      let newLastStreakDate = prev.sideQuestLastStreakDate
-      if (value && !wasComplete && selectedDay === todayIso() && prev.sideQuestLastStreakDate !== selectedDay) {
-        const yesterday = addDays(selectedDay, -1)
-        newStreak = prev.sideQuestLastStreakDate === yesterday
-          ? (prev.sideQuestStreak ?? 0) + 1
-          : 1
-        newLastStreakDate = selectedDay
-      }
-
-      return {
-        ...prev,
-        sideQuestXp: Math.max(0, (prev.sideQuestXp ?? 0) + xpDelta),
-        sideQuestStreak: newStreak,
-        sideQuestLastStreakDate: newLastStreakDate,
-        days: {
-          ...prev.days,
-          [selectedDay]: {
-            ...day,
-            sideQuestCompletions: newCompletions,
-          },
-        },
-      }
-    })
-  }, [selectedDay, updateAppState])
-
-  const handleSaveSideQuestDefs = useCallback((defs: SideQuestDef[]) => {
-    updateAppState((prev) => ({ ...prev, sideQuestDefs: defs }))
-  }, [updateAppState])
-
-  /** Record a completed deep work session into the current day. */
-  const handleSessionComplete = useCallback((label: string, durationMinutes: number) => {
-    updateAppState((prev) => {
-      const day = getOrCreateDay(prev, selectedDay);
-      const session: DeepWorkSession = {
-        id: `dw-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        label,
-        durationMinutes,
-        startedAt: new Date(Date.now() - durationMinutes * 60_000).toISOString(),
-        finishedAt: new Date().toISOString(),
-      };
-      return {
-        ...prev,
-        days: {
-          ...prev.days,
-          [selectedDay]: { ...day, deepWorkSessions: [...day.deepWorkSessions, session] },
-        },
-      };
-    });
-  }, [selectedDay, updateAppState]);
-
-  /** Move a task to the global not-doing list and remove it from the plan. */
-  const handleMoveToNotDoing = useCallback((taskId: string) => {
-    updateAppState((prev) => {
-      const existingDay = getOrCreateDay(prev, selectedDay);
-      const task = existingDay.tasks.find((t) => t.id === taskId);
-      if (!task) return prev;
-      const descendantIds = getDescendantIds(existingDay.tasks, taskId);
-      const toRemove = new Set([taskId, ...descendantIds]);
-      const nextTasks = existingDay.tasks.filter((t) => !toRemove.has(t.id));
-      const newItem: NotDoingItem = {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        text: task.title,
-        createdAt: new Date().toISOString(),
-      };
-      return {
-        ...prev,
-        notDoingList: [...(prev.notDoingList ?? []), newItem],
-        days: { ...prev.days, [selectedDay]: { ...existingDay, tasks: nextTasks } },
-      };
-    });
-  }, [updateAppState, selectedDay]);
-
-  /** Consciously abandon a task (Drucker: abandonment as a success). */
-  const handleAbandonTask = useCallback((taskId: string) => {
-    updateAppState((prev) => {
-      const existingDay = getOrCreateDay(prev, selectedDay);
-      const task = existingDay.tasks.find((t) => t.id === taskId);
-      if (!task) return prev;
-      const descendantIds = getDescendantIds(existingDay.tasks, taskId);
-      const toRemove = new Set([taskId, ...descendantIds]);
-      const nextTasks = existingDay.tasks.filter((t) => !toRemove.has(t.id));
-      const abandoned: AbandonedTask = {
-        id: taskId,
-        title: task.title,
-        sectionId: task.sectionId,
-        abandonedAt: new Date().toISOString(),
-      };
-      return {
-        ...prev,
-        days: {
-          ...prev.days,
-          [selectedDay]: {
-            ...existingDay,
-            tasks: nextTasks,
-            abandonedTasks: [...(existingDay.abandonedTasks ?? []), abandoned],
-          },
-        },
-      };
-    });
-  }, [updateAppState, selectedDay]);
-
-  /** Add an item to the global not-doing list. */
-  const handleAddToNotDoing = useCallback((text: string) => {
-    updateAppState((prev) => {
-      const newItem: NotDoingItem = {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        text,
-        createdAt: new Date().toISOString(),
-      };
-      return { ...prev, notDoingList: [...(prev.notDoingList ?? []), newItem] };
-    });
-  }, [updateAppState]);
-
-  /** Remove an item from the global not-doing list. */
-  const handleRemoveFromNotDoing = useCallback((id: string) => {
-    updateAppState((prev) => ({
-      ...prev,
-      notDoingList: (prev.notDoingList ?? []).filter((item) => item.id !== id),
-    }));
-  }, [updateAppState]);
-
-  /** Add a per-day not-doing item. */
-  const handleAddDayNotDoing = useCallback((text: string) => {
-    updateAppState((prev) => {
-      const existingDay = getOrCreateDay(prev, selectedDay);
-      const newItem: NotDoingItem = {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        text,
-        createdAt: new Date().toISOString(),
-      };
-      return {
-        ...prev,
-        days: {
-          ...prev.days,
-          [selectedDay]: {
-            ...existingDay,
-            notDoingItems: [...(existingDay.notDoingItems ?? []), newItem],
-          },
-        },
-      };
-    });
-  }, [updateAppState, selectedDay]);
-
-  /** Remove a per-day not-doing item. */
-  const handleRemoveDayNotDoing = useCallback((id: string) => {
-    updateAppState((prev) => {
-      const existingDay = getOrCreateDay(prev, selectedDay);
-      return {
-        ...prev,
-        days: {
-          ...prev.days,
-          [selectedDay]: {
-            ...existingDay,
-            notDoingItems: (existingDay.notDoingItems ?? []).filter((item) => item.id !== id),
-          },
-        },
-      };
-    });
-  }, [updateAppState, selectedDay]);
-
+  // --- Handlers that stay in DayPlanner (simple, few lines each) ---
   const habits = appState.habitDefinitions ?? DEFAULT_HABIT_DEFINITIONS;
   const habitIds = useMemo(() => habits.map((h) => h.id), [habits]);
 
@@ -975,6 +347,48 @@ export function DayPlanner({
     [updateAppState],
   );
 
+  const handleUpdateHabitDefinitions = useCallback(
+    (updatedHabits: HabitDefinition[]) => {
+      updateAppState((prev) => ({ ...prev, habitDefinitions: updatedHabits }));
+    },
+    [updateAppState],
+  );
+
+  const handleTrackingUpdateDay = useCallback(
+    (isoDate: string, updatedDay: DayState) => {
+      updateAppState((prev) => {
+        const existing = getOrCreateDay(prev, isoDate);
+        return { ...prev, days: { ...prev.days, [isoDate]: { ...existing, ...updatedDay } } };
+      });
+    },
+    [updateAppState],
+  );
+
+  const handleTrackingUpdateSettings = useCallback(
+    (patch: {
+      habitDefinitions?: HabitDefinition[];
+      monthTitles?: Record<string, string>;
+      depthPhilosophy?: AppState['depthPhilosophy'];
+      deepWorkGoalHoursPerWeek?: number;
+      goalCascade?: AppState['goalCascade'];
+      monthlyReviews?: AppState['monthlyReviews'];
+    }) => {
+      updateAppState((prev) => ({
+        ...prev,
+        habitDefinitions: patch.habitDefinitions ?? prev.habitDefinitions,
+        monthTitles: patch.monthTitles ?? prev.monthTitles,
+        depthPhilosophy: patch.depthPhilosophy !== undefined ? patch.depthPhilosophy : prev.depthPhilosophy,
+        deepWorkGoalHoursPerWeek: patch.deepWorkGoalHoursPerWeek !== undefined ? patch.deepWorkGoalHoursPerWeek : prev.deepWorkGoalHoursPerWeek,
+        goalCascade: patch.goalCascade !== undefined ? patch.goalCascade : prev.goalCascade,
+        monthlyReviews: patch.monthlyReviews !== undefined ? patch.monthlyReviews : prev.monthlyReviews,
+      }));
+    },
+    [updateAppState],
+  );
+
+  const [editHabitsOpen, setEditHabitsOpen] = useState(false);
+  const [editSideQuestOpen, setEditSideQuestOpen] = useState(false);
+
   const tomorrowDate = useMemo(() => addDays(selectedDay, 1), [selectedDay]);
 
   const tomorrowMustTasks = useMemo(() =>
@@ -983,75 +397,6 @@ export function DayPlanner({
     ),
     [appState.days, tomorrowDate],
   );
-
-  const handleAddTomorrowMust = useCallback((title: string) => {
-    updateAppState((prev) => {
-      const day = getOrCreateDay(prev, tomorrowDate);
-      const task: Task = {
-        id: `must-tmrw-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        title,
-        sectionId: 'mustDo',
-        date: tomorrowDate,
-        isDone: false,
-      };
-      return {
-        ...prev,
-        days: { ...prev.days, [tomorrowDate]: { ...day, tasks: [...day.tasks, task] } },
-      };
-    });
-  }, [tomorrowDate, updateAppState]);
-
-  const handleDeleteTomorrowMust = useCallback((taskId: string) => {
-    updateAppState((prev) => {
-      const day = getOrCreateDay(prev, tomorrowDate);
-      return {
-        ...prev,
-        days: {
-          ...prev.days,
-          [tomorrowDate]: { ...day, tasks: day.tasks.filter((t) => t.id !== taskId) },
-        },
-      };
-    });
-  }, [tomorrowDate, updateAppState]);
-
-  const handleEditTomorrowMust = useCallback((taskId: string, title: string) => {
-    updateAppState((prev) => {
-      const day = getOrCreateDay(prev, tomorrowDate);
-      return {
-        ...prev,
-        days: {
-          ...prev.days,
-          [tomorrowDate]: {
-            ...day,
-            tasks: day.tasks.map((t) => t.id === taskId ? { ...t, title } : t),
-          },
-        },
-      };
-    });
-  }, [tomorrowDate, updateAppState]);
-
-  const handleUpdateTomorrowMust = useCallback((taskId: string, patch: { scheduledAt?: string; durationMinutes?: number }) => {
-    updateAppState((prev) => {
-      const day = getOrCreateDay(prev, tomorrowDate);
-      return {
-        ...prev,
-        days: {
-          ...prev.days,
-          [tomorrowDate]: { ...day, tasks: day.tasks.map((t) => t.id === taskId ? { ...t, ...patch } : t) },
-        },
-      };
-    });
-  }, [tomorrowDate, updateAppState]);
-
-  const handleUpdateHabitDefinitions = useCallback(
-    (updatedHabits: HabitDefinition[]) => {
-      updateAppState((prev) => ({ ...prev, habitDefinitions: updatedHabits }));
-    },
-    [updateAppState],
-  );
-
-  const [editHabitsOpen, setEditHabitsOpen] = useState(false);
-  const [editSideQuestOpen, setEditSideQuestOpen] = useState(false);
 
   const todayQuestIds = useMemo(
     () => getDailyQuestSelection(appState.sideQuestDefs ?? [], appState.days, selectedDay),
@@ -1107,387 +452,6 @@ export function DayPlanner({
       new Date(y!, m! - 1, d!),
     );
   }, [selectedDay]);
-
-
-  // Resolved block minutes: per-day override > global ratio template > wake/sleep defaults.
-  const effectiveBlockDurations = useMemo<BlockDurations | null>(() => {
-    if (!dayState.wakeTime || !dayState.sleepTarget) return null;
-    if (dayState.blockDurations) return dayState.blockDurations;
-    const ratios = appState.blockDurationRatios;
-    if (ratios) {
-      const awake = computeAwakeMinutes(dayState.wakeTime, dayState.sleepTarget);
-      return ratiosToBlockDurations(ratios, awake);
-    }
-    return getDefaultBlockDurations(dayState.wakeTime, dayState.sleepTarget);
-  }, [dayState, appState.blockDurationRatios]);
-
-  // Per-day timeline blocks derived from effective durations.
-  const computedBlocks = useMemo(() => {
-    if (!dayState.wakeTime || !dayState.sleepTarget || !effectiveBlockDurations) return undefined;
-    return computeBlocksFromDurations(dayState.wakeTime, effectiveBlockDurations);
-  }, [dayState.wakeTime, dayState.sleepTarget, effectiveBlockDurations]);
-
-  // Modal state: auto-open when today has no wake time; "Edit schedule" forces it open.
-  const [daySetupOpen, setDaySetupOpen] = useState(false);
-  // Track which day the user explicitly skipped so we don't re-prompt automatically.
-  const [daySetupSkippedFor, setDaySetupSkippedFor] = useState<string | null>(null);
-
-  const showDaySetupModal =
-    !shareMode &&
-    (daySetupOpen ||
-      (selectedDay === todayIso() && !dayState.wakeTime && daySetupSkippedFor !== selectedDay));
-
-  const handleDaySetupSave = useCallback(
-    (wakeTime: string, sleepTarget: string, bedTime: string) => {
-      updateAppState((prev) => {
-        const existing = getOrCreateDay(prev, selectedDay);
-        // Clear manual block overrides so blocks recompute from new wake/sleep times.
-        return {
-          ...prev,
-          days: { ...prev.days, [selectedDay]: { ...existing, bedTime, wakeTime, sleepTarget, blockDurations: null } },
-        };
-      });
-      setDaySetupOpen(false);
-    },
-    [updateAppState, selectedDay],
-  );
-
-  // --- Block duration editor state ---
-  const [sleepWarnPending, setSleepWarnPending] = useState<{
-    durations: BlockDurations; newSleepMinutes: number;
-  } | null>(null);
-
-  interface ConflictPending {
-    durations: BlockDurations;
-    newSleepTarget: string | null;
-    blockName: string;
-    newBlockStart: string;
-    newBlockEnd: string;
-    tasks: Task[];
-    nextSectionId: TaskSectionId | null;
-    nextBlockName: string | null;
-  }
-  const [conflictPending, setConflictPending] = useState<ConflictPending | null>(null);
-
-  interface DurationScopePending {
-    durations: BlockDurations;
-    newSleepTarget: string | null;
-    afterApply?: (next: AppState) => AppState;
-  }
-  const [durationScopePending, setDurationScopePending] = useState<DurationScopePending | null>(null);
-
-  const applyDurationScopeToday = useCallback(() => {
-    if (!durationScopePending) return;
-    const { durations, newSleepTarget, afterApply } = durationScopePending;
-    updateAppState((prev) => {
-      const existing = getOrCreateDay(prev, selectedDay);
-      const patch: Partial<DayState> = { blockDurations: durations };
-      if (newSleepTarget !== null) patch.sleepTarget = newSleepTarget;
-      let next: AppState = {
-        ...prev,
-        days: { ...prev.days, [selectedDay]: { ...existing, ...patch } },
-      };
-      if (afterApply) next = afterApply(next);
-      return next;
-    });
-    setDurationScopePending(null);
-  }, [durationScopePending, updateAppState, selectedDay]);
-
-  const applyDurationScopeAllDays = useCallback(() => {
-    if (!durationScopePending) return;
-    const { durations, newSleepTarget, afterApply } = durationScopePending;
-    const ratios = blockDurationsToRatios(durations);
-    updateAppState((prev) => {
-      const nextDays = { ...prev.days };
-      for (const date of Object.keys(nextDays)) {
-        const day = nextDays[date];
-        if (day) nextDays[date] = { ...day, blockDurations: null };
-      }
-      const existing = getOrCreateDay(prev, selectedDay);
-      const dayPatch: Partial<DayState> = { blockDurations: null };
-      if (newSleepTarget !== null) dayPatch.sleepTarget = newSleepTarget;
-      nextDays[selectedDay] = { ...existing, ...dayPatch };
-      let next: AppState = {
-        ...prev,
-        days: nextDays,
-        blockDurationRatios: ratios,
-      };
-      if (afterApply) next = afterApply(next);
-      return next;
-    });
-    setDurationScopePending(null);
-  }, [durationScopePending, updateAppState, selectedDay]);
-
-  const handleBlockDurationChange = useCallback(
-    (sectionId: keyof BlockDurations, newDurationMinutes: number) => {
-      if (!effectiveBlockDurations || !dayState.wakeTime || !dayState.sleepTarget) return;
-
-      const currentSleepMins = (() => {
-        const [wh, wm] = (dayState.wakeTime ?? "07:00").split(":").map(Number);
-        const [sh, sm] = (dayState.sleepTarget ?? "23:00").split(":").map(Number);
-        const wake = (wh ?? 0) * 60 + (wm ?? 0);
-        const sleep = (sh ?? 0) * 60 + (sm ?? 0);
-        return wake > sleep ? wake - sleep : wake + 1440 - sleep;
-      })();
-
-      const result = applyBlockDurationChange(
-        effectiveBlockDurations,
-        sectionId,
-        newDurationMinutes,
-        currentSleepMins,
-      );
-      if (!result) return; // hard minimum violated
-
-      // Compute new sleep target string if sleep minutes changed
-      const newSleepTarget: string | null = result.sleepMinutes !== currentSleepMins
-        ? (() => {
-            const [wh, wm] = (dayState.wakeTime ?? "07:00").split(":").map(Number);
-            const totalMin = ((wh ?? 0) * 60 + (wm ?? 0) + result.sleepMinutes) % 1440;
-            return `${String(Math.floor(totalMin / 60)).padStart(2, "0")}:${String(totalMin % 60).padStart(2, "0")}`;
-          })()
-        : null;
-
-      // Check for task conflicts in the changed block
-      const blockIdx = BLOCK_ORDER.indexOf(sectionId);
-      const newBlocks = computeBlocksFromDurations(dayState.wakeTime, result.durations);
-      const newBlock = newBlocks[blockIdx];
-
-      if (newBlock) {
-        const blockStartMins = newBlock.start;
-        const blockEndMins = newBlock.end >= newBlock.start ? newBlock.end : newBlock.end + 1440;
-        const conflicts = (dayState.tasks ?? []).filter(
-          (t) =>
-            t.sectionId === sectionId &&
-            t.scheduledAt &&
-            (() => {
-              const [th, tm] = t.scheduledAt!.split(":").map(Number);
-              const taskMin = (th ?? 0) * 60 + (tm ?? 0);
-              const adj = taskMin < blockStartMins ? taskMin + 1440 : taskMin;
-              return adj < blockStartMins || adj >= blockEndMins;
-            })(),
-        );
-
-        if (conflicts.length > 0) {
-          const section = FIXED_SECTIONS.find((s) => s.id === sectionId);
-          const nextId = blockIdx < BLOCK_ORDER.length - 1 ? BLOCK_ORDER[blockIdx + 1] ?? null : null;
-          const nextSection = nextId ? FIXED_SECTIONS.find((s) => s.id === nextId) : null;
-          const fmt = (m: number) =>
-            `${String(Math.floor(m % 1440 / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
-
-          // Sleep warn first if applicable
-          if (result.sleepWarning) {
-            setSleepWarnPending({ durations: result.durations, newSleepMinutes: result.sleepMinutes });
-            return;
-          }
-
-          setConflictPending({
-            durations: result.durations,
-            newSleepTarget,
-            blockName: section?.title ?? sectionId,
-            newBlockStart: fmt(newBlock.start),
-            newBlockEnd: fmt(newBlock.end),
-            tasks: conflicts,
-            nextSectionId: nextId as TaskSectionId | null,
-            nextBlockName: nextSection?.title ?? null,
-          });
-          return;
-        }
-      }
-
-      // Sleep warning (no task conflicts)
-      if (result.sleepWarning) {
-        setSleepWarnPending({ durations: result.durations, newSleepMinutes: result.sleepMinutes });
-        return;
-      }
-
-      setDurationScopePending({
-        durations: result.durations,
-        newSleepTarget,
-        afterApply: undefined,
-      });
-    },
-    [effectiveBlockDurations, dayState],
-  );
-
-
-  const handleTrackingUpdateDay = useCallback(
-    (isoDate: string, updatedDay: DayState) => {
-      updateAppState((prev) => {
-        const existing = getOrCreateDay(prev, isoDate);
-        return { ...prev, days: { ...prev.days, [isoDate]: { ...existing, ...updatedDay } } };
-      });
-    },
-    [updateAppState],
-  );
-
-  const handleTrackingUpdateSettings = useCallback(
-    (patch: {
-      habitDefinitions?: HabitDefinition[];
-      monthTitles?: Record<string, string>;
-      depthPhilosophy?: AppState['depthPhilosophy'];
-      deepWorkGoalHoursPerWeek?: number;
-      goalCascade?: AppState['goalCascade'];
-      monthlyReviews?: AppState['monthlyReviews'];
-    }) => {
-      updateAppState((prev) => ({
-        ...prev,
-        habitDefinitions: patch.habitDefinitions ?? prev.habitDefinitions,
-        monthTitles: patch.monthTitles ?? prev.monthTitles,
-        depthPhilosophy: patch.depthPhilosophy !== undefined ? patch.depthPhilosophy : prev.depthPhilosophy,
-        deepWorkGoalHoursPerWeek: patch.deepWorkGoalHoursPerWeek !== undefined ? patch.deepWorkGoalHoursPerWeek : prev.deepWorkGoalHoursPerWeek,
-        goalCascade: patch.goalCascade !== undefined ? patch.goalCascade : prev.goalCascade,
-        monthlyReviews: patch.monthlyReviews !== undefined ? patch.monthlyReviews : prev.monthlyReviews,
-      }));
-    },
-    [updateAppState],
-  );
-
-  // Streak counts are derived from completed tasks (not just opening the app).
-
-  const [tick, setTick] = useState(0);
-  useEffect(() => {
-    const id = setInterval(() => setTick((t) => t + 1), 15_000);
-    return () => clearInterval(id);
-  }, []);
-
-  const taskIdsDueNow = useMemo(() => {
-    void tick; // re-run when tick updates (every 15s) so due-now matches current time
-    const today = todayIso();
-    const day = getOrCreateDay(appState, today);
-    const now = new Date();
-    const currentMinutes = now.getHours() * 60 + now.getMinutes();
-    const set = new Set<string>();
-
-    // 1) Highlight all tasks currently in their time window
-    for (const task of day.tasks) {
-      if (!task.scheduledAt || task.isDone) continue;
-      const normalized = normalizeHhmm(task.scheduledAt);
-      const [h, m] = normalized.split(":").map(Number);
-      const startMinutes = h * 60 + m;
-      const durationMins = task.durationMinutes ?? 1;
-      const endMinutes = startMinutes + durationMins;
-      if (currentMinutes >= startMinutes && currentMinutes < endMinutes)
-        set.add(task.id);
-    }
-
-    // 2) If no task is in-window, highlight the next upcoming one so completing a task
-    //    immediately shows the next (rewarding flow)
-    if (set.size === 0) {
-      let nextStart = Infinity;
-      let nextId: string | null = null;
-      for (const task of day.tasks) {
-        if (!task.scheduledAt || task.isDone) continue;
-        const normalized = normalizeHhmm(task.scheduledAt);
-        const [h, m] = normalized.split(":").map(Number);
-        const startMinutes = h * 60 + m;
-        if (startMinutes >= currentMinutes && startMinutes < nextStart) {
-          nextStart = startMinutes;
-          nextId = task.id;
-        }
-      }
-      if (nextId) set.add(nextId);
-    }
-
-    return set;
-  }, [appState, tick]);
-
-  /** Which section block is active right now (5–9 morning, 9–5 focus, etc.). Updates with tick. */
-  const activeSectionIds = useMemo(() => {
-    void tick;
-    const now = new Date();
-    const currentMinutes = now.getHours() * 60 + now.getMinutes();
-    return getActiveSectionIds(currentMinutes, timeOffsetMinutes, computedBlocks);
-  }, [tick, timeOffsetMinutes, computedBlocks]);
-  const isSleepTimeNow = useMemo(() => {
-    void tick;
-    const now = new Date();
-    return isSleepTime(now.getHours() * 60 + now.getMinutes(), timeOffsetMinutes, computedBlocks);
-  }, [tick, timeOffsetMinutes, computedBlocks]);
-
-  const timeframeLabelsBySection: Record<TaskSectionId, string | null> = useMemo(() => {
-    const labels: Record<TaskSectionId, string | null> = {
-      mustDo: null,
-      morningRoutine: null,
-      highPriority: null,
-      mediumPriority: null,
-      lowPriority: null,
-      nightRoutine: null,
-      sideQuest: null,
-    };
-    for (const section of FIXED_SECTIONS) {
-      labels[section.id] = getSectionTimeframeLabel(section.id, timeOffsetMinutes, computedBlocks);
-    }
-    return labels;
-  }, [timeOffsetMinutes, computedBlocks]);
-
-  const lastBeepedRef = useRef<
-    Record<string, { start?: boolean; mid?: boolean; end?: boolean }>
-  >({});
-  const audioCtxRef = useRef<AudioContext | null>(null);
-
-  const playBeep = useCallback(() => {
-    try {
-      if (!audioCtxRef.current) {
-        audioCtxRef.current = new (
-          window.AudioContext ||
-          (window as unknown as { webkitAudioContext: typeof AudioContext })
-            .webkitAudioContext
-        )();
-      }
-      const ctx = audioCtxRef.current;
-      void ctx.resume().then(() => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.frequency.value = 880;
-        osc.type = "sine";
-        gain.gain.setValueAtTime(0.12, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.2);
-      });
-    } catch {
-      // ignore
-    }
-  }, []);
-
-  useEffect(() => {
-    void tick;
-    const today = todayIso();
-    const day = getOrCreateDay(appState, today);
-    const now = new Date();
-    const currentMinutes = now.getHours() * 60 + now.getMinutes();
-
-    for (const task of day.tasks) {
-      if (!task.scheduledAt || task.isDone) continue;
-      const normalized = normalizeHhmm(task.scheduledAt);
-      const [h, m] = normalized.split(":").map(Number);
-      const startMinutes = h * 60 + m;
-      const durationMins = task.durationMinutes ?? 1;
-      const midMinutes = startMinutes + Math.floor(durationMins / 2);
-      const endMinutes = startMinutes + durationMins;
-
-      const key = `${task.id}-${today}`;
-      const state = lastBeepedRef.current[key] ?? {};
-
-      if (currentMinutes >= endMinutes && !state.end) {
-        lastBeepedRef.current[key] = { ...state, end: true };
-        playBeep();
-        return;
-      }
-      if (currentMinutes >= midMinutes && !state.mid) {
-        lastBeepedRef.current[key] = { ...state, mid: true };
-        playBeep();
-        return;
-      }
-      if (currentMinutes >= startMinutes && !state.start) {
-        lastBeepedRef.current[key] = { ...state, start: true };
-        playBeep();
-        return;
-      }
-    }
-  }, [appState, tick, playBeep]);
 
   useEffect(() => {
     return () => {
@@ -1828,7 +792,7 @@ export function DayPlanner({
             )}
             </Fragment>
           ))}
-          {/* Sleep block: same style as sections, no tasks, highlights when current time is 11 PM – 5 AM */}
+          {/* Sleep block: same style as sections, no tasks, highlights when current time is 11 PM - 5 AM */}
           <section
             className={`rounded-lg border p-3 sm:p-4 ${
               isSleepTimeNow
@@ -2003,150 +967,20 @@ export function DayPlanner({
         </div>
       )}
 
-      {/* Day setup modal: prompts for wake/sleep times on today's fresh planner */}
-      {showDaySetupModal && (
-        <DaySetupModal
-          date={selectedDay}
-          initialBedTime={dayState.bedTime}
-          initialWakeTime={dayState.wakeTime}
-          initialSleepTarget={dayState.sleepTarget}
-          prevBedTime={prevDayState.bedTime}
-          prevWakeTime={prevDayState.wakeTime}
-          prevSleepTarget={prevDayState.sleepTarget}
-          onSave={handleDaySetupSave}
-          onSkip={() => { setDaySetupSkippedFor(selectedDay); setDaySetupOpen(false); }}
-        />
-      )}
-
-      {/* Sleep warning confirmation */}
-      {sleepWarnPending && dayState.wakeTime && (() => {
-        const { durations, newSleepMinutes } = sleepWarnPending;
-        const [wh, wm] = (dayState.wakeTime ?? "07:00").split(":").map(Number);
-        const totalMin = ((wh ?? 0) * 60 + (wm ?? 0) + newSleepMinutes) % 1440;
-        const newTarget = `${String(Math.floor(totalMin / 60)).padStart(2, "0")}:${String(totalMin % 60).padStart(2, "0")}`;
-        const h = Math.floor(newSleepMinutes / 60);
-        const m = newSleepMinutes % 60;
-        const label = m === 0 ? `${h}h` : `${h}h ${m}m`;
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 px-4">
-            <div className="w-full max-w-sm rounded-xl border border-amber-500/30 bg-slate-900 p-5 shadow-2xl">
-              <div className="mb-4 flex items-start gap-3">
-                <span className="mt-0.5 shrink-0 text-amber-400">
-                  <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-                  </svg>
-                </span>
-                <div>
-                  <h3 className="text-sm font-semibold text-slate-100">Sleep will drop to {label}</h3>
-                  <p className="mt-1 text-xs text-slate-400">
-                    Sleep below 7 hours affects focus, memory, and performance. This change will update your bedtime target to {newTarget}.
-                  </p>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => {
-                    setDurationScopePending({
-                      durations,
-                      newSleepTarget: newTarget,
-                      afterApply: undefined,
-                    });
-                    setSleepWarnPending(null);
-                  }}
-                  className="flex-1 rounded-lg border border-amber-500/40 bg-amber-500/10 py-2 text-xs font-medium text-amber-300 hover:bg-amber-500/20"
-                >
-                  Apply anyway
-                </button>
-                <button
-                  onClick={() => setSleepWarnPending(null)}
-                  className="flex-1 rounded-lg border border-slate-700 py-2 text-xs font-medium text-slate-400 hover:text-slate-200"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* Task conflict modal */}
-      {conflictPending && (
-        <TaskConflictModal
-          blockName={conflictPending.blockName}
-          newStart={conflictPending.newBlockStart}
-          newEnd={conflictPending.newBlockEnd}
-          conflictingTasks={conflictPending.tasks}
-          nextBlockName={conflictPending.nextBlockName}
-          onKeep={() => {
-            const c = conflictPending;
-            setDurationScopePending({
-              durations: c.durations,
-              newSleepTarget: c.newSleepTarget,
-              afterApply: undefined,
-            });
-            setConflictPending(null);
-          }}
-          onClear={() => {
-            const c = conflictPending;
-            const toClear = c.tasks;
-            setDurationScopePending({
-              durations: c.durations,
-              newSleepTarget: c.newSleepTarget,
-              afterApply: (next) => {
-                const existing = getOrCreateDay(next, selectedDay);
-                const tasks = existing.tasks.map((t) =>
-                  toClear.some((x) => x.id === t.id) ? { ...t, scheduledAt: undefined } : t,
-                );
-                return { ...next, days: { ...next.days, [selectedDay]: { ...existing, tasks } } };
-              },
-            });
-            setConflictPending(null);
-          }}
-          onMove={conflictPending.nextSectionId ? () => {
-            const c = conflictPending;
-            const nid = c.nextSectionId!;
-            const toMove = c.tasks;
-            setDurationScopePending({
-              durations: c.durations,
-              newSleepTarget: c.newSleepTarget,
-              afterApply: (next) => {
-                const existing = getOrCreateDay(next, selectedDay);
-                const tasks = existing.tasks.map((t) =>
-                  toMove.some((x) => x.id === t.id)
-                    ? { ...t, sectionId: nid, scheduledAt: undefined }
-                    : t,
-                );
-                return { ...next, days: { ...next.days, [selectedDay]: { ...existing, tasks } } };
-              },
-            });
-            setConflictPending(null);
-          } : null}
-        />
-      )}
-
-      {durationScopePending && (
-        <BlockDurationScopeModal
-          onThisDayOnly={applyDurationScopeToday}
-          onAllDaysDefault={applyDurationScopeAllDays}
-          onCancel={() => setDurationScopePending(null)}
-        />
-      )}
-
-      {editHabitsOpen && (
-        <HabitEditorModal
-          habits={habits}
-          onSave={handleUpdateHabitDefinitions}
-          onClose={() => setEditHabitsOpen(false)}
-        />
-      )}
-
-      {editSideQuestOpen && (
-        <SideQuestEditorModal
-          defs={appState.sideQuestDefs ?? []}
-          onSave={handleSaveSideQuestDefs}
-          onClose={() => setEditSideQuestOpen(false)}
-        />
-      )}
+      <PlannerModals
+        selectedDay={selectedDay}
+        dayState={dayState}
+        prevDayState={prevDayState}
+        blockEditor={blockEditor}
+        habits={habits}
+        sideQuestDefs={appState.sideQuestDefs ?? []}
+        editHabitsOpen={editHabitsOpen}
+        editSideQuestOpen={editSideQuestOpen}
+        onCloseHabits={() => setEditHabitsOpen(false)}
+        onCloseSideQuests={() => setEditSideQuestOpen(false)}
+        onSaveHabits={handleUpdateHabitDefinitions}
+        onSaveSideQuests={handleSaveSideQuestDefs}
+      />
 
       {/* Mobile bottom tab bar — owner only, not shown in shared views */}
       {!shareMode && !shareShellLayout && (
