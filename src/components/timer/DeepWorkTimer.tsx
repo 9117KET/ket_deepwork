@@ -1,19 +1,35 @@
-/**
- * components/timer/DeepWorkTimer.tsx
- *
- * A simple deep-work countdown timer with presets.
- * It focuses on clarity over advanced features so you can start a
- * focused block quickly.
- */
-
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
+import { CheckCircle } from 'lucide-react'
 
 interface DeepWorkTimerProps {
   onSessionComplete?: (label: string, durationMinutes: number) => void
 }
 
 type TimerStatus = 'idle' | 'running' | 'paused' | 'finished'
+
+function playCompletionChime() {
+  try {
+    const ctx = new AudioContext()
+    const notes = [523.25, 659.25, 783.99] // C5, E5, G5 - major arpeggio
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      osc.frequency.value = freq
+      osc.type = 'sine'
+      const t = ctx.currentTime + i * 0.18
+      gain.gain.setValueAtTime(0, t)
+      gain.gain.linearRampToValueAtTime(0.25, t + 0.02)
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.6)
+      osc.start(t)
+      osc.stop(t + 0.6)
+    })
+  } catch (_err) {
+    // AudioContext unavailable - silent fail
+  }
+}
 
 export function DeepWorkTimer({ onSessionComplete }: DeepWorkTimerProps) {
   const [label, setLabel] = useState('Deep work block')
@@ -40,6 +56,7 @@ export function DeepWorkTimer({ onSessionComplete }: DeepWorkTimerProps) {
       if (msLeft === 0) {
         setStatus('finished')
         setTargetTime(null)
+        playCompletionChime()
         onSessionCompleteRef.current?.(label, durationMinutes)
       }
     }
@@ -50,7 +67,8 @@ export function DeepWorkTimer({ onSessionComplete }: DeepWorkTimerProps) {
   }, [status, targetTime, label, durationMinutes])
 
   const totalMs = useMemo(() => durationMinutes * 60 * 1000, [durationMinutes])
-  const effectiveRemaining = status === 'idle' ? totalMs : remainingMs
+  // Show original duration when idle or finished (not 00:00 after completion)
+  const effectiveRemaining = status === 'idle' || status === 'finished' ? totalMs : remainingMs
 
   const minutes = Math.floor(effectiveRemaining / 60000)
   const seconds = Math.floor((effectiveRemaining % 60000) / 1000)
@@ -90,7 +108,11 @@ export function DeepWorkTimer({ onSessionComplete }: DeepWorkTimerProps) {
   const isIdleOrFinished = status === 'idle' || status === 'finished'
 
   const fractionComplete =
-    totalMs === 0 ? 0 : 1 - Math.min(1, effectiveRemaining / Math.max(1, totalMs))
+    status === 'finished'
+      ? 1
+      : totalMs === 0
+        ? 0
+        : 1 - Math.min(1, effectiveRemaining / Math.max(1, totalMs))
 
   return (
     <section className="rounded-lg border border-slate-800 bg-slate-900 p-3 sm:p-4">
@@ -132,20 +154,33 @@ export function DeepWorkTimer({ onSessionComplete }: DeepWorkTimerProps) {
           ))}
         </div>
 
-        <div className="space-y-1">
-          <div className="flex items-baseline justify-between">
-            <p className="font-mono text-2xl sm:text-3xl">
-              {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
+        {status === 'finished' ? (
+          <div className="rounded-md border border-teal-500/40 bg-teal-500/10 px-3 py-2.5">
+            <div className="flex items-center gap-2 text-teal-300">
+              <CheckCircle className="h-4 w-4 shrink-0" />
+              <span className="text-sm font-medium">Session complete</span>
+            </div>
+            <p className="mt-0.5 text-xs text-teal-400/70">
+              {durationMinutes} min - {label}
             </p>
-            <p className="text-xs text-slate-400 capitalize">{status}</p>
+            <p className="mt-1 text-xs text-slate-400">Block logged. Start another or call it done.</p>
           </div>
-          <div className="h-1.5 w-full rounded-full bg-slate-900">
-            <div
-              className="h-1.5 rounded-full bg-sky-500"
-              style={{ width: `${fractionComplete * 100}%` }}
-            />
+        ) : (
+          <div className="space-y-1">
+            <div className="flex items-baseline justify-between">
+              <p className="font-mono text-2xl sm:text-3xl">
+                {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
+              </p>
+              <p className="text-xs text-slate-400 capitalize">{status}</p>
+            </div>
+            <div className="h-1.5 w-full rounded-full bg-slate-900">
+              <div
+                className="h-1.5 rounded-full bg-sky-500 transition-[width] duration-300"
+                style={{ width: `${fractionComplete * 100}%` }}
+              />
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="flex flex-wrap items-center gap-2">
           {isIdleOrFinished ? (
@@ -191,4 +226,3 @@ export function DeepWorkTimer({ onSessionComplete }: DeepWorkTimerProps) {
     </section>
   )
 }
-
