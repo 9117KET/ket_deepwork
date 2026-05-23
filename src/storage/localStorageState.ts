@@ -505,6 +505,9 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
           },
           weeklyProjectRotation: s.weeklyProjectRotation ?? [],
           sideQuestDefs: s.sideQuestDefs ?? [],
+          sideQuestXp: s.sideQuestXp ?? 0,
+          sideQuestStreak: s.sideQuestStreak ?? 0,
+          sideQuestLastStreakDate: s.sideQuestLastStreakDate,
         }).then(() => {
           pendingSettings.current = false
           writePendingSettings(false)
