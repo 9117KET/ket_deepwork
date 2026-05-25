@@ -10,12 +10,12 @@ import { ComingSoonBanner } from "../components/ui/ComingSoonBanner";
 export function CalendarSyncPage() {
   return (
     <AppChrome
-      headerPositionClass="top-0"
       mobileActive="planner"
-      maxWidthClass="max-w-4xl"
       showCalendarLink
     >
-      <ComingSoonBanner feature="Google Calendar Sync" />
+      <div className="mx-auto max-w-4xl px-4 py-6 md:px-8 pb-28 md:pb-10">
+        <ComingSoonBanner feature="Google Calendar Sync" />
+      </div>
     </AppChrome>
   );
 }

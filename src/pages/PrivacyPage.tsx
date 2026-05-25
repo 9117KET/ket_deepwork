@@ -9,8 +9,8 @@ import { AppChrome } from "../components/layout/AppChrome";
 
 export function PrivacyPage() {
   return (
-    <AppChrome headerPositionClass="top-0" mobileActive="home" maxWidthClass="max-w-3xl">
-      <div className="py-12 pb-32 md:pb-12">
+    <AppChrome mobileActive="home" hideSidebar>
+      <div className="mx-auto max-w-3xl px-4 py-12 md:px-8 pb-32 md:pb-12">
         <Link
           to="/"
           className="mb-8 inline-flex items-center gap-1 text-sm text-share-onSurfaceVariant hover:text-share-onSurface"

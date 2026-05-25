@@ -33,3 +33,9 @@
     filter: blur(80px);
   }
 }
+
+/* Thin dark scrollbar for the sidebar main area */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(61,73,77,0.6); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(61,73,77,0.9); }

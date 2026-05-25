@@ -59,7 +59,7 @@ export function PlannerPage() {
 
   if (loading) {
     return (
-      <AppChrome headerPositionClass="top-0" mobileActive="planner" showMobileNav={false}>
+      <AppChrome mobileActive="planner" showMobileNav={false}>
         <div className="flex min-h-[50vh] items-center justify-center text-share-onSurfaceVariant">
           <p className="text-sm">Loading your workspace…</p>
         </div>
@@ -69,7 +69,7 @@ export function PlannerPage() {
 
   if (!showPlanner) {
     return (
-      <AppChrome headerPositionClass="top-0" mobileActive="planner" showMobileNav={false}>
+      <AppChrome mobileActive="planner" showMobileNav={false}>
         <div className="flex min-h-[calc(100vh-8rem)] items-center justify-center px-4">
           <LoginForm onContinueAsGuest={() => startTransition(() => setGuest(true))} />
         </div>
@@ -80,14 +80,13 @@ export function PlannerPage() {
   return (
     <>
       <AppChrome
-        headerPositionClass="top-0"
         mobileActive="planner"
-        maxWidthClass="max-w-[1600px]"
         showCalendarLink={isAuthenticated}
         showHelp
         onHelpClick={() => setHelpOpen(true)}
         trailing={
           <AccountMenu
+            dropUp
             userInitial={userInitial}
             userEmail={user?.email}
             items={[
@@ -141,7 +140,9 @@ export function PlannerPage() {
           />
         }
       >
-        <DayPlanner stickyTopClass="top-16" />
+        <div className="px-4 pt-4 pb-28 md:px-6 md:pt-5 md:pb-8">
+          <DayPlanner stickyTopClass="top-0" />
+        </div>
       </AppChrome>
       <HelpModal
         isOpen={helpOpen}

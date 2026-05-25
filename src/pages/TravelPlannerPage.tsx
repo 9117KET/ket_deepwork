@@ -23,7 +23,8 @@ export function TravelPlannerPage() {
   const completed = trips?.filter((t) => t.status === "completed") ?? []
 
   return (
-    <AppChrome headerPositionClass="top-0" mobileActive="travel" maxWidthClass="max-w-4xl">
+    <AppChrome mobileActive="travel">
+      <div className="mx-auto max-w-4xl px-4 py-6 md:px-8 pb-28 md:pb-10">
       <div className="space-y-6">
         {/* Page header */}
         <div className="flex items-center justify-between">
@@ -101,6 +102,7 @@ export function TravelPlannerPage() {
       {showCreate && (
         <CreateTripModal onClose={() => setShowCreate(false)} onCreated={handleCreated} />
       )}
+      </div>
     </AppChrome>
   )
 }

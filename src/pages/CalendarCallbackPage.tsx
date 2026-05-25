@@ -44,26 +44,26 @@ export function CalendarCallbackPage() {
 
   return (
     <AppChrome
-      headerPositionClass="top-0"
       mobileActive="planner"
-      maxWidthClass="max-w-xl"
       showCalendarLink
     >
-      <h1 className="font-shareHeadline text-2xl font-black text-share-onSurface">Calendar connection</h1>
-      <p className="mt-2 text-share-onSurfaceVariant">
-        {status === "working"
-          ? "Finalizing connection…"
-          : status === "ok"
-            ? message
-            : `Failed: ${message}`}
-      </p>
-      <div className="mt-6">
-        <Link
-          to="/calendar"
-          className="text-sm font-bold text-share-primary hover:text-share-primaryContainer"
-        >
-          Go to Calendar sync
-        </Link>
+      <div className="mx-auto max-w-xl px-4 py-6 md:px-8 pb-28 md:pb-10">
+        <h1 className="font-shareHeadline text-2xl font-black text-share-onSurface">Calendar connection</h1>
+        <p className="mt-2 text-share-onSurfaceVariant">
+          {status === "working"
+            ? "Finalizing connection…"
+            : status === "ok"
+              ? message
+              : `Failed: ${message}`}
+        </p>
+        <div className="mt-6">
+          <Link
+            to="/calendar"
+            className="text-sm font-bold text-share-primary hover:text-share-primaryContainer"
+          >
+            Go to Calendar sync
+          </Link>
+        </div>
       </div>
     </AppChrome>
   );

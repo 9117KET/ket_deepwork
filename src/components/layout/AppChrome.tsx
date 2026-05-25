@@ -1,23 +1,24 @@
 /**
  * AppChrome.tsx
  *
- * Global shell: Stitch palette, fixed top bar, optional mobile bottom nav, main padding for fixed UI.
+ * Global layout shell.
+ * - Desktop (md+): fixed left sidebar + full-height scrollable main
+ * - Mobile (<md): full-screen stack with optional bottom nav
  */
 
 import type { ReactNode } from "react";
-import { AppTopBar } from "./AppTopBar";
+import { AppSidebar } from "./AppSidebar";
 import { AppMobileNav, type MobileNavKey } from "./AppMobileNav";
 
 export interface AppChromeProps {
   children: ReactNode;
   mobileActive: MobileNavKey;
-  /** Row above the top bar (e.g. share permission strip). */
+  /** Row above main content area (e.g. share permission strip). */
   topBanner?: ReactNode;
-  /** Tailwind top offset for AppTopBar when a banner sits above it. */
-  headerPositionClass: string;
   showCalendarLink?: boolean;
   showHelp?: boolean;
   onHelpClick?: () => void;
+  /** AccountMenu slot - rendered in sidebar bottom on desktop, top-right on mobile. */
   trailing?: ReactNode;
   showMobileNav?: boolean;
   /** Shared planner: middle tab is current page, not a router link. */
@@ -25,15 +26,14 @@ export interface AppChromeProps {
   plannerTabHref?: string;
   /** Extra main padding bottom when mobile nav hidden. */
   mainPb?: string;
-  /** Inner content max width (default max-w-7xl). */
-  maxWidthClass?: string;
+  /** When true, render a plain full-width layout with no sidebar (for marketing pages). */
+  hideSidebar?: boolean;
 }
 
 export function AppChrome({
   children,
   mobileActive,
   topBanner,
-  headerPositionClass,
   showCalendarLink = false,
   showHelp = false,
   onHelpClick,
@@ -41,30 +41,85 @@ export function AppChrome({
   showMobileNav = true,
   plannerTabCurrent = false,
   plannerTabHref,
-  mainPb,
-  maxWidthClass = "max-w-7xl",
+  hideSidebar = false,
 }: AppChromeProps) {
-  const pb =
-    mainPb ?? (showMobileNav ? "pb-28 md:pb-10" : "pb-10");
+  // Desktop: plain full-width layout for marketing/landing pages
+  if (hideSidebar) {
+    return (
+      <>
+        {/* Desktop - no sidebar */}
+        <div className="hidden md:block min-h-screen bg-share-bg font-shareSans text-share-onBg selection:bg-share-primary/30">
+          {topBanner}
+          <main>{children}</main>
+        </div>
+
+        {/* Mobile */}
+        <div className="md:hidden flex flex-col min-h-screen bg-share-bg font-shareSans text-share-onBg selection:bg-share-primary/30">
+          {topBanner}
+          <main className="flex-1">{children}</main>
+          {showMobileNav && (
+            <AppMobileNav
+              active={mobileActive}
+              plannerCurrent={plannerTabCurrent}
+              plannerHref={plannerTabHref}
+            />
+          )}
+        </div>
+      </>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-share-bg font-shareSans text-share-onBg selection:bg-share-primary/30">
-      {topBanner}
-      <AppTopBar
-        positionClass={headerPositionClass}
-        showCalendarLink={showCalendarLink}
-        showHelp={showHelp}
-        onHelpClick={onHelpClick}
-        trailing={trailing}
-      />
-      <div className={`mx-auto ${maxWidthClass} px-4 pt-24 md:px-8 ${pb}`}>{children}</div>
-      {showMobileNav && (
-        <AppMobileNav
+    <>
+      {/* Desktop layout: sidebar + scrollable main */}
+      <div className="hidden md:flex h-screen overflow-hidden bg-share-bg font-shareSans text-share-onBg selection:bg-share-primary/30">
+        <AppSidebar
           active={mobileActive}
-          plannerCurrent={plannerTabCurrent}
-          plannerHref={plannerTabHref}
+          showCalendarLink={showCalendarLink}
+          showHelp={showHelp}
+          onHelpClick={onHelpClick}
+          trailing={trailing}
         />
-      )}
-    </div>
+        {/* Main area - offset by sidebar width */}
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden ml-[240px]">
+          {topBanner}
+          <main className="flex-1 overflow-y-auto">
+            {children}
+          </main>
+        </div>
+      </div>
+
+      {/* Mobile layout: full-screen stack */}
+      <div className="md:hidden flex flex-col min-h-screen bg-share-bg font-shareSans text-share-onBg selection:bg-share-primary/30">
+        {topBanner}
+        {/* Minimal mobile header - shows account menu when present */}
+        {trailing && (
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-share-outlineVariant/20 flex-shrink-0">
+            <span className="font-shareHeadline font-black text-base text-share-onBg">Deepblock</span>
+            <div className="flex items-center gap-1">
+              {showHelp && (
+                <button
+                  type="button"
+                  onClick={onHelpClick}
+                  className="rounded-xl p-2 text-share-onSurfaceVariant hover:bg-share-surfaceContainerHigh transition-colors"
+                  aria-label="Help"
+                >
+                  <span className="material-symbols-outlined text-[1.25rem]">help</span>
+                </button>
+              )}
+              {trailing}
+            </div>
+          </div>
+        )}
+        <main className="flex-1">{children}</main>
+        {showMobileNav && (
+          <AppMobileNav
+            active={mobileActive}
+            plannerCurrent={plannerTabCurrent}
+            plannerHref={plannerTabHref}
+          />
+        )}
+      </div>
+    </>
   );
 }

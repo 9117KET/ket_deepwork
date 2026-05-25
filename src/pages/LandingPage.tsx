@@ -117,27 +117,15 @@ function HowItWorksSection() {
 export function LandingPage() {
   return (
     <AppChrome
-      headerPositionClass="top-0"
       mobileActive="home"
-      trailing={
-        <div className="flex items-center gap-1 sm:gap-2">
-          <Link
-            to="/planner"
-            className="hidden rounded-xl p-2 text-slate-400 transition-colors hover:bg-slate-800/50 sm:block"
-            aria-label="Help"
-          >
-            <MaterialIcon name="help" />
-          </Link>
-          <Link
-            to="/calendar"
-            className="hidden rounded-xl p-2 text-slate-400 transition-colors hover:bg-slate-800/50 md:block"
-            aria-label="Calendar"
-          >
-            <MaterialIcon name="calendar_month" />
-          </Link>
-          <div className="hidden h-8 w-8 items-center justify-center overflow-hidden rounded-full border border-share-outlineVariant/20 bg-share-surfaceContainerHighest sm:flex">
-            <MaterialIcon name="person" className="text-[1.1rem] text-share-onSurfaceVariant" />
-          </div>
+      hideSidebar
+    >
+      {/* Minimal top bar for landing/marketing pages */}
+      <header className="sticky top-0 z-40 flex h-14 w-full items-center justify-between bg-share-bg/80 px-4 backdrop-blur-xl sm:px-8 border-b border-share-outlineVariant/10">
+        <Link to="/" className="font-shareHeadline text-xl font-black tracking-tight text-share-onBg">
+          Deepblock
+        </Link>
+        <div className="flex items-center gap-2">
           <Link
             to="/planner"
             className={`${appPrimaryButtonClass()} hidden px-4 py-2 sm:inline-flex`}
@@ -145,9 +133,8 @@ export function LandingPage() {
             Open planner
           </Link>
         </div>
-      }
-    >
-      <div className="relative">
+      </header>
+      <div className="relative px-4 pt-8 pb-0 sm:px-8">
         <div className="pointer-events-none absolute left-1/2 top-4 -z-10 h-[400px] w-[min(100%,600px)] -translate-x-1/2 sky-glow" aria-hidden />
 
         <section className="mx-auto mb-20 max-w-5xl text-center md:mb-24">

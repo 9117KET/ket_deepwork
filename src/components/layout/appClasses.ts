@@ -1,7 +1,7 @@
 /** Shared Tailwind class helpers used across pages. */
 
 export function appCardClass() {
-  return "rounded-xl border border-share-outlineVariant/20 bg-share-surfaceContainerLow p-6";
+  return "rounded-xl border border-share-outlineVariant/20 bg-share-surfaceContainerLow p-5 shadow-sm shadow-black/20";
 }
 
 export function appInputClass() {
@@ -14,4 +14,12 @@ export function appPrimaryButtonClass() {
 
 export function appSecondaryButtonClass() {
   return "rounded-lg border border-share-outlineVariant/50 bg-share-surfaceContainerHigh px-4 py-2 text-sm font-medium text-share-onSurface transition-colors hover:border-share-outlineVariant disabled:opacity-60";
+}
+
+export function appPageHeaderClass() {
+  return "text-2xl font-bold font-shareHeadline text-share-onBg mb-6";
+}
+
+export function appSectionClass() {
+  return "space-y-4";
 }

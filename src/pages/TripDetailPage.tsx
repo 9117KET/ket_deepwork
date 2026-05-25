@@ -49,7 +49,7 @@ export function TripDetailPage() {
 
   if (trip === undefined) {
     return (
-      <AppChrome headerPositionClass="top-0" mobileActive="travel">
+      <AppChrome mobileActive="travel">
         <div className="flex items-center justify-center py-24 text-share-onSurfaceVariant">
           <p className="text-sm">Loading…</p>
         </div>
@@ -59,7 +59,7 @@ export function TripDetailPage() {
 
   if (trip === null) {
     return (
-      <AppChrome headerPositionClass="top-0" mobileActive="travel">
+      <AppChrome mobileActive="travel">
         <div className="flex flex-col items-center justify-center py-24 gap-3">
           <p className="text-sm text-share-onSurfaceVariant">Trip not found.</p>
           <button
@@ -165,7 +165,8 @@ export function TripDetailPage() {
   const packingList = (trip.packingList ?? []) as Array<{ id: string; text: string; checked: boolean; category: string }>
 
   return (
-    <AppChrome headerPositionClass="top-0" mobileActive="travel" maxWidthClass="max-w-4xl">
+    <AppChrome mobileActive="travel">
+      <div className="mx-auto max-w-4xl px-4 py-6 md:px-8 pb-28 md:pb-10">
       <div className="space-y-5">
         {/* Header */}
         <div className="flex items-start gap-3">
@@ -379,6 +380,7 @@ export function TripDetailPage() {
           durationDays={trip.durationDays}
         />
       )}
+      </div>
     </AppChrome>
   )
 }

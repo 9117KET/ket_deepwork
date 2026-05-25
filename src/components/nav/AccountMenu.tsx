@@ -23,12 +23,15 @@ interface AccountMenuProps {
   userInitial: string;
   userEmail?: string | null;
   items: MenuItem[];
+  /** Open the dropdown above the button instead of below (use in sidebar footers). */
+  dropUp?: boolean;
 }
 
 export function AccountMenu({
   userInitial,
   userEmail,
   items,
+  dropUp = false,
 }: AccountMenuProps) {
   const [open, setOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
@@ -105,7 +108,7 @@ export function AccountMenu({
           id={menuId}
           role="menu"
           aria-label="Account menu"
-          className="absolute right-0 z-50 mt-2 w-56 overflow-hidden rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainer shadow-xl"
+          className={`absolute right-0 z-50 w-56 overflow-hidden rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainer shadow-xl ${dropUp ? "bottom-full mb-2" : "mt-2"}`}
         >
           <div className="px-3 py-2 sm:hidden">
             <div className="text-xs font-medium text-share-onSurface">Account</div>

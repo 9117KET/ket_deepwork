@@ -143,13 +143,13 @@ export function FinancialPlannerPage() {
 
   return (
     <AppChrome
-      headerPositionClass="top-0"
       mobileActive="finance"
-      maxWidthClass="max-w-[1200px]"
     >
-      <FinanceLayout activeTab={activeTab} onTabChange={setActiveTab}>
-        {renderTab()}
-      </FinanceLayout>
+      <div className="mx-auto max-w-[1200px] px-4 py-6 md:px-8 pb-28 md:pb-10">
+        <FinanceLayout activeTab={activeTab} onTabChange={setActiveTab}>
+          {renderTab()}
+        </FinanceLayout>
+      </div>
     </AppChrome>
   )
 }

@@ -36,6 +36,11 @@ export default {
         shareHeadline: ['Epilogue', 'system-ui', 'sans-serif'],
         shareSans: ['Manrope', 'system-ui', 'sans-serif'],
       },
+      spacing: {
+        sidebar: '240px',
+      },
+      // Default breakpoints are kept (md = 768px).
+      // Custom scrollbar styles are in index.css.
     },
   },
   plugins: [],
