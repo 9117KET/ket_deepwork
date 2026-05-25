@@ -122,7 +122,7 @@ export function TaskItem({
   const trimmedTitle = task.title.trim()
   const isUrl = /^https?:\/\/\S+$/i.test(trimmedTitle)
   const textClasses = `text-sm ${
-    task.isDone ? 'text-slate-400 line-through decoration-slate-500/60' : 'text-slate-100'
+    task.isDone ? 'text-share-onSurfaceVariant/60 line-through decoration-share-outlineVariant/60' : 'text-share-onSurface'
   }`
   const isReorderable = typeof onDragStart === 'function' && typeof onDrop === 'function'
   const canEditTime = typeof onUpdateTask === 'function'
@@ -197,7 +197,7 @@ export function TaskItem({
   }
 
   return (
-    <div className={`relative ${isSubtask ? 'ml-6 border-l-2 border-slate-700 pl-2' : ''}`}>
+    <div className={`relative ${isSubtask ? 'ml-6 border-l-2 border-share-outlineVariant/40 pl-2' : ''}`}>
       {showDropAbove && (
         <div
           className="absolute left-0 right-0 top-0 h-0.5 rounded-full bg-sky-500"
@@ -227,7 +227,7 @@ export function TaskItem({
             onDragStart={handleDragStart}
             onDragEnd={onDragEnd}
             onContextMenu={handleContextMenu}
-            className="hidden cursor-grab touch-none rounded p-0.5 text-slate-500 hover:bg-slate-800 hover:text-slate-300 active:cursor-grabbing sm:block"
+            className="hidden cursor-grab touch-none rounded p-0.5 text-share-onSurfaceVariant/50 hover:bg-share-surfaceContainerHigh hover:text-share-onSurfaceVariant active:cursor-grabbing sm:block"
             aria-label="Drag to reorder; right-click for menu"
           >
             <GripIcon />
@@ -238,7 +238,7 @@ export function TaskItem({
             ref={menuBtnRef}
             type="button"
             onClick={handleMenuButtonClick}
-            className="shrink-0 rounded p-0.5 text-slate-500 hover:bg-slate-800 hover:text-slate-300 sm:opacity-0 sm:group-hover:opacity-100"
+            className="shrink-0 rounded p-0.5 text-share-onSurfaceVariant/50 hover:bg-share-surfaceContainerHigh hover:text-share-onSurfaceVariant sm:opacity-0 sm:group-hover:opacity-100"
             aria-label="Task options"
           >
             <MoreVertical className="h-4 w-4" />
@@ -250,14 +250,14 @@ export function TaskItem({
               type="button"
               onClick={onMoveUp}
               disabled={onMoveUp === undefined}
-              className="rounded p-0.5 text-slate-500 hover:bg-slate-800 hover:text-slate-300 disabled:opacity-25"
+              className="rounded p-0.5 text-share-onSurfaceVariant/50 hover:bg-share-surfaceContainerHigh hover:text-share-onSurfaceVariant disabled:opacity-25"
               aria-label="Move task up"
             ><ArrowUp className="h-3 w-3" /></button>
             <button
               type="button"
               onClick={onMoveDown}
               disabled={onMoveDown === undefined}
-              className="rounded p-0.5 text-slate-500 hover:bg-slate-800 hover:text-slate-300 disabled:opacity-25"
+              className="rounded p-0.5 text-share-onSurfaceVariant/50 hover:bg-share-surfaceContainerHigh hover:text-share-onSurfaceVariant disabled:opacity-25"
               aria-label="Move task down"
             ><ArrowDown className="h-3 w-3" /></button>
           </span>
@@ -267,7 +267,7 @@ export function TaskItem({
             type="checkbox"
             checked={task.isDone}
             onChange={onToggle}
-            className="h-5 w-5 shrink-0 rounded border-slate-800 bg-slate-900 text-sky-400 focus:ring-sky-500 sm:h-4 sm:w-4"
+            className="h-5 w-5 shrink-0 rounded border-share-outlineVariant/50 bg-share-surfaceContainer text-share-primary focus:ring-share-primary sm:h-4 sm:w-4"
           />
           {isUrl ? (
             <a
@@ -310,11 +310,11 @@ export function TaskItem({
                   const v = e.target.value
                   onUpdateTask?.({ scheduledAt: v ? normalizeHhmm(v) : undefined })
                 }}
-                className={`w-16 rounded border border-slate-700 bg-slate-800 px-1 py-0.5 text-xs tabular-nums [color-scheme:dark] ${task.scheduledAt ? 'text-slate-300' : 'text-transparent'}`}
+                className={`w-16 rounded border border-share-outlineVariant/40 bg-share-surfaceContainer px-1 py-0.5 text-xs tabular-nums [color-scheme:dark] ${task.scheduledAt ? 'text-share-onSurface' : 'text-transparent'}`}
                 aria-label="Scheduled time"
               />
               {!task.scheduledAt && (
-                <span className="pointer-events-none absolute inset-0 flex items-center px-1 text-xs text-slate-500">
+                <span className="pointer-events-none absolute inset-0 flex items-center px-1 text-xs text-share-onSurfaceVariant/50">
                   time
                 </span>
               )}
@@ -325,7 +325,7 @@ export function TaskItem({
                 const v = e.target.value === '' ? undefined : Number(e.target.value)
                 onUpdateTask?.({ durationMinutes: v })
               }}
-              className="w-16 rounded border border-slate-700 bg-slate-800 px-1 py-0.5 text-xs tabular-nums text-slate-300"
+              className="w-16 rounded border border-share-outlineVariant/40 bg-share-surfaceContainer px-1 py-0.5 text-xs tabular-nums text-share-onSurface"
               aria-label="Task duration"
               title="Duration (optional)"
             >
@@ -343,7 +343,7 @@ export function TaskItem({
       {menu && (
         <div
           ref={menuRef}
-          className="fixed z-50 min-w-[10rem] rounded-md border border-slate-700 bg-slate-800 py-1 shadow-lg"
+          className="fixed z-50 min-w-[10rem] rounded-md border border-share-outlineVariant/50 bg-share-surfaceContainerHigh py-1 shadow-xl shadow-black/30"
           style={{ left: menu.x, top: menu.y }}
           role="menu"
         >
@@ -351,7 +351,7 @@ export function TaskItem({
             <button
               type="button"
               role="menuitem"
-              className="w-full px-3 py-1.5 text-left text-sm text-slate-200 hover:bg-slate-700"
+              className="w-full px-3 py-1.5 text-left text-sm text-share-onSurface hover:bg-share-surfaceContainerHighest"
               onClick={() => {
                 const newTitle = window.prompt('Edit task title:', task.title)
                 if (newTitle != null && newTitle.trim() !== '') {
@@ -368,7 +368,7 @@ export function TaskItem({
             <button
               type="button"
               role="menuitem"
-              className="w-full px-3 py-1.5 text-left text-sm text-amber-300 hover:bg-slate-700"
+              className="w-full px-3 py-1.5 text-left text-sm text-amber-300 hover:bg-share-surfaceContainerHighest"
               onClick={() => closeAnd(() => onUpdateTask?.({ isShallow: !task.isShallow }))}
             >
               {task.isShallow ? 'Mark as deep work' : 'Mark as shallow'}
@@ -378,7 +378,7 @@ export function TaskItem({
             <button
               type="button"
               role="menuitem"
-              className="w-full px-3 py-1.5 text-left text-sm text-slate-200 hover:bg-slate-700"
+              className="w-full px-3 py-1.5 text-left text-sm text-share-onSurface hover:bg-share-surfaceContainerHighest"
               onClick={() => closeAnd(onAddTaskAbove)}
             >
               Add task above
@@ -388,7 +388,7 @@ export function TaskItem({
             <button
               type="button"
               role="menuitem"
-              className="w-full px-3 py-1.5 text-left text-sm text-slate-200 hover:bg-slate-700"
+              className="w-full px-3 py-1.5 text-left text-sm text-share-onSurface hover:bg-share-surfaceContainerHighest"
               onClick={() => closeAnd(onAddTaskBelow)}
             >
               Add task below
@@ -398,7 +398,7 @@ export function TaskItem({
             <button
               type="button"
               role="menuitem"
-              className="w-full px-3 py-1.5 text-left text-sm text-slate-200 hover:bg-slate-700"
+              className="w-full px-3 py-1.5 text-left text-sm text-share-onSurface hover:bg-share-surfaceContainerHighest"
               onClick={() => closeAnd(onAddSubtask)}
             >
               Add subtask
@@ -408,7 +408,7 @@ export function TaskItem({
             <button
               type="button"
               role="menuitem"
-              className="w-full px-3 py-1.5 text-left text-sm text-amber-300 hover:bg-slate-700"
+              className="w-full px-3 py-1.5 text-left text-sm text-amber-300 hover:bg-share-surfaceContainerHighest"
               onClick={() => closeAnd(onMoveToNotDoing)}
             >
               Move to Not Doing
@@ -418,7 +418,7 @@ export function TaskItem({
             <button
               type="button"
               role="menuitem"
-              className="w-full px-3 py-1.5 text-left text-sm text-slate-400 hover:bg-slate-700"
+              className="w-full px-3 py-1.5 text-left text-sm text-share-onSurfaceVariant hover:bg-share-surfaceContainerHighest"
               onClick={() => closeAnd(onAbandon)}
             >
               Abandon
@@ -428,7 +428,7 @@ export function TaskItem({
             <button
               type="button"
               role="menuitem"
-              className="w-full px-3 py-1.5 text-left text-sm text-red-300 hover:bg-slate-700"
+              className="w-full px-3 py-1.5 text-left text-sm text-red-300 hover:bg-share-surfaceContainerHighest"
               onClick={() => closeAnd(onDelete)}
             >
               Delete

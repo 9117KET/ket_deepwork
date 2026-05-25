@@ -171,7 +171,7 @@ export function SectionColumn({
           ? 'border-red-500/50 bg-red-500/5'
           : isTimeBlockActive
           ? 'border-amber-500/60 bg-amber-500/10'
-          : 'border-slate-800 bg-slate-900'
+          : 'border-share-outlineVariant/25 bg-share-surfaceContainerLow'
       }`}
     >
       <header className="mb-2 flex items-start justify-between gap-2">
@@ -179,16 +179,16 @@ export function SectionColumn({
           <button
             type="button"
             onClick={() => { setCollapsed((c) => !c); setPendingCollapse(null) }}
-            className="mt-0.5 shrink-0 text-slate-400 hover:text-slate-200"
+            className="mt-0.5 shrink-0 text-share-onSurfaceVariant hover:text-share-onSurface"
             aria-label={collapsed ? 'Expand section' : 'Collapse section'}
           >
             {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </button>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h3 className="text-sm sm:text-base font-semibold text-slate-100">{section.title}</h3>
+              <h3 className="text-sm sm:text-base font-semibold text-share-onBg">{section.title}</h3>
               {collapsed && tasks.length > 0 && (
-                <span className="rounded-full bg-slate-700 px-1.5 py-0.5 text-xs text-slate-300">
+                <span className="rounded-full bg-share-outlineVariant/40 px-1.5 py-0.5 text-xs text-share-onSurfaceVariant">
                   {tasks.filter(t => !t.parentId).length} task{tasks.filter(t => !t.parentId).length !== 1 ? 's' : ''}
                 </span>
               )}
@@ -209,19 +209,19 @@ export function SectionColumn({
               ) : null}
             </div>
             {timeframeLabel ? (
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-share-onSurfaceVariant">
                 {timeframeLabel}
                 {dynamicDescription ? ` / ${dynamicDescription}` : null}
               </p>
             ) : dynamicDescription ? (
-              <p className="text-xs text-slate-500">{dynamicDescription}</p>
+              <p className="text-xs text-share-onSurfaceVariant/70">{dynamicDescription}</p>
             ) : null}
           </div>
         </div>
         {headerAction && <div className="shrink-0">{headerAction}</div>}
       </header>
       {!collapsed && pendingCollapse && (
-        <div className="mb-2 flex items-center justify-between gap-2 rounded border border-slate-700 bg-slate-800/80 px-3 py-1.5 text-xs text-slate-300">
+        <div className="mb-2 flex items-center justify-between gap-2 rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-3 py-1.5 text-xs text-share-onSurface">
           <span>
             {pendingCollapse === 'done' ? 'All tasks done!' : 'Time block ended.'} Collapse this section?
           </span>
@@ -229,7 +229,7 @@ export function SectionColumn({
             <button
               type="button"
               onClick={() => setPendingCollapse(null)}
-              className="rounded px-2 py-0.5 hover:bg-slate-700"
+              className="rounded px-2 py-0.5 hover:bg-share-surfaceContainerHighest"
             >
               Keep open
             </button>

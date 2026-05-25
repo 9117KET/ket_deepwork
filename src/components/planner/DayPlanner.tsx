@@ -496,7 +496,7 @@ export function DayPlanner({
         className={
           shareShellLayout
             ? "sticky top-[6.5rem] z-20 border-b border-share-outlineVariant/25 bg-share-bg/95 pb-3 backdrop-blur-sm"
-            : `sticky z-20 border-b border-slate-800 bg-slate-950/95 pb-3 backdrop-blur-sm ${stickyTopClass ?? "top-0"}`
+            : `sticky z-20 border-b border-share-outlineVariant/30 bg-share-bg/95 pb-3 backdrop-blur-sm ${stickyTopClass ?? "top-0"}`
         }
         data-tour="date-nav"
       >
@@ -537,7 +537,7 @@ export function DayPlanner({
           if (!goal) return null
           const label = appState.goalCascade?.threeMonths ? '3-month' : '1-year'
           return (
-            <div className="mt-1 rounded border border-slate-700/50 bg-slate-900/60 px-3 py-1.5 text-xs text-slate-400">
+            <div className="mt-1 rounded border border-share-outlineVariant/30 bg-share-surfaceContainerLow px-3 py-1.5 text-xs text-share-onSurfaceVariant">
               <span className="text-slate-500">{label} goal: </span>
               <span className="text-slate-300">{goal}</span>
             </div>
@@ -797,16 +797,16 @@ export function DayPlanner({
             className={`rounded-lg border p-3 sm:p-4 ${
               isSleepTimeNow
                 ? 'border-amber-500/60 bg-amber-500/10'
-                : 'border-slate-800 bg-slate-900'
+                : 'border-share-outlineVariant/25 bg-share-surfaceContainerLow'
             }`}
             aria-label="Sleep block"
           >
             <header className="mb-2 flex items-start justify-between gap-2">
               <div>
-                <h3 className="text-sm sm:text-base font-semibold text-slate-100">
+                <h3 className="text-sm sm:text-base font-semibold text-share-onBg">
                   Sleep
                 </h3>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-share-onSurfaceVariant">
                   Timeframe: {getSleepWindowLabel(timeOffsetMinutes, computedBlocks)}
                 </p>
               </div>
@@ -815,7 +815,7 @@ export function DayPlanner({
                   <button
                     type="button"
                     onClick={() => setDaySetupOpen(true)}
-                    className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-300 hover:border-sky-500 hover:text-sky-300"
+                    className="rounded border border-share-outlineVariant/40 bg-share-surfaceContainer px-2 py-1 text-xs text-share-onSurface hover:border-share-primary/50 hover:text-share-primary"
                   >
                     Edit schedule
                   </button>
@@ -850,12 +850,12 @@ export function DayPlanner({
         {!shareShellLayout && (
           <>
             <div
-              className="hidden h-full w-1 cursor-col-resize rounded-full bg-slate-800 hover:bg-sky-500 lg:block"
+              className="hidden h-full w-1 cursor-col-resize rounded-full bg-share-outlineVariant/30 hover:bg-share-primary lg:block"
               onMouseDown={handleSplitterMouseDown}
               aria-hidden="true"
             />
 
-            <div className="hidden lg:block space-y-3 lg:sticky lg:top-20 lg:max-h-[calc(100vh-5.5rem)] lg:overflow-y-auto lg:pr-1" data-tour="sidebar">
+            <div className="hidden lg:block space-y-3 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto lg:pr-1" data-tour="sidebar">
               {/* Cross-section day snapshot */}
               {!shareMode && <DaySummaryCard ctx={dayCtx} />}
               {/* Deep work timer: most-used active tool — placed first for immediate reach */}

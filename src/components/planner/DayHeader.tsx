@@ -37,7 +37,7 @@ export function DayHeader({
     <div className="mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-between">
       <div>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
-          <p className="text-xs uppercase tracking-wide text-sky-300/80">Today&apos;s plan</p>
+          <p className="text-xs uppercase tracking-wide text-share-primary/70">Today&apos;s plan</p>
           {streak != null && streak > 0 && (
             <span className="flex items-center gap-1 rounded border border-amber-500/50 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-200">
               <Flame className="h-3 w-3" />
@@ -97,17 +97,17 @@ export function DayHeader({
         <h2 className="text-xl sm:text-2xl font-semibold tracking-tight">{dateLabel}</h2>
         {totalTaskCount > 0 ? (
           <div className="mt-2 max-w-md">
-            <div className="flex items-center justify-between text-[11px] text-slate-400">
+            <div className="flex items-center justify-between text-[11px] text-share-onSurfaceVariant">
               <span>
-                Today: <span className="font-medium text-slate-200">{percentage.toFixed(1)}%</span>
+                Today: <span className="font-medium text-share-onBg">{percentage.toFixed(1)}%</span>
               </span>
               <span>
                 {completedTaskCount}/{totalTaskCount} tasks
               </span>
             </div>
-            <div className="mt-1 h-2.5 w-full rounded-full bg-slate-800">
+            <div className="mt-1 h-1.5 w-full rounded-full bg-share-outlineVariant/30">
               <div
-                className="h-2.5 rounded-full bg-sky-500 transition-[width] duration-300"
+                className="h-1.5 rounded-full bg-share-primary transition-[width] duration-300"
                 style={{ width: `${percentage}%` }}
               />
             </div>
@@ -118,21 +118,21 @@ export function DayHeader({
         <button
           type="button"
           onClick={onPrevDay}
-          className="rounded-md border border-slate-800 bg-slate-900 px-3 py-1.5 text-sm text-slate-100 hover:border-sky-500 hover:text-sky-400 transition-colors"
+          className="rounded-md border border-share-outlineVariant/40 bg-share-surfaceContainer px-3 py-1.5 text-sm text-share-onSurface hover:border-share-primary/60 hover:text-share-primary transition-colors"
         >
           Previous
         </button>
         <button
           type="button"
           onClick={onToday}
-          className="rounded-md border border-sky-500 bg-sky-500/10 px-3 py-1.5 text-sm text-sky-400 hover:bg-sky-500/20 transition-colors"
+          className="rounded-md border border-share-primary/60 bg-share-primary/10 px-3 py-1.5 text-sm text-share-primary hover:bg-share-primary/20 transition-colors"
         >
           Today
         </button>
         <button
           type="button"
           onClick={onNextDay}
-          className="rounded-md border border-slate-800 bg-slate-900 px-3 py-1.5 text-sm text-slate-100 hover:border-sky-500 hover:text-sky-400 transition-colors"
+          className="rounded-md border border-share-outlineVariant/40 bg-share-surfaceContainer px-3 py-1.5 text-sm text-share-onSurface hover:border-share-primary/60 hover:text-share-primary transition-colors"
         >
           Next
         </button>
