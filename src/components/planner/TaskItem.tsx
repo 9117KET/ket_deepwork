@@ -54,7 +54,7 @@ interface TaskItemProps {
 function GripIcon() {
   return (
     <svg
-      className="h-4 w-4 shrink-0 text-slate-500"
+      className="h-4 w-4 shrink-0 text-share-onSurfaceVariant/60"
       fill="currentColor"
       viewBox="0 0 16 16"
       aria-hidden

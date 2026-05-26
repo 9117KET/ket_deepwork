@@ -27,7 +27,7 @@ const COLOR_CLASSES: Record<NonNullable<WeeklyProjectAssignment['color']>, { bad
   rose:    { badge: 'bg-rose-500/15 text-rose-300 border-rose-500/30',   dot: 'bg-rose-400',    border: 'border-rose-500/40' },
 }
 
-const DEFAULT_COLOR_CLASSES = { badge: 'bg-slate-700/60 text-slate-300 border-slate-600', dot: 'bg-slate-400', border: 'border-slate-700' }
+const DEFAULT_COLOR_CLASSES = { badge: 'bg-share-surfaceContainerHigh text-share-onSurface border-share-outlineVariant/40', dot: 'bg-share-onSurfaceVariant', border: 'border-share-outlineVariant/40' }
 
 function getColorClasses(color?: WeeklyProjectAssignment['color']) {
   return color ? COLOR_CLASSES[color] : DEFAULT_COLOR_CLASSES
@@ -96,32 +96,32 @@ export function WeeklyProjectCard({ selectedDate, projects, onUpdate }: WeeklyPr
 
   if (editing) {
     return (
-      <section className="rounded-lg border border-slate-700 bg-slate-900 p-3 sm:p-4">
+      <section className="rounded-lg border border-share-outlineVariant/25 bg-share-surfaceContainerLow p-3 sm:p-4">
         <header className="mb-3 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-slate-100">Weekly projects</h3>
+          <h3 className="text-sm font-semibold text-share-onBg">Weekly projects</h3>
           <div className="flex gap-2">
-            <button type="button" onClick={cancel} className="rounded px-2 py-1 text-xs text-slate-400 hover:text-slate-200">Cancel</button>
+            <button type="button" onClick={cancel} className="rounded px-2 py-1 text-xs text-share-onSurfaceVariant hover:text-share-onBg">Cancel</button>
             <button type="button" onClick={save} className="rounded bg-sky-600 px-2 py-1 text-xs font-medium text-white hover:bg-sky-500">Save</button>
           </div>
         </header>
         <div className="space-y-3">
           {draft.map(p => (
-            <div key={p.id} className="space-y-2 rounded-md border border-slate-700 bg-slate-800 p-2">
+            <div key={p.id} className="space-y-2 rounded-md border border-share-outlineVariant/25 bg-share-surfaceContainerHigh p-2">
               <div className="flex items-center gap-2">
                 <input
                   type="text"
                   value={p.name}
                   onChange={e => updateDraft(p.id, { name: e.target.value })}
                   placeholder="Project name"
-                  className="min-w-0 flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-100 placeholder:text-slate-500 focus:border-sky-500 focus:outline-none"
+                  className="min-w-0 flex-1 rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHighest px-2 py-1 text-xs text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-share-primary focus:outline-none"
                 />
-                <button type="button" onClick={() => removeDraft(p.id)} className="shrink-0 text-xs text-slate-500 hover:text-red-400">✕</button>
+                <button type="button" onClick={() => removeDraft(p.id)} className="shrink-0 text-xs text-share-onSurfaceVariant/60 hover:text-red-400">✕</button>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <select
                   value={p.dayOfWeek}
                   onChange={e => updateDraft(p.id, { dayOfWeek: Number(e.target.value) as WeeklyProjectAssignment['dayOfWeek'] })}
-                  className="rounded border border-slate-700 bg-slate-900 px-1 py-0.5 text-xs text-slate-300 focus:border-sky-500 focus:outline-none"
+                  className="rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHighest px-1 py-0.5 text-xs text-share-onSurface focus:border-share-primary focus:outline-none"
                 >
                   {allDays.map(d => <option key={d} value={d}>{DAY_FULL[d]}</option>)}
                 </select>
@@ -131,7 +131,7 @@ export function WeeklyProjectCard({ selectedDate, projects, onUpdate }: WeeklyPr
                       key={c}
                       type="button"
                       onClick={() => updateDraft(p.id, { color: c })}
-                      className={`h-4 w-4 rounded-full ${COLOR_CLASSES[c!].dot} ${p.color === c ? 'ring-2 ring-white/60 ring-offset-1 ring-offset-slate-800' : 'opacity-60 hover:opacity-100'}`}
+                      className={`h-4 w-4 rounded-full ${COLOR_CLASSES[c!].dot} ${p.color === c ? 'ring-2 ring-white/60 ring-offset-1 ring-offset-share-surfaceContainerHigh' : 'opacity-60 hover:opacity-100'}`}
                       aria-label={c}
                     />
                   ))}
@@ -142,7 +142,7 @@ export function WeeklyProjectCard({ selectedDate, projects, onUpdate }: WeeklyPr
                 value={p.description ?? ''}
                 onChange={e => updateDraft(p.id, { description: e.target.value || undefined })}
                 placeholder="Short description (optional)"
-                className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-400 placeholder:text-slate-600 focus:border-sky-500 focus:outline-none"
+                className="w-full rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHighest px-2 py-1 text-xs text-share-onSurfaceVariant placeholder:text-share-onSurfaceVariant/40 focus:border-share-primary focus:outline-none"
               />
             </div>
           ))}
@@ -150,7 +150,7 @@ export function WeeklyProjectCard({ selectedDate, projects, onUpdate }: WeeklyPr
             <button
               type="button"
               onClick={addProject}
-              className="w-full rounded-md border border-dashed border-slate-700 py-1.5 text-xs text-slate-500 hover:border-sky-500 hover:text-sky-400"
+              className="w-full rounded-md border border-dashed border-share-outlineVariant/40 py-1.5 text-xs text-share-onSurfaceVariant/60 hover:border-share-primary/60 hover:text-share-primary"
             >
               + Add project
             </button>
@@ -161,16 +161,16 @@ export function WeeklyProjectCard({ selectedDate, projects, onUpdate }: WeeklyPr
   }
 
   return (
-    <section className="rounded-lg border border-slate-800 bg-slate-900 p-3 sm:p-4">
+    <section className="rounded-lg border border-share-outlineVariant/25 bg-share-surfaceContainerLow p-3 sm:p-4">
       <header className="mb-3 flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-semibold text-slate-100">Weekly projects</h3>
-          <p className="text-xs text-slate-400">Side commitments pinned to their day</p>
+          <h3 className="text-sm font-semibold text-share-onBg">Weekly projects</h3>
+          <p className="text-xs text-share-onSurfaceVariant">Side commitments pinned to their day</p>
         </div>
         <button
           type="button"
           onClick={openEdit}
-          className="rounded px-2 py-1 text-xs text-slate-500 hover:bg-slate-800 hover:text-slate-300"
+          className="rounded px-2 py-1 text-xs text-share-onSurfaceVariant/60 hover:bg-share-surfaceContainerHigh hover:text-share-onSurface"
         >
           Edit
         </button>
@@ -180,14 +180,14 @@ export function WeeklyProjectCard({ selectedDate, projects, onUpdate }: WeeklyPr
       {todayProject && (() => {
         const cls = getColorClasses(todayProject.color)
         return (
-          <div className={`mb-3 rounded-md border px-3 py-2 ${cls.border} bg-slate-800/60`}>
-            <p className="mb-0.5 text-[10px] font-medium uppercase tracking-wider text-slate-500">Today's commitment</p>
+          <div className={`mb-3 rounded-md border px-3 py-2 ${cls.border} bg-share-surfaceContainerHigh`}>
+            <p className="mb-0.5 text-[10px] font-medium uppercase tracking-wider text-share-onSurfaceVariant/60">Today's commitment</p>
             <div className="flex items-center gap-2">
               <span className={`h-2 w-2 shrink-0 rounded-full ${cls.dot}`} />
-              <span className="text-sm font-medium text-slate-100">{todayProject.name}</span>
+              <span className="text-sm font-medium text-share-onBg">{todayProject.name}</span>
             </div>
             {todayProject.description && (
-              <p className="mt-0.5 text-xs text-slate-400">{todayProject.description}</p>
+              <p className="mt-0.5 text-xs text-share-onSurfaceVariant">{todayProject.description}</p>
             )}
           </div>
         )
@@ -202,7 +202,7 @@ export function WeeklyProjectCard({ selectedDate, projects, onUpdate }: WeeklyPr
             const cls = proj ? getColorClasses(proj.color) : null
             return (
               <div key={day} className="flex flex-col items-center gap-1">
-                <span className={`text-[10px] font-medium ${isToday ? 'text-sky-400' : 'text-slate-500'}`}>
+                <span className={`text-[10px] font-medium ${isToday ? 'text-sky-400' : 'text-share-onSurfaceVariant/60'}`}>
                   {DAY_LABELS[day]}
                 </span>
                 {proj ? (
@@ -213,7 +213,7 @@ export function WeeklyProjectCard({ selectedDate, projects, onUpdate }: WeeklyPr
                     {proj.name.length > 6 ? proj.name.slice(0, 5) + '…' : proj.name}
                   </div>
                 ) : (
-                  <div className={`h-7 w-full rounded border border-dashed ${isToday ? 'border-slate-600' : 'border-slate-800'}`} />
+                  <div className={`h-7 w-full rounded border border-dashed ${isToday ? 'border-share-outlineVariant/50' : 'border-share-outlineVariant/20'}`} />
                 )}
               </div>
             )
@@ -223,7 +223,7 @@ export function WeeklyProjectCard({ selectedDate, projects, onUpdate }: WeeklyPr
         <button
           type="button"
           onClick={openEdit}
-          className="w-full rounded-md border border-dashed border-slate-700 py-3 text-xs text-slate-500 hover:border-sky-500 hover:text-sky-400"
+          className="w-full rounded-md border border-dashed border-share-outlineVariant/40 py-3 text-xs text-share-onSurfaceVariant/60 hover:border-share-primary/60 hover:text-share-primary"
         >
           + Pin your first weekly project
         </button>

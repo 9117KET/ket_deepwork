@@ -41,8 +41,8 @@ export function DaySummaryCard({ ctx }: Props) {
   if (!hasAnyData) return null
 
   return (
-    <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-3 text-xs space-y-2">
-      <p className="text-[10px] uppercase tracking-widest text-slate-500 font-semibold">Day at a glance</p>
+    <div className="rounded-lg border border-share-outlineVariant/25 bg-share-surfaceContainerLow p-3 text-xs space-y-2">
+      <p className="text-[10px] uppercase tracking-widest text-share-onSurfaceVariant/60 font-semibold">Day at a glance</p>
 
       <div className="grid grid-cols-2 gap-1.5">
         {tasks.total > 0 && (
@@ -95,7 +95,7 @@ export function DaySummaryCard({ ctx }: Props) {
 
 function Chip({ icon, label, highlight = false }: { icon: string; label: string; highlight?: boolean }) {
   return (
-    <div className={`flex items-center gap-1 rounded-md px-2 py-1 ${highlight ? "bg-slate-800 text-slate-200" : "text-slate-400"}`}>
+    <div className={`flex items-center gap-1 rounded-md px-2 py-1 ${highlight ? "bg-share-surfaceContainerHigh text-share-onBg" : "text-share-onSurfaceVariant"}`}>
       <span className="shrink-0">{icon}</span>
       <span className="truncate">{label}</span>
     </div>

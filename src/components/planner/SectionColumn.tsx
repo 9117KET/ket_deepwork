@@ -249,7 +249,7 @@ export function SectionColumn({
             className={`min-h-[2.5rem] rounded-md border border-dashed ${
               draggedTask && dropTarget !== null
                 ? 'border-amber-500/60 bg-amber-500/5'
-                : 'border-slate-700/60 border-transparent'
+                : 'border-share-outlineVariant/30 border-transparent'
             } flex items-center justify-center`}
             onDragOver={(e) => {
               e.preventDefault()
@@ -263,7 +263,7 @@ export function SectionColumn({
               setDropTarget(null)
             }}
           >
-            <p className="text-xs text-slate-400 italic">No tasks yet. Drop a task here.</p>
+            <p className="text-xs text-share-onSurfaceVariant/60 italic">No tasks yet. Drop a task here.</p>
           </div>
         ) : (() => {
           const roots = tasks.filter((t) => !t.parentId)
