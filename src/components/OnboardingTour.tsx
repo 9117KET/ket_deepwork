@@ -149,10 +149,10 @@ export function OnboardingTour({ isActive, onComplete }: OnboardingTourProps) {
       aria-describedby="tour-body"
     >
       {/* Dark overlay with optional spotlight cutout */}
-      <div className="absolute inset-0 bg-slate-950/80" aria-hidden />
+      <div className="absolute inset-0 bg-share-bg/80" aria-hidden />
       {spotlight && (
         <div
-          className="pointer-events-none absolute rounded-lg ring-2 ring-sky-500/80 ring-offset-2 ring-offset-slate-950 transition-all duration-200"
+          className="pointer-events-none absolute rounded-lg ring-2 ring-sky-500/80 ring-offset-2 ring-offset-share-bg transition-all duration-200"
           style={{
             top: spotlight.top - 6,
             left: spotlight.left - 6,
@@ -166,7 +166,7 @@ export function OnboardingTour({ isActive, onComplete }: OnboardingTourProps) {
 
       {/* Card: below spotlight when present, else centered */}
       <div
-        className="relative z-10 w-full max-w-md rounded-xl border border-slate-700 bg-slate-900 p-5 shadow-2xl"
+        className="relative z-10 w-full max-w-md rounded-xl border border-share-outlineVariant/40 bg-share-surfaceContainerHigh p-5 shadow-2xl"
         style={
           spotlight
             ? {
@@ -185,15 +185,15 @@ export function OnboardingTour({ isActive, onComplete }: OnboardingTourProps) {
           <button
             type="button"
             onClick={handleSkip}
-            className="text-xs text-slate-400 underline hover:text-slate-200"
+            className="text-xs text-share-onSurfaceVariant underline hover:text-share-onBg"
           >
             Skip tour
           </button>
         </div>
-        <h3 id="tour-title" className="mb-2 text-lg font-semibold text-slate-100">
+        <h3 id="tour-title" className="mb-2 text-lg font-semibold text-share-onBg">
           {step.title}
         </h3>
-        <p id="tour-body" className="mb-6 text-sm leading-relaxed text-slate-300">
+        <p id="tour-body" className="mb-6 text-sm leading-relaxed text-share-onSurface">
           {step.body}
         </p>
         <div className="flex items-center justify-between gap-3">
@@ -201,7 +201,7 @@ export function OnboardingTour({ isActive, onComplete }: OnboardingTourProps) {
             type="button"
             onClick={handleBack}
             disabled={isFirst}
-            className="rounded-md border border-slate-600 px-3 py-1.5 text-sm text-slate-300 hover:border-sky-600 hover:text-sky-300 disabled:opacity-40 disabled:pointer-events-none"
+            className="rounded-md border border-share-outlineVariant/40 px-3 py-1.5 text-sm text-share-onSurface hover:border-sky-600 hover:text-sky-300 disabled:opacity-40 disabled:pointer-events-none"
           >
             Back
           </button>

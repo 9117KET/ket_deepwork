@@ -18,7 +18,7 @@ export interface AppTopBarProps {
 function navClass(isActive: boolean) {
   return isActive
     ? "border-b-2 border-share-primary pb-1 text-sm font-medium text-share-primary"
-    : "text-sm font-medium text-slate-400 transition-colors duration-200 hover:text-slate-200";
+    : "text-sm font-medium text-share-onSurfaceVariant transition-colors duration-200 hover:text-share-onBg";
 }
 
 export function AppTopBar({
@@ -33,12 +33,12 @@ export function AppTopBar({
 
   return (
     <header
-      className={`fixed ${positionClass} z-50 flex h-16 w-full items-center justify-between bg-slate-900/80 px-4 shadow-2xl shadow-black/40 backdrop-blur-xl sm:px-8`}
+      className={`fixed ${positionClass} z-50 flex h-16 w-full items-center justify-between bg-share-bg/80 px-4 shadow-2xl shadow-black/40 backdrop-blur-xl sm:px-8`}
     >
       <div className="flex items-center gap-4">
         <Link
           to="/"
-          className="font-shareHeadline text-xl font-black tracking-tight text-slate-100"
+          className="font-shareHeadline text-xl font-black tracking-tight text-share-onBg"
         >
           Life Planner
         </Link>
@@ -67,7 +67,7 @@ export function AppTopBar({
           <button
             type="button"
             onClick={onHelpClick}
-            className="rounded-xl p-2 text-slate-400 transition-all duration-200 hover:bg-slate-800/50 active:scale-90"
+            className="rounded-xl p-2 text-share-onSurfaceVariant transition-all duration-200 hover:bg-share-surfaceContainerHigh active:scale-90"
             aria-label="Help"
           >
             <MaterialIcon name="help" />

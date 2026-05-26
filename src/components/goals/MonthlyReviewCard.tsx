@@ -61,7 +61,7 @@ export function MonthlyReviewCard({ monthKey, questions, review, onUpdate }: Mon
   const isComplete = Boolean(review?.completedAt)
 
   return (
-    <div className="mt-3 rounded border border-amber-900/40 bg-slate-950 p-3">
+    <div className="mt-3 rounded border border-amber-900/40 bg-share-surfaceContainerLow p-3">
       <button
         type="button"
         className="flex w-full items-center justify-between gap-2"
@@ -69,7 +69,7 @@ export function MonthlyReviewCard({ monthKey, questions, review, onUpdate }: Mon
         aria-expanded={!collapsed}
       >
         <div className="flex items-center gap-1.5">
-          <span className="text-[10px] text-slate-500">{collapsed ? '▸' : '▾'}</span>
+          <span className="text-[10px] text-share-onSurfaceVariant/50">{collapsed ? '▸' : '▾'}</span>
           <span className="text-xs font-semibold text-amber-300">Monthly Review</span>
           {isComplete && (
             <span className="rounded-full bg-emerald-500/20 px-1.5 py-0.5 text-[9px] font-medium text-emerald-300">
@@ -90,7 +90,7 @@ export function MonthlyReviewCard({ monthKey, questions, review, onUpdate }: Mon
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); handleReopen() }}
-            className="rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-[10px] text-slate-400 hover:text-slate-200 transition-colors"
+            className="rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-2 py-0.5 text-[10px] text-share-onSurfaceVariant hover:text-share-onBg transition-colors"
           >
             Reopen
           </button>
@@ -101,7 +101,7 @@ export function MonthlyReviewCard({ monthKey, questions, review, onUpdate }: Mon
         <div className="mt-3 space-y-3">
           {qs.map((question, i) => (
             <div key={i}>
-              <label className="mb-1 block text-[10px] font-medium text-slate-400">
+              <label className="mb-1 block text-[10px] font-medium text-share-onSurfaceVariant">
                 {i + 1}. {question}
               </label>
               <textarea
@@ -109,7 +109,7 @@ export function MonthlyReviewCard({ monthKey, questions, review, onUpdate }: Mon
                 onChange={(e) => handleAnswerChange(i, e.target.value)}
                 rows={2}
                 placeholder="Your answer..."
-                className="w-full resize-none rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-xs leading-relaxed text-slate-200 placeholder:text-slate-600 focus:border-amber-700 focus:outline-none"
+                className="w-full resize-none rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHighest px-2 py-1.5 text-xs leading-relaxed text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-amber-700 focus:outline-none"
               />
             </div>
           ))}

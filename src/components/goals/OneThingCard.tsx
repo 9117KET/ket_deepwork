@@ -57,13 +57,13 @@ function OneThingRow({ label, sublabel, value, placeholder, accentClass, onSave 
   }
 
   return (
-    <div className="group flex items-start gap-2 py-1.5 border-t border-slate-800 first:border-t-0">
+    <div className="group flex items-start gap-2 py-1.5 border-t border-share-outlineVariant/20 first:border-t-0">
       <div className="flex-none pt-px">
         <span className={`inline-block rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${accentClass}`}>
           {label}
         </span>
         {sublabel && (
-          <div className="mt-0.5 text-[9px] text-slate-600">{sublabel}</div>
+          <div className="mt-0.5 text-[9px] text-share-onSurfaceVariant/40">{sublabel}</div>
         )}
       </div>
       <div className="min-w-0 flex-1">
@@ -76,7 +76,7 @@ function OneThingRow({ label, sublabel, value, placeholder, accentClass, onSave 
             onBlur={save}
             onKeyDown={handleKeyDown}
             placeholder={placeholder}
-            className="w-full rounded border border-amber-700 bg-slate-950 px-1.5 py-0.5 text-xs text-slate-100 placeholder:text-slate-600 focus:border-amber-500 focus:outline-none"
+            className="w-full rounded border border-amber-700 bg-share-surfaceContainerHighest px-1.5 py-0.5 text-xs text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-amber-500 focus:outline-none"
           />
         ) : (
           <button
@@ -86,9 +86,9 @@ function OneThingRow({ label, sublabel, value, placeholder, accentClass, onSave 
             className="w-full text-left"
           >
             {value ? (
-              <span className="text-xs text-slate-200 leading-snug">{value}</span>
+              <span className="text-xs text-share-onSurface leading-snug">{value}</span>
             ) : (
-              <span className="text-xs text-slate-600 italic">{placeholder}</span>
+              <span className="text-xs text-share-onSurfaceVariant/40 italic">{placeholder}</span>
             )}
           </button>
         )}
@@ -122,7 +122,7 @@ export function OneThingCard({
   const handleSetMonth = useCallback((v: string) => onSetMonth(monthKey, v), [onSetMonth, monthKey])
 
   return (
-    <div className="rounded-lg border border-amber-900/40 bg-slate-900 p-3 text-xs">
+    <div className="rounded-lg border border-amber-900/40 bg-share-surfaceContainerLow p-3 text-xs">
       <div className="mb-1 flex items-center justify-between gap-2">
         <button
           type="button"

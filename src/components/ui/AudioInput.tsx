@@ -148,8 +148,8 @@ export function AudioTextarea({
         placeholder={placeholder}
         rows={rows}
         className={[
-          'w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 pr-10 text-sm',
-          'text-slate-100 placeholder:text-slate-600 resize-none',
+          'w-full rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerLow px-3 py-2.5 pr-10 text-sm',
+          'text-share-onBg placeholder:text-share-onSurfaceVariant/40 resize-none',
           'focus:border-share-primary focus:outline-none focus:ring-1 focus:ring-share-primary/30',
           className,
         ].join(' ')}

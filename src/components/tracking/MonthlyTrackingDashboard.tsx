@@ -96,32 +96,32 @@ export function MonthlyTrackingDashboard({
   return (
     <section
       id="tracking-dashboard"
-      className="rounded-lg border border-slate-800 bg-slate-900 p-3 sm:p-4"
+      className="rounded-lg border border-share-outlineVariant/30 bg-share-surfaceContainerLow p-3 sm:p-4"
       aria-label="Monthly tracking"
     >
       <header className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h3 className="text-sm sm:text-base font-semibold text-slate-100">
+          <h3 className="text-sm sm:text-base font-semibold text-share-onBg">
             Monthly tracking
           </h3>
-          <p className="text-xs text-slate-400">Block completion and mood by day.</p>
+          <p className="text-xs text-share-onSurfaceVariant">Block completion and mood by day.</p>
         </div>
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => setSelectedMonthId(previousMonthId(selectedMonthId))}
-            className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-300 hover:border-sky-600 hover:text-sky-300"
+            className="rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-2 py-1 text-xs text-share-onSurface hover:border-sky-600 hover:text-sky-300"
             aria-label="Previous month"
           >
             ←
           </button>
-          <span className="min-w-[140px] text-center text-sm font-medium text-slate-200">
+          <span className="min-w-[140px] text-center text-sm font-medium text-share-onBg">
             {monthLabel(selectedMonthId)}
           </span>
           <button
             type="button"
             onClick={() => setSelectedMonthId(nextMonthId(selectedMonthId))}
-            className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-300 hover:border-sky-600 hover:text-sky-300"
+            className="rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-2 py-1 text-xs text-share-onSurface hover:border-sky-600 hover:text-sky-300"
             aria-label="Next month"
           >
             →
@@ -141,13 +141,13 @@ export function MonthlyTrackingDashboard({
       />
 
       <div className="mb-3">
-        <label className="block text-xs text-slate-400 mb-1">This chapter is called:</label>
+        <label className="block text-xs text-share-onSurfaceVariant mb-1">This chapter is called:</label>
         <input
           type="text"
           value={chapterTitle}
           onChange={(e) => handleSetChapterTitle(e.target.value)}
           placeholder="e.g. The Foundation"
-          className="w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-sky-600 focus:outline-none"
+          className="w-full rounded border border-share-outlineVariant/40 bg-share-surfaceContainerLow px-2 py-1.5 text-sm text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-sky-600 focus:outline-none"
         />
       </div>
 
@@ -161,10 +161,10 @@ export function MonthlyTrackingDashboard({
           ...weekDays.map((d) => computeDailyDeepWorkMinutes(state.days[d]))
         )
         return (
-          <div className="mb-4 rounded border border-slate-800 bg-slate-950 p-3">
+          <div className="mb-4 rounded border border-share-outlineVariant/30 bg-share-surfaceContainerLow p-3">
             <div className="mb-2 flex items-center justify-between gap-2">
               <span className="text-xs font-semibold text-teal-300">Deep Work This Week</span>
-              <span className="flex items-center gap-1 text-xs text-slate-400">
+              <span className="flex items-center gap-1 text-xs text-share-onSurfaceVariant">
                 {weeklyHours.toFixed(1)}h /&nbsp;
                 {editingGoal ? (
                   <input
@@ -183,7 +183,7 @@ export function MonthlyTrackingDashboard({
                       if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
                       if (e.key === 'Escape') setEditingGoal(false)
                     }}
-                    className="w-10 rounded border border-teal-600 bg-slate-900 px-1 py-0.5 text-xs text-slate-100 focus:outline-none"
+                    className="w-10 rounded border border-teal-600 bg-share-surfaceContainerHigh px-1 py-0.5 text-xs text-share-onBg focus:outline-none"
                   />
                 ) : (
                   <button
@@ -198,7 +198,7 @@ export function MonthlyTrackingDashboard({
                 &nbsp;goal
               </span>
             </div>
-            <div className="mb-2 h-2 w-full overflow-hidden rounded-full bg-slate-800">
+            <div className="mb-2 h-2 w-full overflow-hidden rounded-full bg-share-outlineVariant/25">
               <div
                 className="h-full rounded-full bg-sky-500 transition-[width] duration-300"
                 style={{ width: `${progressPct}%` }}
@@ -220,13 +220,13 @@ export function MonthlyTrackingDashboard({
                         />
                       )}
                     </div>
-                    <span className="text-[9px] text-slate-500">{dayLabel}</span>
+                    <span className="text-[9px] text-share-onSurfaceVariant/50">{dayLabel}</span>
                   </div>
                 )
               })}
             </div>
-            <div className="mt-3 border-t border-slate-800 pt-2">
-              <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-slate-500">Depth Philosophy</div>
+            <div className="mt-3 border-t border-share-outlineVariant/30 pt-2">
+              <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-share-onSurfaceVariant/50">Depth Philosophy</div>
               <div className="flex gap-1.5">
                 {(['rhythmic', 'journalistic', 'bimodal'] as const).map((p) => (
                   <button
@@ -236,7 +236,7 @@ export function MonthlyTrackingDashboard({
                     className={`rounded border px-2 py-0.5 text-xs capitalize transition-colors ${
                       state.depthPhilosophy === p
                         ? 'border-teal-500 bg-teal-500/20 text-teal-300'
-                        : 'border-slate-700 bg-slate-800 text-slate-400 hover:border-slate-600 hover:text-slate-300'
+                        : 'border-share-outlineVariant/40 bg-share-surfaceContainerHigh text-share-onSurfaceVariant hover:border-share-outlineVariant/60 hover:text-share-onBg'
                     }`}
                   >
                     {p}
@@ -316,7 +316,7 @@ function blockCellClass(total: number, completed: number): string {
 }
 
 function blockCellContent(total: number, completed: number): React.ReactNode {
-  if (total === 0) return <span className="text-slate-600">·</span>
+  if (total === 0) return <span className="text-share-onSurfaceVariant/40">·</span>
   if (completed >= total) return <span className="text-sky-400 font-medium">✓</span>
   return (
     <span className="text-[9px] leading-none text-amber-300">
@@ -368,13 +368,13 @@ function HabitTrackingGrid({
   const streaks = computePerHabitStreaks(state.days, habitIds, untilDate)
 
   const dayHeaderCell =
-    'border border-slate-700 bg-slate-950 px-0.5 py-1 text-center text-slate-500 w-7 min-w-[1.75rem] max-w-[1.75rem]'
-  const dayBodyCell = 'border border-slate-700 p-0 text-center w-7 min-w-[1.75rem] max-w-[1.75rem]'
+    'border border-share-outlineVariant/30 bg-share-surfaceContainerLow px-0.5 py-1 text-center text-share-onSurfaceVariant/50 w-7 min-w-[1.75rem] max-w-[1.75rem]'
+  const dayBodyCell = 'border border-share-outlineVariant/30 p-0 text-center w-7 min-w-[1.75rem] max-w-[1.75rem]'
 
   return (
     <div className="mb-4">
-      <h4 className="text-xs font-medium text-slate-300 mb-1">Habit tracking</h4>
-      <p className="text-[10px] text-slate-500 mb-2">
+      <h4 className="text-xs font-medium text-share-onSurface mb-1">Habit tracking</h4>
+      <p className="text-[10px] text-share-onSurfaceVariant/50 mb-2">
         Check off each habit daily. Streak = consecutive completed days.
         <span className="ml-2 text-sky-400">✓ = done</span>
       </p>
@@ -389,7 +389,7 @@ function HabitTrackingGrid({
           </colgroup>
           <thead>
             <tr>
-              <th className="border border-slate-700 bg-slate-950 px-1 py-1 text-left font-medium text-slate-400">
+              <th className="border border-share-outlineVariant/30 bg-share-surfaceContainerLow px-1 py-1 text-left font-medium text-share-onSurfaceVariant">
                 Habit
               </th>
               {monthDays.map((isoDate) => (
@@ -397,7 +397,7 @@ function HabitTrackingGrid({
                   {isoDate.split('-')[2]}
                 </th>
               ))}
-              <th className="border border-slate-700 bg-slate-950 px-1 py-1 text-center font-medium text-slate-400">
+              <th className="border border-share-outlineVariant/30 bg-share-surfaceContainerLow px-1 py-1 text-center font-medium text-share-onSurfaceVariant">
                 🔥
               </th>
             </tr>
@@ -406,7 +406,7 @@ function HabitTrackingGrid({
             {habits.map((habit) => (
               <tr key={habit.id}>
                 <td
-                  className="border border-slate-700 bg-slate-900 px-1 py-0.5 text-slate-300 whitespace-nowrap overflow-hidden text-ellipsis max-w-[6rem]"
+                  className="border border-share-outlineVariant/30 bg-share-surfaceContainerHigh px-1 py-0.5 text-share-onSurface whitespace-nowrap overflow-hidden text-ellipsis max-w-[6rem]"
                   title={habit.label}
                 >
                   {habit.label}
@@ -416,24 +416,24 @@ function HabitTrackingGrid({
                   return (
                     <td
                       key={isoDate}
-                      className={`${dayBodyCell} ${done ? 'bg-sky-500/20' : 'bg-slate-950'}`}
+                      className={`${dayBodyCell} ${done ? 'bg-sky-500/20' : 'bg-share-surfaceContainerLow'}`}
                       title={done ? 'Completed' : 'Not completed'}
                     >
                       <div className="flex h-6 w-full items-center justify-center">
                         {done ? (
                           <span className="text-sky-400 font-medium">✓</span>
                         ) : (
-                          <span className="text-slate-600">·</span>
+                          <span className="text-share-onSurfaceVariant/40">·</span>
                         )}
                       </div>
                     </td>
                   )
                 })}
-                <td className="border border-slate-700 bg-slate-900 px-1 py-0.5 text-center">
+                <td className="border border-share-outlineVariant/30 bg-share-surfaceContainerHigh px-1 py-0.5 text-center">
                   {(streaks[habit.id] ?? 0) > 0 ? (
                     <span className="text-xs text-orange-400">{streaks[habit.id]}</span>
                   ) : (
-                    <span className="text-slate-600">·</span>
+                    <span className="text-share-onSurfaceVariant/40">·</span>
                   )}
                 </td>
               </tr>
@@ -476,13 +476,13 @@ function BlockCompletionGrid({
   }, [state, monthDays])
 
   const dayHeaderCell =
-    'border border-slate-700 bg-slate-950 px-0.5 py-1 text-center text-slate-500 w-7 min-w-[1.75rem] max-w-[1.75rem]'
-  const dayBodyCell = 'border border-slate-700 p-0 text-center w-7 min-w-[1.75rem] max-w-[1.75rem]'
+    'border border-share-outlineVariant/30 bg-share-surfaceContainerLow px-0.5 py-1 text-center text-share-onSurfaceVariant/50 w-7 min-w-[1.75rem] max-w-[1.75rem]'
+  const dayBodyCell = 'border border-share-outlineVariant/30 p-0 text-center w-7 min-w-[1.75rem] max-w-[1.75rem]'
 
   return (
     <div className="mb-4">
-      <h4 className="text-xs font-medium text-slate-300 mb-1">Block completion rate</h4>
-      <p className="text-[10px] text-slate-500 mb-2">
+      <h4 className="text-xs font-medium text-share-onSurface mb-1">Block completion rate</h4>
+      <p className="text-[10px] text-share-onSurfaceVariant/50 mb-2">
         From your planner tasks. Rate per block (not individual tasks) so it stays accurate as tasks change.
         <span className="ml-2 text-sky-400">✓ = 100%</span>
         <span className="ml-1 text-amber-300">n/m = partial</span>
@@ -498,7 +498,7 @@ function BlockCompletionGrid({
           </colgroup>
           <thead>
             <tr>
-              <th className="border border-slate-700 bg-slate-950 px-1 py-1 text-left font-medium text-slate-400">
+              <th className="border border-share-outlineVariant/30 bg-share-surfaceContainerLow px-1 py-1 text-left font-medium text-share-onSurfaceVariant">
                 Block
               </th>
               {monthDays.map((isoDate) => (
@@ -511,7 +511,7 @@ function BlockCompletionGrid({
           <tbody>
             {/* Overall day row: weighted completion rate (percentage) */}
             <tr>
-              <td className="border border-slate-700 bg-slate-950 px-1 py-0.5 font-medium text-slate-400 whitespace-nowrap">
+              <td className="border border-share-outlineVariant/30 bg-share-surfaceContainerLow px-1 py-0.5 font-medium text-share-onSurfaceVariant whitespace-nowrap">
                 Day
               </td>
               {monthDays.map((isoDate) => {
@@ -525,7 +525,7 @@ function BlockCompletionGrid({
                   >
                     <div className="flex h-6 w-full items-center justify-center">
                       {total === 0 ? (
-                        <span className="text-slate-600">·</span>
+                        <span className="text-share-onSurfaceVariant/40">·</span>
                       ) : pct >= 100 ? (
                         <span className="text-sky-400 font-medium">✓</span>
                       ) : (
@@ -538,7 +538,7 @@ function BlockCompletionGrid({
             </tr>
             {/* Mode row: auto-computed badge from overall completion % */}
             <tr>
-              <td className="border border-slate-700 bg-slate-950 px-1 py-0.5 font-medium text-slate-400 whitespace-nowrap">
+              <td className="border border-share-outlineVariant/30 bg-share-surfaceContainerLow px-1 py-0.5 font-medium text-share-onSurfaceVariant whitespace-nowrap">
                 Mode
               </td>
               {monthDays.map((isoDate) => {
@@ -548,11 +548,11 @@ function BlockCompletionGrid({
                 return (
                   <td
                     key={isoDate}
-                    className={`${dayBodyCell} bg-slate-950`}
+                    className={`${dayBodyCell} bg-share-surfaceContainerLow`}
                     title={mode ? `${mode.label} (${pct}%)` : 'No tasks'}
                   >
                     <div className="flex h-6 w-full items-center justify-center text-base leading-none">
-                      {mode ? mode.emoji : <span className="text-slate-600">·</span>}
+                      {mode ? mode.emoji : <span className="text-share-onSurfaceVariant/40">·</span>}
                     </div>
                   </td>
                 )
@@ -560,7 +560,7 @@ function BlockCompletionGrid({
             </tr>
             {FIXED_SECTIONS.map((section) => (
               <tr key={section.id}>
-                <td className="border border-slate-700 bg-slate-900 px-1 py-0.5 text-slate-300 whitespace-nowrap">
+                <td className="border border-share-outlineVariant/30 bg-share-surfaceContainerHigh px-1 py-0.5 text-share-onSurface whitespace-nowrap">
                   {SECTION_SHORT_LABELS[section.id] ?? section.id}
                 </td>
                 {monthDays.map((isoDate) => {
@@ -582,7 +582,7 @@ function BlockCompletionGrid({
               </tr>
             ))}
             <tr>
-              <td className="border border-slate-700 bg-slate-900 px-1 py-0.5 text-slate-400 whitespace-nowrap">
+              <td className="border border-share-outlineVariant/30 bg-share-surfaceContainerHigh px-1 py-0.5 text-share-onSurfaceVariant whitespace-nowrap">
                 Abandoned
               </td>
               {monthDays.map((isoDate) => {
@@ -590,14 +590,14 @@ function BlockCompletionGrid({
                 return (
                   <td
                     key={isoDate}
-                    className={`${dayBodyCell} bg-slate-900`}
+                    className={`${dayBodyCell} bg-share-surfaceContainerHigh`}
                     title={count > 0 ? `${count} task${count === 1 ? '' : 's'} abandoned` : 'None abandoned'}
                   >
                     <div className="flex h-6 w-full items-center justify-center">
                       {count > 0 ? (
-                        <span className="text-[9px] leading-none text-slate-400">{count}</span>
+                        <span className="text-[9px] leading-none text-share-onSurfaceVariant">{count}</span>
                       ) : (
-                        <span className="text-slate-600">·</span>
+                        <span className="text-share-onSurfaceVariant/40">·</span>
                       )}
                     </div>
                   </td>
@@ -605,7 +605,7 @@ function BlockCompletionGrid({
               })}
             </tr>
             <tr>
-              <td className="border border-slate-700 bg-slate-900 px-1 py-0.5 font-medium text-slate-400 whitespace-nowrap">
+              <td className="border border-share-outlineVariant/30 bg-share-surfaceContainerHigh px-1 py-0.5 font-medium text-share-onSurfaceVariant whitespace-nowrap">
                 Mood
               </td>
               {monthDays.map((isoDate) => {
@@ -614,20 +614,20 @@ function BlockCompletionGrid({
                 const dayNum = isoDate.split('-')[2]
                 const isOpen = moodPickerDay === isoDate
                 return (
-                  <td key={isoDate} className={`${dayBodyCell} align-top bg-slate-900`}>
+                  <td key={isoDate} className={`${dayBodyCell} align-top bg-share-surfaceContainerHigh`}>
                     <div className="relative flex h-6 w-full items-center justify-center">
                       <button
                         type="button"
                         onClick={() =>
                           onMoodPickerDayChange(isOpen ? null : isoDate)
                         }
-                        className="flex h-full w-full items-center justify-center rounded-sm text-base leading-none hover:bg-slate-800/80"
+                        className="flex h-full w-full items-center justify-center rounded-sm text-base leading-none hover:bg-share-surfaceContainerHighest"
                         title={`Day ${dayNum}: set mood`}
                       >
                         {mood ?? '·'}
                       </button>
                       {isOpen && (
-                        <div className="absolute left-0 top-full z-20 mt-1 flex max-w-[220px] flex-wrap gap-1 rounded border border-slate-700 bg-slate-950 p-2 shadow-lg">
+                        <div className="absolute left-0 top-full z-20 mt-1 flex max-w-[220px] flex-wrap gap-1 rounded border border-share-outlineVariant/40 bg-share-surfaceContainerLow p-2 shadow-lg">
                           {MOOD_OPTIONS.map((emoji) => (
                             <button
                               key={emoji}
@@ -641,7 +641,7 @@ function BlockCompletionGrid({
                           <button
                             type="button"
                             onClick={() => onSetMood(isoDate, null)}
-                            className="text-xs text-slate-500 hover:text-slate-300"
+                            className="text-xs text-share-onSurfaceVariant/50 hover:text-share-onBg"
                           >
                             Clear
                           </button>
