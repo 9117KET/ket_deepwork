@@ -32,8 +32,8 @@ export function TaskConflictModal({
   const count = conflictingTasks.length
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 px-4">
-      <div className="w-full max-w-sm rounded-xl border border-slate-700 bg-slate-900 p-5 shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-share-bg/90 px-4">
+      <div className="w-full max-w-sm rounded-xl border border-share-outlineVariant/40 bg-share-surfaceContainerHigh p-5 shadow-2xl">
         <div className="mb-4 flex items-start gap-3">
           <span className="mt-0.5 text-amber-400">
             <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
@@ -41,10 +41,10 @@ export function TaskConflictModal({
             </svg>
           </span>
           <div>
-            <h3 className="text-sm font-semibold text-slate-100">
+            <h3 className="text-sm font-semibold text-share-onBg">
               {count} task{count !== 1 ? 's' : ''} outside new window
             </h3>
-            <p className="mt-1 text-xs text-slate-400">
+            <p className="mt-1 text-xs text-share-onSurfaceVariant">
               {blockName} is now {newStart} - {newEnd}. The following task{count !== 1 ? 's are' : ' is'} scheduled outside this window:
             </p>
           </div>
@@ -52,8 +52,8 @@ export function TaskConflictModal({
 
         <ul className="mb-4 space-y-1">
           {conflictingTasks.map((t) => (
-            <li key={t.id} className="flex items-center gap-2 rounded-lg bg-slate-800 px-3 py-2 text-xs text-slate-300">
-              <span className="font-mono text-slate-500">{t.scheduledAt}</span>
+            <li key={t.id} className="flex items-center gap-2 rounded-lg bg-share-surfaceContainerHighest px-3 py-2 text-xs text-share-onSurface">
+              <span className="font-mono text-share-onSurfaceVariant/60">{t.scheduledAt}</span>
               <span className="truncate">{t.title}</span>
             </li>
           ))}
@@ -62,17 +62,17 @@ export function TaskConflictModal({
         <div className="flex flex-col gap-2">
           <button
             onClick={onKeep}
-            className="w-full rounded-lg border border-slate-600 px-4 py-2 text-left text-xs text-slate-300 hover:border-slate-500 hover:text-slate-100"
+            className="w-full rounded-lg border border-share-outlineVariant/40 px-4 py-2 text-left text-xs text-share-onSurface hover:border-share-outlineVariant/60 hover:text-share-onBg"
           >
             <span className="font-medium">Keep scheduled times</span>
-            <span className="ml-2 text-slate-500">Task times stay unchanged</span>
+            <span className="ml-2 text-share-onSurfaceVariant/60">Task times stay unchanged</span>
           </button>
           <button
             onClick={onClear}
-            className="w-full rounded-lg border border-slate-600 px-4 py-2 text-left text-xs text-slate-300 hover:border-slate-500 hover:text-slate-100"
+            className="w-full rounded-lg border border-share-outlineVariant/40 px-4 py-2 text-left text-xs text-share-onSurface hover:border-share-outlineVariant/60 hover:text-share-onBg"
           >
             <span className="font-medium">Clear scheduled times</span>
-            <span className="ml-2 text-slate-500">Remove time from conflicting tasks</span>
+            <span className="ml-2 text-share-onSurfaceVariant/60">Remove time from conflicting tasks</span>
           </button>
           {onMove && nextBlockName && (
             <button

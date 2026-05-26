@@ -156,24 +156,24 @@ export function HelpModal({ isOpen, onClose, onStartTour }: HelpModalProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/80 p-4 pt-12"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-share-bg/90 p-4 pt-12"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
       aria-labelledby="help-title"
     >
       <div
-        className="w-full max-w-lg rounded-lg border border-slate-700 bg-slate-900 p-4 shadow-xl"
+        className="w-full max-w-lg rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerHigh p-4 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
-          <h2 id="help-title" className="text-lg font-semibold text-slate-100">
+          <h2 id="help-title" className="text-lg font-semibold text-share-onBg">
             How to use the planner
           </h2>
           <button
             type="button"
             onClick={onClose}
-            className="rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-slate-100"
+            className="rounded p-1 text-share-onSurfaceVariant hover:bg-share-surfaceContainerHighest hover:text-share-onBg"
             aria-label="Close help"
           >
             X
@@ -186,15 +186,15 @@ export function HelpModal({ isOpen, onClose, onStartTour }: HelpModalProps) {
               <ul className="space-y-2">
                 {section.items.map(([label, desc]) => (
                   <li key={label}>
-                    <span className="font-medium text-slate-200">{label}.</span>{' '}
-                    <span className="text-slate-400">{desc}</span>
+                    <span className="font-medium text-share-onBg">{label}.</span>{' '}
+                    <span className="text-share-onSurfaceVariant">{desc}</span>
                   </li>
                 ))}
               </ul>
             </div>
           ))}
         </div>
-        <p className="mt-4 text-xs text-slate-500">
+        <p className="mt-4 text-xs text-share-onSurfaceVariant/60">
           Signed-in users sync data to the cloud automatically — habits, deep work sessions,
           philosophy settings, and tasks all included. Guest data lives in your browser only; sign
           in to keep it safe across devices. Use Copy from yesterday or Fill from last [weekday]
@@ -208,7 +208,7 @@ export function HelpModal({ isOpen, onClose, onStartTour }: HelpModalProps) {
           .
         </p>
         {onStartTour && (
-          <div className="mt-4 border-t border-slate-700 pt-4">
+          <div className="mt-4 border-t border-share-outlineVariant/30 pt-4">
             <button
               type="button"
               onClick={onStartTour}
@@ -216,7 +216,7 @@ export function HelpModal({ isOpen, onClose, onStartTour }: HelpModalProps) {
             >
               Take the interactive tour
             </button>
-            <p className="mt-1.5 text-center text-xs text-slate-500">
+            <p className="mt-1.5 text-center text-xs text-share-onSurfaceVariant/60">
               Highlights each area step by step (like onboarding).
             </p>
           </div>

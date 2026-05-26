@@ -58,12 +58,12 @@ function CascadeRow({ label, sublabel, accentClass, value, placeholder, onSave }
   }
 
   return (
-    <div className="flex gap-2 py-2 border-t border-slate-800 first:border-t-0 items-start">
+    <div className="flex gap-2 py-2 border-t border-share-outlineVariant/20 first:border-t-0 items-start">
       <div className="flex-none w-[70px]">
         <span className={`inline-block rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${accentClass}`}>
           {label}
         </span>
-        <div className="mt-0.5 text-[9px] text-slate-600 leading-tight">{sublabel}</div>
+        <div className="mt-0.5 text-[9px] text-share-onSurfaceVariant/40 leading-tight">{sublabel}</div>
       </div>
       <div className="flex-1 min-w-0">
         {editing ? (
@@ -76,9 +76,9 @@ function CascadeRow({ label, sublabel, accentClass, value, placeholder, onSave }
               onKeyDown={handleKeyDown}
               rows={2}
               placeholder={placeholder}
-              className="w-full resize-none rounded border border-violet-700 bg-slate-950 px-2 py-1 text-xs leading-relaxed text-slate-100 placeholder:text-slate-600 focus:border-violet-500 focus:outline-none"
+              className="w-full resize-none rounded border border-violet-700 bg-share-surfaceContainerHighest px-2 py-1 text-xs leading-relaxed text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-violet-500 focus:outline-none"
             />
-            <p className="text-[9px] text-slate-600">Ctrl+Enter · Esc</p>
+            <p className="text-[9px] text-share-onSurfaceVariant/40">Ctrl+Enter · Esc</p>
           </div>
         ) : (
           <button
@@ -88,9 +88,9 @@ function CascadeRow({ label, sublabel, accentClass, value, placeholder, onSave }
             className="w-full text-left"
           >
             {value ? (
-              <span className="text-xs text-slate-300 leading-snug">{value}</span>
+              <span className="text-xs text-share-onSurface leading-snug">{value}</span>
             ) : (
-              <span className="text-xs text-slate-600 italic">{placeholder}</span>
+              <span className="text-xs text-share-onSurfaceVariant/40 italic">{placeholder}</span>
             )}
           </button>
         )}
@@ -108,7 +108,7 @@ export function GoalCascadeSection({ goalCascade, onUpdate }: GoalCascadeSection
   }
 
   return (
-    <div className="mb-3 rounded border border-violet-900/40 bg-slate-950 p-3">
+    <div className="mb-3 rounded border border-violet-900/40 bg-share-surfaceContainerLow p-3">
       <button
         type="button"
         className="flex w-full items-center justify-between gap-2"
@@ -116,9 +116,9 @@ export function GoalCascadeSection({ goalCascade, onUpdate }: GoalCascadeSection
         aria-expanded={!collapsed}
       >
         <div className="flex items-center gap-1.5">
-          <span className="text-[10px] text-slate-500">{collapsed ? '▸' : '▾'}</span>
+          <span className="text-[10px] text-share-onSurfaceVariant/50">{collapsed ? '▸' : '▾'}</span>
           <span className="text-xs font-semibold text-violet-300">Goal Cascade</span>
-          <span className="text-[10px] text-slate-500">Life → 5yr → 1yr → 6mo → 3mo</span>
+          <span className="text-[10px] text-share-onSurfaceVariant/50">Life → 5yr → 1yr → 6mo → 3mo</span>
         </div>
       </button>
 

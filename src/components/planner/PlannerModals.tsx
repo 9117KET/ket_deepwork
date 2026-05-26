@@ -84,8 +84,8 @@ export function PlannerModals({
         const m = newSleepMinutes % 60;
         const label = m === 0 ? `${h}h` : `${h}h ${m}m`;
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 px-4">
-            <div className="w-full max-w-sm rounded-xl border border-amber-500/30 bg-slate-900 p-5 shadow-2xl">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-share-bg/90 px-4">
+            <div className="w-full max-w-sm rounded-xl border border-amber-500/30 bg-share-surfaceContainerHigh p-5 shadow-2xl">
               <div className="mb-4 flex items-start gap-3">
                 <span className="mt-0.5 shrink-0 text-amber-400">
                   <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
@@ -93,8 +93,8 @@ export function PlannerModals({
                   </svg>
                 </span>
                 <div>
-                  <h3 className="text-sm font-semibold text-slate-100">Sleep will drop to {label}</h3>
-                  <p className="mt-1 text-xs text-slate-400">
+                  <h3 className="text-sm font-semibold text-share-onBg">Sleep will drop to {label}</h3>
+                  <p className="mt-1 text-xs text-share-onSurfaceVariant">
                     Sleep below 7 hours affects focus, memory, and performance. This change will update your bedtime target to {newTarget}.
                   </p>
                 </div>
@@ -115,7 +115,7 @@ export function PlannerModals({
                 </button>
                 <button
                   onClick={() => setSleepWarnPending(null)}
-                  className="flex-1 rounded-lg border border-slate-700 py-2 text-xs font-medium text-slate-400 hover:text-slate-200"
+                  className="flex-1 rounded-lg border border-share-outlineVariant/40 py-2 text-xs font-medium text-share-onSurfaceVariant hover:text-share-onBg"
                 >
                   Cancel
                 </button>

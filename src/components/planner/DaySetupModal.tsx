@@ -85,7 +85,7 @@ function TimePicker({
         onChange={(e) =>
           onChange(`${e.target.value}:${String(minute).padStart(2, "0")}`)
         }
-        className="rounded border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-sky-500 focus:outline-none"
+        className="rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-3 py-2 text-sm text-share-onBg focus:border-share-primary focus:outline-none"
       >
         {Array.from({ length: 24 }, (_, i) => (
           <option key={i} value={String(i).padStart(2, "0")}>
@@ -93,14 +93,14 @@ function TimePicker({
           </option>
         ))}
       </select>
-      <span className="text-base font-bold text-slate-400">:</span>
+      <span className="text-base font-bold text-share-onSurfaceVariant">:</span>
       <select
         aria-label="minutes"
         value={String(minute).padStart(2, "0")}
         onChange={(e) =>
           onChange(`${String(hour).padStart(2, "0")}:${e.target.value}`)
         }
-        className="rounded border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-sky-500 focus:outline-none"
+        className="rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-3 py-2 text-sm text-share-onBg focus:border-share-primary focus:outline-none"
       >
         {Array.from({ length: 12 }, (_, i) => i * 5).map((m) => (
           <option key={m} value={String(m).padStart(2, "0")}>
@@ -150,20 +150,20 @@ export function DaySetupModal({
     : null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 px-4">
-      <div className="w-full max-w-sm rounded-lg border border-slate-700 bg-slate-900 p-5 shadow-xl">
-        <h2 className="mb-1 text-base font-semibold text-slate-100">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-share-bg/90 px-4">
+      <div className="w-full max-w-sm rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerHigh p-5 shadow-xl">
+        <h2 className="mb-1 text-base font-semibold text-share-onBg">
           Set up your day
         </h2>
-        <p className="mb-4 text-xs text-slate-400">{formatDateLabel(date)}</p>
+        <p className="mb-4 text-xs text-share-onSurfaceVariant">{formatDateLabel(date)}</p>
 
         {hasPrev && (
           <button
             onClick={() => onSave(prevWakeTime!, prevSleepTarget!, prevBedTime!)}
-            className="mb-4 w-full rounded border border-slate-600 px-4 py-2 text-left text-sm text-slate-300 hover:border-sky-500 hover:text-sky-400"
+            className="mb-4 w-full rounded border border-share-outlineVariant/40 px-4 py-2 text-left text-sm text-share-onSurface hover:border-share-primary/60 hover:text-share-primary"
           >
             <span className="font-medium">Same as yesterday</span>
-            <span className="ml-2 text-xs text-slate-500">
+            <span className="ml-2 text-xs text-share-onSurfaceVariant/60">
               Bed {prevBedTime} · wake {prevWakeTime} ({prevSleepLabel}) · target {prevTargetHours}h
             </span>
           </button>
@@ -173,10 +173,10 @@ export function DaySetupModal({
           <div>
             <label
               htmlFor="day-setup-bed"
-              className="mb-2 block text-sm font-medium text-slate-300"
+              className="mb-2 block text-sm font-medium text-share-onBg"
             >
               Went to bed{" "}
-              <span className="font-normal text-slate-500">(last night)</span>
+              <span className="font-normal text-share-onSurfaceVariant/60">(last night)</span>
             </label>
             <TimePicker id="day-setup-bed" value={bedTime} onChange={setBedTime} />
           </div>
@@ -184,20 +184,20 @@ export function DaySetupModal({
           <div>
             <label
               htmlFor="day-setup-wake"
-              className="mb-2 block text-sm font-medium text-slate-300"
+              className="mb-2 block text-sm font-medium text-share-onBg"
             >
               Woke up{" "}
-              <span className="font-normal text-slate-500">(this morning)</span>
+              <span className="font-normal text-share-onSurfaceVariant/60">(this morning)</span>
             </label>
             <TimePicker id="day-setup-wake" value={wakeTime} onChange={setWakeTime} />
           </div>
 
-          <div className="rounded border border-slate-700 bg-slate-800/50 px-3 py-2">
-            <p className="text-xs text-slate-400">Actual sleep</p>
+          <div className="rounded border border-share-outlineVariant/30 bg-share-surfaceContainerHighest px-3 py-2">
+            <p className="text-xs text-share-onSurfaceVariant">Actual sleep</p>
             <p className="mt-0.5 font-mono text-lg font-semibold text-emerald-400">
               {actualSleepLabel}
             </p>
-            <p className="mt-0.5 text-xs text-slate-500">
+            <p className="mt-0.5 text-xs text-share-onSurfaceVariant/60">
               {bedTime} → {wakeTime}
             </p>
           </div>
@@ -205,23 +205,23 @@ export function DaySetupModal({
           <div>
             <label
               htmlFor="day-setup-target"
-              className="mb-2 block text-sm font-medium text-slate-300"
+              className="mb-2 block text-sm font-medium text-share-onBg"
             >
               Sleep target{" "}
-              <span className="font-normal text-slate-500">(tonight)</span>
+              <span className="font-normal text-share-onSurfaceVariant/60">(tonight)</span>
             </label>
             <select
               id="day-setup-target"
               value={targetDurationHours}
               onChange={(e) => setTargetDurationHours(Number(e.target.value))}
-              className="rounded border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:border-sky-500 focus:outline-none"
+              className="rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-3 py-2 text-sm text-share-onBg focus:border-share-primary focus:outline-none"
             >
               {[4, 5, 6, 7, 8, 9, 10, 11, 12].map((h) => (
                 <option key={h} value={h}>{h} hours</option>
               ))}
             </select>
-            <p className="mt-1.5 text-xs text-slate-500">
-              Bed at <span className="font-mono text-slate-300">{calculatedSleepTarget}</span>
+            <p className="mt-1.5 text-xs text-share-onSurfaceVariant/60">
+              Bed at <span className="font-mono text-share-onSurface">{calculatedSleepTarget}</span>
               {" "}({24 - targetDurationHours}h awake)
             </p>
           </div>
@@ -236,7 +236,7 @@ export function DaySetupModal({
           </button>
           <button
             onClick={onSkip}
-            className="flex-1 rounded border border-slate-600 px-4 py-2 text-sm font-medium text-slate-400 hover:border-slate-500 hover:text-slate-300"
+            className="flex-1 rounded border border-share-outlineVariant/40 px-4 py-2 text-sm font-medium text-share-onSurfaceVariant hover:border-share-outlineVariant/60 hover:text-share-onBg"
           >
             Skip for today
           </button>

@@ -75,14 +75,14 @@ export function HabitEditorModal({ habits, onSave, onClose }: HabitEditorModalPr
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 px-4">
-      <div className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-900 shadow-2xl">
-        <header className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
-          <h2 className="text-sm font-semibold text-slate-100">Edit Habits</h2>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-share-bg/90 px-4">
+      <div className="w-full max-w-md rounded-xl border border-share-outlineVariant/40 bg-share-surfaceContainerHigh shadow-2xl">
+        <header className="flex items-center justify-between border-b border-share-outlineVariant/25 px-4 py-3">
+          <h2 className="text-sm font-semibold text-share-onBg">Edit Habits</h2>
           <button
             type="button"
             onClick={onClose}
-            className="text-slate-500 hover:text-slate-300"
+            className="text-share-onSurfaceVariant/60 hover:text-share-onBg"
             aria-label="Close"
           >
             <X className="h-4 w-4" />
@@ -92,14 +92,14 @@ export function HabitEditorModal({ habits, onSave, onClose }: HabitEditorModalPr
         <div className="max-h-[60vh] overflow-y-auto px-4 py-3">
           <ul className="space-y-3">
             {draft.map((habit, index) => (
-              <li key={habit.id} className="rounded border border-slate-800 bg-slate-950 p-2">
+              <li key={habit.id} className="rounded border border-share-outlineVariant/25 bg-share-surfaceContainerHighest p-2">
                 <div className="flex items-center gap-1.5">
                   <div className="flex flex-col">
                     <button
                       type="button"
                       onClick={() => handleMoveUp(index)}
                       disabled={index === 0}
-                      className="text-slate-600 hover:text-slate-300 disabled:opacity-30"
+                      className="text-share-onSurfaceVariant/40 hover:text-share-onSurface disabled:opacity-30"
                       aria-label="Move up"
                     >
                       <ChevronUp className="h-3.5 w-3.5" />
@@ -108,7 +108,7 @@ export function HabitEditorModal({ habits, onSave, onClose }: HabitEditorModalPr
                       type="button"
                       onClick={() => handleMoveDown(index)}
                       disabled={index === draft.length - 1}
-                      className="text-slate-600 hover:text-slate-300 disabled:opacity-30"
+                      className="text-share-onSurfaceVariant/40 hover:text-share-onSurface disabled:opacity-30"
                       aria-label="Move down"
                     >
                       <ChevronDown className="h-3.5 w-3.5" />
@@ -120,13 +120,13 @@ export function HabitEditorModal({ habits, onSave, onClose }: HabitEditorModalPr
                     value={habit.label}
                     onChange={(e) => handleLabelChange(habit.id, e.target.value)}
                     placeholder="Habit name"
-                    className="flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm text-slate-100 placeholder:text-slate-600 focus:border-sky-600 focus:outline-none"
+                    className="flex-1 rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-2 py-1 text-sm text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-share-primary focus:outline-none"
                   />
 
                   <button
                     type="button"
                     onClick={() => handleDelete(habit.id)}
-                    className="text-slate-600 hover:text-red-400"
+                    className="text-share-onSurfaceVariant/40 hover:text-red-400"
                     aria-label="Delete habit"
                   >
                     <X className="h-3.5 w-3.5" />
@@ -139,7 +139,7 @@ export function HabitEditorModal({ habits, onSave, onClose }: HabitEditorModalPr
                     value={habit.stackAnchor ?? ''}
                     onChange={(e) => handleAnchorChange(habit.id, e.target.value)}
                     placeholder="After... (optional stack anchor)"
-                    className="w-full rounded border border-slate-800 bg-slate-900 px-2 py-0.5 text-xs text-slate-400 placeholder:text-slate-600 focus:border-sky-700 focus:outline-none"
+                    className="w-full rounded border border-share-outlineVariant/25 bg-share-surfaceContainerHigh px-2 py-0.5 text-xs text-share-onSurfaceVariant placeholder:text-share-onSurfaceVariant/40 focus:border-share-primary focus:outline-none"
                   />
                 </div>
               </li>
@@ -153,23 +153,23 @@ export function HabitEditorModal({ habits, onSave, onClose }: HabitEditorModalPr
               onChange={(e) => setNewLabel(e.target.value)}
               onKeyDown={handleAddKeyDown}
               placeholder="Add new habit..."
-              className="flex-1 rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100 placeholder:text-slate-600 focus:border-sky-600 focus:outline-none"
+              className="flex-1 rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHighest px-2 py-1.5 text-sm text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-share-primary focus:outline-none"
             />
             <button
               type="button"
               onClick={handleAddHabit}
-              className="rounded border border-slate-600 bg-slate-800 px-3 py-1.5 text-xs text-slate-300 hover:border-sky-600 hover:text-sky-300"
+              className="rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-3 py-1.5 text-xs text-share-onSurface hover:border-share-primary/60 hover:text-share-primary"
             >
               Add
             </button>
           </div>
         </div>
 
-        <footer className="flex justify-end gap-2 border-t border-slate-800 px-4 py-3">
+        <footer className="flex justify-end gap-2 border-t border-share-outlineVariant/25 px-4 py-3">
           <button
             type="button"
             onClick={onClose}
-            className="rounded border border-slate-700 px-3 py-1.5 text-xs text-slate-400 hover:text-slate-200"
+            className="rounded border border-share-outlineVariant/40 px-3 py-1.5 text-xs text-share-onSurfaceVariant hover:text-share-onBg"
           >
             Cancel
           </button>

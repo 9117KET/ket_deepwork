@@ -538,8 +538,8 @@ export function DayPlanner({
           const label = appState.goalCascade?.threeMonths ? '3-month' : '1-year'
           return (
             <div className="mt-1 rounded border border-share-outlineVariant/30 bg-share-surfaceContainerLow px-3 py-1.5 text-xs text-share-onSurfaceVariant">
-              <span className="text-slate-500">{label} goal: </span>
-              <span className="text-slate-300">{goal}</span>
+              <span className="text-share-onSurfaceVariant/70">{label} goal: </span>
+              <span className="text-share-onBg">{goal}</span>
             </div>
           )
         })()}
@@ -573,7 +573,7 @@ export function DayPlanner({
                   key={sourceDate}
                   type="button"
                   onClick={() => handleCopyFromDay(sourceDate)}
-                  className="rounded-md border border-slate-700 bg-slate-800 px-2 py-1.5 text-slate-300 hover:border-sky-600 hover:text-sky-300"
+                  className="rounded-md border border-share-outlineVariant/40 bg-share-surfaceContainer px-2 py-1.5 text-share-onSurface hover:border-share-primary/60 hover:text-share-primary"
                   title={title}
                 >
                   {label}
@@ -598,7 +598,7 @@ export function DayPlanner({
               <button
                 type="button"
                 onClick={handleCarryForward}
-                className="rounded-md border border-slate-700 bg-slate-800 px-2 py-1.5 text-slate-300 hover:border-amber-500 hover:text-amber-300"
+                className="rounded-md border border-share-outlineVariant/40 bg-share-surfaceContainer px-2 py-1.5 text-share-onSurface hover:border-amber-500/60 hover:text-amber-300"
                 title="Append incomplete tasks from yesterday to today's plan"
               >
                 ↑ {incompletePrevTasks.length} incomplete from yesterday — carry forward
@@ -608,7 +608,7 @@ export function DayPlanner({
         })()}
         {selectedTaskIds.size > 0 && (
           <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md border border-sky-600/60 bg-sky-500/10 px-2 py-1.5 text-xs">
-            <span className="text-slate-300">
+            <span className="text-share-onBg">
               {selectedTaskIds.size} selected
             </span>
             <button
@@ -621,7 +621,7 @@ export function DayPlanner({
             <button
               type="button"
               onClick={() => setSelectedTaskIds(new Set())}
-              className="rounded border border-slate-600 px-2 py-1 text-slate-400 hover:bg-slate-800"
+              className="rounded border border-share-outlineVariant/40 px-2 py-1 text-share-onSurfaceVariant hover:bg-share-surfaceContainer"
             >
               Clear selection
             </button>

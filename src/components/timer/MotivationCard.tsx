@@ -55,16 +55,16 @@ export function MotivationCard({ rotationSeconds = 45 }: MotivationCardProps) {
   const quote = QUOTES[index] ?? QUOTES[0]
 
   return (
-    <section className="rounded-lg border border-slate-800 bg-slate-900 p-3 sm:p-4">
+    <section className="rounded-lg border border-share-outlineVariant/25 bg-share-surfaceContainerLow p-3 sm:p-4">
       <header className="mb-2">
-        <h3 className="text-sm sm:text-base font-semibold text-slate-100">
+        <h3 className="text-sm sm:text-base font-semibold text-share-onBg">
           Focus reminder
         </h3>
-        <p className="text-xs text-slate-400">
+        <p className="text-xs text-share-onSurfaceVariant">
           Gentle motivation for this deep work season.
         </p>
       </header>
-      <p className="text-sm leading-relaxed text-slate-200">{quote}</p>
+      <p className="text-sm leading-relaxed text-share-onSurface">{quote}</p>
     </section>
   )
 }

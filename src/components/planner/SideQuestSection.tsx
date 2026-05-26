@@ -102,7 +102,7 @@ export function SideQuestSection({
       {!isLocked ? (
         <div className="space-y-2">
           {todayDefs.length > 0 && (
-            <div className="rounded-lg border border-violet-900/30 bg-slate-900 p-3">
+            <div className="rounded-lg border border-violet-900/30 bg-share-surfaceContainerLow p-3">
               <div className="mb-2 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <ListChecks className="h-3.5 w-3.5 text-violet-300" />
@@ -123,7 +123,7 @@ export function SideQuestSection({
                 <button
                   type="button"
                   onClick={onManageDefs}
-                  className="flex items-center gap-1 text-[10px] text-slate-500 hover:text-slate-300 transition-colors"
+                  className="flex items-center gap-1 text-[10px] text-share-onSurfaceVariant/60 hover:text-share-onSurface transition-colors"
                 >
                   <Settings className="h-3 w-3" /> Edit
                 </button>
@@ -136,10 +136,10 @@ export function SideQuestSection({
                   return (
                     <label
                       key={def.id}
-                      className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 hover:bg-slate-800 transition-colors"
+                      className="flex cursor-pointer items-center gap-2 rounded px-1 py-1 hover:bg-share-surfaceContainerHigh transition-colors"
                     >
                       <div className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
-                        done ? 'border-violet-500 bg-violet-500 text-white' : 'border-slate-600 bg-slate-800'
+                        done ? 'border-violet-500 bg-violet-500 text-white' : 'border-share-outlineVariant/50 bg-share-surfaceContainerHigh'
                       }`}>
                         <input
                           type="checkbox"
@@ -149,17 +149,17 @@ export function SideQuestSection({
                         />
                         {done && <Check className="h-3 w-3" />}
                       </div>
-                      <span className={`flex-1 text-sm ${done ? 'text-slate-500 line-through decoration-slate-600/60' : 'text-slate-200'}`}>
+                      <span className={`flex-1 text-sm ${done ? 'text-share-onSurfaceVariant/50 line-through decoration-share-outlineVariant/60' : 'text-share-onSurface'}`}>
                         {def.title}
                       </span>
-                      <CatIcon className="h-3.5 w-3.5 text-slate-600 shrink-0" />
+                      <CatIcon className="h-3.5 w-3.5 text-share-onSurfaceVariant/40 shrink-0" />
                     </label>
                   )
                 })}
               </div>
 
               {xpToNext !== null && (
-                <p className="mt-2 text-[9px] text-slate-600">
+                <p className="mt-2 text-[9px] text-share-onSurfaceVariant/40">
                   {xpToNext} quest{xpToNext !== 1 ? 's' : ''} to {getSideQuestRank(xp + xpToNext).rank}
                 </p>
               )}
@@ -172,11 +172,11 @@ export function SideQuestSection({
       )}
 
       {isLocked && (
-        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 rounded-lg border border-slate-700/60 bg-slate-950/90 px-4 backdrop-blur-sm">
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 rounded-lg border border-share-outlineVariant/30 bg-share-bg/90 px-4 backdrop-blur-sm">
           <div className="flex flex-col items-center gap-1.5 text-center">
-            <Lock className="h-6 w-6 text-slate-400" />
-            <p className="text-xs font-semibold text-slate-300">Side Quest - locked</p>
-            <p className="text-[11px] text-slate-500">
+            <Lock className="h-6 w-6 text-share-onSurfaceVariant" />
+            <p className="text-xs font-semibold text-share-onBg">Side Quest - locked</p>
+            <p className="text-[11px] text-share-onSurfaceVariant/60">
               {needed - pct}% more to unlock, finish your core tasks first
             </p>
             {selectedQuestIds.length > 0 && (
@@ -187,11 +187,11 @@ export function SideQuestSection({
           </div>
 
           <div className="w-36">
-            <div className="mb-1 flex justify-between text-[10px] text-slate-600">
+            <div className="mb-1 flex justify-between text-[10px] text-share-onSurfaceVariant/50">
               <span>{pct}%</span>
               <span>{needed}%</span>
             </div>
-            <div className="h-1.5 w-full rounded-full bg-slate-800">
+            <div className="h-1.5 w-full rounded-full bg-share-outlineVariant/25">
               <div
                 className="h-full rounded-full bg-sky-500 transition-all duration-700"
                 style={{ width: `${fillPct}%` }}
@@ -202,7 +202,7 @@ export function SideQuestSection({
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onManageDefs() }}
-            className="flex items-center gap-1 rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-[10px] text-slate-500 hover:border-violet-700 hover:text-slate-300 transition-colors"
+            className="flex items-center gap-1 rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-2 py-0.5 text-[10px] text-share-onSurfaceVariant/60 hover:border-violet-500/60 hover:text-share-onSurface transition-colors"
           >
             <Settings className="h-3 w-3" /> Manage quests
           </button>

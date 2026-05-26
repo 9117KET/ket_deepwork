@@ -249,15 +249,15 @@ export function LandingPage() {
         <footer className="mt-24 border-t border-share-outlineVariant/10 pb-32 pt-12 md:pb-12">
           <div className="mx-auto flex max-w-7xl flex-col items-start justify-between gap-8 md:flex-row md:items-center">
             <div>
-              <h4 className="mb-2 font-shareHeadline text-xl font-black text-slate-100">Life Planner</h4>
+              <h4 className="mb-2 font-shareHeadline text-xl font-black text-share-onBg">Life Planner</h4>
               <p className="max-w-xs text-sm text-share-onSurfaceVariant">
                 Built for people who value time and clear design in equal measure.
               </p>
             </div>
             <div className="flex flex-wrap gap-8">
-              <Link to="/privacy" className="text-sm font-medium text-slate-400 transition-colors hover:text-slate-200">Privacy</Link>
-              <Link to="/terms" className="text-sm font-medium text-slate-400 transition-colors hover:text-slate-200">Terms</Link>
-              <Link to="/support" className="text-sm font-medium text-slate-400 transition-colors hover:text-slate-200">Support</Link>
+              <Link to="/privacy" className="text-sm font-medium text-share-onSurfaceVariant transition-colors hover:text-share-onBg">Privacy</Link>
+              <Link to="/terms" className="text-sm font-medium text-share-onSurfaceVariant transition-colors hover:text-share-onBg">Terms</Link>
+              <Link to="/support" className="text-sm font-medium text-share-onSurfaceVariant transition-colors hover:text-share-onBg">Support</Link>
             </div>
             <p className="text-sm text-share-onSurfaceVariant">Life Planner</p>
           </div>

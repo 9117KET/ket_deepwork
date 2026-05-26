@@ -76,7 +76,7 @@ export function MustDoPinnedHeader({ tasks, onToggle, onAdd, onDelete, onUpdate 
         >
           <CheckCircle2 className="h-4 w-4 text-emerald-400" />
           <span className="text-xs font-medium text-emerald-400">All MUSTs complete</span>
-          <span className="ml-auto flex items-center gap-2 text-[10px] text-slate-500">
+          <span className="ml-auto flex items-center gap-2 text-[10px] text-share-onSurfaceVariant/60">
             {rootTasks.length}/{rootTasks.length} done
             {doneExpanded ? <ChevronUp className="h-3.5 w-3.5 text-emerald-600/70" /> : <ChevronDown className="h-3.5 w-3.5 text-emerald-600/70" />}
           </span>
@@ -95,7 +95,7 @@ export function MustDoPinnedHeader({ tasks, onToggle, onAdd, onDelete, onUpdate 
                     type="checkbox"
                     checked={task.isDone}
                     onChange={() => onToggle(task.id)}
-                    className="h-4 w-4 shrink-0 rounded border-emerald-700 bg-slate-800 text-emerald-400 focus:ring-emerald-500"
+                    className="h-4 w-4 shrink-0 rounded border-emerald-700 bg-share-surfaceContainerHigh text-emerald-400 focus:ring-emerald-500"
                   />
                   {editingId === task.id ? (
                     <input
@@ -108,12 +108,12 @@ export function MustDoPinnedHeader({ tasks, onToggle, onAdd, onDelete, onUpdate 
                         if (e.key === 'Enter') commitTitleEdit(task.id)
                         if (e.key === 'Escape') setEditingId(null)
                       }}
-                      className="min-w-0 flex-1 rounded border border-sky-500 bg-slate-800 px-1 py-0.5 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                      className="min-w-0 flex-1 rounded border border-share-primary bg-share-surfaceContainerHigh px-1 py-0.5 text-sm text-share-onBg focus:outline-none focus:ring-1 focus:ring-share-primary"
                     />
                   ) : (
                     <span
                       onClick={e => { e.preventDefault(); e.stopPropagation(); setEditingId(task.id); setEditingTitle(task.title) }}
-                      className="min-w-0 truncate text-sm cursor-text text-slate-400 line-through decoration-slate-600/60"
+                      className="min-w-0 truncate text-sm cursor-text text-share-onSurfaceVariant/60 line-through decoration-share-outlineVariant/60"
                     >
                       {task.title}
                     </span>
@@ -125,16 +125,16 @@ export function MustDoPinnedHeader({ tasks, onToggle, onAdd, onDelete, onUpdate 
                       type="time"
                       value={task.scheduledAt ?? ''}
                       onChange={e => onUpdate(task.id, { scheduledAt: e.target.value ? normalizeHhmm(e.target.value) : undefined })}
-                      className={`w-24 rounded border border-slate-700 bg-slate-800 px-1 py-0.5 text-xs tabular-nums [color-scheme:dark] ${task.scheduledAt ? 'text-slate-300' : 'text-transparent'}`}
+                      className={`w-24 rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-1 py-0.5 text-xs tabular-nums [color-scheme:dark] ${task.scheduledAt ? 'text-share-onSurface' : 'text-transparent'}`}
                     />
                     {!task.scheduledAt && (
-                      <span className="pointer-events-none absolute inset-0 flex items-center px-1 text-xs text-slate-500">time</span>
+                      <span className="pointer-events-none absolute inset-0 flex items-center px-1 text-xs text-share-onSurfaceVariant/50">time</span>
                     )}
                   </div>
                   <select
                     value={task.durationMinutes ?? ''}
                     onChange={e => onUpdate(task.id, { durationMinutes: e.target.value === '' ? undefined : Number(e.target.value) })}
-                    className="w-16 rounded border border-slate-700 bg-slate-800 px-1 py-0.5 text-xs tabular-nums text-slate-300"
+                    className="w-16 rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-1 py-0.5 text-xs tabular-nums text-share-onSurface"
                     title="Duration"
                   >
                     <option value="">dur</option>
@@ -144,7 +144,7 @@ export function MustDoPinnedHeader({ tasks, onToggle, onAdd, onDelete, onUpdate 
                 <button
                   type="button"
                   onClick={() => onDelete(task.id)}
-                  className="shrink-0 rounded p-0.5 text-transparent group-hover:text-slate-600 hover:!text-red-400 transition-colors"
+                  className="shrink-0 rounded p-0.5 text-transparent group-hover:text-share-outlineVariant hover:!text-red-400 transition-colors"
                   aria-label="Remove"
                 >
                   ✕
@@ -159,7 +159,7 @@ export function MustDoPinnedHeader({ tasks, onToggle, onAdd, onDelete, onUpdate 
 
   // ── Active pinned state ───────────────────────────────────────────────────
   return (
-    <div className="mt-2 rounded-lg border border-slate-700 bg-slate-900/95 px-3 py-2 backdrop-blur-sm">
+    <div className="mt-2 rounded-lg border border-share-outlineVariant/30 bg-share-surfaceContainerLow/95 px-3 py-2 backdrop-blur-sm">
       {/* Header row — click to collapse/expand task list */}
       <button
         type="button"
@@ -167,7 +167,7 @@ export function MustDoPinnedHeader({ tasks, onToggle, onAdd, onDelete, onUpdate 
         className="mb-1 flex w-full items-center justify-between gap-2 text-left"
       >
         <div className="flex items-center gap-2">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-share-onSurfaceVariant">
             3 MUSTs today
           </span>
           {/* Progress pips */}
@@ -178,7 +178,7 @@ export function MustDoPinnedHeader({ tasks, onToggle, onAdd, onDelete, onUpdate 
                 <span
                   key={i}
                   className={`h-1.5 w-5 rounded-full transition-colors duration-300 ${
-                    !task ? 'bg-slate-800'
+                    !task ? 'bg-share-outlineVariant/40'
                     : task.isDone ? 'bg-emerald-500'
                     : 'bg-sky-500'
                   }`}
@@ -186,19 +186,19 @@ export function MustDoPinnedHeader({ tasks, onToggle, onAdd, onDelete, onUpdate 
               )
             })}
           </span>
-          <span className="text-[10px] text-slate-500">{donePct}%</span>
+          <span className="text-[10px] text-share-onSurfaceVariant/60">{donePct}%</span>
         </div>
         <div className="flex items-center gap-2">
           {rootTasks.length < MAX && !showAdd && !listCollapsed && (
             <span
               role="button"
               onClick={e => { e.stopPropagation(); setShowAdd(true) }}
-              className="rounded px-1.5 py-0.5 text-[10px] text-slate-500 hover:bg-slate-800 hover:text-slate-300"
+              className="rounded px-1.5 py-0.5 text-[10px] text-share-onSurfaceVariant/60 hover:bg-share-surfaceContainerHigh hover:text-share-onSurface"
             >
               + Add
             </span>
           )}
-          {listCollapsed ? <ChevronDown className="h-3.5 w-3.5 text-slate-600" /> : <ChevronUp className="h-3.5 w-3.5 text-slate-600" />}
+          {listCollapsed ? <ChevronDown className="h-3.5 w-3.5 text-share-outlineVariant" /> : <ChevronUp className="h-3.5 w-3.5 text-share-outlineVariant" />}
         </div>
       </button>
 
@@ -206,7 +206,7 @@ export function MustDoPinnedHeader({ tasks, onToggle, onAdd, onDelete, onUpdate 
       {!listCollapsed && <div className="space-y-1">
         {rootTasks.map((task, idx) => (
           <div key={task.id} className="flex items-center gap-2 group">
-            <span className="w-4 shrink-0 text-center text-[10px] font-bold text-slate-600">
+            <span className="w-4 shrink-0 text-center text-[10px] font-bold text-share-onSurfaceVariant/50">
               {idx + 1}
             </span>
             <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
@@ -214,7 +214,7 @@ export function MustDoPinnedHeader({ tasks, onToggle, onAdd, onDelete, onUpdate 
                 type="checkbox"
                 checked={task.isDone}
                 onChange={() => onToggle(task.id)}
-                className="h-4 w-4 shrink-0 rounded border-slate-700 bg-slate-800 text-emerald-400 focus:ring-emerald-500"
+                className="h-4 w-4 shrink-0 rounded border-share-outlineVariant/40 bg-share-surfaceContainerHigh text-emerald-400 focus:ring-emerald-500"
               />
               {editingId === task.id ? (
                 <input
@@ -227,15 +227,15 @@ export function MustDoPinnedHeader({ tasks, onToggle, onAdd, onDelete, onUpdate 
                     if (e.key === 'Enter') commitTitleEdit(task.id)
                     if (e.key === 'Escape') setEditingId(null)
                   }}
-                  className="min-w-0 flex-1 rounded border border-sky-500 bg-slate-800 px-1 py-0.5 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                  className="min-w-0 flex-1 rounded border border-sky-500 bg-share-surfaceContainerHigh px-1 py-0.5 text-sm text-share-onBg focus:outline-none focus:ring-1 focus:ring-sky-500"
                 />
               ) : (
                 <span
                   onClick={e => { e.preventDefault(); e.stopPropagation(); setEditingId(task.id); setEditingTitle(task.title) }}
                   className={`min-w-0 truncate text-sm cursor-text ${
                     task.isDone
-                      ? 'text-slate-500 line-through decoration-slate-600/60'
-                      : 'text-slate-100'
+                      ? 'text-share-onSurfaceVariant/60 line-through decoration-share-outlineVariant/60'
+                      : 'text-share-onBg'
                   }`}
                 >
                   {task.title}
@@ -248,16 +248,16 @@ export function MustDoPinnedHeader({ tasks, onToggle, onAdd, onDelete, onUpdate 
                   type="time"
                   value={task.scheduledAt ?? ''}
                   onChange={e => onUpdate(task.id, { scheduledAt: e.target.value ? normalizeHhmm(e.target.value) : undefined })}
-                  className={`w-24 rounded border border-slate-700 bg-slate-800 px-1 py-0.5 text-xs tabular-nums [color-scheme:dark] ${task.scheduledAt ? 'text-slate-300' : 'text-transparent'}`}
+                  className={`w-24 rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-1 py-0.5 text-xs tabular-nums [color-scheme:dark] ${task.scheduledAt ? 'text-share-onSurface' : 'text-transparent'}`}
                 />
                 {!task.scheduledAt && (
-                  <span className="pointer-events-none absolute inset-0 flex items-center px-1 text-xs text-slate-500">time</span>
+                  <span className="pointer-events-none absolute inset-0 flex items-center px-1 text-xs text-share-onSurfaceVariant/50">time</span>
                 )}
               </div>
               <select
                 value={task.durationMinutes ?? ''}
                 onChange={e => onUpdate(task.id, { durationMinutes: e.target.value === '' ? undefined : Number(e.target.value) })}
-                className="w-16 rounded border border-slate-700 bg-slate-800 px-1 py-0.5 text-xs tabular-nums text-slate-300"
+                className="w-16 rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-1 py-0.5 text-xs tabular-nums text-share-onSurface"
                 title="Duration"
               >
                 <option value="">dur</option>
@@ -267,7 +267,7 @@ export function MustDoPinnedHeader({ tasks, onToggle, onAdd, onDelete, onUpdate 
             <button
               type="button"
               onClick={() => onDelete(task.id)}
-              className="shrink-0 rounded p-0.5 text-transparent group-hover:text-slate-600 hover:!text-red-400 transition-colors"
+              className="shrink-0 rounded p-0.5 text-transparent group-hover:text-share-onSurfaceVariant/50 hover:!text-red-400 transition-colors"
               aria-label="Remove"
             >
               <X className="h-3.5 w-3.5" />
@@ -277,7 +277,7 @@ export function MustDoPinnedHeader({ tasks, onToggle, onAdd, onDelete, onUpdate 
 
         {/* Empty slots */}
         {rootTasks.length === 0 && (
-          <p className="text-xs italic text-slate-600 px-1">
+          <p className="text-xs italic text-share-onSurfaceVariant/50 px-1">
             No MUSTs set — add up to 3 for today.
           </p>
         )}
@@ -285,7 +285,7 @@ export function MustDoPinnedHeader({ tasks, onToggle, onAdd, onDelete, onUpdate 
         {/* Inline add input */}
         {showAdd && rootTasks.length < MAX && (
           <div className="flex items-center gap-2 pt-0.5">
-            <span className="w-4 shrink-0 text-center text-[10px] font-bold text-slate-600">
+            <span className="w-4 shrink-0 text-center text-[10px] font-bold text-share-onSurfaceVariant/50">
               {rootTasks.length + 1}
             </span>
             <input
@@ -298,7 +298,7 @@ export function MustDoPinnedHeader({ tasks, onToggle, onAdd, onDelete, onUpdate 
                 if (e.key === 'Escape') { setShowAdd(false); setInput('') }
               }}
               placeholder="What must get done today?"
-              className="min-w-0 flex-1 rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-100 placeholder:text-slate-600 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+              className="min-w-0 flex-1 rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-2 py-1 text-xs text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-share-primary focus:outline-none focus:ring-1 focus:ring-share-primary"
             />
             <button
               type="button"
@@ -311,7 +311,7 @@ export function MustDoPinnedHeader({ tasks, onToggle, onAdd, onDelete, onUpdate 
             <button
               type="button"
               onClick={() => { setShowAdd(false); setInput('') }}
-              className="shrink-0 text-xs text-slate-600 hover:text-slate-400"
+              className="shrink-0 text-xs text-share-onSurfaceVariant/50 hover:text-share-onSurfaceVariant"
             >
               ✕
             </button>

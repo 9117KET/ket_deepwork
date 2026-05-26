@@ -87,7 +87,7 @@ export function TomorrowMustPanel({ tomorrowDate, tasks, onAdd, onDelete, onEdit
             <p className="text-xs font-semibold text-indigo-300">
               Set tomorrow's MUSTs
             </p>
-            <p className="text-[10px] text-slate-500">
+            <p className="text-[10px] text-share-onSurfaceVariant/60">
               {tomorrowLabel}, {tasks.length}/{MAX_MUSTS} set
               {allSet ? ' - ready' : noneSet ? ' - not set yet' : ''}
             </p>
@@ -100,19 +100,19 @@ export function TomorrowMustPanel({ tomorrowDate, tasks, onAdd, onDelete, onEdit
               <span
                 key={i}
                 className={`h-1.5 w-1.5 rounded-full ${
-                  i < tasks.length ? 'bg-indigo-400' : 'bg-slate-700'
+                  i < tasks.length ? 'bg-indigo-400' : 'bg-share-outlineVariant/40'
                 }`}
               />
             ))}
           </span>
-          {open ? <ChevronUp className="h-4 w-4 text-slate-500" /> : <ChevronDown className="h-4 w-4 text-slate-500" />}
+          {open ? <ChevronUp className="h-4 w-4 text-share-onSurfaceVariant/60" /> : <ChevronDown className="h-4 w-4 text-share-onSurfaceVariant/60" />}
         </div>
       </button>
 
       {open && (
         <div className="mt-3 space-y-2">
           {tasks.length === 0 && (
-            <p className="text-[11px] italic text-slate-500">
+            <p className="text-[11px] italic text-share-onSurfaceVariant/60">
               No MUSTs set for tomorrow yet. Add up to 3 below.
             </p>
           )}
@@ -133,13 +133,13 @@ export function TomorrowMustPanel({ tomorrowDate, tasks, onAdd, onDelete, onEdit
                     if (e.key === 'Enter') commitEdit()
                     if (e.key === 'Escape') { setEditingId(null) }
                   }}
-                  className="min-w-0 flex-1 rounded border border-indigo-500/50 bg-slate-900 px-2 py-1 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  className="min-w-0 flex-1 rounded border border-indigo-500/50 bg-share-surfaceContainerHigh px-2 py-1 text-xs text-share-onBg focus:outline-none focus:ring-1 focus:ring-indigo-500"
                 />
               ) : (
                 <button
                   type="button"
                   onClick={() => startEdit(task)}
-                  className="min-w-0 flex-1 truncate rounded px-2 py-1 text-left text-xs text-slate-200 hover:bg-slate-800"
+                  className="min-w-0 flex-1 truncate rounded px-2 py-1 text-left text-xs text-share-onSurface hover:bg-share-surfaceContainerHigh"
                   title="Click to edit"
                 >
                   {task.title}
@@ -151,16 +151,16 @@ export function TomorrowMustPanel({ tomorrowDate, tasks, onAdd, onDelete, onEdit
                     type="time"
                     value={task.scheduledAt ?? ''}
                     onChange={e => onUpdate(task.id, { scheduledAt: e.target.value ? normalizeHhmm(e.target.value) : undefined })}
-                    className={`w-24 rounded border border-slate-700 bg-slate-900 px-1 py-0.5 text-xs tabular-nums [color-scheme:dark] ${task.scheduledAt ? 'text-slate-300' : 'text-transparent'}`}
+                    className={`w-24 rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-1 py-0.5 text-xs tabular-nums [color-scheme:dark] ${task.scheduledAt ? 'text-share-onSurface' : 'text-transparent'}`}
                   />
                   {!task.scheduledAt && (
-                    <span className="pointer-events-none absolute inset-0 flex items-center px-1 text-xs text-slate-600">time</span>
+                    <span className="pointer-events-none absolute inset-0 flex items-center px-1 text-xs text-share-onSurfaceVariant/50">time</span>
                   )}
                 </div>
                 <select
                   value={task.durationMinutes ?? ''}
                   onChange={e => onUpdate(task.id, { durationMinutes: e.target.value === '' ? undefined : Number(e.target.value) })}
-                  className="w-16 rounded border border-slate-700 bg-slate-900 px-1 py-0.5 text-xs tabular-nums text-slate-300"
+                  className="w-16 rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-1 py-0.5 text-xs tabular-nums text-share-onSurface"
                   title="Duration"
                 >
                   <option value="">dur</option>
@@ -170,7 +170,7 @@ export function TomorrowMustPanel({ tomorrowDate, tasks, onAdd, onDelete, onEdit
               <button
                 type="button"
                 onClick={() => onDelete(task.id)}
-                className="shrink-0 rounded p-0.5 text-slate-600 hover:text-red-400"
+                className="shrink-0 rounded p-0.5 text-share-onSurfaceVariant/40 hover:text-red-400"
                 aria-label="Remove"
               >
                 <X className="h-3.5 w-3.5" />
@@ -180,7 +180,7 @@ export function TomorrowMustPanel({ tomorrowDate, tasks, onAdd, onDelete, onEdit
 
           {tasks.length < MAX_MUSTS && (
             <div className="flex items-center gap-2">
-              <span className="w-4 shrink-0 text-center text-[10px] font-bold text-slate-600">
+              <span className="w-4 shrink-0 text-center text-[10px] font-bold text-share-onSurfaceVariant/50">
                 {tasks.length + 1}
               </span>
               <input
@@ -190,7 +190,7 @@ export function TomorrowMustPanel({ tomorrowDate, tasks, onAdd, onDelete, onEdit
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="What must get done tomorrow?"
-                className="min-w-0 flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-slate-100 placeholder:text-slate-600 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                className="min-w-0 flex-1 rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-2 py-1 text-xs text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               />
               <button
                 type="button"

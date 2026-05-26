@@ -92,7 +92,7 @@ export function BlockDurationEditor({
     <div ref={containerRef} className="relative">
       <button
         onClick={() => { setDraft(currentDuration); setOpen((v) => !v) }}
-        className="flex items-center gap-1 text-xs text-slate-500 hover:text-sky-400"
+        className="flex items-center gap-1 text-xs text-share-onSurfaceVariant/60 hover:text-share-primary"
         title="Adjust block duration"
       >
         <MaterialIcon name="edit" className="text-sm" />
@@ -100,26 +100,26 @@ export function BlockDurationEditor({
       </button>
 
       {open && (
-        <div className="absolute right-0 top-7 z-30 w-[min(100vw-2rem,18rem)] min-w-[16rem] rounded-xl border border-slate-700 bg-slate-900 p-4 shadow-2xl">
+        <div className="absolute right-0 top-7 z-30 w-[min(100vw-2rem,18rem)] min-w-[16rem] rounded-xl border border-share-outlineVariant/40 bg-share-surfaceContainerHigh p-4 shadow-2xl">
           {/* Current duration stepper */}
-          <p className="mb-3 text-xs font-bold uppercase tracking-widest text-slate-400">
+          <p className="mb-3 text-xs font-bold uppercase tracking-widest text-share-onSurfaceVariant">
             Duration
           </p>
           <div className="mb-4 flex items-center justify-between gap-2">
             <button
               onClick={() => setDraft((d) => d - STEP)}
               disabled={!canDecrease}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-700 text-slate-300 hover:border-sky-500 hover:text-sky-400 disabled:opacity-30 disabled:pointer-events-none"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-share-outlineVariant/40 text-share-onSurface hover:border-share-primary/60 hover:text-share-primary disabled:opacity-30 disabled:pointer-events-none"
             >
               <MaterialIcon name="remove" className="text-base" />
             </button>
-            <span className="min-w-[5.5rem] flex-1 text-center font-mono text-xl font-semibold tabular-nums text-slate-100">
+            <span className="min-w-[5.5rem] flex-1 text-center font-mono text-xl font-semibold tabular-nums text-share-onBg">
               {formatDur(draft)}
             </span>
             <button
               onClick={() => setDraft((d) => d + STEP)}
               disabled={!canIncrease}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-700 text-slate-300 hover:border-sky-500 hover:text-sky-400 disabled:opacity-30 disabled:pointer-events-none"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-share-outlineVariant/40 text-share-onSurface hover:border-share-primary/60 hover:text-share-primary disabled:opacity-30 disabled:pointer-events-none"
             >
               <MaterialIcon name="add" className="text-base" />
             </button>
@@ -127,8 +127,8 @@ export function BlockDurationEditor({
 
           {/* Adjacent block preview */}
           {delta !== 0 && (
-            <div className={`mb-3 rounded-lg px-3 py-2 text-xs ${sleepWarn ? 'border border-amber-500/30 bg-amber-500/10' : 'bg-slate-800'}`}>
-              <span className="text-slate-400">{adjacentLabel} will adjust to </span>
+            <div className={`mb-3 rounded-lg px-3 py-2 text-xs ${sleepWarn ? 'border border-amber-500/30 bg-amber-500/10' : 'bg-share-surfaceContainerHighest'}`}>
+              <span className="text-share-onSurfaceVariant">{adjacentLabel} will adjust to </span>
               <span className={`font-semibold ${adjacentPreview < adjacentPreviewMin ? 'text-red-400' : sleepWarn ? 'text-amber-300' : 'text-sky-300'}`}>
                 {formatDur(Math.max(0, adjacentPreview))}
               </span>
@@ -144,13 +144,13 @@ export function BlockDurationEditor({
             <button
               onClick={handleConfirm}
               disabled={delta === 0}
-              className="flex-1 rounded-lg bg-sky-600 py-1.5 text-xs font-medium text-white hover:bg-sky-500 disabled:opacity-40 disabled:pointer-events-none"
+              className="flex-1 rounded-lg bg-share-primary py-1.5 text-xs font-medium text-share-onPrimary hover:opacity-90 disabled:opacity-40 disabled:pointer-events-none"
             >
               Save
             </button>
             <button
               onClick={handleCancel}
-              className="flex-1 rounded-lg border border-slate-700 py-1.5 text-xs font-medium text-slate-400 hover:text-slate-200"
+              className="flex-1 rounded-lg border border-share-outlineVariant/40 py-1.5 text-xs font-medium text-share-onSurfaceVariant hover:text-share-onBg"
             >
               Cancel
             </button>

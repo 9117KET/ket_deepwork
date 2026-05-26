@@ -83,14 +83,14 @@ export function WeeklyOverview({ state, referenceDay }: WeeklyOverviewProps) {
   return (
     <section
       id="progress-dashboard"
-      className="rounded-lg border border-slate-800 bg-slate-900 p-3 sm:p-4"
+      className="rounded-lg border border-share-outlineVariant/25 bg-share-surfaceContainerLow p-3 sm:p-4"
     >
       <header className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h3 className="text-sm sm:text-base font-semibold text-slate-100">Progress</h3>
-          <p className="text-xs text-slate-400">Year overview of your tasks.</p>
+          <h3 className="text-sm sm:text-base font-semibold text-share-onBg">Progress</h3>
+          <p className="text-xs text-share-onSurfaceVariant">Year overview of your tasks.</p>
         </div>
-        <div className="inline-flex self-start rounded-full border border-slate-700 bg-slate-950 text-xs text-slate-300">
+        <div className="inline-flex self-start rounded-full border border-share-outlineVariant/40 bg-share-surfaceContainerHighest text-xs text-share-onSurface">
           {(['day', 'week', 'month', 'year'] as const).map((key) => (
             <button
               key={key}
@@ -98,8 +98,8 @@ export function WeeklyOverview({ state, referenceDay }: WeeklyOverviewProps) {
               onClick={() => setView(key)}
               className={`px-2 py-1 first:rounded-l-full last:rounded-r-full ${
                 view === key
-                  ? 'bg-sky-600 text-slate-950'
-                  : 'hover:bg-slate-800 hover:text-slate-100'
+                  ? 'bg-share-primary text-share-onPrimary'
+                  : 'hover:bg-share-surfaceContainerHigh hover:text-share-onBg'
               }`}
             >
               {key.charAt(0).toUpperCase() + key.slice(1)}
@@ -110,10 +110,10 @@ export function WeeklyOverview({ state, referenceDay }: WeeklyOverviewProps) {
 
       {activeTotal > 0 && (
         <div className="mb-3">
-          <div className="flex items-center justify-between text-[11px] text-slate-400">
+          <div className="flex items-center justify-between text-[11px] text-share-onSurfaceVariant">
             <span>
               {view.charAt(0).toUpperCase() + view.slice(1)}:{' '}
-              <span className="font-medium text-slate-200">
+              <span className="font-medium text-share-onBg">
                 {activePercentage.toFixed(1)}%
               </span>
             </span>
@@ -121,7 +121,7 @@ export function WeeklyOverview({ state, referenceDay }: WeeklyOverviewProps) {
               {activeCompleted.toFixed(1)}/{activeTotal.toFixed(1)} pts
             </span>
           </div>
-          <div className="mt-1 h-1.5 w-full rounded-full bg-slate-900">
+          <div className="mt-1 h-1.5 w-full rounded-full bg-share-outlineVariant/25">
             <div
               className="h-1.5 rounded-full bg-sky-500"
               style={{ width: `${activePercentage}%` }}
@@ -130,7 +130,7 @@ export function WeeklyOverview({ state, referenceDay }: WeeklyOverviewProps) {
         </div>
       )}
 
-      <div className="mb-3 rounded-md bg-slate-950/60 px-3 py-2 text-xs text-slate-300">
+      <div className="mb-3 rounded-md bg-share-surfaceContainerHighest px-3 py-2 text-xs text-share-onSurface">
         {view === 'day' && (
           <>
             {today.totalCount === 0 ? (
@@ -180,16 +180,16 @@ export function WeeklyOverview({ state, referenceDay }: WeeklyOverviewProps) {
 
             return (
               <div key={day.date} className="flex items-center gap-2">
-                <div className="w-20 text-xs text-slate-400">{formatShortLabel(day.date)}</div>
+                <div className="w-20 text-xs text-share-onSurfaceVariant">{formatShortLabel(day.date)}</div>
                 <div className="flex-1">
-                  <div className="h-1.5 w-full rounded-full bg-slate-900">
+                  <div className="h-1.5 w-full rounded-full bg-share-outlineVariant/25">
                     <div
                       className="h-1.5 rounded-full bg-sky-500"
                       style={{ width: `${percentage}%` }}
                     />
                   </div>
                 </div>
-                <div className="w-16 text-right text-xs text-slate-400">{percentage.toFixed(1)}%</div>
+                <div className="w-16 text-right text-xs text-share-onSurfaceVariant">{percentage.toFixed(1)}%</div>
               </div>
             )
           })}
