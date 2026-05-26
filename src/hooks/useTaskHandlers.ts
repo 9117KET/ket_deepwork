@@ -753,6 +753,92 @@ export function useTaskHandlers(
     });
   }, [selectedDay, updateAppState]);
 
+  const handleReorderSubtask = useCallback(
+    (parentId: string, subtaskId: string, insertIndex: number) => {
+      updateAppState((prev) => {
+        try {
+          const existingDay = getOrCreateDay(prev, selectedDay)
+          const siblings = existingDay.tasks.filter(t => t.parentId === parentId)
+          const fromIndex = siblings.findIndex(t => t.id === subtaskId)
+          if (fromIndex < 0) return prev
+
+          const reordered = reorderTasks(siblings, fromIndex, insertIndex)
+          const withoutSiblings = existingDay.tasks.filter(t => t.parentId !== parentId)
+          const parentIdx = withoutSiblings.findIndex(t => t.id === parentId)
+          if (parentIdx < 0) return prev
+
+          const nextTasks = [
+            ...withoutSiblings.slice(0, parentIdx + 1),
+            ...reordered,
+            ...withoutSiblings.slice(parentIdx + 1),
+          ]
+          if (nextTasks.length !== existingDay.tasks.length) return prev
+          return {
+            ...prev,
+            days: { ...prev.days, [selectedDay]: { ...existingDay, tasks: nextTasks } },
+          }
+        } catch {
+          return prev
+        }
+      })
+    },
+    [updateAppState, selectedDay],
+  )
+
+  const handleMoveSubtask = useCallback(
+    (subtaskId: string, newParentId: string | null) => {
+      updateAppState((prev) => {
+        try {
+          const existingDay = getOrCreateDay(prev, selectedDay)
+          const subtask = existingDay.tasks.find(t => t.id === subtaskId)
+          if (!subtask) return prev
+
+          if (newParentId === null) {
+            const nextTasks = existingDay.tasks.map(t =>
+              t.id === subtaskId ? { ...t, parentId: undefined } : t
+            )
+            return {
+              ...prev,
+              days: { ...prev.days, [selectedDay]: { ...existingDay, tasks: nextTasks } },
+            }
+          }
+
+          const newParent = existingDay.tasks.find(t => t.id === newParentId)
+          if (!newParent || newParentId === subtask.parentId) return prev
+
+          const withoutSubtask = existingDay.tasks.filter(t => t.id !== subtaskId)
+          const newParentIdx = withoutSubtask.findIndex(t => t.id === newParentId)
+          if (newParentIdx < 0) return prev
+
+          const moved: Task = { ...subtask, parentId: newParentId, sectionId: newParent.sectionId }
+
+          let insertAfterIdx = newParentIdx
+          for (let i = newParentIdx + 1; i < withoutSubtask.length; i++) {
+            if (withoutSubtask[i]?.parentId === newParentId) {
+              insertAfterIdx = i
+            } else {
+              break
+            }
+          }
+
+          const nextTasks = [
+            ...withoutSubtask.slice(0, insertAfterIdx + 1),
+            moved,
+            ...withoutSubtask.slice(insertAfterIdx + 1),
+          ]
+          if (nextTasks.length !== existingDay.tasks.length) return prev
+          return {
+            ...prev,
+            days: { ...prev.days, [selectedDay]: { ...existingDay, tasks: nextTasks } },
+          }
+        } catch {
+          return prev
+        }
+      })
+    },
+    [updateAppState, selectedDay],
+  )
+
   return {
     draggedTask,
     setSelectedTaskIds,
@@ -787,5 +873,7 @@ export function useTaskHandlers(
     handleDeleteTomorrowMust,
     handleEditTomorrowMust,
     handleUpdateTomorrowMust,
+    handleReorderSubtask,
+    handleMoveSubtask,
   };
 }

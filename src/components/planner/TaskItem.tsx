@@ -40,6 +40,8 @@ interface TaskItemProps {
   onMoveToNotDoing?: () => void
   /** Consciously abandon this task (Drucker: abandonment as a success). */
   onAbandon?: () => void
+  /** Subtask only: open the parent picker to move to a different parent or promote. */
+  onMoveToAnotherParent?: () => void
   onDragStart?: () => void
   onDragOver?: (position: 'above' | 'below') => void
   onDragLeave?: () => void
@@ -87,6 +89,7 @@ export function TaskItem({
   onUpdateTask,
   onMoveToNotDoing,
   onAbandon,
+  onMoveToAnotherParent,
   onDragStart,
   onDragOver,
   onDragLeave,
@@ -127,7 +130,7 @@ export function TaskItem({
   const isReorderable = typeof onDragStart === 'function' && typeof onDrop === 'function'
   const canEditTime = typeof onUpdateTask === 'function'
   const showContextMenu = Boolean(
-    onUpdateTask ?? onAddTaskAbove ?? onAddTaskBelow ?? onAddSubtask ?? onMoveToNotDoing ?? onAbandon ?? onDelete,
+    onUpdateTask ?? onAddTaskAbove ?? onAddTaskBelow ?? onAddSubtask ?? onMoveToNotDoing ?? onAbandon ?? onDelete ?? onMoveToAnotherParent,
   )
   const postponedCount = task.postponedCount ?? 0
 
@@ -238,7 +241,7 @@ export function TaskItem({
             ref={menuBtnRef}
             type="button"
             onClick={handleMenuButtonClick}
-            className="shrink-0 rounded p-0.5 text-share-onSurfaceVariant/50 hover:bg-share-surfaceContainerHigh hover:text-share-onSurfaceVariant sm:opacity-0 sm:group-hover:opacity-100"
+            className={`shrink-0 rounded p-0.5 text-share-onSurfaceVariant/50 hover:bg-share-surfaceContainerHigh hover:text-share-onSurfaceVariant ${isReorderable ? 'sm:hidden' : 'sm:opacity-0 sm:group-hover:opacity-100'}`}
             aria-label="Task options"
           >
             <MoreVertical className="h-4 w-4" />
@@ -412,6 +415,16 @@ export function TaskItem({
               onClick={() => closeAnd(onMoveToNotDoing)}
             >
               Move to Not Doing
+            </button>
+          )}
+          {onMoveToAnotherParent && (
+            <button
+              type="button"
+              role="menuitem"
+              className="w-full px-3 py-1.5 text-left text-sm text-share-onSurface hover:bg-share-surfaceContainerHighest"
+              onClick={() => closeAnd(onMoveToAnotherParent)}
+            >
+              Move to...
             </button>
           )}
           {onAbandon && (

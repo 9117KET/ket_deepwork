@@ -5,7 +5,7 @@
  * Manages drag state for reordering within the section.
  */
 
-import { useState, useEffect, useRef, type ReactNode } from 'react'
+import { useState, useEffect, useRef, type ReactNode, useCallback } from 'react'
 import type { Task, TaskSection, TaskSectionId } from '../../domain/types'
 import { AddTaskInput } from './AddTaskInput'
 import { TaskItem } from './TaskItem'
@@ -51,6 +51,10 @@ interface SectionColumnProps {
   onMoveToNotDoing?: (taskId: string) => void
   /** Consciously abandon a task (Drucker). */
   onAbandonTask?: (taskId: string) => void
+  /** Reorder a subtask within its parent (same parent). */
+  onReorderSubtask?: (parentId: string, subtaskId: string, insertIndex: number) => void
+  /** Open the parent picker for a subtask so the user can move it elsewhere. */
+  onRequestMoveSubtask?: (subtaskId: string) => void
   /**
    * Max incomplete root tasks before showing an overload nudge.
    * Undefined = no nudge for this section.
@@ -85,11 +89,16 @@ export function SectionColumn({
   onMoveTaskDown,
   onMoveToNotDoing,
   onAbandonTask,
+  onReorderSubtask,
+  onRequestMoveSubtask,
   overloadThreshold,
 }: SectionColumnProps) {
   const [dropTarget, setDropTarget] = useState<{ index: number; position: DropPosition } | null>(
     null,
   )
+  const [draggedSubtask, setDraggedSubtask] = useState<{ parentId: string; subtaskId: string } | null>(null)
+  const draggedSubtaskRef = useRef<{ parentId: string; subtaskId: string } | null>(null)
+  const [subtaskDropTarget, setSubtaskDropTarget] = useState<{ subtaskId: string; position: DropPosition } | null>(null)
   const [collapsed, setCollapsed] = useState(() => isTimeBlockActive ? false : defaultCollapsed)
   const [pendingCollapse, setPendingCollapse] = useState<'done' | 'timeEnd' | null>(null)
   const collapsedRef = useRef(collapsed)
@@ -163,6 +172,44 @@ export function SectionColumn({
     setDropTarget(null)
     onDragEnd?.()
   }
+
+  const handleSubtaskDragStart = useCallback((parentId: string, subtaskId: string) => {
+    draggedSubtaskRef.current = { parentId, subtaskId }
+    setDraggedSubtask({ parentId, subtaskId })
+  }, [])
+
+  const handleSubtaskDragOver = useCallback((subtaskId: string, position: DropPosition) => {
+    setSubtaskDropTarget({ subtaskId, position })
+  }, [])
+
+  const handleSubtaskDragLeave = useCallback(() => setSubtaskDropTarget(null), [])
+
+  const handleSubtaskDrop = useCallback((targetSubtaskId: string) => {
+    const payload = draggedSubtaskRef.current ?? draggedSubtask
+    if (!payload) return
+    const target = subtaskDropTarget
+    if (!target) {
+      draggedSubtaskRef.current = null
+      setDraggedSubtask(null)
+      return
+    }
+    const siblings = tasks.filter(t => t.parentId === payload.parentId)
+    const fromIndex = siblings.findIndex(t => t.id === payload.subtaskId)
+    const targetIndex = siblings.findIndex(t => t.id === targetSubtaskId)
+    if (fromIndex >= 0 && targetIndex >= 0) {
+      const insertIndex = target.position === 'above' ? targetIndex : targetIndex + 1
+      onReorderSubtask?.(payload.parentId, payload.subtaskId, insertIndex)
+    }
+    draggedSubtaskRef.current = null
+    setDraggedSubtask(null)
+    setSubtaskDropTarget(null)
+  }, [draggedSubtask, subtaskDropTarget, tasks, onReorderSubtask])
+
+  const handleSubtaskDragEnd = useCallback(() => {
+    draggedSubtaskRef.current = null
+    setDraggedSubtask(null)
+    setSubtaskDropTarget(null)
+  }, [])
 
   return (
     <section
@@ -275,9 +322,21 @@ export function SectionColumn({
                 key={task.id}
                 task={task}
                 isSubtask={Boolean(task.parentId)}
-                isDragging={draggedTask?.sectionId === section.id && draggedTask?.taskId === task.id}
-                showDropAbove={dropTarget?.index === index && dropTarget?.position === 'above'}
-                showDropBelow={dropTarget?.index === index && dropTarget?.position === 'below'}
+                isDragging={
+                  task.parentId
+                    ? draggedSubtask?.subtaskId === task.id
+                    : draggedTask?.sectionId === section.id && draggedTask?.taskId === task.id
+                }
+                showDropAbove={
+                  task.parentId
+                    ? subtaskDropTarget?.subtaskId === task.id && subtaskDropTarget.position === 'above'
+                    : dropTarget?.index === index && dropTarget?.position === 'above'
+                }
+                showDropBelow={
+                  task.parentId
+                    ? subtaskDropTarget?.subtaskId === task.id && subtaskDropTarget.position === 'below'
+                    : dropTarget?.index === index && dropTarget?.position === 'below'
+                }
                 isDueNow={taskIdsDueNow.has(task.id)}
                 isSelected={selectedTaskIds.has(task.id)}
                 onToggleSelect={onToggleSelect ? () => onToggleSelect(task.id) : undefined}
@@ -285,17 +344,38 @@ export function SectionColumn({
                 onDelete={() => onDeleteTask(task.id)}
                 onAddTaskAbove={onAddTaskAbove ? () => onAddTaskAbove(task.id) : undefined}
                 onAddTaskBelow={onAddTaskBelow ? () => onAddTaskBelow(task.id) : undefined}
-                onAddSubtask={onAddSubtask ? () => onAddSubtask(task.id) : undefined}
+                onAddSubtask={!task.parentId && onAddSubtask ? () => onAddSubtask(task.id) : undefined}
                 onUpdateTask={(patch) => onUpdateTask(task.id, patch)}
-                onDragStart={!task.parentId ? () => handleDragStart(task.id) : undefined}
-                onDragOver={!task.parentId ? (position) => handleDragOver(index, position) : undefined}
-                onDragLeave={!task.parentId ? handleDragLeave : undefined}
-                onDrop={!task.parentId ? handleDrop : undefined}
-                onDragEnd={!task.parentId ? handleDragEnd : undefined}
+                onDragStart={
+                  task.parentId && onReorderSubtask
+                    ? () => handleSubtaskDragStart(task.parentId!, task.id)
+                    : !task.parentId ? () => handleDragStart(task.id) : undefined
+                }
+                onDragOver={
+                  task.parentId && onReorderSubtask
+                    ? (position) => handleSubtaskDragOver(task.id, position)
+                    : !task.parentId ? (position) => handleDragOver(index, position) : undefined
+                }
+                onDragLeave={
+                  task.parentId && onReorderSubtask
+                    ? handleSubtaskDragLeave
+                    : !task.parentId ? handleDragLeave : undefined
+                }
+                onDrop={
+                  task.parentId && onReorderSubtask
+                    ? () => handleSubtaskDrop(task.id)
+                    : !task.parentId ? handleDrop : undefined
+                }
+                onDragEnd={
+                  task.parentId && onReorderSubtask
+                    ? handleSubtaskDragEnd
+                    : !task.parentId ? handleDragEnd : undefined
+                }
                 onMoveUp={onMoveTaskUp && rootIdx > 0 && !isParent ? () => onMoveTaskUp(task.id) : undefined}
                 onMoveDown={onMoveTaskDown && rootIdx >= 0 && rootIdx < roots.length - 1 && !isParent ? () => onMoveTaskDown(task.id) : undefined}
-                onMoveToNotDoing={onMoveToNotDoing ? () => onMoveToNotDoing(task.id) : undefined}
-                onAbandon={onAbandonTask ? () => onAbandonTask(task.id) : undefined}
+                onMoveToNotDoing={!task.parentId && onMoveToNotDoing ? () => onMoveToNotDoing(task.id) : undefined}
+                onAbandon={!task.parentId && onAbandonTask ? () => onAbandonTask(task.id) : undefined}
+                onMoveToAnotherParent={task.parentId && onRequestMoveSubtask ? () => onRequestMoveSubtask(task.id) : undefined}
               />
             )
           })

@@ -244,6 +244,8 @@ export function DayPlanner({
     handleDeleteTomorrowMust,
     handleEditTomorrowMust,
     handleUpdateTomorrowMust,
+    handleReorderSubtask,
+    handleMoveSubtask,
   } = taskHandlers;
 
   const blockEditor = useDayBlockEditor(
@@ -387,6 +389,7 @@ export function DayPlanner({
   );
 
   const [editHabitsOpen, setEditHabitsOpen] = useState(false);
+  const [moveSubtaskId, setMoveSubtaskId] = useState<string | null>(null);
   const [editSideQuestOpen, setEditSideQuestOpen] = useState(false);
 
   const tomorrowDate = useMemo(() => addDays(selectedDay, 1), [selectedDay]);
@@ -661,20 +664,20 @@ export function DayPlanner({
               </div>
             )
           })()}
-          {FIXED_SECTIONS.filter(s => s.id !== 'mustDo' && s.id !== 'sideQuest').map((section) => (
+          {FIXED_SECTIONS.filter(s => s.id !== 'mustDo' && s.id !== 'sideQuest').map((section) => {
+            const isActive = !shareMode && selectedDay === todayIso() && activeSectionIds.includes(section.id)
+            const isDeepBlock = !shareMode && section.id === 'highPriority' && appState.depthPhilosophy === 'rhythmic'
+            const timeLabel = timeframeLabelsBySection[section.id]
+            return (
             <Fragment key={section.id}>
-              {!shareMode && section.id === 'highPriority' && appState.depthPhilosophy === 'rhythmic' && (
-                <div className="rounded border border-teal-700 bg-teal-900/30 px-3 py-1.5 text-xs text-teal-300">
-                  Deep Block
-                  {timeframeLabelsBySection['highPriority'] ? ` · ${timeframeLabelsBySection['highPriority']}` : ''}
-                  {' '}· protect this time
-                </div>
-              )}
-              {!shareMode && selectedDay === todayIso() && activeSectionIds.includes(section.id) && (
-                <div className="flex items-center gap-2 rounded border border-teal-700/60 bg-teal-900/20 px-3 py-1.5 text-xs text-teal-300">
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-teal-400" />
-                  <span className="font-medium">
-                    Active now{timeframeLabelsBySection[section.id] ? ` · ${timeframeLabelsBySection[section.id]}` : ''}
+              {(isDeepBlock || isActive) && (
+                <div className={`flex items-center gap-2 rounded border px-3 py-1.5 text-xs text-teal-300 ${isDeepBlock ? 'border-teal-700 bg-teal-900/30' : 'border-teal-700/60 bg-teal-900/20'}`}>
+                  {isActive && <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-teal-400" />}
+                  <span className={isDeepBlock ? '' : 'font-medium'}>
+                    {isDeepBlock
+                      ? `Deep Block${timeLabel ? ` · ${timeLabel}` : ''} · protect this time`
+                      : `Active${timeLabel ? ` · ${timeLabel}` : ''}`
+                    }
                   </span>
                 </div>
               )}
@@ -711,6 +714,8 @@ export function DayPlanner({
               onMoveTaskDown={shareMode === 'view' ? undefined : (taskId) => handleReorderTask(taskId, section.id, 'down')}
               onMoveToNotDoing={shareMode === 'view' ? undefined : handleMoveToNotDoing}
               onAbandonTask={shareMode === 'view' ? undefined : handleAbandonTask}
+              onReorderSubtask={shareMode === 'view' ? undefined : handleReorderSubtask}
+              onRequestMoveSubtask={shareMode === 'view' ? undefined : (id) => setMoveSubtaskId(id)}
               overloadThreshold={
                 section.id === 'mustDo' ? 3
                 : section.id === 'highPriority' ? 5
@@ -791,7 +796,8 @@ export function DayPlanner({
               />
             )}
             </Fragment>
-          ))}
+          )
+          })}
           {/* Sleep block: same style as sections, no tasks, highlights when current time is 11 PM - 5 AM */}
           <section
             className={`rounded-lg border p-3 sm:p-4 ${
@@ -966,6 +972,75 @@ export function DayPlanner({
           />
         </div>
       )}
+
+      {moveSubtaskId && !shareMode && (() => {
+        const subtask = dayState.tasks.find(t => t.id === moveSubtaskId)
+        if (!subtask) return null
+        const parentsBySection = FIXED_SECTIONS
+          .filter(s => s.id !== 'sideQuest')
+          .map(s => ({
+            section: s,
+            roots: (tasksBySection[s.id] ?? []).filter(t => !t.parentId && t.id !== moveSubtaskId && t.id !== subtask.parentId),
+          }))
+          .filter(({ roots }) => roots.length > 0)
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+            onClick={() => setMoveSubtaskId(null)}
+          >
+            <div
+              className="w-full max-w-sm rounded-lg border border-share-outlineVariant/50 bg-share-surfaceContainerHigh p-4 shadow-2xl"
+              onClick={e => e.stopPropagation()}
+            >
+              <h3 className="mb-3 text-sm font-semibold text-share-onBg">Move subtask to...</h3>
+              <div className="max-h-64 overflow-y-auto space-y-1">
+                {parentsBySection.map(({ section, roots }) => (
+                  <div key={section.id}>
+                    <p className="px-3 py-1 text-[10px] uppercase tracking-wide text-share-onSurfaceVariant/60">{section.title}</p>
+                    {roots.map(parent => (
+                      <button
+                        key={parent.id}
+                        type="button"
+                        className="w-full rounded px-3 py-2 text-left text-sm text-share-onSurface hover:bg-share-surfaceContainerHighest"
+                        onClick={() => {
+                          handleMoveSubtask(moveSubtaskId, parent.id)
+                          setMoveSubtaskId(null)
+                        }}
+                      >
+                        {parent.title}
+                      </button>
+                    ))}
+                  </div>
+                ))}
+                {parentsBySection.length === 0 && (
+                  <p className="px-3 py-2 text-sm text-share-onSurfaceVariant/60">No other tasks to move to.</p>
+                )}
+              </div>
+              <div className="mt-3 border-t border-share-outlineVariant/30 pt-3">
+                <button
+                  type="button"
+                  className="w-full rounded px-3 py-2 text-left text-sm text-share-onSurfaceVariant hover:bg-share-surfaceContainerHighest"
+                  onClick={() => {
+                    handleMoveSubtask(moveSubtaskId, null)
+                    setMoveSubtaskId(null)
+                  }}
+                >
+                  Make it a top-level task
+                </button>
+              </div>
+              <div className="mt-2">
+                <button
+                  type="button"
+                  className="w-full rounded px-3 py-1.5 text-center text-xs text-share-onSurfaceVariant/70 hover:bg-share-surfaceContainerHighest"
+                  onClick={() => setMoveSubtaskId(null)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       <PlannerModals
         selectedDay={selectedDay}
