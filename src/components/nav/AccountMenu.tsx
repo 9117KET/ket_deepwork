@@ -124,7 +124,7 @@ export function AccountMenu({
                 <div
                   key={item.key}
                   role="separator"
-                  className="my-1 h-px bg-slate-800"
+                  className="my-1 h-px bg-share-outlineVariant/25"
                 />
               );
             }

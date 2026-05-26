@@ -17,7 +17,7 @@ export interface AppMobileNavProps {
 function itemClass(active: boolean) {
   return active
     ? "flex flex-col items-center justify-center rounded-2xl bg-share-primary/15 py-3 px-4 text-share-primary transition-colors min-w-[60px]"
-    : "flex flex-col items-center justify-center rounded-2xl py-3 px-4 text-slate-500 transition-colors hover:text-slate-300 active:bg-slate-800 min-w-[60px]";
+    : "flex flex-col items-center justify-center rounded-2xl py-3 px-4 text-share-onSurfaceVariant/60 transition-colors hover:text-share-onSurface active:bg-share-surfaceContainerHigh min-w-[60px]";
 }
 
 export function AppMobileNav({

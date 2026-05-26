@@ -115,31 +115,31 @@ export function ShareModal({ userId, isOpen, onClose }: ShareModalProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-share-bg/90 p-4"
       role="dialog"
       aria-modal="true"
       aria-label="Share planner"
     >
-      <div className="w-full max-w-lg rounded-lg border border-slate-700 bg-slate-900 p-5 shadow-xl">
+      <div className="w-full max-w-lg rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerHigh p-5 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <h3 className="text-base font-semibold text-slate-100">Share your planner</h3>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <h3 className="text-base font-semibold text-share-onBg">Share your planner</h3>
+            <p className="text-xs text-share-onSurfaceVariant mt-0.5">
               Anyone with a link can view or edit tasks. Links have no expiry.
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-400 hover:bg-slate-800"
+            className="rounded border border-share-outlineVariant/40 px-2 py-1 text-xs text-share-onSurfaceVariant hover:bg-share-surfaceContainerHighest"
           >
             Close
           </button>
         </div>
 
         {/* Create new link */}
-        <div className="mb-5 rounded-md border border-slate-700 bg-slate-950 p-3">
-          <p className="text-xs font-medium text-slate-300 mb-2">New link</p>
+        <div className="mb-5 rounded-md border border-share-outlineVariant/30 bg-share-surfaceContainerHighest p-3">
+          <p className="text-xs font-medium text-share-onBg mb-2">New link</p>
           <div className="flex flex-wrap gap-2 mb-2">
             {(["view", "edit"] as const).map((p) => (
               <button
@@ -148,8 +148,8 @@ export function ShareModal({ userId, isOpen, onClose }: ShareModalProps) {
                 onClick={() => setNewPermission(p)}
                 className={`rounded border px-3 py-1 text-xs font-medium ${
                   newPermission === p
-                    ? "border-sky-600 bg-sky-600 text-slate-950"
-                    : "border-slate-600 text-slate-300 hover:border-sky-600 hover:text-sky-300"
+                    ? "border-sky-600 bg-sky-600 text-white"
+                    : "border-share-outlineVariant/40 text-share-onSurface hover:border-sky-600 hover:text-sky-300"
                 }`}
               >
                 {p === "view" ? "View only" : "Can edit tasks"}
@@ -162,14 +162,14 @@ export function ShareModal({ userId, isOpen, onClose }: ShareModalProps) {
               value={newLabel}
               onChange={(e) => setNewLabel(e.target.value)}
               placeholder="Label (optional, e.g. Team)"
-              className="flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-sky-600 focus:outline-none"
+              className="flex-1 rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-2 py-1.5 text-sm text-share-onBg placeholder:text-share-onSurfaceVariant/50 focus:border-sky-600 focus:outline-none"
               onKeyDown={(e) => { if (e.key === "Enter" && !creating) void handleCreate() }}
             />
             <button
               type="button"
               onClick={() => void handleCreate()}
               disabled={creating}
-              className="rounded border border-sky-600 bg-sky-600 px-3 py-1.5 text-xs font-medium text-slate-950 hover:bg-sky-500 disabled:opacity-50"
+              className="rounded border border-sky-600 bg-sky-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-500 disabled:opacity-50"
             >
               {creating ? "Creating…" : "Create link"}
             </button>
@@ -181,17 +181,17 @@ export function ShareModal({ userId, isOpen, onClose }: ShareModalProps) {
 
         {/* Existing links */}
         <div>
-          <p className="text-xs font-medium text-slate-300 mb-2">Active links</p>
+          <p className="text-xs font-medium text-share-onBg mb-2">Active links</p>
           {loading ? (
-            <p className="text-xs text-slate-500 py-3 text-center">Loading…</p>
+            <p className="text-xs text-share-onSurfaceVariant/60 py-3 text-center">Loading…</p>
           ) : tokens.length === 0 ? (
-            <p className="text-xs text-slate-500 py-3 text-center">No share links yet.</p>
+            <p className="text-xs text-share-onSurfaceVariant/60 py-3 text-center">No share links yet.</p>
           ) : (
             <ul className="space-y-2 max-h-56 overflow-y-auto">
               {tokens.map((t) => (
                 <li
                   key={t.id}
-                  className="flex items-center gap-2 rounded-md border border-slate-700 bg-slate-950 px-3 py-2"
+                  className="flex items-center gap-2 rounded-md border border-share-outlineVariant/30 bg-share-surfaceContainerHighest px-3 py-2"
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -205,27 +205,27 @@ export function ShareModal({ userId, isOpen, onClose }: ShareModalProps) {
                         {t.permission === "edit" ? "Edit tasks" : "View only"}
                       </span>
                       {t.label && (
-                        <span className="text-xs text-slate-300 truncate">{t.label}</span>
+                        <span className="text-xs text-share-onSurface truncate">{t.label}</span>
                       )}
-                      <span className="text-[10px] text-slate-500">
+                      <span className="text-[10px] text-share-onSurfaceVariant/60">
                         Created {formatDate(t.createdAt)}
                       </span>
                     </div>
-                    <p className="mt-0.5 text-[10px] text-slate-600 font-mono truncate">
+                    <p className="mt-0.5 text-[10px] text-share-onSurfaceVariant/40 font-mono truncate">
                       {buildShareUrl(t.token)}
                     </p>
                   </div>
                   <button
                     type="button"
                     onClick={() => handleCopy(t.token)}
-                    className="shrink-0 rounded border border-slate-600 bg-slate-800 px-2 py-1 text-xs text-slate-300 hover:border-sky-600 hover:text-sky-300"
+                    className="shrink-0 rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-2 py-1 text-xs text-share-onSurface hover:border-sky-600 hover:text-sky-300"
                   >
                     {copied === t.token ? "Copied!" : "Copy"}
                   </button>
                   <button
                     type="button"
                     onClick={() => handleDelete(t.id)}
-                    className="shrink-0 rounded border border-slate-700 px-2 py-1 text-xs text-slate-500 hover:bg-red-500/20 hover:text-red-300"
+                    className="shrink-0 rounded border border-share-outlineVariant/30 px-2 py-1 text-xs text-share-onSurfaceVariant/60 hover:bg-red-500/20 hover:text-red-300"
                     aria-label="Delete link"
                   >
                     ✕

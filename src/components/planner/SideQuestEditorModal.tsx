@@ -73,19 +73,19 @@ export function SideQuestEditorModal({ defs, onSave, onClose }: SideQuestEditorM
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 px-4">
-      <div className="w-full max-w-lg rounded-xl border border-slate-700 bg-slate-900 shadow-2xl">
-        <header className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-share-bg/90 px-4">
+      <div className="w-full max-w-lg rounded-xl border border-share-outlineVariant/40 bg-share-surfaceContainerHigh shadow-2xl">
+        <header className="flex items-center justify-between border-b border-share-outlineVariant/25 px-4 py-3">
           <div>
-            <h2 className="text-sm font-semibold text-slate-100">Edit Side Quests</h2>
-            <p className="mt-0.5 text-[10px] text-slate-500">
+            <h2 className="text-sm font-semibold text-share-onBg">Edit Side Quests</h2>
+            <p className="mt-0.5 text-[10px] text-share-onSurfaceVariant/60">
               Set them once - they appear every time you hit 90%. One quest per category is picked daily.
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="text-slate-500 hover:text-slate-300"
+            className="text-share-onSurfaceVariant/60 hover:text-share-onBg"
             aria-label="Close"
           >
             <X className="h-4 w-4" />
@@ -93,7 +93,7 @@ export function SideQuestEditorModal({ defs, onSave, onClose }: SideQuestEditorM
         </header>
 
         {/* Category legend */}
-        <div className="flex gap-2 border-b border-slate-800 px-4 py-2">
+        <div className="flex gap-2 border-b border-share-outlineVariant/25 px-4 py-2">
           {CATEGORY_OPTIONS.map((opt) => (
             <span key={opt.value} className={`flex items-center gap-1 rounded border px-2 py-0.5 text-[10px] ${opt.activeColor}`}>
               <opt.Icon className="h-3 w-3" /> {opt.label}
@@ -107,14 +107,14 @@ export function SideQuestEditorModal({ defs, onSave, onClose }: SideQuestEditorM
               const cat = def.category ?? 'fun'
               const catOpt = CATEGORY_OPTIONS.find(o => o.value === cat)!
               return (
-                <li key={def.id} className="rounded border border-slate-800 bg-slate-950 p-2">
+                <li key={def.id} className="rounded border border-share-outlineVariant/25 bg-share-surfaceContainerHighest p-2">
                   <div className="flex items-center gap-1.5">
                     <div className="flex flex-col">
                       <button
                         type="button"
                         onClick={() => handleMoveUp(index)}
                         disabled={index === 0}
-                        className="text-slate-600 hover:text-slate-300 disabled:opacity-30"
+                        className="text-share-onSurfaceVariant/40 hover:text-share-onSurface disabled:opacity-30"
                         aria-label="Move up"
                       >
                         <ChevronUp className="h-3.5 w-3.5" />
@@ -123,7 +123,7 @@ export function SideQuestEditorModal({ defs, onSave, onClose }: SideQuestEditorM
                         type="button"
                         onClick={() => handleMoveDown(index)}
                         disabled={index === draft.length - 1}
-                        className="text-slate-600 hover:text-slate-300 disabled:opacity-30"
+                        className="text-share-onSurfaceVariant/40 hover:text-share-onSurface disabled:opacity-30"
                         aria-label="Move down"
                       >
                         <ChevronDown className="h-3.5 w-3.5" />
@@ -135,13 +135,13 @@ export function SideQuestEditorModal({ defs, onSave, onClose }: SideQuestEditorM
                       value={def.title}
                       onChange={(e) => handleTitleChange(def.id, e.target.value)}
                       placeholder="Quest name"
-                      className="flex-1 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-sm text-slate-100 placeholder:text-slate-600 focus:border-violet-600 focus:outline-none"
+                      className="flex-1 rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-2 py-1 text-sm text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-violet-600 focus:outline-none"
                     />
 
                     <button
                       type="button"
                       onClick={() => handleDelete(def.id)}
-                      className="text-slate-600 hover:text-red-400"
+                      className="text-share-onSurfaceVariant/40 hover:text-red-400"
                       aria-label="Delete quest"
                     >
                       <X className="h-3.5 w-3.5" />
@@ -158,13 +158,13 @@ export function SideQuestEditorModal({ defs, onSave, onClose }: SideQuestEditorM
                         className={`flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] transition-colors ${
                           cat === opt.value
                             ? opt.activeColor
-                            : 'border-slate-700 text-slate-500 hover:border-slate-600 hover:text-slate-400'
+                            : 'border-share-outlineVariant/30 text-share-onSurfaceVariant/60 hover:border-share-outlineVariant/50 hover:text-share-onSurfaceVariant'
                         }`}
                       >
                         <opt.Icon className="h-3 w-3" /> {opt.label}
                       </button>
                     ))}
-                    <span className="ml-auto flex items-center gap-0.5 text-[9px] text-slate-600 self-center">
+                    <span className="ml-auto flex items-center gap-0.5 text-[9px] text-share-onSurfaceVariant/40 self-center">
                       <catOpt.Icon className="h-3 w-3" /> {catOpt.label}
                     </span>
                   </div>
@@ -181,18 +181,18 @@ export function SideQuestEditorModal({ defs, onSave, onClose }: SideQuestEditorM
                 onChange={(e) => setNewTitle(e.target.value)}
                 onKeyDown={handleAddKeyDown}
                 placeholder="Add a quest... e.g. Guitar practice"
-                className="flex-1 rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-sm text-slate-100 placeholder:text-slate-600 focus:border-violet-600 focus:outline-none"
+                className="flex-1 rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHighest px-2 py-1.5 text-sm text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-violet-600 focus:outline-none"
               />
               <button
                 type="button"
                 onClick={handleAdd}
-                className="rounded border border-slate-600 bg-slate-800 px-3 py-1.5 text-xs text-slate-300 hover:border-violet-600 hover:text-violet-300"
+                className="rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-3 py-1.5 text-xs text-share-onSurface hover:border-violet-600 hover:text-violet-300"
               >
                 Add
               </button>
             </div>
             <div className="flex items-center gap-1 pl-1">
-              <span className="text-[10px] text-slate-600 mr-1">Category:</span>
+              <span className="text-[10px] text-share-onSurfaceVariant/40 mr-1">Category:</span>
               {CATEGORY_OPTIONS.map((opt) => (
                 <button
                   key={opt.value}
@@ -201,7 +201,7 @@ export function SideQuestEditorModal({ defs, onSave, onClose }: SideQuestEditorM
                   className={`flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] transition-colors ${
                     newCategory === opt.value
                       ? opt.activeColor
-                      : 'border-slate-700 text-slate-500 hover:border-slate-600 hover:text-slate-400'
+                      : 'border-share-outlineVariant/30 text-share-onSurfaceVariant/60 hover:border-share-outlineVariant/50 hover:text-share-onSurfaceVariant'
                   }`}
                 >
                   <opt.Icon className="h-3 w-3" /> {opt.label}
@@ -211,11 +211,11 @@ export function SideQuestEditorModal({ defs, onSave, onClose }: SideQuestEditorM
           </div>
         </div>
 
-        <footer className="flex justify-end gap-2 border-t border-slate-800 px-4 py-3">
+        <footer className="flex justify-end gap-2 border-t border-share-outlineVariant/25 px-4 py-3">
           <button
             type="button"
             onClick={onClose}
-            className="rounded border border-slate-700 px-3 py-1.5 text-xs text-slate-400 hover:text-slate-200"
+            className="rounded border border-share-outlineVariant/40 px-3 py-1.5 text-xs text-share-onSurfaceVariant hover:text-share-onBg"
           >
             Cancel
           </button>
