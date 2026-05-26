@@ -46,7 +46,7 @@ export function FinanceLearn() {
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search terms..."
-          className="w-full rounded-lg border border-slate-700 bg-slate-950 py-2.5 pl-10 pr-3 text-sm text-slate-100 placeholder:text-slate-500 focus:border-share-primary focus:outline-none"
+          className="w-full rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerLow py-2.5 pl-10 pr-3 text-sm text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-share-primary focus:outline-none"
         />
         {searchQuery && (
           <button

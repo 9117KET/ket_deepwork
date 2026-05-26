@@ -230,7 +230,7 @@ export function RichLifeVision({ state, onUpdate }: RichLifeVisionProps) {
                   onChange={(e) => setNewItem((p) => ({ ...p, description: e.target.value }))}
                   onKeyDown={(e) => e.key === 'Enter' && handleAddItem()}
                   placeholder="e.g. Annual trip to Southern Europe"
-                  className="flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-share-primary focus:outline-none"
+                  className="flex-1 rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerLow px-3 py-2 text-sm text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-share-primary focus:outline-none"
                 />
                 <AudioInput onTranscript={handleItemDescriptionVoice} lang="en-US" />
               </div>
@@ -272,7 +272,7 @@ export function RichLifeVision({ state, onUpdate }: RichLifeVisionProps) {
                   onChange={(e) => setNewItem((p) => ({ ...p, estimatedMonthlyCost: e.target.value }))}
                   onKeyDown={(e) => e.key === 'Enter' && handleAddItem()}
                   placeholder="0"
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 py-2 pl-7 pr-3 text-sm text-slate-100 placeholder:text-slate-600 focus:border-share-primary focus:outline-none"
+                  className="w-full rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerLow py-2 pl-7 pr-3 text-sm text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-share-primary focus:outline-none"
                 />
               </div>
               <p className="text-[10px] text-share-onSurfaceVariant/50 mt-1">
@@ -292,7 +292,7 @@ export function RichLifeVision({ state, onUpdate }: RichLifeVisionProps) {
               <button
                 type="button"
                 onClick={() => { setAddingItem(false); setNewItem(EMPTY_FORM) }}
-                className="rounded-lg border border-slate-700 px-4 py-2 text-xs text-slate-400 hover:text-slate-200 transition-colors"
+                className="rounded-lg border border-share-outlineVariant/40 px-4 py-2 text-xs text-share-onSurfaceVariant hover:text-share-onBg transition-colors"
               >
                 Cancel
               </button>

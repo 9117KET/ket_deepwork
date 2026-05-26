@@ -339,7 +339,7 @@ export function DebtManager({ state, onUpdate }: DebtManagerProps) {
               value={form.label}
               onChange={(e) => setForm((p) => ({ ...p, label: e.target.value }))}
               placeholder={DEBT_TYPE_LABELS[form.type]}
-              className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-share-primary focus:outline-none"
+              className="w-full rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerLow px-3 py-2 text-sm text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-share-primary focus:outline-none"
             />
           </div>
 
@@ -354,7 +354,7 @@ export function DebtManager({ state, onUpdate }: DebtManagerProps) {
                   value={form.balance}
                   onChange={(e) => setForm((p) => ({ ...p, balance: e.target.value }))}
                   placeholder="5000"
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 py-2 pl-6 pr-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-share-primary focus:outline-none"
+                  className="w-full rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerLow py-2 pl-6 pr-2 text-sm text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-share-primary focus:outline-none"
                 />
               </div>
             </div>
@@ -368,7 +368,7 @@ export function DebtManager({ state, onUpdate }: DebtManagerProps) {
                   value={form.interestRate}
                   onChange={(e) => setForm((p) => ({ ...p, interestRate: e.target.value }))}
                   placeholder="9.9"
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 py-2 pl-2 pr-6 text-sm text-slate-100 placeholder:text-slate-600 focus:border-share-primary focus:outline-none"
+                  className="w-full rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerLow py-2 pl-2 pr-6 text-sm text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-share-primary focus:outline-none"
                 />
                 <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-share-onSurfaceVariant">%</span>
               </div>
@@ -383,7 +383,7 @@ export function DebtManager({ state, onUpdate }: DebtManagerProps) {
                   value={form.minimumPayment}
                   onChange={(e) => setForm((p) => ({ ...p, minimumPayment: e.target.value }))}
                   placeholder="100"
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 py-2 pl-6 pr-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-share-primary focus:outline-none"
+                  className="w-full rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerLow py-2 pl-6 pr-2 text-sm text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-share-primary focus:outline-none"
                 />
               </div>
             </div>
@@ -401,7 +401,7 @@ export function DebtManager({ state, onUpdate }: DebtManagerProps) {
             <button
               type="button"
               onClick={() => { setAddingDebt(false); setForm(EMPTY_FORM) }}
-              className="rounded-lg border border-slate-700 px-4 py-2 text-xs text-slate-400 hover:text-slate-200 transition-colors"
+              className="rounded-lg border border-share-outlineVariant/40 px-4 py-2 text-xs text-share-onSurfaceVariant hover:text-share-onBg transition-colors"
             >
               Cancel
             </button>
@@ -477,7 +477,7 @@ export function DebtManager({ state, onUpdate }: DebtManagerProps) {
                 step="50"
                 value={extraPayment}
                 onChange={(e) => setExtraPayment(e.target.value)}
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 py-2 pl-7 pr-3 text-sm text-slate-100 focus:border-share-primary focus:outline-none"
+                className="w-full rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerLow py-2 pl-7 pr-3 text-sm text-share-onBg focus:border-share-primary focus:outline-none"
               />
             </div>
             <p className="text-[10px] text-share-onSurfaceVariant/60 mt-1">

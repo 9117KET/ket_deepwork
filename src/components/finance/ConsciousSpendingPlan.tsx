@@ -217,7 +217,7 @@ export function ConsciousSpendingPlan({ state, onUpdate }: ConsciousSpendingPlan
                 onKeyDown={(e) => e.key === 'Enter' && handleSaveIncome()}
                 placeholder="2800"
                 autoFocus
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 py-2.5 pl-7 pr-3 text-sm text-slate-100 placeholder:text-slate-600 focus:border-share-primary focus:outline-none"
+                className="w-full rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerLow py-2.5 pl-7 pr-3 text-sm text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-share-primary focus:outline-none"
               />
             </div>
             <button
@@ -419,7 +419,7 @@ export function ConsciousSpendingPlan({ state, onUpdate }: ConsciousSpendingPlan
                     onKeyDown={(e) => e.key === 'Enter' && handleAddExpense(bucket)}
                     placeholder="Expense name"
                     autoFocus
-                    className="flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-share-primary focus:outline-none"
+                    className="flex-1 rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerLow px-3 py-2 text-sm text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-share-primary focus:outline-none"
                   />
                   <AudioInput
                     onTranscript={(text) => setNewExpense((p) => ({ ...p, label: text }))}
@@ -437,7 +437,7 @@ export function ConsciousSpendingPlan({ state, onUpdate }: ConsciousSpendingPlan
                       onChange={(e) => setNewExpense((p) => ({ ...p, amount: e.target.value }))}
                       onKeyDown={(e) => e.key === 'Enter' && handleAddExpense(bucket)}
                       placeholder="Amount"
-                      className="w-full rounded-lg border border-slate-700 bg-slate-950 py-2 pl-7 pr-3 text-sm text-slate-100 placeholder:text-slate-600 focus:border-share-primary focus:outline-none"
+                      className="w-full rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerLow py-2 pl-7 pr-3 text-sm text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-share-primary focus:outline-none"
                     />
                   </div>
                   <span className="text-xs text-share-onSurfaceVariant">/month</span>
@@ -455,7 +455,7 @@ export function ConsciousSpendingPlan({ state, onUpdate }: ConsciousSpendingPlan
                   <button
                     type="button"
                     onClick={() => { setAddingToBucket(null); setNewExpense(EMPTY_EXPENSE); setShowPresets(null) }}
-                    className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-400 hover:text-slate-200 transition-colors"
+                    className="rounded-lg border border-share-outlineVariant/40 px-3 py-1.5 text-xs text-share-onSurfaceVariant hover:text-share-onBg transition-colors"
                   >
                     Cancel
                   </button>

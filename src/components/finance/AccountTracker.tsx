@@ -343,7 +343,7 @@ export function AccountTracker({ state, onUpdate }: AccountTrackerProps) {
                 value={form.label}
                 onChange={(e) => setForm((p) => ({ ...p, label: e.target.value }))}
                 placeholder={ACCOUNT_TYPE_LABELS[form.type]}
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-share-primary focus:outline-none"
+                className="w-full rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerLow px-3 py-2 text-sm text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-share-primary focus:outline-none"
               />
             </div>
             <div>
@@ -353,7 +353,7 @@ export function AccountTracker({ state, onUpdate }: AccountTrackerProps) {
                 value={form.institution}
                 onChange={(e) => setForm((p) => ({ ...p, institution: e.target.value }))}
                 placeholder="e.g. DKB, Trade Republic"
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-share-primary focus:outline-none"
+                className="w-full rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerLow px-3 py-2 text-sm text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-share-primary focus:outline-none"
               />
             </div>
           </div>
@@ -369,7 +369,7 @@ export function AccountTracker({ state, onUpdate }: AccountTrackerProps) {
                   value={form.balance}
                   onChange={(e) => setForm((p) => ({ ...p, balance: e.target.value }))}
                   placeholder="0"
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 py-2 pl-7 pr-3 text-sm text-slate-100 placeholder:text-slate-600 focus:border-share-primary focus:outline-none"
+                  className="w-full rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerLow py-2 pl-7 pr-3 text-sm text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-share-primary focus:outline-none"
                 />
               </div>
             </div>
@@ -383,7 +383,7 @@ export function AccountTracker({ state, onUpdate }: AccountTrackerProps) {
                   value={form.interestRate}
                   onChange={(e) => setForm((p) => ({ ...p, interestRate: e.target.value }))}
                   placeholder="2.5"
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 py-2 pl-3 pr-7 text-sm text-slate-100 placeholder:text-slate-600 focus:border-share-primary focus:outline-none"
+                  className="w-full rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerLow py-2 pl-3 pr-7 text-sm text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-share-primary focus:outline-none"
                 />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-share-onSurfaceVariant">%</span>
               </div>
@@ -401,7 +401,7 @@ export function AccountTracker({ state, onUpdate }: AccountTrackerProps) {
             <button
               type="button"
               onClick={() => { setAddingAccount(false); setForm(EMPTY_FORM) }}
-              className="rounded-lg border border-slate-700 px-4 py-2 text-xs text-slate-400 hover:text-slate-200 transition-colors"
+              className="rounded-lg border border-share-outlineVariant/40 px-4 py-2 text-xs text-share-onSurfaceVariant hover:text-share-onBg transition-colors"
             >
               Cancel
             </button>
@@ -468,7 +468,7 @@ function AccountRow({ account, onToggleSetUp, onToggleAutomated, onUpdateBalance
                   onChange={(e) => setBalanceInput(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSaveBalance()}
                   autoFocus
-                  className="w-24 rounded border border-slate-700 bg-slate-950 px-2 py-0.5 text-xs text-slate-100 focus:border-share-primary focus:outline-none"
+                  className="w-24 rounded border border-share-outlineVariant/40 bg-share-surfaceContainerLow px-2 py-0.5 text-xs text-share-onBg focus:border-share-primary focus:outline-none"
                 />
                 <button type="button" onClick={handleSaveBalance} className="text-[10px] text-share-primary hover:underline">Save</button>
                 <button type="button" onClick={() => setEditingBalance(false)} className="text-[10px] text-share-onSurfaceVariant/50">✕</button>

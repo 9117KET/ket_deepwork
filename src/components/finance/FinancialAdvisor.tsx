@@ -273,7 +273,7 @@ export function FinancialAdvisor({ state, onSaveHistory }: FinancialAdvisorProps
               }}
               placeholder="Ask about your finances..."
               disabled={loading}
-              className="flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-share-primary focus:outline-none disabled:opacity-50"
+              className="flex-1 rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerLow px-3 py-2 text-sm text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-share-primary focus:outline-none disabled:opacity-50"
             />
             <AudioInput
               onTranscript={(text) => { setInput(text); void sendMessage(text) }}

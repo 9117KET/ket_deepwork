@@ -315,7 +315,7 @@ export function ETFPortfolio({ state, onUpdate }: ETFPortfolioProps) {
                 onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
                 placeholder="e.g. Vanguard FTSE All-World"
                 autoFocus
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-share-primary focus:outline-none"
+                className="w-full rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerLow px-3 py-2 text-sm text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-share-primary focus:outline-none"
               />
             </div>
             <div>
@@ -325,7 +325,7 @@ export function ETFPortfolio({ state, onUpdate }: ETFPortfolioProps) {
                 value={form.isin}
                 onChange={(e) => setForm((p) => ({ ...p, isin: e.target.value.toUpperCase() }))}
                 placeholder="IE00BK5BQT80"
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-share-primary focus:outline-none font-mono"
+                className="w-full rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerLow px-3 py-2 text-sm text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-share-primary focus:outline-none font-mono"
               />
             </div>
             <div>
@@ -335,7 +335,7 @@ export function ETFPortfolio({ state, onUpdate }: ETFPortfolioProps) {
                 value={form.depot}
                 onChange={(e) => setForm((p) => ({ ...p, depot: e.target.value }))}
                 placeholder="e.g. Trade Republic"
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-share-primary focus:outline-none"
+                className="w-full rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerLow px-3 py-2 text-sm text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-share-primary focus:outline-none"
               />
             </div>
           </div>
@@ -371,7 +371,7 @@ export function ETFPortfolio({ state, onUpdate }: ETFPortfolioProps) {
                 value={form.shares}
                 onChange={(e) => setForm((p) => ({ ...p, shares: e.target.value }))}
                 placeholder="10.5"
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-share-primary focus:outline-none"
+                className="w-full rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerLow px-3 py-2 text-sm text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-share-primary focus:outline-none"
               />
             </div>
             <div>
@@ -385,7 +385,7 @@ export function ETFPortfolio({ state, onUpdate }: ETFPortfolioProps) {
                   value={form.currentPriceEur}
                   onChange={(e) => setForm((p) => ({ ...p, currentPriceEur: e.target.value }))}
                   placeholder="120.00"
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 py-2 pl-6 pr-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-share-primary focus:outline-none"
+                  className="w-full rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerLow py-2 pl-6 pr-2 text-sm text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-share-primary focus:outline-none"
                 />
               </div>
             </div>
@@ -400,7 +400,7 @@ export function ETFPortfolio({ state, onUpdate }: ETFPortfolioProps) {
                   value={form.purchasePriceEur}
                   onChange={(e) => setForm((p) => ({ ...p, purchasePriceEur: e.target.value }))}
                   placeholder="95.00"
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 py-2 pl-6 pr-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-share-primary focus:outline-none"
+                  className="w-full rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerLow py-2 pl-6 pr-2 text-sm text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-share-primary focus:outline-none"
                 />
               </div>
             </div>
@@ -418,7 +418,7 @@ export function ETFPortfolio({ state, onUpdate }: ETFPortfolioProps) {
             <button
               type="button"
               onClick={() => { setAddingHolding(false); setForm(EMPTY_FORM) }}
-              className="rounded-lg border border-slate-700 px-4 py-2 text-xs text-slate-400 hover:text-slate-200 transition-colors"
+              className="rounded-lg border border-share-outlineVariant/40 px-4 py-2 text-xs text-share-onSurfaceVariant hover:text-share-onBg transition-colors"
             >
               Cancel
             </button>
@@ -499,7 +499,7 @@ function HoldingRow({ holding, value, gain, onUpdateCurrent, onDelete }: Holding
                     if (e.key === 'Enter') { onUpdateCurrent(priceInput); setEditingPrice(false) }
                   }}
                   autoFocus
-                  className="w-20 rounded border border-slate-700 bg-slate-950 px-2 py-0.5 text-xs text-slate-100 focus:border-share-primary focus:outline-none"
+                  className="w-20 rounded border border-share-outlineVariant/40 bg-share-surfaceContainerLow px-2 py-0.5 text-xs text-share-onBg focus:border-share-primary focus:outline-none"
                 />
                 <button
                   type="button"

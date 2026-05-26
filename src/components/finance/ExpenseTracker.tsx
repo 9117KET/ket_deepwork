@@ -242,7 +242,7 @@ export function ExpenseTracker({ state, onUpdate }: ExpenseTrackerProps) {
           <select
             value={selectedMonth}
             onChange={(e) => setSelectedMonth(e.target.value)}
-            className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs text-slate-100 focus:border-share-primary focus:outline-none flex-shrink-0"
+            className="rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerLow px-3 py-1.5 text-xs text-share-onBg focus:border-share-primary focus:outline-none flex-shrink-0"
           >
             {availableMonths.map((m) => (
               <option key={m} value={m}>{formatMonthKey(m)}</option>
@@ -334,7 +334,7 @@ export function ExpenseTracker({ state, onUpdate }: ExpenseTrackerProps) {
               onChange={(e) => setVoiceInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleVoiceAdd()}
               placeholder="Type or tap mic..."
-              className="flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-share-primary focus:outline-none"
+              className="flex-1 rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerLow px-3 py-2 text-sm text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-share-primary focus:outline-none"
             />
             <AudioInput onTranscript={handleVoiceTranscript} lang="en-US" />
             <button
@@ -396,7 +396,7 @@ export function ExpenseTracker({ state, onUpdate }: ExpenseTrackerProps) {
                 onKeyDown={(e) => e.key === 'Enter' && handleAddTx()}
                 placeholder="e.g. Kaufland, Coffee, Gym"
                 autoFocus
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-share-primary focus:outline-none"
+                className="w-full rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerLow px-3 py-2 text-sm text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-share-primary focus:outline-none"
               />
             </div>
 
@@ -412,7 +412,7 @@ export function ExpenseTracker({ state, onUpdate }: ExpenseTrackerProps) {
                   onChange={(e) => setForm((p) => ({ ...p, amount: e.target.value }))}
                   onKeyDown={(e) => e.key === 'Enter' && handleAddTx()}
                   placeholder="0.00"
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 py-2 pl-6 pr-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-share-primary focus:outline-none"
+                  className="w-full rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerLow py-2 pl-6 pr-2 text-sm text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-share-primary focus:outline-none"
                 />
               </div>
             </div>
@@ -423,7 +423,7 @@ export function ExpenseTracker({ state, onUpdate }: ExpenseTrackerProps) {
                 type="date"
                 value={form.date}
                 onChange={(e) => setForm((p) => ({ ...p, date: e.target.value }))}
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-share-primary focus:outline-none"
+                className="w-full rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerLow px-3 py-2 text-sm text-share-onBg focus:border-share-primary focus:outline-none"
               />
             </div>
 
@@ -461,7 +461,7 @@ export function ExpenseTracker({ state, onUpdate }: ExpenseTrackerProps) {
             <button
               type="button"
               onClick={() => { setAddingTx(false); setForm(EMPTY_FORM) }}
-              className="rounded-lg border border-slate-700 px-4 py-2 text-xs text-slate-400 hover:text-slate-200 transition-colors"
+              className="rounded-lg border border-share-outlineVariant/40 px-4 py-2 text-xs text-share-onSurfaceVariant hover:text-share-onBg transition-colors"
             >
               Cancel
             </button>

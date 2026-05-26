@@ -289,7 +289,7 @@ export function ReceiptScanner({ onUpdate, onClose }: ReceiptScannerProps) {
                 type="text"
                 value={editLabel}
                 onChange={(e) => setEditLabel(e.target.value)}
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-share-primary focus:outline-none"
+                className="w-full rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerLow px-3 py-2 text-sm text-share-onBg focus:border-share-primary focus:outline-none"
               />
             </div>
 
@@ -304,7 +304,7 @@ export function ReceiptScanner({ onUpdate, onClose }: ReceiptScannerProps) {
                     step="0.01"
                     value={editAmount}
                     onChange={(e) => setEditAmount(e.target.value)}
-                    className="w-full rounded-lg border border-slate-700 bg-slate-950 py-2 pl-6 pr-2 text-sm text-slate-100 focus:border-share-primary focus:outline-none"
+                    className="w-full rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerLow py-2 pl-6 pr-2 text-sm text-share-onBg focus:border-share-primary focus:outline-none"
                   />
                 </div>
                 <p className="text-[10px] text-share-onSurfaceVariant/50 mt-0.5">
@@ -316,7 +316,7 @@ export function ReceiptScanner({ onUpdate, onClose }: ReceiptScannerProps) {
                 <select
                   value={editBucket}
                   onChange={(e) => setEditBucket(e.target.value as CSPBucket)}
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-2 py-2 text-sm text-slate-100 focus:border-share-primary focus:outline-none"
+                  className="w-full rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerLow px-2 py-2 text-sm text-share-onBg focus:border-share-primary focus:outline-none"
                 >
                   {(Object.entries(BUCKET_LABELS) as [CSPBucket, string][]).map(([key, label]) => (
                     <option key={key} value={key}>{label}</option>
@@ -337,7 +337,7 @@ export function ReceiptScanner({ onUpdate, onClose }: ReceiptScannerProps) {
               <button
                 type="button"
                 onClick={handleReset}
-                className="rounded-lg border border-slate-700 px-4 py-2 text-xs text-slate-400 hover:text-slate-200 transition-colors"
+                className="rounded-lg border border-share-outlineVariant/40 px-4 py-2 text-xs text-share-onSurfaceVariant hover:text-share-onBg transition-colors"
               >
                 Discard
               </button>

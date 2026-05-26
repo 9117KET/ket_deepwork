@@ -199,7 +199,7 @@ export function SparplanManager({ state, onUpdate }: SparplanManagerProps) {
                 onChange={(e) => setForm((p) => ({ ...p, etfName: e.target.value }))}
                 placeholder="e.g. Vanguard FTSE All-World"
                 autoFocus
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-share-primary focus:outline-none"
+                className="w-full rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerLow px-3 py-2 text-sm text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-share-primary focus:outline-none"
               />
             </div>
             <div>
@@ -209,7 +209,7 @@ export function SparplanManager({ state, onUpdate }: SparplanManagerProps) {
                 value={form.isin}
                 onChange={(e) => setForm((p) => ({ ...p, isin: e.target.value.toUpperCase() }))}
                 placeholder="IE00BK5BQT80"
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-share-primary focus:outline-none font-mono"
+                className="w-full rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerLow px-3 py-2 text-sm text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-share-primary focus:outline-none font-mono"
               />
             </div>
             <div>
@@ -217,7 +217,7 @@ export function SparplanManager({ state, onUpdate }: SparplanManagerProps) {
               <select
                 value={form.broker}
                 onChange={(e) => setForm((p) => ({ ...p, broker: e.target.value }))}
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-share-primary focus:outline-none"
+                className="w-full rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerLow px-3 py-2 text-sm text-share-onBg focus:border-share-primary focus:outline-none"
               >
                 {BROKERS.map((b) => (
                   <option key={b.name} value={b.name}>{b.name}</option>
@@ -235,7 +235,7 @@ export function SparplanManager({ state, onUpdate }: SparplanManagerProps) {
                   value={form.monthlyAmount}
                   onChange={(e) => setForm((p) => ({ ...p, monthlyAmount: e.target.value }))}
                   placeholder="100"
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 py-2 pl-6 pr-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-share-primary focus:outline-none"
+                  className="w-full rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerLow py-2 pl-6 pr-2 text-sm text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-share-primary focus:outline-none"
                 />
               </div>
             </div>
@@ -247,7 +247,7 @@ export function SparplanManager({ state, onUpdate }: SparplanManagerProps) {
                 max="28"
                 value={form.executionDay}
                 onChange={(e) => setForm((p) => ({ ...p, executionDay: e.target.value }))}
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-share-primary focus:outline-none"
+                className="w-full rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerLow px-3 py-2 text-sm text-share-onBg focus:border-share-primary focus:outline-none"
               />
             </div>
           </div>
@@ -264,7 +264,7 @@ export function SparplanManager({ state, onUpdate }: SparplanManagerProps) {
             <button
               type="button"
               onClick={() => { setAddingSparplan(false); setForm(EMPTY_FORM) }}
-              className="rounded-lg border border-slate-700 px-4 py-2 text-xs text-slate-400 hover:text-slate-200 transition-colors"
+              className="rounded-lg border border-share-outlineVariant/40 px-4 py-2 text-xs text-share-onSurfaceVariant hover:text-share-onBg transition-colors"
             >
               Cancel
             </button>

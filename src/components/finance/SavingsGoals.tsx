@@ -249,7 +249,7 @@ export function SavingsGoals({ state, onUpdate }: SavingsGoalsProps) {
                 onChange={(e) => setForm((p) => ({ ...p, label: e.target.value }))}
                 placeholder="Goal name (e.g. Urlaub Thailand)"
                 autoFocus
-                className="flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-share-primary focus:outline-none"
+                className="flex-1 rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerLow px-3 py-2 text-sm text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-share-primary focus:outline-none"
               />
               <AudioInput onTranscript={(t) => setForm((p) => ({ ...p, label: t }))} lang="en-US" />
             </div>
@@ -281,7 +281,7 @@ export function SavingsGoals({ state, onUpdate }: SavingsGoalsProps) {
                   value={form.targetAmount}
                   onChange={(e) => setForm((p) => ({ ...p, targetAmount: e.target.value }))}
                   placeholder="5000"
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 py-2 pl-6 pr-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-share-primary focus:outline-none"
+                  className="w-full rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerLow py-2 pl-6 pr-2 text-sm text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-share-primary focus:outline-none"
                 />
               </div>
             </div>
@@ -295,7 +295,7 @@ export function SavingsGoals({ state, onUpdate }: SavingsGoalsProps) {
                   value={form.currentAmount}
                   onChange={(e) => setForm((p) => ({ ...p, currentAmount: e.target.value }))}
                   placeholder="0"
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 py-2 pl-6 pr-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-share-primary focus:outline-none"
+                  className="w-full rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerLow py-2 pl-6 pr-2 text-sm text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-share-primary focus:outline-none"
                 />
               </div>
             </div>
@@ -309,7 +309,7 @@ export function SavingsGoals({ state, onUpdate }: SavingsGoalsProps) {
                   value={form.monthlyContribution}
                   onChange={(e) => setForm((p) => ({ ...p, monthlyContribution: e.target.value }))}
                   placeholder="100"
-                  className="w-full rounded-lg border border-slate-700 bg-slate-950 py-2 pl-6 pr-2 text-sm text-slate-100 placeholder:text-slate-600 focus:border-share-primary focus:outline-none"
+                  className="w-full rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerLow py-2 pl-6 pr-2 text-sm text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-share-primary focus:outline-none"
                 />
               </div>
             </div>
@@ -321,7 +321,7 @@ export function SavingsGoals({ state, onUpdate }: SavingsGoalsProps) {
               type="date"
               value={form.targetDate}
               onChange={(e) => setForm((p) => ({ ...p, targetDate: e.target.value }))}
-              className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 focus:border-share-primary focus:outline-none"
+              className="rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerLow px-3 py-2 text-sm text-share-onBg focus:border-share-primary focus:outline-none"
             />
           </div>
 
@@ -337,7 +337,7 @@ export function SavingsGoals({ state, onUpdate }: SavingsGoalsProps) {
             <button
               type="button"
               onClick={() => { setAddingGoal(false); setForm(EMPTY_FORM) }}
-              className="rounded-lg border border-slate-700 px-4 py-2 text-xs text-slate-400 hover:text-slate-200 transition-colors"
+              className="rounded-lg border border-share-outlineVariant/40 px-4 py-2 text-xs text-share-onSurfaceVariant hover:text-share-onBg transition-colors"
             >
               Cancel
             </button>
@@ -463,7 +463,7 @@ function GoalCard({
                     if (e.key === 'Enter') { onUpdateCurrent(currentInput); setEditingCurrent(false) }
                   }}
                   autoFocus
-                  className="w-20 rounded border border-slate-700 bg-slate-950 px-2 py-0.5 text-xs text-slate-100 focus:border-share-primary focus:outline-none"
+                  className="w-20 rounded border border-share-outlineVariant/40 bg-share-surfaceContainerLow px-2 py-0.5 text-xs text-share-onBg focus:border-share-primary focus:outline-none"
                 />
                 <button type="button" onClick={() => { onUpdateCurrent(currentInput); setEditingCurrent(false) }} className="text-[10px] text-share-primary hover:underline">
                   Save

@@ -343,7 +343,7 @@ export function NetWorthTracker({ state, onUpdate }: NetWorthTrackerProps) {
                     value={balanceOverrides[account.id] ?? account.balance?.toString() ?? ''}
                     onChange={(e) => setBalanceOverrides((p) => ({ ...p, [account.id]: e.target.value }))}
                     placeholder={account.balance?.toString() ?? '0'}
-                    className="w-24 rounded border border-slate-700 bg-slate-950 px-2 py-0.5 text-xs text-right text-slate-100 focus:border-share-primary focus:outline-none"
+                    className="w-24 rounded border border-share-outlineVariant/40 bg-share-surfaceContainerLow px-2 py-0.5 text-xs text-right text-share-onBg focus:border-share-primary focus:outline-none"
                   />
                 </div>
               </li>
@@ -378,7 +378,7 @@ export function NetWorthTracker({ state, onUpdate }: NetWorthTrackerProps) {
               onChange={(e) => setAssetForm((p) => ({ ...p, label: e.target.value }))}
               placeholder="e.g. Property, Car"
               autoFocus
-              className="flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs text-slate-100 placeholder:text-slate-600 focus:border-share-primary focus:outline-none"
+              className="flex-1 rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerLow px-3 py-1.5 text-xs text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-share-primary focus:outline-none"
             />
             <span className="text-xs text-share-onSurfaceVariant">€</span>
             <input
@@ -388,7 +388,7 @@ export function NetWorthTracker({ state, onUpdate }: NetWorthTrackerProps) {
               onChange={(e) => setAssetForm((p) => ({ ...p, amount: e.target.value }))}
               onKeyDown={(e) => e.key === 'Enter' && handleAddAdHocAsset()}
               placeholder="0"
-              className="w-24 rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs text-slate-100 focus:border-share-primary focus:outline-none"
+              className="w-24 rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerLow px-3 py-1.5 text-xs text-share-onBg focus:border-share-primary focus:outline-none"
             />
             <button type="button" onClick={handleAddAdHocAsset} className="text-xs text-share-primary hover:underline">Add</button>
             <button type="button" onClick={() => setAddingAsset(false)} className="text-xs text-share-onSurfaceVariant/50">✕</button>
@@ -427,7 +427,7 @@ export function NetWorthTracker({ state, onUpdate }: NetWorthTrackerProps) {
                     value={debtOverrides[debt.id] ?? debt.balance?.toString() ?? ''}
                     onChange={(e) => setDebtOverrides((p) => ({ ...p, [debt.id]: e.target.value }))}
                     placeholder={debt.balance?.toString() ?? '0'}
-                    className="w-24 rounded border border-slate-700 bg-slate-950 px-2 py-0.5 text-xs text-right text-slate-100 focus:border-share-primary focus:outline-none"
+                    className="w-24 rounded border border-share-outlineVariant/40 bg-share-surfaceContainerLow px-2 py-0.5 text-xs text-right text-share-onBg focus:border-share-primary focus:outline-none"
                   />
                 </div>
               </li>
@@ -461,7 +461,7 @@ export function NetWorthTracker({ state, onUpdate }: NetWorthTrackerProps) {
               onChange={(e) => setLiabilityForm((p) => ({ ...p, label: e.target.value }))}
               placeholder="e.g. Personal loan"
               autoFocus
-              className="flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs text-slate-100 placeholder:text-slate-600 focus:border-share-primary focus:outline-none"
+              className="flex-1 rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerLow px-3 py-1.5 text-xs text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-share-primary focus:outline-none"
             />
             <span className="text-xs text-share-onSurfaceVariant">€</span>
             <input
@@ -471,7 +471,7 @@ export function NetWorthTracker({ state, onUpdate }: NetWorthTrackerProps) {
               onChange={(e) => setLiabilityForm((p) => ({ ...p, amount: e.target.value }))}
               onKeyDown={(e) => e.key === 'Enter' && handleAddAdHocLiability()}
               placeholder="0"
-              className="w-24 rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs text-slate-100 focus:border-share-primary focus:outline-none"
+              className="w-24 rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerLow px-3 py-1.5 text-xs text-share-onBg focus:border-share-primary focus:outline-none"
             />
             <button type="button" onClick={handleAddAdHocLiability} className="text-xs text-share-primary hover:underline">Add</button>
             <button type="button" onClick={() => setAddingLiability(false)} className="text-xs text-share-onSurfaceVariant/50">✕</button>
