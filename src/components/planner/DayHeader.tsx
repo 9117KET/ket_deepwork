@@ -68,7 +68,7 @@ export function DayHeader({
             </span>
           )}
           {totalDays != null && totalDays > 0 && (
-            <span className="rounded border border-slate-700 bg-slate-800/60 px-2 py-0.5 text-xs text-slate-400">
+            <span className="rounded border border-share-outlineVariant/30 bg-share-surfaceContainerLow px-2 py-0.5 text-xs text-share-onSurfaceVariant">
               {totalDays} day{totalDays !== 1 ? 's' : ''} since 1st use
             </span>
           )}

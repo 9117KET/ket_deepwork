@@ -59,22 +59,22 @@ export function HabitChecklist({
   }
 
   return (
-    <div className="rounded-lg border border-slate-800 bg-slate-900 p-3 sm:p-4">
+    <div className="rounded-lg border border-share-outlineVariant/25 bg-share-surfaceContainerLow p-3 sm:p-4">
       <header className="mb-2 flex items-center justify-between gap-2">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <button
             type="button"
             onClick={() => setCollapsed((c) => !c)}
-            className="shrink-0 text-left text-sm font-semibold text-slate-100 hover:text-sky-300"
+            className="shrink-0 text-left text-sm font-semibold text-share-onBg hover:text-share-primary"
             aria-expanded={!collapsed}
           >
             Daily Habits
           </button>
-          <span className="shrink-0 text-xs text-slate-500">
+          <span className="shrink-0 text-xs text-share-onSurfaceVariant/60">
             {doneCount}/{totalCount}
           </span>
           {collapsed && identityStatement && (
-            <span className="min-w-0 truncate text-[10px] italic text-slate-500">
+            <span className="min-w-0 truncate text-[10px] italic text-share-onSurfaceVariant/60">
               &ldquo;{identityStatement}&rdquo;
             </span>
           )}
@@ -82,7 +82,7 @@ export function HabitChecklist({
         <button
           type="button"
           onClick={onEditHabits}
-          className="text-xs text-slate-500 hover:text-sky-400"
+          className="text-xs text-share-onSurfaceVariant/60 hover:text-share-primary"
           title="Edit habit list"
         >
           Edit
@@ -108,17 +108,17 @@ export function HabitChecklist({
                 onBlur={handleIdentityBlur}
                 onKeyDown={handleIdentityKeyDown}
                 placeholder="I am someone who..."
-                className="w-full rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm italic text-slate-200 placeholder:text-slate-600 focus:border-sky-600 focus:outline-none"
+                className="w-full rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-2 py-1 text-sm italic text-share-onSurface placeholder:text-share-onSurfaceVariant/40 focus:border-share-primary focus:outline-none"
               />
             ) : (
               <button
                 type="button"
                 onClick={handleIdentityClick}
-                className="w-full text-left text-sm italic text-slate-400 hover:text-slate-200"
+                className="w-full text-left text-sm italic text-share-onSurfaceVariant hover:text-share-onBg"
                 title="Click to set your identity statement"
               >
                 {identityStatement || (
-                  <span className="text-slate-600">Set your identity...</span>
+                  <span className="text-share-onSurfaceVariant/40">Set your identity...</span>
                 )}
               </button>
             )}
@@ -146,8 +146,8 @@ export function HabitChecklist({
                     onClick={() => onToggle(habit.id, !done)}
                     className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border text-xs transition-colors ${
                       done
-                        ? 'border-sky-500 bg-sky-500 text-white'
-                        : 'border-slate-600 bg-slate-800 text-transparent hover:border-sky-500'
+                        ? 'border-share-primary bg-share-primary text-share-onPrimary'
+                        : 'border-share-outlineVariant/50 bg-share-surfaceContainerHigh text-transparent hover:border-share-primary'
                     }`}
                     aria-label={done ? `Uncheck ${habit.label}` : `Check ${habit.label}`}
                   >
@@ -157,13 +157,13 @@ export function HabitChecklist({
                   <div className="min-w-0 flex-1">
                     <span
                       className={`text-sm leading-tight ${
-                        done ? 'text-slate-500 line-through' : 'text-slate-200'
+                        done ? 'text-share-onSurfaceVariant/50 line-through' : 'text-share-onSurface'
                       }`}
                     >
                       {habit.label}
                     </span>
                     {habit.stackAnchor && (
-                      <p className="text-xs text-slate-600">After: {habit.stackAnchor}</p>
+                      <p className="text-xs text-share-onSurfaceVariant/50">After: {habit.stackAnchor}</p>
                     )}
                   </div>
 

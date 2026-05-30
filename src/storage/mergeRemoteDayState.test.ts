@@ -61,4 +61,11 @@ describe('mergeRemoteDayState', () => {
     const merged = mergeRemoteDayState(makeDay(), makeDay())
     expect(merged.tasks).toEqual([])
   })
+
+  it('preserves notDoingItems and abandonedTasks from remote', () => {
+    const local = makeDay({ notDoingItems: undefined })
+    const remote = makeDay({ notDoingItems: [{ id: 'nd1', text: 'skip it', createdAt: '2026-01-01T00:00:00Z' }] })
+    const merged = mergeRemoteDayState(local, remote)
+    expect(merged.notDoingItems).toEqual(remote.notDoingItems)
+  })
 })

@@ -129,28 +129,28 @@ export function DeepWorkTimer({ onSessionComplete }: DeepWorkTimerProps) {
         : 1 - Math.min(1, effectiveRemaining / Math.max(1, totalMs))
 
   return (
-    <section className="rounded-lg border border-slate-800 bg-slate-900 p-3 sm:p-4">
+    <section className="rounded-lg border border-share-outlineVariant/25 bg-share-surfaceContainerLow p-3 sm:p-4">
       <header className="mb-3">
-        <h3 className="text-sm sm:text-base font-semibold text-slate-100">Deep work timer</h3>
-        <p className="text-xs text-slate-400">
+        <h3 className="text-sm sm:text-base font-semibold text-share-onBg">Deep work timer</h3>
+        <p className="text-xs text-share-onSurfaceVariant">
           Set a focused block (e.g. German, job applications) and stay with it.
         </p>
       </header>
 
       <form onSubmit={handleStart} className="space-y-3">
         <div className="space-y-1">
-          <label className="block text-xs text-slate-400">Session label</label>
+          <label className="block text-xs text-share-onSurfaceVariant">Session label</label>
           <input
             type="text"
             value={label}
             onChange={(event) => setLabel(event.target.value)}
-            className="w-full rounded-md border border-slate-800 bg-slate-900 px-3 py-1.5 text-sm text-slate-100 placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+            className="w-full rounded-md border border-share-outlineVariant/40 bg-share-surfaceContainer px-3 py-1.5 text-sm text-share-onBg placeholder:text-share-onSurfaceVariant/50 focus:border-share-primary focus:outline-none focus:ring-1 focus:ring-share-primary"
             placeholder="What are you focusing on?"
           />
         </div>
 
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span className="text-slate-400">Presets:</span>
+          <span className="text-share-onSurfaceVariant">Presets:</span>
           {PRESETS.map((minutesPreset) => (
             <button
               key={minutesPreset}
@@ -160,7 +160,7 @@ export function DeepWorkTimer({ onSessionComplete }: DeepWorkTimerProps) {
               className={`rounded-full border px-3 py-1 transition-colors ${
                 durationMinutes === minutesPreset && !isCustom
                   ? 'border-sky-500 bg-sky-500/10 text-sky-400'
-                  : 'border-slate-800 bg-slate-900 text-slate-400 hover:border-sky-500 hover:text-sky-400'
+                  : 'border-share-outlineVariant/40 bg-share-surfaceContainer text-share-onSurfaceVariant hover:border-share-primary/60 hover:text-share-primary'
               } ${isRunning ? 'opacity-60' : ''}`}
             >
               {minutesPreset} min
@@ -179,7 +179,7 @@ export function DeepWorkTimer({ onSessionComplete }: DeepWorkTimerProps) {
             className={`w-16 rounded-full border px-2 py-1 text-center transition-colors focus:outline-none focus:ring-1 focus:ring-sky-500 ${
               isCustom
                 ? 'border-sky-500 bg-sky-500/10 text-sky-400'
-                : 'border-slate-800 bg-slate-900 text-slate-400 placeholder:text-slate-600 focus:border-sky-500 focus:text-sky-400'
+                : 'border-share-outlineVariant/40 bg-share-surfaceContainer text-share-onSurfaceVariant placeholder:text-share-onSurfaceVariant/40 focus:border-share-primary focus:text-share-primary'
             } ${isRunning ? 'opacity-60' : ''}`}
           />
         </div>
@@ -193,7 +193,7 @@ export function DeepWorkTimer({ onSessionComplete }: DeepWorkTimerProps) {
             <p className="mt-0.5 text-xs text-teal-400/70">
               {durationMinutes} min - {label}
             </p>
-            <p className="mt-1 text-xs text-slate-400">Block logged. Start another or call it done.</p>
+            <p className="mt-1 text-xs text-share-onSurfaceVariant">Block logged. Start another or call it done.</p>
           </div>
         ) : (
           <div className="space-y-1">
@@ -201,11 +201,11 @@ export function DeepWorkTimer({ onSessionComplete }: DeepWorkTimerProps) {
               <p className="font-mono text-2xl sm:text-3xl">
                 {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
               </p>
-              <p className="text-xs text-slate-400 capitalize">{status}</p>
+              <p className="text-xs text-share-onSurfaceVariant capitalize">{status}</p>
             </div>
-            <div className="h-1.5 w-full rounded-full bg-slate-900">
+            <div className="h-1.5 w-full rounded-full bg-share-outlineVariant/25">
               <div
-                className="h-1.5 rounded-full bg-sky-500 transition-[width] duration-300"
+                className="h-1.5 rounded-full bg-share-primary transition-[width] duration-300"
                 style={{ width: `${fractionComplete * 100}%` }}
               />
             </div>
@@ -226,7 +226,7 @@ export function DeepWorkTimer({ onSessionComplete }: DeepWorkTimerProps) {
             <button
               type="button"
               onClick={handlePause}
-              className="rounded-md border border-slate-800 bg-slate-900 px-3 py-1.5 text-sm text-slate-100 hover:border-sky-500 hover:text-sky-400"
+              className="rounded-md border border-share-outlineVariant/40 bg-share-surfaceContainer px-3 py-1.5 text-sm text-share-onBg hover:border-share-primary/60 hover:text-share-primary"
             >
               Pause
             </button>
@@ -236,7 +236,7 @@ export function DeepWorkTimer({ onSessionComplete }: DeepWorkTimerProps) {
             <button
               type="button"
               onClick={handleResume}
-              className="rounded-md border border-sky-500 bg-sky-500/10 px-3 py-1.5 text-sm text-sky-400 hover:bg-sky-500/20"
+              className="rounded-md border border-share-primary/60 bg-share-primary/10 px-3 py-1.5 text-sm text-share-primary hover:bg-share-primary/20"
             >
               Resume
             </button>
@@ -246,7 +246,7 @@ export function DeepWorkTimer({ onSessionComplete }: DeepWorkTimerProps) {
             <button
               type="button"
               onClick={handleReset}
-              className="rounded-md border border-slate-800 bg-slate-900 px-3 py-1.5 text-sm text-slate-400 hover:border-sky-500 hover:text-sky-400"
+              className="rounded-md border border-share-outlineVariant/40 bg-share-surfaceContainer px-3 py-1.5 text-sm text-share-onSurfaceVariant hover:border-share-primary/60 hover:text-share-primary"
             >
               Reset
             </button>
