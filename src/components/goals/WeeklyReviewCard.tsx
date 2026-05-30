@@ -34,7 +34,8 @@ export function WeeklyReviewCard({
 }: WeeklyReviewCardProps) {
   const qs = questions.length > 0 ? questions : DEFAULT_QUESTIONS
   const answers = useMemo(() => review?.answers ?? [], [review?.answers])
-  const [collapsed, setCollapsed] = useState(!!review?.completedAt)
+  // Start collapsed — the user opens it when ready (unlike monthly review which auto-opens).
+  const [collapsed, setCollapsed] = useState(!review || !review.answers?.some(Boolean) || !!review.completedAt)
   const [prevForceOpen, setPrevForceOpen] = useState(forceOpen ?? 0)
   const debounceTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({})
 
