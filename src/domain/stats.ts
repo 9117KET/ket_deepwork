@@ -211,3 +211,71 @@ export function computeSectionCompletion(
   return result
 }
 
+// ─── Mood correlation ─────────────────────────────────────────────────────────
+
+const MOOD_SCORES: Record<string, number> = {
+  '😊': 5, '🔥': 5, '🙂': 4, '😐': 3, '😴': 3, '😤': 2, '🙁': 2, '😢': 1,
+}
+
+function moodScore(emoji: string | null | undefined): number | null {
+  if (!emoji) return null
+  return MOOD_SCORES[emoji] ?? null
+}
+
+export interface MoodInsight {
+  highAvg: number | null;
+  lowAvg: number | null;
+  highCount: number;
+  lowCount: number;
+}
+
+/** Avg mood split by whether deep work hours met threshold (default 2 h). */
+export function moodByDeepWork(
+  days: Record<string, import('./types').DayState | undefined>,
+  monthDays: string[],
+  thresholdHours = 2,
+): MoodInsight {
+  let highSum = 0, highCount = 0, lowSum = 0, lowCount = 0
+  for (const isoDate of monthDays) {
+    const day = days[isoDate]
+    const score = moodScore(day?.mood)
+    if (score == null) continue
+    const dwMins = day?.deepWorkSessions
+      ?.filter(s => s.finishedAt)
+      .reduce((acc, s) => acc + s.durationMinutes, 0) ?? 0
+    if (dwMins >= thresholdHours * 60) { highSum += score; highCount++ }
+    else { lowSum += score; lowCount++ }
+  }
+  return {
+    highAvg: highCount >= 3 ? Math.round((highSum / highCount) * 10) / 10 : null,
+    lowAvg: lowCount >= 3 ? Math.round((lowSum / lowCount) * 10) / 10 : null,
+    highCount,
+    lowCount,
+  }
+}
+
+/** Avg mood split by whether >= threshold fraction of habits were completed. */
+export function moodByHabits(
+  days: Record<string, import('./types').DayState | undefined>,
+  habitIds: string[],
+  monthDays: string[],
+  thresholdFraction = 0.6,
+): MoodInsight {
+  let highSum = 0, highCount = 0, lowSum = 0, lowCount = 0
+  for (const isoDate of monthDays) {
+    const day = days[isoDate]
+    const score = moodScore(day?.mood)
+    if (score == null || habitIds.length === 0) continue
+    const done = habitIds.filter(id => day?.habitCompletions?.[id]).length
+    const fraction = done / habitIds.length
+    if (fraction >= thresholdFraction) { highSum += score; highCount++ }
+    else { lowSum += score; lowCount++ }
+  }
+  return {
+    highAvg: highCount >= 3 ? Math.round((highSum / highCount) * 10) / 10 : null,
+    lowAvg: lowCount >= 3 ? Math.round((lowSum / lowCount) * 10) / 10 : null,
+    highCount,
+    lowCount,
+  }
+}
+

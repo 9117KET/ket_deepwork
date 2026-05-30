@@ -54,6 +54,9 @@ import { WeeklyProjectCard } from "./WeeklyProjectCard";
 import { TomorrowMustPanel } from "./TomorrowMustPanel";
 import { MustDoPinnedHeader } from "./MustDoPinnedHeader";
 import { MonthlyReviewBanner } from "../goals/MonthlyReviewBanner";
+import { WeeklyReviewBanner } from "../goals/WeeklyReviewBanner";
+import { DayJournalCard } from "./DayJournalCard";
+import { ShutdownRitualModal } from "./ShutdownRitualModal";
 import { SideQuestSection } from "./SideQuestSection";
 import { getDailyQuestSelection } from "../../domain/sideQuestAlgorithm";
 import { MobileTabBar, type MobileTab } from "./MobileTabBar";
@@ -231,6 +234,7 @@ export function DayPlanner({
     handleCarryForward,
     handleUpdateTask,
     handleUpdateMonthlyReview: _handleUpdateMonthlyReview,
+    handleUpdateWeeklyReview,
     handleToggleSideQuestCompletion,
     handleSaveSideQuestDefs,
     handleSessionComplete,
@@ -279,6 +283,8 @@ export function DayPlanner({
     habitIds,
   });
 
+  const shutdownAlreadyDone = Boolean(dayState.shutdownCompletedAt);
+
   const handleToggleHabit = useCallback(
     (habitId: string, value: boolean) => {
       updateAppState((prev) => {
@@ -311,6 +317,39 @@ export function DayPlanner({
     },
     [updateAppState],
   );
+
+  const handleSaveDayJournal = useCallback(
+    (note: string) => {
+      updateAppState((prev) => {
+        const day = getOrCreateDay(prev, selectedDay);
+        return { ...prev, days: { ...prev.days, [selectedDay]: { ...day, dayNote: note } } };
+      });
+    },
+    [updateAppState, selectedDay],
+  );
+
+  const handleSaveFocusHijacker = useCallback(
+    (hijacker: import("../../domain/types").FocusHijacker) => {
+      updateAppState((prev) => {
+        const day = getOrCreateDay(prev, selectedDay);
+        return { ...prev, days: { ...prev.days, [selectedDay]: { ...day, focusHijacker: hijacker } } };
+      });
+    },
+    [updateAppState, selectedDay],
+  );
+
+  const handleShutdownComplete = useCallback(() => {
+    updateAppState((prev) => {
+      const day = getOrCreateDay(prev, selectedDay);
+      return {
+        ...prev,
+        days: {
+          ...prev.days,
+          [selectedDay]: { ...day, shutdownCompletedAt: new Date().toISOString() },
+        },
+      };
+    });
+  }, [updateAppState, selectedDay]);
 
   const handleSetDayOneThing = useCallback(
     (date: string, value: string) => {
@@ -374,6 +413,9 @@ export function DayPlanner({
       deepWorkGoalHoursPerWeek?: number;
       goalCascade?: AppState['goalCascade'];
       monthlyReviews?: AppState['monthlyReviews'];
+      weeklyReviews?: AppState['weeklyReviews'];
+      weeklyReviewDay?: AppState['weeklyReviewDay'];
+      weeklyReviewQuestions?: AppState['weeklyReviewQuestions'];
     }) => {
       updateAppState((prev) => ({
         ...prev,
@@ -383,6 +425,9 @@ export function DayPlanner({
         deepWorkGoalHoursPerWeek: patch.deepWorkGoalHoursPerWeek !== undefined ? patch.deepWorkGoalHoursPerWeek : prev.deepWorkGoalHoursPerWeek,
         goalCascade: patch.goalCascade !== undefined ? patch.goalCascade : prev.goalCascade,
         monthlyReviews: patch.monthlyReviews !== undefined ? patch.monthlyReviews : prev.monthlyReviews,
+        weeklyReviews: patch.weeklyReviews !== undefined ? patch.weeklyReviews : prev.weeklyReviews,
+        weeklyReviewDay: patch.weeklyReviewDay !== undefined ? patch.weeklyReviewDay : prev.weeklyReviewDay,
+        weeklyReviewQuestions: patch.weeklyReviewQuestions !== undefined ? patch.weeklyReviewQuestions : prev.weeklyReviewQuestions,
       }));
     },
     [updateAppState],
@@ -392,6 +437,8 @@ export function DayPlanner({
   const [moveSubtaskId, setMoveSubtaskId] = useState<string | null>(null);
   const [editSideQuestOpen, setEditSideQuestOpen] = useState(false);
   const [reviewOpenTrigger, setReviewOpenTrigger] = useState(0);
+  const [weeklyReviewOpenTrigger, setWeeklyReviewOpenTrigger] = useState(0);
+  const [showShutdown, setShowShutdown] = useState(false);
 
   const tomorrowDate = useMemo(() => addDays(selectedDay, 1), [selectedDay]);
 
@@ -457,6 +504,20 @@ export function DayPlanner({
     );
   }, [selectedDay]);
 
+  // Auto-nudge: trigger shutdown modal when ALL night-routine tasks are completed.
+  const nightRoutineTasks = useMemo(
+    () => (tasksBySection['nightRoutine'] ?? []).filter(t => !t.parentId),
+    [tasksBySection],
+  );
+  const allNightDone = nightRoutineTasks.length > 0 && nightRoutineTasks.every(t => t.isDone);
+
+  useEffect(() => {
+    if (!shareMode && allNightDone && !shutdownAlreadyDone && selectedDay === todayIso()) {
+      const timer = setTimeout(() => setShowShutdown(true), 800);
+      return () => clearTimeout(timer);
+    }
+  }, [allNightDone, shutdownAlreadyDone, selectedDay, shareMode]);
+
   useEffect(() => {
     return () => {
       window.removeEventListener("mousemove", handleSplitterMouseMove);
@@ -518,6 +579,8 @@ export function DayPlanner({
           onToday={() => setSelectedDay(todayIso())}
           deepWorkMinutesToday={shareMode ? undefined : deepWorkMinutesToday}
           depthPhilosophy={shareMode ? undefined : appState.depthPhilosophy}
+          shutdownCompleted={shareMode ? undefined : shutdownAlreadyDone}
+          onShutdown={shareMode ? undefined : () => setShowShutdown(true)}
         />
         {!shareMode && (
           <MustDoPinnedHeader
@@ -533,6 +596,14 @@ export function DayPlanner({
             selectedDay={selectedDay}
             review={appState.monthlyReviews?.[toMonthId(selectedDay)]}
             onOpen={() => setReviewOpenTrigger((t) => t + 1)}
+          />
+        )}
+        {!shareMode && (
+          <WeeklyReviewBanner
+            selectedDay={selectedDay}
+            review={appState.weeklyReviews?.[selectedDay]}
+            reviewWeekday={appState.weeklyReviewDay ?? 5}
+            onOpen={() => setWeeklyReviewOpenTrigger((t) => t + 1)}
           />
         )}
         {!shareMode && (() => {
@@ -961,6 +1032,16 @@ export function DayPlanner({
         </>
       )}
 
+      {/* Day journal — always accessible for current day (Cal Newport time-block journal) */}
+      {!shareMode && (
+        <DayJournalCard
+          dayNote={dayState.dayNote}
+          focusHijacker={dayState.focusHijacker}
+          onSaveNote={handleSaveDayJournal}
+          onSaveHijacker={handleSaveFocusHijacker}
+        />
+      )}
+
       {/* Monthly tracking: owner only (not shown on shared views) */}
       {!shareMode && (
         <div className="mt-6">
@@ -970,9 +1051,59 @@ export function DayPlanner({
             onUpdateDay={handleTrackingUpdateDay}
             onUpdateSettings={handleTrackingUpdateSettings}
             scrollToReview={reviewOpenTrigger}
+            weeklyReviewOpenTrigger={weeklyReviewOpenTrigger}
+            onUpdateWeeklyReview={handleUpdateWeeklyReview}
           />
         </div>
       )}
+
+      {/* Shutdown ritual modal */}
+      {!shareMode && showShutdown && (() => {
+        const incompleteTasks = dayState.tasks.filter(
+          t => !t.isDone && !t.parentId && t.sectionId !== 'mustDo'
+        );
+        const tomorrowDate = addDays(selectedDay, 1);
+        const tomorrowMustDos = (appState.days[tomorrowDate]?.tasks ?? []).filter(
+          t => t.sectionId === 'mustDo' && !t.parentId
+        );
+        const habitDone = habits.filter(h => dayState.habitCompletions?.[h.id]).length;
+        const habitFraction = habits.length > 0 ? habitDone / habits.length : 0;
+
+        return (
+          <ShutdownRitualModal
+            incompleteTasks={incompleteTasks}
+            tomorrowMustDos={tomorrowMustDos}
+            dayNote={dayState.dayNote}
+            focusHijacker={dayState.focusHijacker}
+            deepWorkMinutesToday={deepWorkMinutesToday}
+            habitFraction={habitFraction}
+            onSaveJournal={(note, hijacker) => {
+              handleSaveDayJournal(note);
+              handleSaveFocusHijacker(hijacker);
+            }}
+            onCarryTask={task => {
+              const tDate = addDays(selectedDay, 1);
+              updateAppState(prev => {
+                const tomorrow = getOrCreateDay(prev, tDate);
+                const newTask: import("../../domain/types").Task = {
+                  id: `${Date.now()}-carried`,
+                  title: task.title,
+                  isDone: false,
+                  sectionId: task.sectionId,
+                  date: tDate,
+                };
+                return {
+                  ...prev,
+                  days: { ...prev.days, [tDate]: { ...tomorrow, tasks: [...tomorrow.tasks, newTask] } },
+                };
+              });
+            }}
+            onDropTask={task => handleAbandonTask(task.id)}
+            onComplete={handleShutdownComplete}
+            onClose={() => setShowShutdown(false)}
+          />
+        );
+      })()}
 
       {moveSubtaskId && !shareMode && (() => {
         const subtask = dayState.tasks.find(t => t.id === moveSubtaskId)

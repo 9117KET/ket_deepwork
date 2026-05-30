@@ -7,19 +7,21 @@
 
 import { useState, useMemo, useCallback, useRef, useEffect, Component } from 'react'
 import type React from 'react'
-import type { AppState, DayState, GoalCascade, HabitDefinition, MonthlyReview } from '../../domain/types'
+import type { AppState, DayState, GoalCascade, HabitDefinition, MonthlyReview, WeeklyReview } from '../../domain/types'
 import { DEFAULT_HABIT_DEFINITIONS, FIXED_SECTIONS } from '../../domain/types'
 import { GoalCascadeSection } from '../goals/GoalCascadeSection'
 import { MonthlyReviewCard, MonthlyReviewBanner } from '../goals/MonthlyReviewCard'
+import { WeeklyReviewCard } from '../goals/WeeklyReviewCard'
 import {
   toMonthId,
   previousMonthId,
   nextMonthId,
   daysInMonth,
   todayIso,
+  weekdayName,
 } from '../../domain/dateUtils'
 import { getOrCreateDay } from '../../storage/localStorageState'
-import { computeSectionCompletion, computeDayCompletion, computePerHabitStreaks, computeDailyDeepWorkMinutes, computeWeeklyDeepWorkHours } from '../../domain/stats'
+import { computeSectionCompletion, computeDayCompletion, computePerHabitStreaks, computeDailyDeepWorkMinutes, computeWeeklyDeepWorkHours, moodByDeepWork, moodByHabits } from '../../domain/stats'
 import { weekForDay } from '../../domain/dateUtils'
 
 const MOOD_OPTIONS = ['🙂', '😐', '🙁', '😊', '😢', '😤', '😴', '🔥'] as const
@@ -35,9 +37,16 @@ interface MonthlyTrackingDashboardProps {
     deepWorkGoalHoursPerWeek?: number
     goalCascade?: GoalCascade
     monthlyReviews?: Record<string, MonthlyReview>
+    weeklyReviews?: Record<string, WeeklyReview>
+    weeklyReviewDay?: AppState['weeklyReviewDay']
+    weeklyReviewQuestions?: AppState['weeklyReviewQuestions']
   }) => void
-  /** Increment to scroll to and expand the review card (e.g. when triggered from the planner banner). */
+  /** Increment to scroll to and expand the monthly review card. */
   scrollToReview?: number
+  /** Increment to scroll to and expand the weekly review card. */
+  weeklyReviewOpenTrigger?: number
+  /** Handler to save weekly review updates. */
+  onUpdateWeeklyReview?: (dateKey: string, review: WeeklyReview) => void
 }
 
 function monthLabel(monthId: string): string {
@@ -52,18 +61,28 @@ export function MonthlyTrackingDashboard({
   onUpdateDay,
   onUpdateSettings,
   scrollToReview,
+  weeklyReviewOpenTrigger,
+  onUpdateWeeklyReview,
 }: MonthlyTrackingDashboardProps) {
   const [selectedMonthId, setSelectedMonthId] = useState(() => toMonthId(referenceDay))
   const [moodPickerDay, setMoodPickerDay] = useState<string | null>(null)
   const [editingGoal, setEditingGoal] = useState(false)
   const [goalInput, setGoalInput] = useState('')
+  const [editingReviewDay, setEditingReviewDay] = useState(false)
   const reviewRef = useRef<HTMLDivElement>(null)
+  const weeklyReviewRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (scrollToReview && scrollToReview > 0) {
       reviewRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
   }, [scrollToReview])
+
+  useEffect(() => {
+    if (weeklyReviewOpenTrigger && weeklyReviewOpenTrigger > 0) {
+      weeklyReviewRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [weeklyReviewOpenTrigger])
 
   const monthDays = useMemo(() => daysInMonth(selectedMonthId), [selectedMonthId])
   const chapterTitle = state.monthTitles?.[selectedMonthId] ?? ''
@@ -91,6 +110,20 @@ export function MonthlyTrackingDashboard({
       onUpdateSettings({ goalCascade: cascade })
     },
     [onUpdateSettings],
+  )
+
+  // Mood correlation insights
+  const habitIds = useMemo(
+    () => (state.habitDefinitions ?? DEFAULT_HABIT_DEFINITIONS).map(h => h.id),
+    [state.habitDefinitions],
+  )
+  const moodDwInsight = useMemo(
+    () => moodByDeepWork(state.days, monthDays),
+    [state.days, monthDays],
+  )
+  const moodHabitInsight = useMemo(
+    () => moodByHabits(state.days, habitIds, monthDays),
+    [state.days, habitIds, monthDays],
   )
 
   const handleUpdateReview = useCallback(
@@ -253,6 +286,34 @@ export function MonthlyTrackingDashboard({
                 ))}
               </div>
             </div>
+            <div className="mt-3 border-t border-share-outlineVariant/30 pt-2">
+              <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-share-onSurfaceVariant/50">Weekly Review Day</div>
+              {editingReviewDay ? (
+                <select
+                  autoFocus
+                  defaultValue={state.weeklyReviewDay ?? 5}
+                  onChange={e => {
+                    onUpdateSettings({ weeklyReviewDay: Number(e.target.value) as 1|2|3|4|5|6|7 })
+                    setEditingReviewDay(false)
+                  }}
+                  onBlur={() => setEditingReviewDay(false)}
+                  className="rounded border border-sky-600 bg-share-surfaceContainerHigh px-2 py-0.5 text-xs text-share-onBg focus:outline-none"
+                >
+                  {([1,2,3,4,5,6,7] as const).map(d => (
+                    <option key={d} value={d}>{weekdayName(d)}</option>
+                  ))}
+                </select>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setEditingReviewDay(true)}
+                  className="rounded px-1 text-xs text-sky-400 underline decoration-dotted hover:text-sky-300"
+                  title="Click to change weekly review day"
+                >
+                  {weekdayName(state.weeklyReviewDay ?? 5)}
+                </button>
+              )}
+            </div>
           </div>
         )
       })()}
@@ -264,6 +325,39 @@ export function MonthlyTrackingDashboard({
         onSetMood={handleSetMood}
       />
 
+      {/* Mood correlation insights */}
+      {(moodDwInsight.highAvg != null || moodHabitInsight.highAvg != null) && (
+        <div className="mt-3 rounded border border-share-outlineVariant/25 bg-share-surfaceContainerLow p-3">
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-share-onSurfaceVariant/50">
+            Mood insights this month
+          </p>
+          <div className="space-y-1.5">
+            {moodDwInsight.highAvg != null && moodDwInsight.lowAvg != null && (
+              <p className="text-xs text-share-onSurfaceVariant">
+                Your mood averages{' '}
+                <span className="font-semibold text-teal-300">{moodDwInsight.highAvg}/5</span> on days
+                with 2+ h deep work vs.{' '}
+                <span className="font-semibold text-share-onSurface">{moodDwInsight.lowAvg}/5</span> on
+                lighter days.
+              </p>
+            )}
+            {moodHabitInsight.highAvg != null && moodHabitInsight.lowAvg != null && (
+              <p className="text-xs text-share-onSurfaceVariant">
+                Your mood averages{' '}
+                <span className="font-semibold text-sky-300">{moodHabitInsight.highAvg}/5</span> when
+                you complete 60%+ of habits vs.{' '}
+                <span className="font-semibold text-share-onSurface">{moodHabitInsight.lowAvg}/5</span>{' '}
+                on lower-completion days.
+              </p>
+            )}
+            <p className="text-[9px] italic text-share-onSurfaceVariant/40">
+              Based on {monthDays.filter(d => state.days[d]?.mood).length} mood-logged days this month.
+              Min 3 per group for an insight to appear.
+            </p>
+          </div>
+        </div>
+      )}
+
       <div ref={reviewRef}>
         <MonthlyReviewCard
           monthKey={selectedMonthId}
@@ -273,6 +367,19 @@ export function MonthlyTrackingDashboard({
           forceOpen={scrollToReview}
         />
       </div>
+
+      {/* Weekly review card */}
+      {onUpdateWeeklyReview && (
+        <div ref={weeklyReviewRef}>
+          <WeeklyReviewCard
+            dateKey={referenceDay}
+            questions={state.weeklyReviewQuestions ?? []}
+            review={state.weeklyReviews?.[referenceDay]}
+            onUpdate={onUpdateWeeklyReview}
+            forceOpen={weeklyReviewOpenTrigger}
+          />
+        </div>
+      )}
 
       <HabitGridBoundary>
         <HabitTrackingGrid

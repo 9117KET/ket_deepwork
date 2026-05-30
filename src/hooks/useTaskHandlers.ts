@@ -517,6 +517,13 @@ export function useTaskHandlers(
     }))
   }, [updateAppState])
 
+  const handleUpdateWeeklyReview = useCallback((dateKey: string, review: import('../domain/types').WeeklyReview) => {
+    updateAppState((prev) => ({
+      ...prev,
+      weeklyReviews: { ...(prev.weeklyReviews ?? {}), [dateKey]: review },
+    }))
+  }, [updateAppState])
+
   const handleToggleSideQuestCompletion = useCallback((id: string, value: boolean) => {
     updateAppState((prev) => {
       const day = getOrCreateDay(prev, selectedDay)
@@ -860,6 +867,7 @@ export function useTaskHandlers(
     handleCarryForward,
     handleUpdateTask,
     handleUpdateMonthlyReview,
+    handleUpdateWeeklyReview,
     handleToggleSideQuestCompletion,
     handleSaveSideQuestDefs,
     handleSessionComplete,

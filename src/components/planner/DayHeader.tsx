@@ -1,4 +1,4 @@
-import { Flame, Timer, Zap, Calendar, Scale } from 'lucide-react'
+import { Flame, Timer, Zap, Calendar, Scale, Moon } from 'lucide-react'
 
 interface DayHeaderProps {
   dateLabel: string
@@ -14,6 +14,8 @@ interface DayHeaderProps {
   onToday: () => void
   deepWorkMinutesToday?: number
   depthPhilosophy?: 'rhythmic' | 'journalistic' | 'bimodal'
+  shutdownCompleted?: boolean
+  onShutdown?: () => void
 }
 
 export function DayHeader({
@@ -30,6 +32,8 @@ export function DayHeader({
   onToday,
   deepWorkMinutesToday,
   depthPhilosophy,
+  shutdownCompleted,
+  onShutdown,
 }: DayHeaderProps) {
   const percentage =
     totalTaskCount <= 0 ? 0 : Math.max(0, Math.min(100, Math.round(completionRatio * 1000) / 10))
@@ -115,6 +119,22 @@ export function DayHeader({
         ) : null}
       </div>
       <div className="flex items-center gap-2">
+        {onShutdown && (
+          shutdownCompleted ? (
+            <span className="flex items-center gap-1 rounded-md border border-emerald-600/50 bg-emerald-500/10 px-2.5 py-1.5 text-xs text-emerald-300">
+              <Moon className="h-3.5 w-3.5" /> Day closed
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={onShutdown}
+              title="Run the shutdown ritual — close the day intentionally"
+              className="flex items-center gap-1 rounded-md border border-share-outlineVariant/40 bg-share-surfaceContainer px-2.5 py-1.5 text-xs text-share-onSurfaceVariant hover:border-violet-500/60 hover:text-violet-300 transition-colors"
+            >
+              <Moon className="h-3.5 w-3.5" /> Close day
+            </button>
+          )
+        )}
         <button
           type="button"
           onClick={onPrevDay}

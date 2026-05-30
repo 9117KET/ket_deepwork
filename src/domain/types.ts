@@ -88,6 +88,13 @@ export interface DayState {
   blockDurations?: BlockDurations | null;
   /** Side quest def id -> completed for this day. */
   sideQuestCompletions?: Record<string, boolean>;
+  // ── End-of-day reflection (Cal Newport shutdown ritual + time-block journal) ──
+  /** Free-text note: what actually happened vs. the plan today. */
+  dayNote?: string;
+  /** What most disrupted the High Priority / deep work block today. */
+  focusHijacker?: FocusHijacker;
+  /** ISO timestamp when the user completed the shutdown ritual for this day. */
+  shutdownCompletedAt?: string;
 }
 
 /**
@@ -130,6 +137,17 @@ export interface GoalCascade {
   sixMonths?: string;
   threeMonths?: string;
 }
+
+/** Weekly review answers (Cal Newport + GTD weekly review ritual). */
+export interface WeeklyReview {
+  /** Free-text answers indexed to the weekly review questions. */
+  answers: string[];
+  /** ISO timestamp when the user marked this review complete. */
+  completedAt?: string;
+}
+
+/** What hijacked the High Priority / deep work block today. */
+export type FocusHijacker = 'none' | 'meetings' | 'shallow' | 'distraction' | 'personal' | 'rest';
 
 /** Monthly review answers for The ONE Thing framework. */
 export interface MonthlyReview {
@@ -196,6 +214,13 @@ export interface AppState {
   monthlyReviews?: Record<string, MonthlyReview>;
   /** Customisable monthly review question list (defaults to the 7 standard questions). */
   monthlyReviewQuestions?: string[];
+  // ── Weekly review (GTD weekly review + Cal Newport shutdown ritual) ──────────
+  /** ISO date of review day → weekly review answers. Key is the actual date the review was done. */
+  weeklyReviews?: Record<string, WeeklyReview>;
+  /** ISO weekday for the weekly review trigger (1=Mon … 7=Sun, default 5=Friday). */
+  weeklyReviewDay?: 1 | 2 | 3 | 4 | 5 | 6 | 7;
+  /** Customisable weekly review question list. */
+  weeklyReviewQuestions?: string[];
   /** Weekly project commitments pinned to specific days (e.g. InfradarAI on Monday). */
   weeklyProjectRotation?: WeeklyProjectAssignment[];
   /** Recurring side quest definitions — set once, visible on every unlock. */

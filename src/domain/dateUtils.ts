@@ -245,6 +245,26 @@ export function daysInMonth(monthId: string): string[] {
   return out
 }
 
+/** Returns the ISO weekday (1=Mon … 7=Sun) for a given YYYY-MM-DD string. */
+export function isoWeekdayOf(isoDate: string): 1 | 2 | 3 | 4 | 5 | 6 | 7 {
+  const d = new Date(isoDate + 'T00:00:00')
+  const day = d.getDay() // 0=Sun
+  return (day === 0 ? 7 : day) as 1 | 2 | 3 | 4 | 5 | 6 | 7
+}
+
+/** Returns true when isoDate falls on the configured weekly review weekday. */
+export function isWeeklyReviewDay(
+  isoDate: string,
+  reviewWeekday: 1 | 2 | 3 | 4 | 5 | 6 | 7 = 5,
+): boolean {
+  return isoWeekdayOf(isoDate) === reviewWeekday
+}
+
+/** Returns the full weekday name for an ISO weekday number (1=Monday … 7=Sunday). */
+export function weekdayName(day: 1 | 2 | 3 | 4 | 5 | 6 | 7): string {
+  return ['', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'][day]!
+}
+
 /**
  * Returns true when isoDate falls within the last N days of its month.
  * Used to trigger the monthly review reminder.
