@@ -86,7 +86,7 @@ async function prepareTestState(page: Page) {
           'deepblock_state_v1',
           JSON.stringify({ version: 1, state: appState }),
         )
-      } catch {}
+      } catch (_) { /* ignore parse errors — fresh state will be used */ }
     }
   })
 }
