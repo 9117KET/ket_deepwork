@@ -5,7 +5,7 @@
  * Mood shares the block-completion table so day columns align vertically.
  */
 
-import { useState, useMemo, useCallback, useRef, Component } from 'react'
+import { useState, useMemo, useCallback, useRef, useEffect, Component } from 'react'
 import type React from 'react'
 import type { AppState, DayState, GoalCascade, HabitDefinition, MonthlyReview } from '../../domain/types'
 import { DEFAULT_HABIT_DEFINITIONS, FIXED_SECTIONS } from '../../domain/types'
@@ -36,6 +36,8 @@ interface MonthlyTrackingDashboardProps {
     goalCascade?: GoalCascade
     monthlyReviews?: Record<string, MonthlyReview>
   }) => void
+  /** Increment to scroll to and expand the review card (e.g. when triggered from the planner banner). */
+  scrollToReview?: number
 }
 
 function monthLabel(monthId: string): string {
@@ -49,12 +51,19 @@ export function MonthlyTrackingDashboard({
   referenceDay,
   onUpdateDay,
   onUpdateSettings,
+  scrollToReview,
 }: MonthlyTrackingDashboardProps) {
   const [selectedMonthId, setSelectedMonthId] = useState(() => toMonthId(referenceDay))
   const [moodPickerDay, setMoodPickerDay] = useState<string | null>(null)
   const [editingGoal, setEditingGoal] = useState(false)
   const [goalInput, setGoalInput] = useState('')
   const reviewRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (scrollToReview && scrollToReview > 0) {
+      reviewRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [scrollToReview])
 
   const monthDays = useMemo(() => daysInMonth(selectedMonthId), [selectedMonthId])
   const chapterTitle = state.monthTitles?.[selectedMonthId] ?? ''
@@ -261,6 +270,7 @@ export function MonthlyTrackingDashboard({
           questions={state.monthlyReviewQuestions ?? []}
           review={state.monthlyReviews?.[selectedMonthId]}
           onUpdate={handleUpdateReview}
+          forceOpen={scrollToReview}
         />
       </div>
 

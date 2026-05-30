@@ -230,7 +230,7 @@ export function DayPlanner({
     handleCopyFromDay,
     handleCarryForward,
     handleUpdateTask,
-    handleUpdateMonthlyReview,
+    handleUpdateMonthlyReview: _handleUpdateMonthlyReview,
     handleToggleSideQuestCompletion,
     handleSaveSideQuestDefs,
     handleSessionComplete,
@@ -391,6 +391,7 @@ export function DayPlanner({
   const [editHabitsOpen, setEditHabitsOpen] = useState(false);
   const [moveSubtaskId, setMoveSubtaskId] = useState<string | null>(null);
   const [editSideQuestOpen, setEditSideQuestOpen] = useState(false);
+  const [reviewOpenTrigger, setReviewOpenTrigger] = useState(0);
 
   const tomorrowDate = useMemo(() => addDays(selectedDay, 1), [selectedDay]);
 
@@ -531,8 +532,7 @@ export function DayPlanner({
           <MonthlyReviewBanner
             selectedDay={selectedDay}
             review={appState.monthlyReviews?.[toMonthId(selectedDay)]}
-            questions={appState.monthlyReviewQuestions ?? []}
-            onUpdate={handleUpdateMonthlyReview}
+            onOpen={() => setReviewOpenTrigger((t) => t + 1)}
           />
         )}
         {!shareMode && (() => {
@@ -969,6 +969,7 @@ export function DayPlanner({
             referenceDay={selectedDay}
             onUpdateDay={handleTrackingUpdateDay}
             onUpdateSettings={handleTrackingUpdateSettings}
+            scrollToReview={reviewOpenTrigger}
           />
         </div>
       )}

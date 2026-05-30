@@ -12,13 +12,14 @@ import type { MonthlyReview } from '../../domain/types'
 import { todayIso } from '../../domain/dateUtils'
 
 const DEFAULT_QUESTIONS = [
-  'Did I protect the deep-work block every weekday this month?',
-  'How many quality applications did I send? How many responses?',
-  'Is my German improving measurably? Am I on track for B2?',
-  'Has Bürgergeld been resolved?',
-  'What is the ONE thing for next month that makes everything else easier or unnecessary?',
-  'What did I park that I need to make sure stays parked?',
-  'What did I almost say yes to that I should have said no to?',
+  'How many hours of deep work did I log this month? Did I consistently protect my focus blocks every weekday?',
+  'What was the ONE Thing that made the biggest difference this month?',
+  'What is the ONE Thing for next month that will make everything else easier or unnecessary?',
+  'Am I becoming the person I declared I am? Which habits held strong — and which broke, and why?',
+  'Am I on track toward my 3-month goal? What is the honest gap between where I am and where I need to be?',
+  'What almost hijacked my focus this month? What boundary do I need to enforce more firmly next month?',
+  'What am I choosing to park — and what evidence shows it is the right call?',
+  'What did I consistently underestimate or avoid this month? What does that reveal about me?',
 ]
 
 interface MonthlyReviewCardProps {
@@ -26,12 +27,21 @@ interface MonthlyReviewCardProps {
   questions: string[]
   review: MonthlyReview | undefined
   onUpdate: (monthKey: string, review: MonthlyReview) => void
+  /** Increment to force-expand the card (e.g. when scrolled to from a banner). */
+  forceOpen?: number
 }
 
-export function MonthlyReviewCard({ monthKey, questions, review, onUpdate }: MonthlyReviewCardProps) {
+export function MonthlyReviewCard({ monthKey, questions, review, onUpdate, forceOpen }: MonthlyReviewCardProps) {
   const qs = questions.length > 0 ? questions : DEFAULT_QUESTIONS
   const answers = useMemo(() => review?.answers ?? [], [review?.answers])
   const [collapsed, setCollapsed] = useState(!!review?.completedAt)
+  const [prevForceOpen, setPrevForceOpen] = useState(forceOpen ?? 0)
+
+  // React's render-time state sync: expand the card whenever forceOpen increments
+  if ((forceOpen ?? 0) > prevForceOpen) {
+    setPrevForceOpen(forceOpen ?? 0)
+    setCollapsed(false)
+  }
 
   // Debounce ref per question
   const debounceTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({})
