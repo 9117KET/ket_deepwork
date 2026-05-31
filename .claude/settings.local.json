@@ -24,7 +24,10 @@
       "Bash(bash:*)",
       "Bash(npx vite:*)",
       "Bash(xargs basename *)",
-      "Bash(cmd *)"
+      "Bash(cmd *)",
+      "Bash(git add *)",
+      "Bash(git commit -m 'Streamline subtask drag, active block banner, and task menu *)",
+      "Bash(git push *)"
     ]
   }
 }
