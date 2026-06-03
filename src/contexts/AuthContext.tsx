@@ -23,6 +23,15 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 
+function friendlyAuthError(e: unknown): Error {
+  const msg = e instanceof Error ? e.message : String(e)
+  if (msg.includes("InvalidAccountId")) return new Error("No account found with that email address.")
+  if (msg.includes("InvalidSecret")) return new Error("Incorrect password. Please try again.")
+  if (msg.includes("AccountAlreadyExists")) return new Error("An account with this email already exists. Please sign in.")
+  if (msg.includes("TooManyFailedAttempts")) return new Error("Too many failed attempts. Please wait a moment and try again.")
+  return new Error("Authentication failed. Please check your credentials and try again.")
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading } = useConvexAuth()
   const { signIn: convexSignIn, signOut: convexSignOut } = useAuthActions()
@@ -43,7 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await convexSignIn("password", { email, password, flow: "signIn" })
         return null
       } catch (e) {
-        return e instanceof Error ? e : new Error(String(e))
+        return friendlyAuthError(e)
       }
     },
     [convexSignIn],
@@ -55,7 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await convexSignIn("password", { email, password, flow: "signUp" })
         return null
       } catch (e) {
-        return e instanceof Error ? e : new Error(String(e))
+        return friendlyAuthError(e)
       }
     },
     [convexSignIn],

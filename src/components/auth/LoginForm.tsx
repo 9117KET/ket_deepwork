@@ -50,9 +50,8 @@ export function LoginForm({ onContinueAsGuest }: LoginFormProps) {
     if (error) {
       setErrorMessage(error.message ?? 'Authentication failed. Please try again.')
     } else if (mode === 'signup') {
-      setInfoMessage(
-        'Account created. You may need to confirm your email depending on project settings, then sign in.',
-      )
+      setMode('signin')
+      setInfoMessage('Account created! Sign in below to continue.')
     }
 
     setSubmitting(false)
