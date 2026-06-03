@@ -81,6 +81,7 @@ export function PlannerPage() {
     <>
       <AppChrome
         mobileActive="planner"
+        showMobileNav={false}
         showCalendarLink={isAuthenticated}
         showHelp
         onHelpClick={() => setHelpOpen(true)}
@@ -140,7 +141,7 @@ export function PlannerPage() {
           />
         }
       >
-        <div className="px-4 pt-4 pb-28 md:px-6 md:pt-5 md:pb-8">
+        <div className="px-4 pt-4 pb-20 md:px-6 md:pt-5 md:pb-8">
           <DayPlanner stickyTopClass="top-0" />
         </div>
       </AppChrome>

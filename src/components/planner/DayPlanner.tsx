@@ -134,7 +134,7 @@ export function DayPlanner({
   onSelectedDayChange,
   stickyTopClass,
 }: DayPlannerProps = {}) {
-  const [ownState, updateOwnState] = usePersistentState();
+  const [ownState, updateOwnState, isHydrating] = usePersistentState();
   // Use external shared state when provided; fall back to owner's state.
   const appState = externalState ?? ownState;
   const updateAppState = (shareMode && onExternalUpdate) ? onExternalUpdate : updateOwnState;
@@ -565,6 +565,17 @@ export function DayPlanner({
     dragStateRef.current = null;
     window.removeEventListener("mousemove", handleSplitterMouseMove);
     window.removeEventListener("mouseup", handleSplitterMouseUp);
+  }
+
+  if (!shareMode && isHydrating) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <div className="text-center">
+          <div className="mx-auto mb-3 h-6 w-6 animate-spin rounded-full border-2 border-share-primary border-t-transparent" />
+          <p className="text-sm text-share-onSurfaceVariant">Syncing your data…</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -1039,8 +1050,8 @@ export function DayPlanner({
               <WeeklyOverview state={appState as AppState} referenceDay={selectedDay} />
             </div>
           )}
-          {/* Spacer so content doesn't hide behind the fixed tab bar */}
-          <div className="h-16 lg:hidden" />
+          {/* Spacer so content doesn't hide behind the fixed MobileTabBar */}
+          <div className="h-12 lg:hidden" />
         </>
       )}
 

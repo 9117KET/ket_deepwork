@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom'
+
 export type MobileTab = 'plan' | 'timer' | 'habits' | 'stats'
 
 interface MobileTabBarProps {
@@ -14,8 +16,15 @@ const TABS: { id: MobileTab; label: string }[] = [
 
 export function MobileTabBar({ activeTab, onTabChange }: MobileTabBarProps) {
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-share-outlineVariant/30 bg-share-bg/95 backdrop-blur-sm lg:hidden">
+    <div className="fixed bottom-0 left-0 right-0 z-[60] border-t border-share-outlineVariant/30 bg-share-bg/95 backdrop-blur-sm lg:hidden">
       <div className="flex">
+        <Link
+          to="/"
+          className="flex flex-1 items-center justify-center py-3 text-xs font-medium text-share-onSurfaceVariant/60 transition-colors hover:text-share-onSurface"
+          aria-label="Home"
+        >
+          <span className="material-symbols-outlined text-[1.1rem]">home</span>
+        </Link>
         {TABS.map((tab) => (
           <button
             key={tab.id}

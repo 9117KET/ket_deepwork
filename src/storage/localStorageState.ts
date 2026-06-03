@@ -220,7 +220,7 @@ function writePendingSettings(pending: boolean) {
 
 // ─── usePersistentState ───────────────────────────────────────────────────────
 
-export function usePersistentState(): [AppState, (updater: (prev: AppState) => AppState) => void] {
+export function usePersistentState(): [AppState, (updater: (prev: AppState) => AppState) => void, boolean] {
   const { isAuthenticated, isLoading: authLoading } = useConvexAuth()
   const [state, setState] = useState<AppState>(() => readInitialState())
   const [readyToSync, setReadyToSync] = useState(false)
@@ -577,7 +577,9 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
     })
   }
 
-  return [state, update]
+  const isHydrating = !authLoading && isAuthenticated && !readyToSync
+
+  return [state, update, isHydrating]
 }
 
 export function getOrCreateDay(state: AppState, isoDay: string = todayIso()): DayState {
