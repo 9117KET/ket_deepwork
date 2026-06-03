@@ -13,6 +13,7 @@
 import { useState, useRef, useCallback } from 'react'
 import type { Task, FocusHijacker } from '../../domain/types'
 import { CheckCircle, ArrowRight, Trash2, Calendar } from 'lucide-react'
+import { AudioTextarea } from '../ui/AudioInput'
 
 const HIJACKER_OPTIONS: { value: FocusHijacker; label: string }[] = [
   { value: 'none', label: 'None — day went as planned' },
@@ -134,12 +135,11 @@ export function ShutdownRitualModal({
               <label className="mb-1 block text-[10px] font-medium text-share-onSurfaceVariant">
                 What actually happened vs. the plan?
               </label>
-              <textarea
+              <AudioTextarea
                 value={note}
-                onChange={e => handleNoteChange(e.target.value)}
+                onChange={handleNoteChange}
                 rows={3}
                 placeholder="Deep work strong / got pulled off track by... / ONE Thing protected..."
-                className="w-full resize-none rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHighest px-2 py-1.5 text-xs leading-relaxed text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-share-primary focus:outline-none"
               />
             </div>
             <div>

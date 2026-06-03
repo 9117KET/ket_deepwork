@@ -8,6 +8,7 @@
 
 import { useState, useCallback, useMemo, useRef } from 'react'
 import type { WeeklyReview } from '../../domain/types'
+import { AudioTextarea } from '../ui/AudioInput'
 
 const DEFAULT_QUESTIONS = [
   'How many deep work hours did I log this week vs. my goal? Was the High Priority block protected every day?',
@@ -34,9 +35,11 @@ export function WeeklyReviewCard({
 }: WeeklyReviewCardProps) {
   const qs = questions.length > 0 ? questions : DEFAULT_QUESTIONS
   const answers = useMemo(() => review?.answers ?? [], [review?.answers])
-  // Start collapsed — the user opens it when ready (unlike monthly review which auto-opens).
-  const [collapsed, setCollapsed] = useState(!review || !review.answers?.some(Boolean) || !!review.completedAt)
+  // Always start collapsed — auto-expand only via forceOpen (banner/reminder trigger)
+  const [collapsed, setCollapsed] = useState(true)
   const [prevForceOpen, setPrevForceOpen] = useState(forceOpen ?? 0)
+  const [draftAnswers, setDraftAnswers] = useState<string[]>(() => review?.answers ?? [])
+  const [prevExternalAnswers, setPrevExternalAnswers] = useState(review?.answers)
   const debounceTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({})
 
   if ((forceOpen ?? 0) > prevForceOpen) {
@@ -44,8 +47,19 @@ export function WeeklyReviewCard({
     setCollapsed(false)
   }
 
+  // Render-time sync: re-initialize draft when parent answers change (cross-device update)
+  if (prevExternalAnswers !== review?.answers) {
+    setPrevExternalAnswers(review?.answers)
+    setDraftAnswers(review?.answers ?? [])
+  }
+
   const handleAnswerChange = useCallback(
     (index: number, value: string) => {
+      setDraftAnswers(prev => {
+        const next = [...prev]
+        next[index] = value
+        return next
+      })
       if (debounceTimers.current[index]) clearTimeout(debounceTimers.current[index])
       debounceTimers.current[index] = setTimeout(() => {
         const updated = [...answers]
@@ -112,12 +126,11 @@ export function WeeklyReviewCard({
               <label className="mb-1 block text-[10px] font-medium text-share-onSurfaceVariant">
                 {i + 1}. {question}
               </label>
-              <textarea
-                defaultValue={answers[i] ?? ''}
-                onChange={e => handleAnswerChange(i, e.target.value)}
+              <AudioTextarea
+                value={draftAnswers[i] ?? ''}
+                onChange={(v) => handleAnswerChange(i, v)}
                 rows={2}
                 placeholder="Your answer..."
-                className="w-full resize-none rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHighest px-2 py-1.5 text-xs leading-relaxed text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-sky-700 focus:outline-none"
               />
             </div>
           ))}

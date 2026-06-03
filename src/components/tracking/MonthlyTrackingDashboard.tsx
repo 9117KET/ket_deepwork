@@ -10,8 +10,10 @@ import type React from 'react'
 import type { AppState, DayState, GoalCascade, HabitDefinition, MonthlyReview, WeeklyReview } from '../../domain/types'
 import { DEFAULT_HABIT_DEFINITIONS, FIXED_SECTIONS } from '../../domain/types'
 import { GoalCascadeSection } from '../goals/GoalCascadeSection'
-import { MonthlyReviewCard, MonthlyReviewBanner } from '../goals/MonthlyReviewCard'
+import { MonthlyReviewCard } from '../goals/MonthlyReviewCard'
 import { WeeklyReviewCard } from '../goals/WeeklyReviewCard'
+import { ReviewReminderModal } from '../goals/ReviewReminderModal'
+import { isReviewReminderDismissed, dismissReviewReminder } from '../goals/reviewReminderUtils'
 import {
   toMonthId,
   previousMonthId,
@@ -19,6 +21,7 @@ import {
   daysInMonth,
   todayIso,
   weekdayName,
+  isWeeklyReviewDay,
 } from '../../domain/dateUtils'
 import { getOrCreateDay } from '../../storage/localStorageState'
 import { computeSectionCompletion, computeDayCompletion, computePerHabitStreaks, computeDailyDeepWorkMinutes, computeWeeklyDeepWorkHours, moodByDeepWork, moodByHabits } from '../../domain/stats'
@@ -71,18 +74,45 @@ export function MonthlyTrackingDashboard({
   const [editingReviewDay, setEditingReviewDay] = useState(false)
   const reviewRef = useRef<HTMLDivElement>(null)
   const weeklyReviewRef = useRef<HTMLDivElement>(null)
+  // Internal force-open counters so the reminder modal can expand cards without needing parent props
+  const [localScrollToReview, setLocalScrollToReview] = useState(0)
+  const [localWeeklyTrigger, setLocalWeeklyTrigger] = useState(0)
+  const effectiveScrollToReview = (scrollToReview ?? 0) + localScrollToReview
+  const effectiveWeeklyTrigger = (weeklyReviewOpenTrigger ?? 0) + localWeeklyTrigger
+
+  // Determine which review reminder to show (if any). Weekly takes priority.
+  const today = todayIso()
+  const reviewWeekday = state.weeklyReviewDay ?? 5
+  const currentMonthKey = today.slice(0, 7)
+  const [todayYear, todayMonth, todayDay] = today.split('-').map(Number)
+  const lastDayOfMonth = new Date(todayYear!, todayMonth!, 0).getDate()
+  const isMonthlyReviewDue =
+    Number(todayDay) >= lastDayOfMonth - 2 &&
+    currentMonthKey === selectedMonthId &&
+    !state.monthlyReviews?.[currentMonthKey]?.completedAt
+  const isWeeklyReviewDue =
+    isWeeklyReviewDay(today, reviewWeekday) &&
+    !state.weeklyReviews?.[referenceDay]?.completedAt
+  const [reminderDismissed, setReminderDismissed] = useState(() => ({
+    weekly: isReviewReminderDismissed('weekly'),
+    monthly: isReviewReminderDismissed('monthly'),
+  }))
+  const activeReminder: 'weekly' | 'monthly' | null =
+    isWeeklyReviewDue && !reminderDismissed.weekly ? 'weekly'
+    : isMonthlyReviewDue && !reminderDismissed.monthly ? 'monthly'
+    : null
 
   useEffect(() => {
-    if (scrollToReview && scrollToReview > 0) {
+    if (effectiveScrollToReview > 0) {
       reviewRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
-  }, [scrollToReview])
+  }, [effectiveScrollToReview])
 
   useEffect(() => {
-    if (weeklyReviewOpenTrigger && weeklyReviewOpenTrigger > 0) {
+    if (effectiveWeeklyTrigger > 0) {
       weeklyReviewRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
-  }, [weeklyReviewOpenTrigger])
+  }, [effectiveWeeklyTrigger])
 
   const monthDays = useMemo(() => daysInMonth(selectedMonthId), [selectedMonthId])
   const chapterTitle = state.monthTitles?.[selectedMonthId] ?? ''
@@ -170,12 +200,6 @@ export function MonthlyTrackingDashboard({
           </button>
         </div>
       </header>
-
-      <MonthlyReviewBanner
-        monthKey={selectedMonthId}
-        review={state.monthlyReviews?.[selectedMonthId]}
-        onScrollToReview={() => reviewRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-      />
 
       <GoalCascadeSection
         goalCascade={state.goalCascade}
@@ -364,7 +388,7 @@ export function MonthlyTrackingDashboard({
           questions={state.monthlyReviewQuestions ?? []}
           review={state.monthlyReviews?.[selectedMonthId]}
           onUpdate={handleUpdateReview}
-          forceOpen={scrollToReview}
+          forceOpen={effectiveScrollToReview}
         />
       </div>
 
@@ -376,9 +400,29 @@ export function MonthlyTrackingDashboard({
             questions={state.weeklyReviewQuestions ?? []}
             review={state.weeklyReviews?.[referenceDay]}
             onUpdate={onUpdateWeeklyReview}
-            forceOpen={weeklyReviewOpenTrigger}
+            forceOpen={effectiveWeeklyTrigger}
           />
         </div>
+      )}
+
+      {/* Review reminder popup — shown once per session when a review is due */}
+      {activeReminder && (
+        <ReviewReminderModal
+          type={activeReminder}
+          onGoToReview={() => {
+            if (activeReminder === 'monthly') {
+              setLocalScrollToReview(v => v + 1)
+            } else {
+              setLocalWeeklyTrigger(v => v + 1)
+            }
+            dismissReviewReminder(activeReminder)
+            setReminderDismissed(prev => ({ ...prev, [activeReminder]: true }))
+          }}
+          onDismiss={() => {
+            dismissReviewReminder(activeReminder)
+            setReminderDismissed(prev => ({ ...prev, [activeReminder]: true }))
+          }}
+        />
       )}
 
       <HabitGridBoundary>

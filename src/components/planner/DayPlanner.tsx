@@ -518,6 +518,18 @@ export function DayPlanner({
     }
   }, [allNightDone, shutdownAlreadyDone, selectedDay, shareMode]);
 
+  // Evening auto-prompt: show shutdown modal at 9 PM+ if shutdown hasn't been done today
+  useEffect(() => {
+    if (shareMode || shutdownAlreadyDone || selectedDay !== todayIso()) return;
+    const hour = new Date().getHours();
+    if (hour < 21) return;
+    const sessionKey = `shutdown_reminder_shown_${todayIso()}`;
+    if (sessionStorage.getItem(sessionKey)) return;
+    sessionStorage.setItem(sessionKey, '1');
+    setShowShutdown(true);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shutdownAlreadyDone, selectedDay]);
+
   useEffect(() => {
     return () => {
       window.removeEventListener("mousemove", handleSplitterMouseMove);

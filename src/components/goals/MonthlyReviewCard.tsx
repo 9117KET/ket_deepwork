@@ -10,6 +10,7 @@
 import { useState, useCallback, useMemo, useRef } from 'react'
 import type { MonthlyReview } from '../../domain/types'
 import { todayIso } from '../../domain/dateUtils'
+import { AudioTextarea } from '../ui/AudioInput'
 
 const DEFAULT_QUESTIONS = [
   'How many hours of deep work did I log this month? Did I consistently protect my focus blocks every weekday?',
@@ -34,8 +35,11 @@ interface MonthlyReviewCardProps {
 export function MonthlyReviewCard({ monthKey, questions, review, onUpdate, forceOpen }: MonthlyReviewCardProps) {
   const qs = questions.length > 0 ? questions : DEFAULT_QUESTIONS
   const answers = useMemo(() => review?.answers ?? [], [review?.answers])
-  const [collapsed, setCollapsed] = useState(!!review?.completedAt)
+  // Always start collapsed — auto-expand only via forceOpen (banner/reminder trigger)
+  const [collapsed, setCollapsed] = useState(true)
   const [prevForceOpen, setPrevForceOpen] = useState(forceOpen ?? 0)
+  const [draftAnswers, setDraftAnswers] = useState<string[]>(() => review?.answers ?? [])
+  const [prevExternalAnswers, setPrevExternalAnswers] = useState(review?.answers)
 
   // React's render-time state sync: expand the card whenever forceOpen increments
   if ((forceOpen ?? 0) > prevForceOpen) {
@@ -43,11 +47,22 @@ export function MonthlyReviewCard({ monthKey, questions, review, onUpdate, force
     setCollapsed(false)
   }
 
+  // Render-time sync: re-initialize draft when parent answers change (cross-device update)
+  if (prevExternalAnswers !== review?.answers) {
+    setPrevExternalAnswers(review?.answers)
+    setDraftAnswers(review?.answers ?? [])
+  }
+
   // Debounce ref per question
   const debounceTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({})
 
   const handleAnswerChange = useCallback(
     (index: number, value: string) => {
+      setDraftAnswers(prev => {
+        const next = [...prev]
+        next[index] = value
+        return next
+      })
       if (debounceTimers.current[index]) clearTimeout(debounceTimers.current[index])
       debounceTimers.current[index] = setTimeout(() => {
         const updatedAnswers = [...answers]
@@ -114,12 +129,11 @@ export function MonthlyReviewCard({ monthKey, questions, review, onUpdate, force
               <label className="mb-1 block text-[10px] font-medium text-share-onSurfaceVariant">
                 {i + 1}. {question}
               </label>
-              <textarea
-                defaultValue={answers[i] ?? ''}
-                onChange={(e) => handleAnswerChange(i, e.target.value)}
+              <AudioTextarea
+                value={draftAnswers[i] ?? ''}
+                onChange={(v) => handleAnswerChange(i, v)}
                 rows={2}
                 placeholder="Your answer..."
-                className="w-full resize-none rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHighest px-2 py-1.5 text-xs leading-relaxed text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-amber-700 focus:outline-none"
               />
             </div>
           ))}
@@ -140,8 +154,8 @@ export function MonthlyReviewCard({ monthKey, questions, review, onUpdate, force
 }
 
 /**
- * Banner shown at the top of the monthly dashboard on the 1st of the month
- * when the current month's review hasn't been completed yet.
+ * Banner shown in the last 3 days of the month prompting the user to complete
+ * (or revisit) their monthly review before the month ends.
  */
 interface MonthlyReviewBannerProps {
   monthKey: string
@@ -151,23 +165,49 @@ interface MonthlyReviewBannerProps {
 
 export function MonthlyReviewBanner({ monthKey, review, onScrollToReview }: MonthlyReviewBannerProps) {
   const today = todayIso()
-  const isFirstOfMonth = today.endsWith('-01')
   const currentMonthKey = today.slice(0, 7)
-  if (!isFirstOfMonth || currentMonthKey !== monthKey) return null
-  if (review?.completedAt) return null
+  if (currentMonthKey !== monthKey) return null
+
+  // Show during the last 3 days of the current month only
+  const [year, month] = today.split('-').map(Number)
+  const lastDay = new Date(year!, month!, 0).getDate()
+  const currentDay = Number(today.slice(8, 10))
+  if (currentDay < lastDay - 2) return null
+
+  const isComplete = Boolean(review?.completedAt)
+  const daysLeft = lastDay - currentDay
+
+  if (isComplete) {
+    return (
+      <div className="mb-3 flex items-center gap-2 rounded border border-emerald-700/40 bg-emerald-500/10 px-3 py-1.5">
+        <span className="flex items-center gap-1 text-xs text-emerald-400">
+          ✓ Monthly review done
+        </span>
+        <button
+          type="button"
+          onClick={onScrollToReview}
+          className="ml-auto text-[10px] text-share-onSurfaceVariant/60 hover:text-share-onBg transition-colors"
+        >
+          Revisit ↓
+        </button>
+      </div>
+    )
+  }
+
+  const countdownText = daysLeft === 0
+    ? 'Monthly review: last day!'
+    : `Monthly review: ${daysLeft} day${daysLeft !== 1 ? 's' : ''} left`
 
   return (
     <div className="mb-3 flex items-center gap-2 rounded border border-amber-700/50 bg-amber-500/10 px-3 py-2">
       <span className="text-sm">📋</span>
-      <span className="flex-1 text-xs text-amber-200">
-        It's the 1st — time for your monthly review.
-      </span>
+      <span className="flex-1 text-xs text-amber-200">{countdownText}</span>
       <button
         type="button"
         onClick={onScrollToReview}
         className="rounded border border-amber-600 bg-amber-500/20 px-2 py-0.5 text-[10px] font-medium text-amber-300 hover:bg-amber-500/30 transition-colors"
       >
-        Start review →
+        Open ↓
       </button>
     </div>
   )
