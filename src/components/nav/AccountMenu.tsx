@@ -108,7 +108,7 @@ export function AccountMenu({
           id={menuId}
           role="menu"
           aria-label="Account menu"
-          className={`absolute right-0 z-50 w-56 overflow-hidden rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainer shadow-xl ${dropUp ? "bottom-full mb-2" : "mt-2"}`}
+          className={`absolute z-50 w-56 overflow-hidden rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainer shadow-xl ${dropUp ? "right-0 mt-2 md:right-auto md:left-0 md:mt-0 md:bottom-full md:mb-2" : "right-0 mt-2"}`}
         >
           <div className="px-3 py-2 sm:hidden">
             <div className="text-xs font-medium text-share-onSurface">Account</div>
