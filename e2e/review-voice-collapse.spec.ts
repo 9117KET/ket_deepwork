@@ -52,6 +52,8 @@ async function prepareBase(page: Page) {
           tasks: [], habitCompletions: {}, deepWorkSessions: [],
           ...existing, date: today,
           wakeTime: '07:00', sleepTarget: '23:00', bedTime: '22:30',
+          // Mark shutdown complete so the ShutdownRitualModal doesn't auto-open
+          shutdownCompletedAt: new Date().toISOString(),
         }
         appState.days = days
         delete appState.monthlyReviews
@@ -65,10 +67,48 @@ async function prepareBase(page: Page) {
   })
 }
 
+/** Like prepareBase but does NOT mark shutdown complete — used for tests that open
+ *  the shutdown modal via the "Close day" button. */
+async function prepareShutdownTest(page: Page) {
+  await page.addInitScript(() => {
+    window.localStorage.setItem('deepblock_tour_done', '1')
+    if (!window.sessionStorage.getItem('_pw_sd_ready')) {
+      window.sessionStorage.setItem('_pw_sd_ready', '1')
+      try {
+        const today = new Date().toISOString().slice(0, 10)
+        const raw = window.localStorage.getItem('deepblock_state_v1')
+        let appState: Record<string, unknown> = { days: {} }
+        if (raw) {
+          const parsed = JSON.parse(raw)
+          if (parsed?.version === 1 && parsed.state) appState = parsed.state
+        }
+        const days = (appState.days as Record<string, unknown>) ?? {}
+        days[today] = {
+          date: today, tasks: [], habitCompletions: {}, deepWorkSessions: [],
+          wakeTime: '07:00', sleepTarget: '23:00', bedTime: '22:30',
+          // shutdownCompletedAt intentionally absent — test will open modal via "Close day"
+        }
+        appState.days = days
+        delete appState.monthlyReviews
+        delete (appState as Record<string, unknown>).weeklyReviews
+        window.localStorage.setItem('deepblock_state_v1', JSON.stringify({ version: 1, state: appState }))
+      } catch (_) { /* ignore */ }
+    }
+    window.sessionStorage.setItem('review_reminder_dismissed_monthly', '1')
+    window.sessionStorage.setItem('review_reminder_dismissed_weekly', '1')
+  })
+}
+
 async function dismissDaySetupIfPresent(page: Page) {
   const skipBtn = page.getByRole('button', { name: 'Skip for today' })
   if (await skipBtn.isVisible({ timeout: 2_000 }).catch(() => false)) {
     await skipBtn.click()
+  }
+  // Close the ShutdownRitualModal if it auto-opened (time-based trigger in evenings)
+  const closeModal = page.getByRole('button', { name: 'Close', exact: true })
+  if (await closeModal.isVisible({ timeout: 2_000 }).catch(() => false)) {
+    await closeModal.click()
+    await page.waitForTimeout(300)
   }
 }
 
@@ -171,7 +211,7 @@ test.describe('Review cards — voice recording buttons', () => {
 
 test.describe('Close day — ShutdownRitualModal', () => {
   test.beforeEach(async ({ page }) => {
-    await prepareBase(page)
+    await prepareShutdownTest(page)
     await openPlanner(page)
     await dismissDaySetupIfPresent(page)
   })
