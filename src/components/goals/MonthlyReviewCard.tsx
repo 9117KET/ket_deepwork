@@ -13,7 +13,7 @@ import { todayIso } from '../../domain/dateUtils'
 import { AudioTextarea } from '../ui/AudioInput'
 
 const DEFAULT_QUESTIONS = [
-  'How many hours of deep work did I log this month? Did I consistently protect my focus blocks every weekday?',
+  'Did you consistently protect your focus blocks this month? What patterns do you notice about when deep work succeeded or failed?',
   'What was the ONE Thing that made the biggest difference this month?',
   'What is the ONE Thing for next month that will make everything else easier or unnecessary?',
   'Am I becoming the person I declared I am? Which habits held strong — and which broke, and why?',
@@ -30,9 +30,13 @@ interface MonthlyReviewCardProps {
   onUpdate: (monthKey: string, review: MonthlyReview) => void
   /** Increment to force-expand the card (e.g. when scrolled to from a banner). */
   forceOpen?: number
+  /** Auto-computed deep work hours for the month (from DeepWorkTimer sessions). */
+  monthlyHours?: number
+  /** Weekly deep work goal in hours (monthly goal displayed as weekly × 4). */
+  goalHours?: number
 }
 
-export function MonthlyReviewCard({ monthKey, questions, review, onUpdate, forceOpen }: MonthlyReviewCardProps) {
+export function MonthlyReviewCard({ monthKey, questions, review, onUpdate, forceOpen, monthlyHours, goalHours }: MonthlyReviewCardProps) {
   const qs = questions.length > 0 ? questions : DEFAULT_QUESTIONS
   const answers = useMemo(() => review?.answers ?? [], [review?.answers])
   // Always start collapsed — auto-expand only via forceOpen (banner/reminder trigger)
@@ -84,6 +88,8 @@ export function MonthlyReviewCard({ monthKey, questions, review, onUpdate, force
   }
 
   const isComplete = Boolean(review?.completedAt)
+  const showStats = monthlyHours !== undefined && goalHours !== undefined
+  const monthlyGoal = goalHours !== undefined ? goalHours * 4 : undefined
 
   return (
     <div className="mt-3 rounded border border-amber-900/40 bg-share-surfaceContainerLow p-3">
@@ -129,6 +135,14 @@ export function MonthlyReviewCard({ monthKey, questions, review, onUpdate, force
               <label className="mb-1 block text-[10px] font-medium text-share-onSurfaceVariant">
                 {i + 1}. {question}
               </label>
+              {i === 0 && showStats && (
+                <div className="mb-1.5 inline-flex items-center gap-1.5 rounded-full bg-teal-500/10 px-2.5 py-1 text-[10px] text-teal-300 ring-1 ring-teal-500/20">
+                  <span>⏱</span>
+                  <span>{monthlyHours!.toFixed(1)} h logged</span>
+                  <span className="text-teal-500/50">·</span>
+                  <span>Goal {monthlyGoal} h</span>
+                </div>
+              )}
               <AudioTextarea
                 value={draftAnswers[i] ?? ''}
                 onChange={(v) => handleAnswerChange(i, v)}

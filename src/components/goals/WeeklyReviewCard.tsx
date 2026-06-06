@@ -2,8 +2,10 @@
  * components/goals/WeeklyReviewCard.tsx
  *
  * Weekly review card (GTD weekly review + Cal Newport shutdown ritual).
- * Five fixed questions covering deep work, the ONE Thing, habits,
+ * Five questions covering deep work, the ONE Thing, habits,
  * task triage, and next week's focus. Answers auto-save on keystroke.
+ * When weeklyHours and goalHours props are provided a computed stats chip
+ * is shown above the first question so the user doesn't have to recall numbers.
  */
 
 import { useState, useCallback, useMemo, useRef } from 'react'
@@ -11,7 +13,7 @@ import type { WeeklyReview } from '../../domain/types'
 import { AudioTextarea } from '../ui/AudioInput'
 
 const DEFAULT_QUESTIONS = [
-  'How many deep work hours did I log this week vs. my goal? Was the High Priority block protected every day?',
+  'Was the High Priority block protected every day? What consistently crowded out deep work — and what will you do differently?',
   'What was this week\'s ONE Thing? Did I actually give it my best hours — or did shallow work crowd it out?',
   'Which habits held strong this week? Which broke — and what specifically caused the break?',
   'What incomplete tasks am I carrying forward intentionally, and what am I consciously dropping?',
@@ -24,6 +26,10 @@ interface WeeklyReviewCardProps {
   review: WeeklyReview | undefined
   onUpdate: (dateKey: string, review: WeeklyReview) => void
   forceOpen?: number
+  /** Auto-computed deep work hours for the week (from DeepWorkTimer sessions). */
+  weeklyHours?: number
+  /** Weekly deep work goal in hours. */
+  goalHours?: number
 }
 
 export function WeeklyReviewCard({
@@ -32,6 +38,8 @@ export function WeeklyReviewCard({
   review,
   onUpdate,
   forceOpen,
+  weeklyHours,
+  goalHours,
 }: WeeklyReviewCardProps) {
   const qs = questions.length > 0 ? questions : DEFAULT_QUESTIONS
   const answers = useMemo(() => review?.answers ?? [], [review?.answers])
@@ -81,6 +89,7 @@ export function WeeklyReviewCard({
   }
 
   const isComplete = Boolean(review?.completedAt)
+  const showStats = weeklyHours !== undefined && goalHours !== undefined
 
   return (
     <div className="mt-3 rounded border border-sky-900/40 bg-share-surfaceContainerLow p-3">
@@ -126,6 +135,14 @@ export function WeeklyReviewCard({
               <label className="mb-1 block text-[10px] font-medium text-share-onSurfaceVariant">
                 {i + 1}. {question}
               </label>
+              {i === 0 && showStats && (
+                <div className="mb-1.5 inline-flex items-center gap-1.5 rounded-full bg-teal-500/10 px-2.5 py-1 text-[10px] text-teal-300 ring-1 ring-teal-500/20">
+                  <span>⏱</span>
+                  <span>{weeklyHours!.toFixed(1)} h logged</span>
+                  <span className="text-teal-500/50">·</span>
+                  <span>Goal {goalHours} h</span>
+                </div>
+              )}
               <AudioTextarea
                 value={draftAnswers[i] ?? ''}
                 onChange={(v) => handleAnswerChange(i, v)}

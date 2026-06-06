@@ -195,6 +195,20 @@ export function computeWeeklyDeepWorkHours(
   return totalMinutes / 60
 }
 
+/**
+ * Returns deep work hours accumulated across all days that belong to the given
+ * month. monthIso must be in "YYYY-MM" format.
+ */
+export function computeMonthlyDeepWorkHours(
+  days: Record<string, DayState | undefined>,
+  monthIso: string,
+): number {
+  const totalMinutes = Object.keys(days)
+    .filter((iso) => iso.startsWith(monthIso))
+    .reduce((sum, iso) => sum + computeDailyDeepWorkMinutes(days[iso]), 0)
+  return totalMinutes / 60
+}
+
 export function computeSectionCompletion(
   tasks: Task[],
 ): Partial<Record<Task['sectionId'], { total: number; completed: number }>> {

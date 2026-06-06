@@ -24,7 +24,7 @@ import {
   isWeeklyReviewDay,
 } from '../../domain/dateUtils'
 import { getOrCreateDay } from '../../storage/localStorageState'
-import { computeSectionCompletion, computeDayCompletion, computePerHabitStreaks, computeDailyDeepWorkMinutes, computeWeeklyDeepWorkHours, moodByDeepWork, moodByHabits } from '../../domain/stats'
+import { computeSectionCompletion, computeDayCompletion, computePerHabitStreaks, computeDailyDeepWorkMinutes, computeWeeklyDeepWorkHours, computeMonthlyDeepWorkHours, moodByDeepWork, moodByHabits } from '../../domain/stats'
 import { weekForDay } from '../../domain/dateUtils'
 
 const MOOD_OPTIONS = ['🙂', '😐', '🙁', '😊', '😢', '😤', '😴', '🔥'] as const
@@ -155,6 +155,16 @@ export function MonthlyTrackingDashboard({
     () => moodByHabits(state.days, habitIds, monthDays),
     [state.days, habitIds, monthDays],
   )
+
+  const weeklyHours = useMemo(
+    () => computeWeeklyDeepWorkHours(state.days, weekForDay(referenceDay)),
+    [state.days, referenceDay],
+  )
+  const monthlyHours = useMemo(
+    () => computeMonthlyDeepWorkHours(state.days, selectedMonthId),
+    [state.days, selectedMonthId],
+  )
+  const goalHours = state.deepWorkGoalHoursPerWeek ?? 20
 
   const handleUpdateReview = useCallback(
     (monthKey: string, review: MonthlyReview) => {
@@ -389,6 +399,8 @@ export function MonthlyTrackingDashboard({
           review={state.monthlyReviews?.[selectedMonthId]}
           onUpdate={handleUpdateReview}
           forceOpen={effectiveScrollToReview}
+          monthlyHours={monthlyHours}
+          goalHours={goalHours}
         />
       </div>
 
@@ -401,6 +413,8 @@ export function MonthlyTrackingDashboard({
             review={state.weeklyReviews?.[referenceDay]}
             onUpdate={onUpdateWeeklyReview}
             forceOpen={effectiveWeeklyTrigger}
+            weeklyHours={weeklyHours}
+            goalHours={goalHours}
           />
         </div>
       )}

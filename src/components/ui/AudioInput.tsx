@@ -5,10 +5,16 @@
  * Renders a mic icon button. On click it starts speech recognition and
  * calls onTranscript(text) when the user stops speaking.
  * Returns null on browsers that don't support SpeechRecognition.
+ *
+ * Recording stops when:
+ *   1. The user clicks the button again (manual stop), OR
+ *   2. 15 seconds of silence pass after the first word is detected.
  */
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { MaterialIcon } from './MaterialIcon'
+
+const SILENCE_TIMEOUT_MS = 15000
 
 interface AudioInputProps {
   onTranscript: (text: string) => void
@@ -33,8 +39,10 @@ interface SpeechRecognitionInstance {
   onresult: ((event: SpeechRecognitionEvent) => void) | null
   onerror: (() => void) | null
   onend: (() => void) | null
+  onstart: (() => void) | null
 }
 interface SpeechRecognitionEvent {
+  resultIndex: number
   results: SpeechRecognitionResultList
 }
 interface SpeechRecognitionResultList {
@@ -43,6 +51,7 @@ interface SpeechRecognitionResultList {
   [index: number]: SpeechRecognitionResult
 }
 interface SpeechRecognitionResult {
+  readonly isFinal: boolean
   readonly length: number
   item(index: number): SpeechRecognitionAlternative
   [index: number]: SpeechRecognitionAlternative
@@ -60,32 +69,77 @@ function getSpeechRecognition(): (new () => SpeechRecognitionInstance) | null {
 export function AudioInput({ onTranscript, lang = 'en-US', className = '', title }: AudioInputProps) {
   const [isRecording, setIsRecording] = useState(false)
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null)
-  const SpeechRecognitionClass = getSpeechRecognition()
+  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const accumulatedRef = useRef('')
 
+  // Cleanup on unmount — stop any active recognition and clear pending timer
+  useEffect(() => {
+    return () => {
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current)
+        silenceTimerRef.current = null
+      }
+      recognitionRef.current?.stop()
+    }
+  }, [])
+
+  const SpeechRecognitionClass = getSpeechRecognition()
   if (!SpeechRecognitionClass) return null
 
+  function clearSilenceTimer() {
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current)
+      silenceTimerRef.current = null
+    }
+  }
+
+  function resetSilenceTimer(recognition: SpeechRecognitionInstance) {
+    clearSilenceTimer()
+    silenceTimerRef.current = setTimeout(() => recognition.stop(), SILENCE_TIMEOUT_MS)
+  }
+
   const startRecording = () => {
+    accumulatedRef.current = ''
     const recognition = new SpeechRecognitionClass()
     recognition.lang = lang
-    recognition.continuous = false
+    recognition.continuous = true     // keep listening until manually stopped or silence timeout
     recognition.interimResults = false
 
     recognition.onresult = (event) => {
-      const transcript = event.results[0]?.[0]?.transcript ?? ''
-      if (transcript) onTranscript(transcript)
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const text = event.results[i]?.[0]?.transcript ?? ''
+        if (text) {
+          accumulatedRef.current = accumulatedRef.current
+            ? `${accumulatedRef.current} ${text}`
+            : text
+        }
+      }
+      // Reset silence timer only after speech is detected — gives user time to start speaking
+      resetSilenceTimer(recognition)
+    }
+
+    recognition.onerror = () => {
+      clearSilenceTimer()
       setIsRecording(false)
     }
-    recognition.onerror = () => setIsRecording(false)
-    recognition.onend = () => setIsRecording(false)
+
+    recognition.onend = () => {
+      clearSilenceTimer()
+      const text = accumulatedRef.current.trim()
+      if (text) onTranscript(text)
+      setIsRecording(false)
+    }
 
     recognitionRef.current = recognition
     recognition.start()
     setIsRecording(true)
+    // Do NOT start silence timer here — wait until user actually speaks (onresult fires)
   }
 
   const stopRecording = () => {
+    clearSilenceTimer()
     recognitionRef.current?.stop()
-    setIsRecording(false)
+    // onend fires next and delivers the accumulated transcript
   }
 
   return (
@@ -133,7 +187,7 @@ export function AudioTextarea({
   append = true,
 }: AudioTextareaProps) {
   const handleTranscript = (text: string) => {
-    if (append && value.trim()) {
+    if (append && value !== '') {
       onChange(`${value.trim()} ${text}`)
     } else {
       onChange(text)

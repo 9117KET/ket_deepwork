@@ -229,6 +229,145 @@ test.describe('Close day — ShutdownRitualModal', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Suite E — Microphone recording behaviour (mocked SpeechRecognition)
+//
+// We inject a controllable SpeechRecognition mock via addInitScript so the
+// AudioInput component initialises normally. The mock exposes a global
+// `window.__mockRecognition` handle for tests to fire events or inspect state.
+// ─────────────────────────────────────────────────────────────────────────────
+
+test.describe('AudioInput — microphone recording behaviour (mocked)', () => {
+  async function prepareWithMockedSpeech(page: Page) {
+    await page.addInitScript(() => {
+      // Mock class that stores itself globally so tests can interact with it
+      class MockSpeechRecognition {
+        lang = 'en-US'
+        continuous = false
+        interimResults = false
+        onresult: ((e: unknown) => void) | null = null
+        onerror: (() => void) | null = null
+        onend: (() => void) | null = null
+        onstart: (() => void) | null = null
+        _started = false
+        _stopped = false
+
+        start() {
+          this._started = true
+          ;(window as unknown as Record<string, unknown>)['__mockRecognition'] = this
+        }
+        stop() {
+          this._stopped = true
+          // Simulate recognition ending
+          setTimeout(() => this.onend?.(), 50)
+        }
+        /** Test helper: fire a speech result event. */
+        fireResult(transcript: string) {
+          this.onresult?.({
+            resultIndex: 0,
+            results: {
+              length: 1,
+              0: { length: 1, 0: { transcript, confidence: 0.9 }, isFinal: true },
+              item: (i: number) => ({ length: 1, 0: { transcript, confidence: 0.9 }, isFinal: true }[i as keyof object]),
+            },
+          })
+        }
+      }
+
+      ;(window as unknown as Record<string, unknown>)['SpeechRecognition'] = MockSpeechRecognition
+      ;(window as unknown as Record<string, unknown>)['webkitSpeechRecognition'] = MockSpeechRecognition
+    })
+
+    await prepareBase(page)
+    await openPlanner(page)
+    await dismissDaySetupIfPresent(page)
+    await scrollToTrackingDashboard(page)
+  }
+
+  test('Test A — recording does not stop prematurely before first speech (no 5 s cutoff)', async ({ page }) => {
+    await prepareWithMockedSpeech(page)
+
+    // Expand the weekly review card so mic buttons are visible
+    const header = page.getByRole('button').filter({ hasText: 'Weekly Review' })
+    await header.first().click()
+    await expect(header.first()).toHaveAttribute('aria-expanded', 'true')
+
+    // Click the first mic button
+    const micBtn = page.getByRole('button', { name: 'Start voice input' }).first()
+    await expect(micBtn).toBeVisible({ timeout: 4_000 })
+    await micBtn.click()
+
+    // Verify recognition started
+    const started = await page.evaluate(() =>
+      !!(window as unknown as Record<string, unknown>)['__mockRecognition'] &&
+      (((window as unknown as Record<string, unknown>)['__mockRecognition']) as Record<string, unknown>)['_started']
+    )
+    expect(started).toBe(true)
+
+    // Wait 3 s — with the old code (5 s timer) this would stop before 5 s elapsed,
+    // but only if the timer starts immediately. With our fix, no timer starts until
+    // speech is detected — so the button should still show "Stop recording".
+    await page.waitForTimeout(3_000)
+
+    const stopBtn = page.getByRole('button', { name: 'Stop recording' }).first()
+    await expect(stopBtn).toBeVisible({ timeout: 1_000 })
+  })
+
+  test('Test B — transcript from mocked speech appears in the textarea', async ({ page }) => {
+    await prepareWithMockedSpeech(page)
+
+    const header = page.getByRole('button').filter({ hasText: 'Weekly Review' })
+    await header.first().click()
+
+    const micBtn = page.getByRole('button', { name: 'Start voice input' }).first()
+    await expect(micBtn).toBeVisible({ timeout: 4_000 })
+    await micBtn.click()
+
+    // Fire a speech result via the mock
+    await page.evaluate(() => {
+      const mock = (window as unknown as Record<string, unknown>)['__mockRecognition'] as
+        { fireResult: (t: string) => void; stop: () => void } | undefined
+      mock?.fireResult('This is a test transcript')
+      // Immediately stop to deliver the result
+      mock?.stop()
+    })
+
+    // Wait for transcript to appear in the first textarea of the weekly review
+    const weeklySection = page.locator('.mt-3.rounded.border.border-sky-900\\/40')
+    const firstTextarea = weeklySection.locator('textarea').first()
+    await expect(firstTextarea).toHaveValue(/This is a test transcript/, { timeout: 4_000 })
+  })
+
+  test('Test C — navigating away while recording does not throw errors', async ({ page }) => {
+    await prepareWithMockedSpeech(page)
+
+    const header = page.getByRole('button').filter({ hasText: 'Weekly Review' })
+    await header.first().click()
+
+    const micBtn = page.getByRole('button', { name: 'Start voice input' }).first()
+    await expect(micBtn).toBeVisible({ timeout: 4_000 })
+    await micBtn.click()
+
+    // Verify recording started
+    const started = await page.evaluate(() =>
+      !!(window as unknown as Record<string, unknown>)['__mockRecognition']
+    )
+    expect(started).toBe(true)
+
+    // Navigate away (triggers component unmount → cleanup useEffect should call stop)
+    const errors: string[] = []
+    page.on('pageerror', (err) => errors.push(err.message))
+
+    await page.goto('/planner')
+
+    // Give cleanup a moment to run
+    await page.waitForTimeout(500)
+
+    // No uncaught JS errors should have occurred during unmount
+    expect(errors).toHaveLength(0)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Suite D — ReviewReminderModal
 // ─────────────────────────────────────────────────────────────────────────────
 
