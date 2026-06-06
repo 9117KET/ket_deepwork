@@ -157,7 +157,7 @@ export function MonthlyTrackingDashboard({
   )
 
   const weeklyHours = useMemo(
-    () => computeWeeklyDeepWorkHours(state.days, weekForDay(referenceDay)),
+    () => computeWeeklyDeepWorkHours(state.days, weekForDay(referenceDay).days),
     [state.days, referenceDay],
   )
   const monthlyHours = useMemo(
