@@ -190,6 +190,81 @@ export function mergeRemoteDayState(local: DayState, remote: DayState): DayState
   }
 }
 
+// ─── Sync payload builders (shared by debounced sync and hide/unload flush) ──
+
+function buildDaysSyncPayload(state: AppState) {
+  return Object.values({ ...state.days })
+    .filter((day): day is DayState => Boolean(day))
+    .map((day) => ({
+      date: day.date,
+      tasks: day.tasks ?? [],
+      deepWorkSessions: day.deepWorkSessions ?? [],
+      habitCompletions: day.habitCompletions,
+      sleepHours: day.sleepHours ?? undefined,
+      mood: day.mood ?? undefined,
+      bedTime: day.bedTime ?? undefined,
+      wakeTime: day.wakeTime ?? undefined,
+      sleepTarget: day.sleepTarget ?? undefined,
+      blockDurations: day.blockDurations ?? undefined,
+      notDoingItems: day.notDoingItems,
+      abandonedTasks: day.abandonedTasks,
+      timeOffsetMinutes: state.timeOffsetMinutes,
+      sideQuestCompletions: day.sideQuestCompletions,
+      dayNote: day.dayNote ?? undefined,
+      focusHijacker: day.focusHijacker ?? undefined,
+      shutdownCompletedAt: day.shutdownCompletedAt ?? undefined,
+    }))
+}
+
+function buildSettingsSyncPayload(s: AppState) {
+  return {
+    habitDefinitions: s.habitDefinitions ?? [],
+    monthTitles: s.monthTitles ?? {},
+    activeDays: s.activeDays ?? [],
+    blockDurationRatios: s.blockDurationRatios ?? null,
+    notDoingList: s.notDoingList ?? [],
+    identityStatement: s.identityStatement ?? "",
+    depthPhilosophy: s.depthPhilosophy,
+    deepWorkGoalHours: s.deepWorkGoalHoursPerWeek ?? undefined,
+    oneThingData: {
+      northStar: s.northStar ?? "",
+      goalCascade: s.goalCascade ?? null,
+      dayOneThings: s.dayOneThings ?? {},
+      weekOneThings: s.weekOneThings ?? {},
+      monthOneThings: s.monthOneThings ?? {},
+      monthlyReviews: s.monthlyReviews ?? {},
+      monthlyReviewQuestions: s.monthlyReviewQuestions ?? [],
+      weeklyReviews: s.weeklyReviews ?? {},
+      weeklyReviewQuestions: s.weeklyReviewQuestions ?? [],
+      weeklyReviewDay: s.weeklyReviewDay,
+    },
+    weeklyProjectRotation: s.weeklyProjectRotation ?? [],
+    sideQuestDefs: s.sideQuestDefs ?? [],
+    sideQuestXp: s.sideQuestXp ?? 0,
+    sideQuestStreak: s.sideQuestStreak ?? 0,
+    sideQuestLastStreakDate: s.sideQuestLastStreakDate,
+  }
+}
+
+/**
+ * Snapshot the write generation of every pending date. Dates restored from a
+ * previous session (after a failed sync + reload) have no in-memory generation
+ * and default to 0 — including them lets a successful sync clear their pending
+ * flag instead of leaving the date stuck pending forever, which would block
+ * remote merges for it. A generation mismatch after the upsert resolves means
+ * the date was edited mid-flight and must stay pending.
+ */
+function snapshotPendingGenerations(
+  pending: Set<string>,
+  generations: Map<string, number>,
+): Map<string, number> {
+  const snapshot = new Map<string, number>()
+  for (const date of pending) {
+    snapshot.set(date, generations.get(date) ?? 0)
+  }
+  return snapshot
+}
+
 // ─── Pending-sync persistence (survives page reloads) ────────────────────────
 // Tracks ISO dates / settings that have local changes not yet confirmed synced.
 // Without this, a page reload after a failed sync would let stale Convex data
@@ -344,34 +419,13 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
     if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current)
     syncTimeoutRef.current = setTimeout(() => {
       syncTimeoutRef.current = null
-      const daysSnapshot = { ...stateRef.current.days }
-      const genSnapshot = new Map(dirtyGenerations.current)
-      const payload = Object.values(daysSnapshot)
-        .filter((day): day is DayState => Boolean(day))
-        .map((day) => ({
-          date: day.date,
-          tasks: day.tasks ?? [],
-          deepWorkSessions: day.deepWorkSessions ?? [],
-          habitCompletions: day.habitCompletions,
-          sleepHours: day.sleepHours ?? undefined,
-          mood: day.mood ?? undefined,
-          bedTime: day.bedTime ?? undefined,
-          wakeTime: day.wakeTime ?? undefined,
-          sleepTarget: day.sleepTarget ?? undefined,
-          blockDurations: day.blockDurations ?? undefined,
-          notDoingItems: day.notDoingItems,
-          abandonedTasks: day.abandonedTasks,
-          timeOffsetMinutes: stateRef.current.timeOffsetMinutes,
-          sideQuestCompletions: day.sideQuestCompletions,
-          dayNote: day.dayNote ?? undefined,
-          focusHijacker: day.focusHijacker ?? undefined,
-          shutdownCompletedAt: day.shutdownCompletedAt ?? undefined,
-        }))
+      const genSnapshot = snapshotPendingGenerations(pendingDates.current, dirtyGenerations.current)
+      const payload = buildDaysSyncPayload(stateRef.current)
       if (payload.length === 0) return
       void upsertManyDays({ days: payload }).then(() => {
         const now = Date.now()
         for (const [date, gen] of genSnapshot) {
-          if (dirtyGenerations.current.get(date) === gen) {
+          if ((dirtyGenerations.current.get(date) ?? 0) === gen) {
             dirtyGenerations.current.delete(date)
             echoSuppressUntil.current.set(date, now + ECHO_SUPPRESS_MS)
             pendingDates.current.delete(date)
@@ -397,34 +451,7 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
     if (settingsSyncTimeoutRef.current) clearTimeout(settingsSyncTimeoutRef.current)
     settingsSyncTimeoutRef.current = setTimeout(() => {
       settingsSyncTimeoutRef.current = null
-      const s = stateRef.current
-      void upsertSettings({
-        habitDefinitions: s.habitDefinitions ?? [],
-        monthTitles: s.monthTitles ?? {},
-        activeDays: s.activeDays ?? [],
-        blockDurationRatios: s.blockDurationRatios ?? null,
-        notDoingList: s.notDoingList ?? [],
-        identityStatement: s.identityStatement ?? "",
-        depthPhilosophy: s.depthPhilosophy,
-        deepWorkGoalHours: s.deepWorkGoalHoursPerWeek ?? undefined,
-        oneThingData: {
-          northStar: s.northStar ?? "",
-          goalCascade: s.goalCascade ?? null,
-          dayOneThings: s.dayOneThings ?? {},
-          weekOneThings: s.weekOneThings ?? {},
-          monthOneThings: s.monthOneThings ?? {},
-          monthlyReviews: s.monthlyReviews ?? {},
-          monthlyReviewQuestions: s.monthlyReviewQuestions ?? [],
-          weeklyReviews: s.weeklyReviews ?? {},
-          weeklyReviewQuestions: s.weeklyReviewQuestions ?? [],
-          weeklyReviewDay: s.weeklyReviewDay,
-        },
-        weeklyProjectRotation: s.weeklyProjectRotation ?? [],
-        sideQuestDefs: s.sideQuestDefs ?? [],
-        sideQuestXp: s.sideQuestXp ?? 0,
-        sideQuestStreak: s.sideQuestStreak ?? 0,
-        sideQuestLastStreakDate: s.sideQuestLastStreakDate,
-      }).then(() => {
+      void upsertSettings(buildSettingsSyncPayload(stateRef.current)).then(() => {
         pendingSettings.current = false
         writePendingSettings(false)
       }).catch((err: unknown) => console.error("[sync] settings sync failed:", err))
@@ -473,33 +500,12 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
       if (syncTimeoutRef.current) {
         clearTimeout(syncTimeoutRef.current)
         syncTimeoutRef.current = null
-        const daysSnapshot = { ...stateRef.current.days }
-        const genSnapshot = new Map(dirtyGenerations.current)
-        const payload = Object.values(daysSnapshot)
-          .filter((day): day is DayState => Boolean(day))
-          .map((day) => ({
-            date: day.date,
-            tasks: day.tasks ?? [],
-            deepWorkSessions: day.deepWorkSessions ?? [],
-            habitCompletions: day.habitCompletions,
-            sleepHours: day.sleepHours ?? undefined,
-            mood: day.mood ?? undefined,
-            bedTime: day.bedTime ?? undefined,
-            wakeTime: day.wakeTime ?? undefined,
-            sleepTarget: day.sleepTarget ?? undefined,
-            blockDurations: day.blockDurations ?? undefined,
-            notDoingItems: day.notDoingItems,
-            abandonedTasks: day.abandonedTasks,
-            timeOffsetMinutes: stateRef.current.timeOffsetMinutes,
-            sideQuestCompletions: day.sideQuestCompletions,
-            dayNote: day.dayNote ?? undefined,
-            focusHijacker: day.focusHijacker ?? undefined,
-            shutdownCompletedAt: day.shutdownCompletedAt ?? undefined,
-          }))
+        const genSnapshot = snapshotPendingGenerations(pendingDates.current, dirtyGenerations.current)
+        const payload = buildDaysSyncPayload(stateRef.current)
         if (payload.length > 0) {
           void upsertManyDays({ days: payload }).then(() => {
             for (const [date, gen] of genSnapshot) {
-              if (dirtyGenerations.current.get(date) === gen) {
+              if ((dirtyGenerations.current.get(date) ?? 0) === gen) {
                 dirtyGenerations.current.delete(date)
                 pendingDates.current.delete(date)
               }
@@ -511,34 +517,7 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
       if (settingsSyncTimeoutRef.current) {
         clearTimeout(settingsSyncTimeoutRef.current)
         settingsSyncTimeoutRef.current = null
-        const s = stateRef.current
-        void upsertSettings({
-          habitDefinitions: s.habitDefinitions ?? [],
-          monthTitles: s.monthTitles ?? {},
-          activeDays: s.activeDays ?? [],
-          blockDurationRatios: s.blockDurationRatios ?? null,
-          notDoingList: s.notDoingList ?? [],
-          identityStatement: s.identityStatement ?? "",
-          depthPhilosophy: s.depthPhilosophy,
-          deepWorkGoalHours: s.deepWorkGoalHoursPerWeek ?? undefined,
-          oneThingData: {
-            northStar: s.northStar ?? "",
-            goalCascade: s.goalCascade ?? null,
-            dayOneThings: s.dayOneThings ?? {},
-            weekOneThings: s.weekOneThings ?? {},
-            monthOneThings: s.monthOneThings ?? {},
-            monthlyReviews: s.monthlyReviews ?? {},
-            monthlyReviewQuestions: s.monthlyReviewQuestions ?? [],
-            weeklyReviews: s.weeklyReviews ?? {},
-            weeklyReviewQuestions: s.weeklyReviewQuestions ?? [],
-            weeklyReviewDay: s.weeklyReviewDay,
-          },
-          weeklyProjectRotation: s.weeklyProjectRotation ?? [],
-          sideQuestDefs: s.sideQuestDefs ?? [],
-          sideQuestXp: s.sideQuestXp ?? 0,
-          sideQuestStreak: s.sideQuestStreak ?? 0,
-          sideQuestLastStreakDate: s.sideQuestLastStreakDate,
-        }).then(() => {
+        void upsertSettings(buildSettingsSyncPayload(stateRef.current)).then(() => {
           pendingSettings.current = false
           writePendingSettings(false)
         }).catch((err: unknown) => console.error("[sync] settings flush failed:", err))
