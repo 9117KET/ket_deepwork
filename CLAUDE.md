@@ -13,6 +13,12 @@ npm run preview   # Local preview of production build
 
 No test runner is configured. CI runs `lint` then `build` on push/PR to `main`.
 
+## Deployment
+
+See `docs/DEPLOYMENT.md` for the Convex dev/prod deployment names, the Vercel
+project mapping, legacy deployments to avoid, and the pending production setup
+steps (auth keys, Google Calendar env vars, domain reclaim).
+
 ## Environment
 
 Copy `.env.example` to `.env` and fill in:
@@ -22,7 +28,7 @@ In the Convex dashboard (Project Settings -> Environment Variables) set:
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_SECRET`
 - `GOOGLE_TOKEN_ENCRYPTION_KEY_B64` (32-byte AES key, base64)
-- `SITE_URL` (your deployed URL, e.g. `https://deepblock.vercel.app`)
+- `SITE_URL` (your deployed URL, e.g. `https://ket-deepwork.vercel.app`)
 
 ## Architecture
 
