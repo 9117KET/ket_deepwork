@@ -105,15 +105,31 @@ export function AudioInput({ onTranscript, lang = 'en-US', className = '', title
     recognition.continuous = true     // keep listening until manually stopped or silence timeout
     recognition.interimResults = false
 
+    // Per-session transcript state. Some platforms (notably Android Chrome)
+    // ignore interimResults=false, keep resultIndex at 0, and re-deliver
+    // cumulative interim/final results on every event. Appending those caused
+    // the "Today Today actually Today actually went..." duplication. Instead we
+    // rebuild the transcript from scratch on each event: final results are
+    // keyed by index (re-delivery overwrites, never duplicates) and only the
+    // latest interim is kept.
+    const finalByIndex = new Map<number, string>()
+    let latestInterim = ''
+
     recognition.onresult = (event) => {
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const text = event.results[i]?.[0]?.transcript ?? ''
-        if (text) {
-          accumulatedRef.current = accumulatedRef.current
-            ? `${accumulatedRef.current} ${text}`
-            : text
+      for (let i = 0; i < event.results.length; i++) {
+        const result = event.results[i]
+        const text = result?.[0]?.transcript?.trim() ?? ''
+        if (!text) continue
+        if (result.isFinal) {
+          finalByIndex.set(i, text)
+        } else {
+          latestInterim = text
         }
       }
+      accumulatedRef.current = [...finalByIndex.entries()]
+        .sort((a, b) => a[0] - b[0])
+        .map(([, text]) => text)
+        .join(' ')
       // Reset silence timer only after speech is detected — gives user time to start speaking
       resetSilenceTimer(recognition)
     }
@@ -125,7 +141,9 @@ export function AudioInput({ onTranscript, lang = 'en-US', className = '', title
 
     recognition.onend = () => {
       clearSilenceTimer()
-      const text = accumulatedRef.current.trim()
+      // Fall back to the latest interim only when no final result ever arrived;
+      // when finals exist, the interim is a cumulative duplicate of them.
+      const text = (accumulatedRef.current || latestInterim).trim()
       if (text) onTranscript(text)
       setIsRecording(false)
     }

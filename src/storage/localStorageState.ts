@@ -154,6 +154,9 @@ function docToDayState(doc: Record<string, unknown>): DayState {
     blockDurations: blockDurations ?? undefined,
     notDoingItems: notDoingItems && notDoingItems.length > 0 ? notDoingItems : undefined,
     abandonedTasks: abandonedTasks && abandonedTasks.length > 0 ? abandonedTasks : undefined,
+    dayNote: (doc.dayNote as string | null) ?? undefined,
+    focusHijacker: (doc.focusHijacker as DayState["focusHijacker"] | null) ?? undefined,
+    shutdownCompletedAt: (doc.shutdownCompletedAt as string | null) ?? undefined,
   }
 }
 
@@ -166,11 +169,13 @@ function docToDayState(doc: Record<string, unknown>): DayState {
  * we preserve local tasks the server hasn't seen yet.
  */
 export function mergeRemoteDayState(local: DayState, remote: DayState): DayState {
+  // Per-task merge: remote is authoritative for tasks the server knows about;
+  // local-only (not-yet-synced) tasks are appended so they survive the merge.
   const remoteTaskIds = new Set((remote.tasks ?? []).map((t) => t.id))
-  const localHasUnsyncedTasks = (local.tasks ?? []).some((t) => !remoteTaskIds.has(t.id))
+  const localOnlyTasks = (local.tasks ?? []).filter((t) => !remoteTaskIds.has(t.id))
   return {
     ...remote,
-    tasks: localHasUnsyncedTasks ? local.tasks : remote.tasks,
+    tasks: [...(remote.tasks ?? []), ...localOnlyTasks],
     bedTime: remote.bedTime ?? local.bedTime,
     wakeTime: remote.wakeTime ?? local.wakeTime,
     sleepTarget: remote.sleepTarget ?? local.sleepTarget,
@@ -179,6 +184,9 @@ export function mergeRemoteDayState(local: DayState, remote: DayState): DayState
     sideQuestCompletions: remote.sideQuestCompletions ?? local.sideQuestCompletions,
     notDoingItems: remote.notDoingItems ?? local.notDoingItems,
     abandonedTasks: remote.abandonedTasks ?? local.abandonedTasks,
+    dayNote: remote.dayNote ?? local.dayNote,
+    focusHijacker: remote.focusHijacker ?? local.focusHijacker,
+    shutdownCompletedAt: remote.shutdownCompletedAt ?? local.shutdownCompletedAt,
   }
 }
 
@@ -355,6 +363,9 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
           abandonedTasks: day.abandonedTasks,
           timeOffsetMinutes: stateRef.current.timeOffsetMinutes,
           sideQuestCompletions: day.sideQuestCompletions,
+          dayNote: day.dayNote ?? undefined,
+          focusHijacker: day.focusHijacker ?? undefined,
+          shutdownCompletedAt: day.shutdownCompletedAt ?? undefined,
         }))
       if (payload.length === 0) return
       void upsertManyDays({ days: payload }).then(() => {
@@ -481,6 +492,9 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
             abandonedTasks: day.abandonedTasks,
             timeOffsetMinutes: stateRef.current.timeOffsetMinutes,
             sideQuestCompletions: day.sideQuestCompletions,
+            dayNote: day.dayNote ?? undefined,
+            focusHijacker: day.focusHijacker ?? undefined,
+            shutdownCompletedAt: day.shutdownCompletedAt ?? undefined,
           }))
         if (payload.length > 0) {
           void upsertManyDays({ days: payload }).then(() => {

@@ -21,6 +21,9 @@ export default defineSchema({
     abandonedTasks: v.optional(v.array(v.any())),
     timeOffsetMinutes: v.optional(v.number()),
     sideQuestCompletions: v.optional(v.record(v.string(), v.boolean())),
+    dayNote: v.optional(v.string()),
+    focusHijacker: v.optional(v.string()),
+    shutdownCompletedAt: v.optional(v.string()),
   })
     .index("by_user", ["userId"])
     .index("by_user_date", ["userId", "date"]),

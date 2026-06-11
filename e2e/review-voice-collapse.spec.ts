@@ -311,6 +311,26 @@ test.describe('AudioInput — microphone recording behaviour (mocked)', () => {
             },
           })
         }
+        /** Test helper: simulate Android Chrome's cumulative interim re-delivery.
+         * Fires growing non-final results (all with resultIndex 0, ignoring
+         * interimResults=false), then the full sentence as a final result —
+         * delivered twice, as real devices re-deliver finals. */
+        fireAndroidSequence(finalText: string) {
+          const makeEvent = (entries: { transcript: string; isFinal: boolean }[]) => {
+            const results: Record<string, unknown> = { length: entries.length }
+            entries.forEach((e, i) => {
+              results[i] = { length: 1, 0: { transcript: e.transcript, confidence: 0.9 }, isFinal: e.isFinal }
+            })
+            results['item'] = (i: number) => results[i]
+            return { resultIndex: 0, results }
+          }
+          const words = finalText.split(' ')
+          for (let n = 1; n <= words.length; n++) {
+            this.onresult?.(makeEvent([{ transcript: words.slice(0, n).join(' '), isFinal: false }]))
+          }
+          this.onresult?.(makeEvent([{ transcript: finalText, isFinal: true }]))
+          this.onresult?.(makeEvent([{ transcript: finalText, isFinal: true }]))
+        }
       }
 
       ;(window as unknown as Record<string, unknown>)['SpeechRecognition'] = MockSpeechRecognition
@@ -375,6 +395,30 @@ test.describe('AudioInput — microphone recording behaviour (mocked)', () => {
     const weeklySection = page.locator('.mt-3.rounded.border.border-sky-900\\/40')
     const firstTextarea = weeklySection.locator('textarea').first()
     await expect(firstTextarea).toHaveValue(/This is a test transcript/, { timeout: 4_000 })
+  })
+
+  test('Test D — Android-style duplicated interims produce the sentence exactly once', async ({ page }) => {
+    await prepareWithMockedSpeech(page)
+
+    const header = page.getByRole('button').filter({ hasText: 'Weekly Review' })
+    await header.first().click()
+
+    const micBtn = page.getByRole('button', { name: 'Start voice input' }).first()
+    await expect(micBtn).toBeVisible({ timeout: 4_000 })
+    await micBtn.click()
+
+    // Replay the Android quirk: cumulative interims + duplicated final
+    await page.evaluate(() => {
+      const mock = (window as unknown as Record<string, unknown>)['__mockRecognition'] as
+        { fireAndroidSequence: (t: string) => void; stop: () => void } | undefined
+      mock?.fireAndroidSequence('Today actually went pretty well')
+      mock?.stop()
+    })
+
+    // Exact match — any duplicated fragment ("Today Today actually ...") fails
+    const weeklySection = page.locator('.mt-3.rounded.border.border-sky-900\\/40')
+    const firstTextarea = weeklySection.locator('textarea').first()
+    await expect(firstTextarea).toHaveValue('Today actually went pretty well', { timeout: 4_000 })
   })
 
   test('Test C — navigating away while recording does not throw errors', async ({ page }) => {

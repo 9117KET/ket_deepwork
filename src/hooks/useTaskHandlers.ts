@@ -411,23 +411,40 @@ export function useTaskHandlers(
     }
   };
 
-  /** Copy tasks from a source day into the selected day (times reset). Used for fill/copy buttons. */
+  /**
+   * Copy tasks from a source day into the selected day, preserving scheduledAt
+   * and durationMinutes. Existing tasks on the target day are kept; source roots
+   * that already exist there (same section + title) are skipped, along with
+   * their subtasks. Used for fill/copy buttons.
+   */
   const handleCopyFromDay = useCallback(
     (sourceDate: string) => {
       updateAppState((prev) => {
         const sourceDayState = getOrCreateDay(prev, sourceDate);
         if (sourceDayState.tasks.length === 0) return prev;
-        // MUSTs and Side Quests are personal — never copy them from another day.
-        const sourceToCopy = sourceDayState.tasks.filter((t) => t.sectionId !== 'mustDo' && t.sectionId !== 'sideQuest');
-        const newTasks = cloneTasksForDay(sourceToCopy, selectedDay, { resetTimes: true });
         const existingDay = getOrCreateDay(prev, selectedDay);
-        // Preserve any MUSTs already on the target day (e.g. pre-set from the night before).
-        const existingMustDo = existingDay.tasks.filter((t) => t.sectionId === 'mustDo');
+        const existingKeys = new Set(
+          existingDay.tasks
+            .filter((t) => !t.parentId)
+            .map((t) => `${t.sectionId}:${t.title.trim().toLowerCase()}`),
+        );
+        // MUSTs and Side Quests are personal — never copy them from another day.
+        const copyableRootIds = new Set(
+          sourceDayState.tasks
+            .filter((t) => !t.parentId && t.sectionId !== 'mustDo' && t.sectionId !== 'sideQuest')
+            .filter((t) => !existingKeys.has(`${t.sectionId}:${t.title.trim().toLowerCase()}`))
+            .map((t) => t.id),
+        );
+        const sourceToCopy = sourceDayState.tasks.filter(
+          (t) => copyableRootIds.has(t.id) || (t.parentId != null && copyableRootIds.has(t.parentId)),
+        );
+        if (sourceToCopy.length === 0) return prev;
+        const newTasks = cloneTasksForDay(sourceToCopy, selectedDay);
         return {
           ...prev,
           days: {
             ...prev.days,
-            [selectedDay]: { ...existingDay, tasks: [...existingMustDo, ...newTasks] },
+            [selectedDay]: { ...existingDay, tasks: [...existingDay.tasks, ...newTasks] },
           },
         };
       });

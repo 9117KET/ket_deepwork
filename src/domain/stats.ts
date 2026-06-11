@@ -73,7 +73,14 @@ function computePoints(tasks: Task[]): { total: number; completed: number } {
       const doneSubDuration = children
         .filter((c) => c.isDone)
         .reduce((s, c) => s + (c.durationMinutes ?? DEFAULT_TASK_DURATION_MINUTES), 0)
-      completed += effectiveWeight * (doneSubDuration / totalSubDuration)
+      // Guard: all subtasks can have an explicit duration of 0, which would make this NaN.
+      const doneRatio =
+        totalSubDuration > 0
+          ? doneSubDuration / totalSubDuration
+          : children.every((c) => c.isDone)
+            ? 1
+            : 0
+      completed += effectiveWeight * doneRatio
     }
   }
 
