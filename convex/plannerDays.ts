@@ -1,12 +1,13 @@
 import { mutation, query } from "./_generated/server"
 import { v } from "convex/values"
+import { getUserId } from "./_shared/auth"
 
 export const getAll = query({
   args: {},
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) return null
-    const userId = identity.subject
+    const userId = getUserId(identity.subject)
     return await ctx.db
       .query("plannerDays")
       .withIndex("by_user", (q) => q.eq("userId", userId))
@@ -39,7 +40,7 @@ export const upsert = mutation({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) throw new Error("Not authenticated")
-    const userId = identity.subject
+    const userId = getUserId(identity.subject)
     const existing = await ctx.db
       .query("plannerDays")
       .withIndex("by_user_date", (q) => q.eq("userId", userId).eq("date", args.date))
@@ -57,7 +58,7 @@ export const upsertMany = mutation({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) throw new Error("Not authenticated")
-    const userId = identity.subject
+    const userId = getUserId(identity.subject)
     for (const day of args.days) {
       const existing = await ctx.db
         .query("plannerDays")

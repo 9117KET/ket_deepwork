@@ -1,6 +1,7 @@
 import { mutation, query, action, internalMutation, internalQuery } from "./_generated/server"
 import { internal } from "./_generated/api"
 import { v } from "convex/values"
+import { getUserId } from "./_shared/auth"
 
 // process.env is available in Convex Node.js actions; declare for browser tsconfig compatibility
 declare const process: { env: Record<string, string | undefined> }
@@ -31,7 +32,7 @@ export const getActiveOnDate = query({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) return null
-    const userId = identity.subject
+    const userId = getUserId(identity.subject)
     const trips = await ctx.db
       .query("travelTrips")
       .withIndex("by_user", (q) => q.eq("userId", userId))
@@ -61,7 +62,7 @@ export const list = query({
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) return []
-    const userId = identity.subject
+    const userId = getUserId(identity.subject)
     return await ctx.db
       .query("travelTrips")
       .withIndex("by_user", (q) => q.eq("userId", userId))
@@ -75,7 +76,7 @@ export const get = query({
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) return null
     const trip = await ctx.db.get(args.id)
-    if (!trip || trip.userId !== identity.subject) return null
+    if (!trip || trip.userId !== getUserId(identity.subject)) return null
     return trip
   },
 })
@@ -104,7 +105,7 @@ export const create = mutation({
     if (args.destination.length > 200) throw new Error("destination exceeds 200 character limit")
     return await ctx.db.insert("travelTrips", {
       ...args,
-      userId: identity.subject,
+      userId: getUserId(identity.subject),
       status: "planning",
     })
   },
@@ -135,7 +136,7 @@ export const update = mutation({
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) throw new Error("Not authenticated")
     const trip = await ctx.db.get(args.id)
-    if (!trip || trip.userId !== identity.subject) throw new Error("Not found")
+    if (!trip || trip.userId !== getUserId(identity.subject)) throw new Error("Not found")
     const { id, ...patch } = args
     await ctx.db.patch(id, patch)
   },
@@ -147,7 +148,7 @@ export const remove = mutation({
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) throw new Error("Not authenticated")
     const trip = await ctx.db.get(args.id)
-    if (!trip || trip.userId !== identity.subject) throw new Error("Not found")
+    if (!trip || trip.userId !== getUserId(identity.subject)) throw new Error("Not found")
     await ctx.db.delete(args.id)
   },
 })
@@ -187,7 +188,7 @@ export const generatePlan = action({
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) throw new Error("Not authenticated")
 
-    const trip = await ctx.runQuery(internal.travel.getTripInternal, { id: args.id, userId: identity.subject })
+    const trip = await ctx.runQuery(internal.travel.getTripInternal, { id: args.id, userId: getUserId(identity.subject) })
     if (!trip) throw new Error("Not found")
 
     const cityQuery = args.destination.includes(",")
@@ -263,7 +264,7 @@ export const injectPreTripTasks = action({
   handler: async (ctx, args): Promise<{ injectedCount: number; datesAffected: number }> => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) throw new Error("Not authenticated")
-    const userId = identity.subject
+    const userId = getUserId(identity.subject)
 
     const trip = await ctx.runQuery(internal.travel.getTripInternal, { id: args.tripId, userId })
     if (!trip) throw new Error("Not found")
@@ -334,7 +335,7 @@ export const getHabitAdvice = action({
   handler: async (ctx, args): Promise<Array<{ habitId: string; label: string; verdict: string; reason: string }>> => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) throw new Error("Not authenticated")
-    const userId = identity.subject
+    const userId = getUserId(identity.subject)
 
     const settings = await ctx.runQuery(internal.travel.getUserSettings, { userId })
     const habits: HabitDefinition[] = (settings?.habitDefinitions ?? []) as HabitDefinition[]
@@ -394,7 +395,7 @@ export const chat = action({
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) throw new Error("Not authenticated")
 
-    const trip = await ctx.runQuery(internal.travel.getTripInternal, { id: args.tripId, userId: identity.subject })
+    const trip = await ctx.runQuery(internal.travel.getTripInternal, { id: args.tripId, userId: getUserId(identity.subject) })
     if (!trip) throw new Error("Trip not found")
 
     const tripCtx: TripContext = {

@@ -1,5 +1,6 @@
 import { mutation, query } from "./_generated/server"
 import { v } from "convex/values"
+import { getUserId } from "./_shared/auth"
 
 // ─── Owner: manage tokens ─────────────────────────────────────────────────────
 
@@ -8,7 +9,7 @@ export const listTokens = query({
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) return []
-    const userId = identity.subject
+    const userId = getUserId(identity.subject)
     return await ctx.db
       .query("shareTokens")
       .withIndex("by_owner", (q) => q.eq("ownerUserId", userId))
@@ -25,7 +26,7 @@ export const createToken = mutation({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) throw new Error("Not authenticated")
-    const ownerUserId = identity.subject
+    const ownerUserId = getUserId(identity.subject)
     const token = crypto.randomUUID()
     const id = await ctx.db.insert("shareTokens", {
       ownerUserId,
@@ -42,7 +43,7 @@ export const deleteToken = mutation({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) throw new Error("Not authenticated")
-    const userId = identity.subject
+    const userId = getUserId(identity.subject)
     const existing = await ctx.db.get(args.tokenId)
     if (!existing || existing.ownerUserId !== userId) {
       throw new Error("Token not found or access denied")

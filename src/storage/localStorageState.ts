@@ -10,6 +10,7 @@ const STORAGE_KEY = "deepblock_state_v1"
 const LEGACY_STORAGE_KEY = "ket_deepwork_state_v1"
 const PENDING_DATES_KEY = "deepblock_pending_dates_v1"
 const PENDING_SETTINGS_KEY = "deepblock_pending_settings_v1"
+const SYNCED_TASK_IDS_KEY = "deepblock_synced_task_ids_v1"
 const SCHEMA_VERSION = 1
 
 interface PersistedStateV1 {
@@ -167,12 +168,20 @@ function docToDayState(doc: Record<string, unknown>): DayState {
  * but we keep local values for scheduling fields when remote is null/undefined
  * (prevents stale server row from wiping out times the user just set), and
  * we preserve local tasks the server hasn't seen yet.
+ *
+ * `syncedTaskIds` is the set of task IDs that were present the last time this
+ * device synced this day with the server. A local task missing from `remote`
+ * is only "not-yet-synced" (and thus preserved) if it was never part of that
+ * snapshot - otherwise it was deleted on another device and must not be
+ * resurrected.
  */
-export function mergeRemoteDayState(local: DayState, remote: DayState): DayState {
+export function mergeRemoteDayState(local: DayState, remote: DayState, syncedTaskIds?: Set<string>): DayState {
   // Per-task merge: remote is authoritative for tasks the server knows about;
   // local-only (not-yet-synced) tasks are appended so they survive the merge.
   const remoteTaskIds = new Set((remote.tasks ?? []).map((t) => t.id))
-  const localOnlyTasks = (local.tasks ?? []).filter((t) => !remoteTaskIds.has(t.id))
+  const localOnlyTasks = (local.tasks ?? []).filter(
+    (t) => !remoteTaskIds.has(t.id) && !syncedTaskIds?.has(t.id),
+  )
   return {
     ...remote,
     tasks: [...(remote.tasks ?? []), ...localOnlyTasks],
@@ -305,6 +314,33 @@ function writePendingSettings(pending: boolean) {
   } catch { /* storage unavailable */ }
 }
 
+// ─── Synced task ID snapshots (per day) ──────────────────────────────────────
+// Tracks which task IDs were present in this day the last time it was
+// reconciled with the server, so `mergeRemoteDayState` can tell "task I just
+// created locally" (preserve) apart from "task deleted on another device"
+// (don't resurrect). Persisted so the distinction survives reloads.
+
+function readSyncedTaskIds(): Map<string, Set<string>> {
+  if (typeof window === "undefined") return new Map()
+  const raw = window.localStorage.getItem(SYNCED_TASK_IDS_KEY)
+  if (!raw) return new Map()
+  try {
+    const obj = JSON.parse(raw) as Record<string, string[]>
+    return new Map(Object.entries(obj).map(([date, ids]) => [date, new Set(ids)]))
+  } catch {
+    return new Map()
+  }
+}
+
+function writeSyncedTaskIds(map: Map<string, Set<string>>) {
+  if (typeof window === "undefined") return
+  try {
+    const obj: Record<string, string[]> = {}
+    for (const [date, ids] of map) obj[date] = [...ids]
+    window.localStorage.setItem(SYNCED_TASK_IDS_KEY, JSON.stringify(obj))
+  } catch { /* storage unavailable */ }
+}
+
 // ─── usePersistentState ───────────────────────────────────────────────────────
 
 export function usePersistentState(): [AppState, (updater: (prev: AppState) => AppState) => void, boolean] {
@@ -332,6 +368,9 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
   // Persisted pending-sync sets - survive page reloads after a failed sync
   const pendingDates = useRef<Set<string>>(readPendingDates())
   const pendingSettings = useRef(readPendingSettings())
+  // Per-day snapshot of task IDs last reconciled with the server - lets the
+  // merge below tell new local tasks apart from remotely-deleted ones
+  const syncedTaskIds = useRef<Map<string, Set<string>>>(readSyncedTaskIds())
 
   // Convex reactive queries - undefined while loading, null/array when ready
   const remoteDays = useQuery(api.plannerDays.getAll, isAuthenticated ? {} : "skip")
@@ -363,6 +402,7 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
 
     setState((prev) => {
       const base = { ...(prev.days ?? {}) }
+      let syncedTaskIdsChanged = false
       for (const doc of remoteDayList) {
         const date = doc.date as string
         if (dirtyGenerations.current.has(date)) continue
@@ -371,8 +411,11 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
         if (suppressUntil && Date.now() < suppressUntil) continue
         const dayState = docToDayState(doc as Record<string, unknown>)
         const local = base[date]
-        base[date] = local ? mergeRemoteDayState(local, dayState) : dayState
+        base[date] = local ? mergeRemoteDayState(local, dayState, syncedTaskIds.current.get(date)) : dayState
+        syncedTaskIds.current.set(date, new Set((dayState.tasks ?? []).map((t) => t.id)))
+        syncedTaskIdsChanged = true
       }
+      if (syncedTaskIdsChanged) writeSyncedTaskIds(syncedTaskIds.current)
 
       const activeDays = deriveActiveDaysFromDays(base)
 

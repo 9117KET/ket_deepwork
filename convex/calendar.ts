@@ -12,6 +12,7 @@ import {
   getGoogleAccessToken,
 } from "./_shared/google"
 import { encryptToEnvelope, decryptFromEnvelope } from "./_shared/crypto"
+import { getUserId } from "./_shared/auth"
 
 // ─── OAuth ────────────────────────────────────────────────────────────────────
 
@@ -45,7 +46,7 @@ export const googleOauthCallback = action({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) throw new Error("Not authenticated")
-    const userId = identity.subject
+    const userId = getUserId(identity.subject)
 
     const clientId = process.env.GOOGLE_CLIENT_ID
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET
@@ -86,7 +87,7 @@ export const listCalendars = action({
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) throw new Error("Not authenticated")
-    const userId = identity.subject
+    const userId = getUserId(identity.subject)
 
     const conn = await ctx.runQuery(internal.calendarInternal.getConnection, { userId })
     if (!conn) throw new Error("Google Calendar not connected")
@@ -119,7 +120,7 @@ export const selectCalendar = mutation({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) throw new Error("Not authenticated")
-    const userId = identity.subject
+    const userId = getUserId(identity.subject)
     const conn = await ctx.db
       .query("googleCalendarConnections")
       .withIndex("by_user", (q) => q.eq("userId", userId))
@@ -164,7 +165,7 @@ export const syncFromGoogle = action({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) throw new Error("Not authenticated")
-    const userId = identity.subject
+    const userId = getUserId(identity.subject)
 
     const conn = await ctx.runQuery(internal.calendarInternal.getConnection, { userId })
     if (!conn?.selectedCalendarId) throw new Error("No calendar selected")
@@ -316,7 +317,7 @@ export const syncToGoogle = action({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) throw new Error("Not authenticated")
-    const userId = identity.subject
+    const userId = getUserId(identity.subject)
 
     const conn = await ctx.runQuery(internal.calendarInternal.getConnection, { userId })
     if (!conn?.selectedCalendarId) throw new Error("No calendar selected")
@@ -426,7 +427,7 @@ export const disconnectGoogle = mutation({
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) throw new Error("Not authenticated")
-    const userId = identity.subject
+    const userId = getUserId(identity.subject)
 
     const links = await ctx.db
       .query("calendarEventLinks")

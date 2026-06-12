@@ -1,12 +1,13 @@
 import { mutation, query } from "./_generated/server"
 import { v } from "convex/values"
+import { getUserId } from "./_shared/auth"
 
 export const get = query({
   args: {},
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) return null
-    const userId = identity.subject
+    const userId = getUserId(identity.subject)
     return await ctx.db
       .query("userSettings")
       .withIndex("by_user", (q) => q.eq("userId", userId))
@@ -40,7 +41,7 @@ export const upsert = mutation({
     if (args.deepWorkGoalHours !== undefined && (args.deepWorkGoalHours < 0 || args.deepWorkGoalHours > 168)) {
       throw new Error("deepWorkGoalHours must be between 0 and 168")
     }
-    const userId = identity.subject
+    const userId = getUserId(identity.subject)
     const existing = await ctx.db
       .query("userSettings")
       .withIndex("by_user", (q) => q.eq("userId", userId))

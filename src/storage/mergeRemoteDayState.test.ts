@@ -41,6 +41,29 @@ describe('mergeRemoteDayState', () => {
     expect(merged.tasks).toEqual([t1, t2])
   })
 
+  it('does not resurrect a task deleted on another device', () => {
+    const kept = task('kept')
+    const deleted = task('deleted')
+    // This device previously synced both tasks.
+    const syncedTaskIds = new Set([kept.id, deleted.id])
+    // Local cache is stale and still has the deleted task.
+    const local = makeDay({ tasks: [kept, deleted] })
+    // Remote no longer has it - another device deleted it.
+    const remote = makeDay({ tasks: [kept] })
+    const merged = mergeRemoteDayState(local, remote, syncedTaskIds)
+    expect(merged.tasks).toEqual([kept])
+  })
+
+  it('still preserves a brand-new local task never seen by the server', () => {
+    const synced = task('synced')
+    const unsynced = task('unsynced')
+    const syncedTaskIds = new Set([synced.id])
+    const local = makeDay({ tasks: [synced, unsynced] })
+    const remote = makeDay({ tasks: [synced] })
+    const merged = mergeRemoteDayState(local, remote, syncedTaskIds)
+    expect(merged.tasks).toEqual([synced, unsynced])
+  })
+
   it('remote fields take precedence for non-task fields', () => {
     const local = makeDay({ wakeTime: '07:00', sleepTarget: '23:00', bedTime: '22:30' })
     const remote = makeDay({ wakeTime: '06:30', sleepTarget: '22:30' })

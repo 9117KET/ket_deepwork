@@ -1,12 +1,13 @@
 import { mutation, query } from "./_generated/server"
 import { v } from "convex/values"
+import { getUserId } from "./_shared/auth"
 
 export const get = query({
   args: {},
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) return null
-    const userId = identity.subject
+    const userId = getUserId(identity.subject)
     return await ctx.db
       .query("financialSettings")
       .withIndex("by_user", (q) => q.eq("userId", userId))
@@ -19,7 +20,7 @@ export const save = mutation({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) throw new Error("Not authenticated")
-    const userId = identity.subject
+    const userId = getUserId(identity.subject)
     const existing = await ctx.db
       .query("financialSettings")
       .withIndex("by_user", (q) => q.eq("userId", userId))

@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as _shared_auth from "../_shared/auth.js";
 import type * as _shared_crypto from "../_shared/crypto.js";
 import type * as _shared_google from "../_shared/google.js";
 import type * as auth from "../auth.js";
@@ -31,6 +32,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  "_shared/auth": typeof _shared_auth;
   "_shared/crypto": typeof _shared_crypto;
   "_shared/google": typeof _shared_google;
   auth: typeof auth;

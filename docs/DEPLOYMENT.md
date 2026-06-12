@@ -20,14 +20,18 @@ _Last updated: 2026-06-11_
 
 ## ⏳ Pending next steps
 
-1. **Prod auth keys** — sign-in on the live site fails until these exist on
-   `nautical-wolf-453`:
-   ```bash
-   npx @convex-dev/auth --prod    # generates + sets JWT_PRIVATE_KEY and JWKS
-   ```
-   Then in the Convex dashboard (switch to **Production** → Settings →
-   Environment Variables) set `SITE_URL=https://ket-deepwork.vercel.app`.
-   Guest mode works without this.
+1. ~~**Prod auth keys**~~ — done (2026-06-12). `nautical-wolf-453` now has
+   `JWT_PRIVATE_KEY`, `JWKS`, and `SITE_URL=https://ket-deepwork.vercel.app`
+   set, and sign-up/sign-in on the live site work end-to-end.
+
+   Note: the `npx @convex-dev/auth --prod` CLI crashes on Windows when
+   writing `JWT_PRIVATE_KEY` (it shells out via `cmd.exe` with a quoted
+   multi-line value, which `cmd.exe` mangles). If this ever needs to be
+   regenerated, generate the RS256 key pair manually (see
+   `node_modules/@convex-dev/auth/dist/bin.cjs` `generateKeys()` for the
+   exact format) and set both vars via
+   `npx convex env set --prod --from-file <file>`, which handles quoting
+   correctly.
 
 2. **Google Calendar on prod** — copy these env vars from the dev deployment to
    Production in the Convex dashboard:
