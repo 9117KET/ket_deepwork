@@ -42,13 +42,20 @@ const GOAL_ICONS = [
   'flag', 'flight', 'home', 'directions_car', 'diamond',
   'health_and_safety', 'menu_book', 'school', 'beach_access', 'laptop',
   'piano', 'landscape', 'pets', 'child_care',
+  'diversity_3', 'volunteer_activism', 'favorite', 'savings',
 ]
 
+/**
+ * Life-ambition goals come first — set these at the start of a career so every
+ * month's saving has a clear purpose. Followed by common German savings goals.
+ */
 const PRESET_GOALS = [
+  { label: 'Support my family', icon: 'diversity_3', targetAmount: 12000, monthlyContribution: 200 },
+  { label: 'Marriage / Wedding', icon: 'favorite', targetAmount: 20000, monthlyContribution: 400 },
+  { label: 'Car (Auto)', icon: 'directions_car', targetAmount: 15000, monthlyContribution: 300 },
+  { label: 'House / Down payment', icon: 'home', targetAmount: 50000, monthlyContribution: 500 },
   { label: 'Notgroschen (Emergency Fund)', icon: 'shield', targetAmount: 9000, monthlyContribution: 200 },
   { label: 'Urlaub (Vacation)', icon: 'flight', targetAmount: 2000, monthlyContribution: 150 },
-  { label: 'Auto (Car)', icon: 'directions_car', targetAmount: 8000, monthlyContribution: 300 },
-  { label: 'Anzahlung (Down Payment)', icon: 'home', targetAmount: 30000, monthlyContribution: 500 },
   { label: 'Laptop / Tech', icon: 'laptop', targetAmount: 1500, monthlyContribution: 100 },
 ]
 
@@ -147,9 +154,11 @@ export function SavingsGoals({ state, onUpdate }: SavingsGoalsProps) {
         <div className="flex items-start gap-3">
           <MaterialIcon name="savings" filled className="text-violet-400 text-[1.5rem] flex-shrink-0 mt-0.5" />
           <div>
-            <h2 className="text-sm font-semibold text-share-onBg">Savings Goals</h2>
+            <h2 className="text-sm font-semibold text-share-onBg">Life-ambition goals</h2>
             <p className="text-xs text-share-onSurfaceVariant mt-1 leading-relaxed">
-              Named goals make abstract saving concrete. A "Vacation 2026" account is harder to raid than a generic savings account.
+              Define what you're saving toward at the start of your career — supporting your
+              family, marriage, a car, a house — so every month's saving has a purpose. Named
+              goals make abstract saving concrete and harder to raid.
             </p>
           </div>
         </div>
@@ -202,7 +211,7 @@ export function SavingsGoals({ state, onUpdate }: SavingsGoalsProps) {
       {showPresets && (
         <div className="rounded-xl border border-share-outlineVariant bg-share-surfaceContainerLow p-4 space-y-2">
           <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold text-share-onBg">Common German savings goals</p>
+            <p className="text-xs font-semibold text-share-onBg">Pick a goal to start</p>
             <button type="button" onClick={() => setShowPresets(false)} className="text-share-onSurfaceVariant/50 text-xs">✕</button>
           </div>
           {PRESET_GOALS.map((p) => (

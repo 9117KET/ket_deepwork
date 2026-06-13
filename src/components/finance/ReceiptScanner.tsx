@@ -11,10 +11,14 @@ import { useRef, useState } from 'react'
 import { useAction, useConvexAuth } from 'convex/react'
 import { api } from '../../../convex/_generated/api'
 import { MaterialIcon } from '../ui/MaterialIcon'
-import type { FinancialState, CSPExpense, CSPBucket, ParsedReceipt } from '../../domain/financialTypes'
+import type { FinancialState, CSPExpense, CSPBucket, FinanceTransaction, ParsedReceipt } from '../../domain/financialTypes'
 
-function createId(): string {
-  return `csp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+function createId(prefix = 'csp'): string {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+}
+
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10)
 }
 
 const BUCKET_LABELS: Record<CSPBucket, string> = {
@@ -28,11 +32,16 @@ interface ReceiptScannerProps {
   state: FinancialState
   onUpdate: (updater: (prev: FinancialState) => FinancialState) => void
   onClose?: () => void
+  /**
+   * 'transaction' (default) logs a one-off daily expense into transactions[month].
+   * 'budget' adds a recurring monthly line to the Conscious Spending Plan.
+   */
+  mode?: 'transaction' | 'budget'
 }
 
 type ScanState = 'idle' | 'captured' | 'parsing' | 'done' | 'error'
 
-export function ReceiptScanner({ onUpdate, onClose }: ReceiptScannerProps) {
+export function ReceiptScanner({ onUpdate, onClose, mode = 'transaction' }: ReceiptScannerProps) {
   const { isAuthenticated } = useConvexAuth()
   const parseReceipt = useAction(api.receiptParser.parseReceipt)
 
@@ -47,6 +56,7 @@ export function ReceiptScanner({ onUpdate, onClose }: ReceiptScannerProps) {
   const [editLabel, setEditLabel] = useState('')
   const [editAmount, setEditAmount] = useState('')
   const [editBucket, setEditBucket] = useState<CSPBucket>('guiltFree')
+  const [editDate, setEditDate] = useState(todayIso())
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -76,6 +86,7 @@ export function ReceiptScanner({ onUpdate, onClose }: ReceiptScannerProps) {
         setEditLabel(result.merchant ?? '')
         setEditAmount(result.total != null ? String(result.total) : '')
         setEditBucket(result.suggestedBucket ?? 'guiltFree')
+        setEditDate(result.date ?? todayIso())
         setScanState('done')
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Unknown error'
@@ -91,6 +102,29 @@ export function ReceiptScanner({ onUpdate, onClose }: ReceiptScannerProps) {
   const handleAddToCSP = () => {
     const amount = parseFloat(editAmount)
     if (!editLabel.trim() || isNaN(amount) || amount <= 0) return
+
+    if (mode === 'transaction') {
+      const date = editDate || todayIso()
+      const month = date.slice(0, 7)
+      const tx: FinanceTransaction = {
+        id: createId('tx'),
+        date,
+        label: editLabel.trim(),
+        amount,
+        bucket: editBucket,
+        category: parsed?.category,
+        method: 'scanned',
+      }
+      onUpdate((prev) => ({
+        ...prev,
+        transactions: {
+          ...(prev.transactions ?? {}),
+          [month]: [...(prev.transactions?.[month] ?? []), tx],
+        },
+      }))
+      setConfirmed(true)
+      return
+    }
 
     const expense: CSPExpense = {
       id: createId(),
@@ -120,6 +154,7 @@ export function ReceiptScanner({ onUpdate, onClose }: ReceiptScannerProps) {
     setEditLabel('')
     setEditAmount('')
     setEditBucket('guiltFree')
+    setEditDate(todayIso())
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
@@ -150,7 +185,9 @@ export function ReceiptScanner({ onUpdate, onClose }: ReceiptScannerProps) {
       </div>
 
       <p className="text-xs text-share-onSurfaceVariant leading-relaxed">
-        Take a photo or upload a receipt. Claude will extract the merchant, amount, and suggest which spending bucket it belongs in.
+        {mode === 'transaction'
+          ? 'Take a photo or upload a receipt. Claude extracts the merchant, amount and date, then logs it to this month’s spending.'
+          : 'Take a photo or upload a receipt. Claude will extract the merchant, amount, and suggest which spending bucket it belongs in.'}
       </p>
 
       {/* Idle state - capture buttons */}
@@ -278,9 +315,11 @@ export function ReceiptScanner({ onUpdate, onClose }: ReceiptScannerProps) {
             </div>
           </div>
 
-          {/* Editable fields before adding to CSP */}
+          {/* Editable fields before saving */}
           <div className="rounded-xl border border-share-outlineVariant bg-share-surfaceContainerLow p-4 space-y-3">
-            <p className="text-xs font-semibold text-share-onBg">Add to Spending Plan</p>
+            <p className="text-xs font-semibold text-share-onBg">
+              {mode === 'transaction' ? 'Log this expense' : 'Add to Spending Plan'}
+            </p>
             <p className="text-[10px] text-share-onSurfaceVariant/60">Review and adjust before saving.</p>
 
             <div>
@@ -295,7 +334,9 @@ export function ReceiptScanner({ onUpdate, onClose }: ReceiptScannerProps) {
 
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block text-xs text-share-onSurfaceVariant mb-1">Monthly amount (€)</label>
+                <label className="block text-xs text-share-onSurfaceVariant mb-1">
+                  {mode === 'transaction' ? 'Amount (€)' : 'Monthly amount (€)'}
+                </label>
                 <div className="relative">
                   <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-share-onSurfaceVariant">€</span>
                   <input
@@ -307,10 +348,39 @@ export function ReceiptScanner({ onUpdate, onClose }: ReceiptScannerProps) {
                     className="w-full rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerLow py-2 pl-6 pr-2 text-sm text-share-onBg focus:border-share-primary focus:outline-none"
                   />
                 </div>
-                <p className="text-[10px] text-share-onSurfaceVariant/50 mt-0.5">
-                  Divide annual costs by 12
-                </p>
+                {mode === 'budget' && (
+                  <p className="text-[10px] text-share-onSurfaceVariant/50 mt-0.5">
+                    Divide annual costs by 12
+                  </p>
+                )}
               </div>
+              {mode === 'transaction' ? (
+                <div>
+                  <label className="block text-xs text-share-onSurfaceVariant mb-1">Date</label>
+                  <input
+                    type="date"
+                    value={editDate}
+                    onChange={(e) => setEditDate(e.target.value)}
+                    className="w-full rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerLow px-2 py-2 text-sm text-share-onBg focus:border-share-primary focus:outline-none"
+                  />
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-xs text-share-onSurfaceVariant mb-1">Bucket</label>
+                  <select
+                    value={editBucket}
+                    onChange={(e) => setEditBucket(e.target.value as CSPBucket)}
+                    className="w-full rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerLow px-2 py-2 text-sm text-share-onBg focus:border-share-primary focus:outline-none"
+                  >
+                    {(Object.entries(BUCKET_LABELS) as [CSPBucket, string][]).map(([key, label]) => (
+                      <option key={key} value={key}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+
+            {mode === 'transaction' && (
               <div>
                 <label className="block text-xs text-share-onSurfaceVariant mb-1">Bucket</label>
                 <select
@@ -323,7 +393,7 @@ export function ReceiptScanner({ onUpdate, onClose }: ReceiptScannerProps) {
                   ))}
                 </select>
               </div>
-            </div>
+            )}
 
             <div className="flex gap-2">
               <button
@@ -332,7 +402,7 @@ export function ReceiptScanner({ onUpdate, onClose }: ReceiptScannerProps) {
                 disabled={!editLabel.trim() || !editAmount}
                 className="rounded-lg border border-share-primary bg-share-primary/10 px-4 py-2 text-xs font-medium text-share-primary hover:bg-share-primary/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
-                Add to Spending Plan
+                {mode === 'transaction' ? 'Log expense' : 'Add to Spending Plan'}
               </button>
               <button
                 type="button"
@@ -351,9 +421,13 @@ export function ReceiptScanner({ onUpdate, onClose }: ReceiptScannerProps) {
         <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 flex items-center gap-3">
           <MaterialIcon name="check_circle" filled className="text-emerald-400 text-[1.3rem] flex-shrink-0" />
           <div className="flex-1">
-            <p className="text-xs font-medium text-emerald-400">Added to Spending Plan</p>
+            <p className="text-xs font-medium text-emerald-400">
+              {mode === 'transaction' ? 'Expense logged' : 'Added to Spending Plan'}
+            </p>
             <p className="text-[10px] text-share-onSurfaceVariant/70 mt-0.5">
-              "{editLabel}" — €{editAmount}/month in {BUCKET_LABELS[editBucket]}
+              {mode === 'transaction'
+                ? `"${editLabel}" — €${editAmount} on ${editDate}`
+                : `"${editLabel}" — €${editAmount}/month in ${BUCKET_LABELS[editBucket]}`}
             </p>
           </div>
           <button type="button" onClick={handleReset} className="text-xs text-share-primary hover:underline flex-shrink-0">

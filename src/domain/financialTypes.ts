@@ -236,6 +236,44 @@ export interface FinanceTransaction {
 /** Keyed by YYYY-MM (month), each month holds its transaction list. */
 export type TransactionsByMonth = Record<string, FinanceTransaction[]>
 
+// ─── Monthly waterfall (matches the user's Excel cash-flow model) ──────────────
+
+/** A single income line for a month (salary, leftover, gift, side job, etc.). */
+export interface IncomeSource {
+  id: string
+  label: string
+  amount: number       // EUR
+  date?: string        // ISO date YYYY-MM-DD
+}
+
+/** A one-off big expense for a month (e.g. "Travel to Frankfurt"). */
+export interface CriticalExpense {
+  id: string
+  label: string
+  amount: number       // EUR
+  date?: string        // ISO date YYYY-MM-DD
+  /** Set when this critical expense was pulled from a planned trip. */
+  tripId?: string
+}
+
+/** Income lines keyed by YYYY-MM. */
+export type IncomeSourcesByMonth = Record<string, IncomeSource[]>
+/** Critical (one-off) expenses keyed by YYYY-MM. */
+export type CriticalExpensesByMonth = Record<string, CriticalExpense[]>
+
+// ─── Shopping list (finance-located) ───────────────────────────────────────────
+
+export interface ShoppingItem {
+  id: string
+  text: string
+  qty?: string
+  checked: boolean
+  /** Staple that refills each shopping run instead of being cleared. */
+  recurring?: boolean
+  addedVia: 'voice' | 'text'
+  createdAt: string    // ISO timestamp
+}
+
 // ─── AI advisor chat ──────────────────────────────────────────────────────────
 
 export interface AdvisorMessage {
@@ -291,6 +329,13 @@ export interface FinancialState {
 
   // Expense transactions (keyed by YYYY-MM)
   transactions?: TransactionsByMonth
+
+  // Monthly waterfall inputs (keyed by YYYY-MM)
+  incomeSources?: IncomeSourcesByMonth
+  criticalExpenses?: CriticalExpensesByMonth
+
+  // Shopping list (finance-located)
+  shoppingList?: ShoppingItem[]
 
   // AI advisor conversation history
   advisorHistory?: AdvisorMessage[]

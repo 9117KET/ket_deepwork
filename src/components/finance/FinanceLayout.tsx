@@ -1,51 +1,30 @@
 /**
  * components/finance/FinanceLayout.tsx
  *
- * Tab-based shell for the Financial Planner.
- * Tabs: Dashboard | Rich Life | Spending Plan | Accounts | Debts | Investments | FIRE | Learn
- * Phase 1 implements: Dashboard, Rich Life, Spending Plan, Learn.
- * Others show a "coming soon" stub.
+ * Tab-based shell for the Financial Planner, consolidated into five groups:
+ * Today · Plan · Goals · Grow · Setup. Each group holds related sub-views,
+ * so the top bar stays short (no horizontal scroll) and the daily-use views
+ * (waterfall, expenses, shopping) live together under "Today".
  */
 
 import type { ReactNode } from 'react'
 import { MaterialIcon } from '../ui/MaterialIcon'
 
-export type FinanceTab =
-  | 'dashboard'
-  | 'richLife'
-  | 'spendingPlan'
-  | 'expenses'
-  | 'netWorth'
-  | 'accounts'
-  | 'debts'
-  | 'investments'
-  | 'fire'
-  | 'goals'
-  | 'journal'
-  | 'advisor'
-  | 'learn'
+/** Top-level group ids. */
+export type FinanceTab = 'today' | 'plan' | 'goals' | 'grow' | 'setup'
 
 interface TabConfig {
   id: FinanceTab
   label: string
   icon: string
-  available: boolean
 }
 
 const TABS: TabConfig[] = [
-  { id: 'dashboard',    label: 'Dashboard',     icon: 'home',                  available: true  },
-  { id: 'expenses',     label: 'Expenses',       icon: 'receipt_long',          available: true  },
-  { id: 'spendingPlan', label: 'Budget',         icon: 'donut_small',           available: true  },
-  { id: 'netWorth',     label: 'Net Worth',      icon: 'account_balance_wallet', available: true  },
-  { id: 'accounts',     label: 'Accounts',       icon: 'account_balance',       available: true  },
-  { id: 'debts',        label: 'Debts',          icon: 'credit_card',           available: true  },
-  { id: 'investments',  label: 'Investments',    icon: 'trending_up',           available: true  },
-  { id: 'fire',         label: 'FIRE',           icon: 'local_fire_department', available: true  },
-  { id: 'goals',        label: 'Goals',          icon: 'flag',                  available: true  },
-  { id: 'richLife',     label: 'Rich Life',      icon: 'favorite',              available: true  },
-  { id: 'journal',      label: 'Journal',        icon: 'menu_book',             available: true  },
-  { id: 'advisor',      label: 'Advisor',        icon: 'psychology',            available: true  },
-  { id: 'learn',        label: 'Learn',          icon: 'school',                available: true  },
+  { id: 'today', label: 'Today', icon: 'today'         },
+  { id: 'plan',  label: 'Plan',  icon: 'donut_small'   },
+  { id: 'goals', label: 'Goals', icon: 'flag'          },
+  { id: 'grow',  label: 'Grow',  icon: 'trending_up'   },
+  { id: 'setup', label: 'Setup', icon: 'settings'      },
 ]
 
 interface FinanceLayoutProps {
@@ -67,43 +46,70 @@ export function FinanceLayout({ activeTab, onTabChange, children }: FinanceLayou
         </p>
       </div>
 
-      {/* Tab bar */}
-      <div className="overflow-x-auto">
-        <nav className="flex gap-1 border-b border-share-outlineVariant pb-0 min-w-max">
-          {TABS.map((tab) => {
-            const isActive = tab.id === activeTab
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => onTabChange(tab.id)}
-                disabled={!tab.available}
-                className={[
-                  'flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors border-b-2 -mb-px',
-                  isActive
-                    ? 'border-share-primary text-share-primary'
-                    : tab.available
-                      ? 'border-transparent text-share-onSurfaceVariant hover:text-share-onBg hover:border-share-outlineVariant'
-                      : 'border-transparent text-share-onSurfaceVariant/30 cursor-not-allowed',
-                ].join(' ')}
-              >
-                <MaterialIcon
-                  name={tab.icon}
-                  filled={isActive}
-                  className="text-[1rem]"
-                />
-                <span className="hidden sm:inline">{tab.label}</span>
-                {!tab.available && (
-                  <span className="hidden sm:inline text-[9px] text-share-onSurfaceVariant/40 font-normal">soon</span>
-                )}
-              </button>
-            )
-          })}
-        </nav>
-      </div>
+      {/* Tab bar — five groups, fits without horizontal scroll */}
+      <nav className="grid grid-cols-5 gap-1 border-b border-share-outlineVariant">
+        {TABS.map((tab) => {
+          const isActive = tab.id === activeTab
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => onTabChange(tab.id)}
+              className={[
+                'flex items-center justify-center gap-1.5 px-2 py-2.5 text-xs font-medium transition-colors border-b-2 -mb-px',
+                isActive
+                  ? 'border-share-primary text-share-primary'
+                  : 'border-transparent text-share-onSurfaceVariant hover:text-share-onBg hover:border-share-outlineVariant',
+              ].join(' ')}
+            >
+              <MaterialIcon name={tab.icon} filled={isActive} className="text-[1.1rem]" />
+              <span className="hidden sm:inline">{tab.label}</span>
+            </button>
+          )
+        })}
+      </nav>
 
       {/* Content */}
       <div>{children}</div>
+    </div>
+  )
+}
+
+// ─── Sub-tab pill bar (used within a group) ────────────────────────────────────
+
+export interface SubTabConfig<T extends string> {
+  id: T
+  label: string
+  icon: string
+}
+
+export function SubTabBar<T extends string>({
+  tabs,
+  active,
+  onChange,
+}: {
+  tabs: SubTabConfig<T>[]
+  active: T
+  onChange: (id: T) => void
+}) {
+  return (
+    <div className="flex gap-1 overflow-x-auto rounded-xl border border-share-outlineVariant bg-share-surfaceContainerLow p-1">
+      {tabs.map((sub) => (
+        <button
+          key={sub.id}
+          type="button"
+          onClick={() => onChange(sub.id)}
+          className={[
+            'flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-medium transition-colors',
+            active === sub.id
+              ? 'bg-share-surfaceContainerHigh text-share-onBg'
+              : 'text-share-onSurfaceVariant hover:text-share-onBg',
+          ].join(' ')}
+        >
+          <MaterialIcon name={sub.icon} className="text-[0.95rem]" />
+          {sub.label}
+        </button>
+      ))}
     </div>
   )
 }

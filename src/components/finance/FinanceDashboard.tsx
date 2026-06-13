@@ -36,21 +36,21 @@ export function FinanceDashboard({ state, onNavigate }: FinanceDashboardProps) {
       label: 'Define your Rich Life',
       description: 'What does financial freedom look like to you specifically?',
       done: hasVision,
-      tab: 'richLife',
+      tab: 'plan',
       icon: 'favorite',
     },
     {
       label: 'Set your monthly income',
       description: 'Enter your net monthly income to calculate your spending buckets.',
       done: hasIncome,
-      tab: 'spendingPlan',
+      tab: 'plan',
       icon: 'payments',
     },
     {
       label: 'Build your Spending Plan',
       description: 'Categorize your expenses into the 4 CSP buckets.',
       done: hasExpenses,
-      tab: 'spendingPlan',
+      tab: 'plan',
       icon: 'donut_small',
     },
   ]
@@ -140,7 +140,7 @@ export function FinanceDashboard({ state, onNavigate }: FinanceDashboardProps) {
             </h2>
             <button
               type="button"
-              onClick={() => onNavigate('spendingPlan')}
+              onClick={() => onNavigate('plan')}
               className="text-xs text-share-primary hover:underline"
             >
               Edit
