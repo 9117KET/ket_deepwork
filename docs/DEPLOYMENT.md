@@ -33,6 +33,27 @@ _Last updated: 2026-06-11_
    `npx convex env set --prod --from-file <file>`, which handles quoting
    correctly.
 
+   **2026-06-14 — dev deployment auth keys were corrupted & fixed.** Local
+   `npm run dev` sign-in succeeded server-side but never authenticated the
+   client (endless refresh loop, `isAuthenticated` stuck false). Root cause:
+   the **dev** deployment's `JWKS` env var contained literal newlines/spaces
+   inside the base64url modulus (same Windows `cmd.exe` mangling), so
+   `…/.well-known/jwks.json` served invalid JSON and the backend could not
+   verify JWT signatures. Fixed by regenerating an RS256 pair in the exact
+   `generateKeys()` format — `JWT_PRIVATE_KEY` = PKCS8 PEM with newlines
+   replaced by spaces (single line); `JWKS` = compact `JSON.stringify` — and
+   setting **each var from a file**:
+   ```bash
+   # Do NOT pass these as CLI args on Windows — npx→cmd.exe strips the JSON
+   # quotes and splits the PEM on spaces. Always use --from-file:
+   npx convex env set JWKS --from-file jwks.txt
+   npx convex env set JWT_PRIVATE_KEY --from-file jwtkey.txt
+   ```
+   Verify the fix: `curl …/.well-known/jwks.json | python -c 'import json,sys;json.load(sys.stdin)'`
+   must parse, and the served modulus `n` must equal the public key derived
+   from `JWT_PRIVATE_KEY`. (`SITE_URL` on dev is still the prod URL; harmless
+   for password auth, but revisit if dev ever needs its own OAuth redirects.)
+
 2. **Google Calendar on prod** — copy these env vars from the dev deployment to
    Production in the Convex dashboard:
    `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_TOKEN_ENCRYPTION_KEY_B64`.
