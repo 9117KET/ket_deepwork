@@ -24,6 +24,10 @@ export default defineSchema({
     dayNote: v.optional(v.string()),
     focusHijacker: v.optional(v.string()),
     shutdownCompletedAt: v.optional(v.string()),
+    // Client-stamped logical edit time (ms). Used by upsert to reject a write
+    // whose snapshot is older than what is already stored, so two mutations
+    // racing in flight can't let the stale one clobber the fresh one.
+    updatedAt: v.optional(v.number()),
   })
     .index("by_user", ["userId"])
     .index("by_user_date", ["userId", "date"]),

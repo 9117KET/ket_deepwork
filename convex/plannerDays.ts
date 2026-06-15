@@ -33,6 +33,15 @@ const dayArgs = {
   dayNote: v.optional(v.string()),
   focusHijacker: v.optional(v.string()),
   shutdownCompletedAt: v.optional(v.string()),
+  updatedAt: v.optional(v.number()),
+}
+
+// A write is stale (and must be ignored) when the stored row carries a strictly
+// newer client edit-time than the incoming payload. Rows predating this field
+// have no updatedAt and are always overwritten.
+function isStaleWrite(existing: { updatedAt?: number } | null, incoming: { updatedAt?: number }): boolean {
+  if (!existing) return false
+  return (existing.updatedAt ?? 0) > (incoming.updatedAt ?? 0)
 }
 
 export const upsert = mutation({
@@ -46,6 +55,7 @@ export const upsert = mutation({
       .withIndex("by_user_date", (q) => q.eq("userId", userId).eq("date", args.date))
       .unique()
     if (existing) {
+      if (isStaleWrite(existing, args)) return
       await ctx.db.patch(existing._id, { ...args, userId })
     } else {
       await ctx.db.insert("plannerDays", { ...args, userId })
@@ -65,6 +75,7 @@ export const upsertMany = mutation({
         .withIndex("by_user_date", (q) => q.eq("userId", userId).eq("date", day.date))
         .unique()
       if (existing) {
+        if (isStaleWrite(existing, day)) continue
         await ctx.db.patch(existing._id, { ...day, userId })
       } else {
         await ctx.db.insert("plannerDays", { ...day, userId })

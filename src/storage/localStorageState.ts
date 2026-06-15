@@ -6,6 +6,20 @@ import type { AppState, DayState, AbandonedTask, BlockDurations, NotDoingItem, S
 import { todayIso, deriveActiveDaysFromDays } from "../domain/dateUtils"
 import { api } from "../../convex/_generated/api"
 
+// TEMP sync-debug instrumentation. Enable in the browser console with:
+//   localStorage.setItem('deepblock_sync_debug', '1')   (then reload)
+// Disable with localStorage.removeItem('deepblock_sync_debug'). Remove this
+// block once the "ticked todo reverts itself" bug is diagnosed.
+function syncDebug(...args: unknown[]) {
+  if (typeof window === "undefined") return
+  if (window.localStorage.getItem("deepblock_sync_debug") !== "1") return
+  console.debug(`[sync ${new Date().toISOString().slice(11, 23)}]`, ...args)
+}
+
+function doneIds(tasks?: { id: string; isDone?: boolean }[]): string {
+  return (tasks ?? []).filter((t) => t.isDone).map((t) => t.id).sort().join(",")
+}
+
 const STORAGE_KEY = "deepblock_state_v1"
 const LEGACY_STORAGE_KEY = "ket_deepwork_state_v1"
 const PENDING_DATES_KEY = "deepblock_pending_dates_v1"
@@ -201,9 +215,21 @@ export function mergeRemoteDayState(local: DayState, remote: DayState, syncedTas
 
 // ─── Sync payload builders (shared by debounced sync and hide/unload flush) ──
 
-function buildDaysSyncPayload(state: AppState) {
+/**
+ * Builds the day upsert payload. Only days in `includeDates` (the dates with
+ * unsynced local changes) are sent — pushing untouched days would let a stale
+ * snapshot needlessly rewrite rows another write may have just updated. Each
+ * day is stamped with `updatedAt` (its last local edit time) so the server can
+ * reject a write that races in behind a fresher one.
+ */
+function buildDaysSyncPayload(
+  state: AppState,
+  lastModified: Map<string, number>,
+  includeDates: Set<string>,
+) {
   return Object.values({ ...state.days })
     .filter((day): day is DayState => Boolean(day))
+    .filter((day) => includeDates.has(day.date))
     .map((day) => ({
       date: day.date,
       tasks: day.tasks ?? [],
@@ -222,6 +248,7 @@ function buildDaysSyncPayload(state: AppState) {
       dayNote: day.dayNote ?? undefined,
       focusHijacker: day.focusHijacker ?? undefined,
       shutdownCompletedAt: day.shutdownCompletedAt ?? undefined,
+      updatedAt: lastModified.get(day.date) ?? Date.now(),
     }))
 }
 
@@ -362,6 +389,9 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
 
   // Per-date write-generation counter for dirty tracking (in-memory, current session)
   const dirtyGenerations = useRef<Map<string, number>>(new Map())
+  // Per-date logical edit time (ms). Stamped onto each synced day so the server
+  // can reject a write whose snapshot predates a fresher one that won the race.
+  const lastModified = useRef<Map<string, number>>(new Map())
   // Echo-suppression window: ignore reactive updates for 3s after we clear a dirty flag
   const echoSuppressUntil = useRef<Map<string, number>>(new Map())
   const ECHO_SUPPRESS_MS = 3000
@@ -405,13 +435,33 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
       let syncedTaskIdsChanged = false
       for (const doc of remoteDayList) {
         const date = doc.date as string
-        if (dirtyGenerations.current.has(date)) continue
-        if (pendingDates.current.has(date)) continue
+        if (dirtyGenerations.current.has(date)) {
+          syncDebug("apply: SKIP (dirty)", date, "gen=", dirtyGenerations.current.get(date))
+          continue
+        }
+        if (pendingDates.current.has(date)) {
+          syncDebug("apply: SKIP (pending)", date)
+          continue
+        }
         const suppressUntil = echoSuppressUntil.current.get(date)
-        if (suppressUntil && Date.now() < suppressUntil) continue
+        if (suppressUntil && Date.now() < suppressUntil) {
+          syncDebug("apply: SKIP (echo-suppress)", date, "for", suppressUntil - Date.now(), "ms")
+          continue
+        }
         const dayState = docToDayState(doc as Record<string, unknown>)
         const local = base[date]
-        base[date] = local ? mergeRemoteDayState(local, dayState, syncedTaskIds.current.get(date)) : dayState
+        const merged = local ? mergeRemoteDayState(local, dayState, syncedTaskIds.current.get(date)) : dayState
+        if (local && doneIds(local.tasks) !== doneIds(merged.tasks)) {
+          syncDebug(
+            "apply: ⚠ REMOTE CHANGED done-set", date,
+            "\n  local done:  ", doneIds(local.tasks),
+            "\n  remote done: ", doneIds(dayState.tasks),
+            "\n  merged done: ", doneIds(merged.tasks),
+          )
+        } else {
+          syncDebug("apply: ok (no done-set change)", date)
+        }
+        base[date] = merged
         syncedTaskIds.current.set(date, new Set((dayState.tasks ?? []).map((t) => t.id)))
         syncedTaskIdsChanged = true
       }
@@ -463,15 +513,20 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
     syncTimeoutRef.current = setTimeout(() => {
       syncTimeoutRef.current = null
       const genSnapshot = snapshotPendingGenerations(pendingDates.current, dirtyGenerations.current)
-      const payload = buildDaysSyncPayload(stateRef.current)
+      const payload = buildDaysSyncPayload(stateRef.current, lastModified.current, pendingDates.current)
       if (payload.length === 0) return
+      syncDebug("sync: upserting", payload.length, "days; snapshot gens:", [...genSnapshot.entries()])
       void upsertManyDays({ days: payload }).then(() => {
         const now = Date.now()
         for (const [date, gen] of genSnapshot) {
-          if ((dirtyGenerations.current.get(date) ?? 0) === gen) {
+          const liveGen = dirtyGenerations.current.get(date) ?? 0
+          if (liveGen === gen) {
             dirtyGenerations.current.delete(date)
             echoSuppressUntil.current.set(date, now + ECHO_SUPPRESS_MS)
             pendingDates.current.delete(date)
+            syncDebug("sync: CLEARED dirty/pending", date, "gen=", gen, "-> echo-suppress 3s")
+          } else {
+            syncDebug("sync: KEPT dirty (edited mid-flight)", date, "snapshot gen=", gen, "live gen=", liveGen)
           }
         }
         writePendingDates(pendingDates.current)
@@ -544,12 +599,14 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
         clearTimeout(syncTimeoutRef.current)
         syncTimeoutRef.current = null
         const genSnapshot = snapshotPendingGenerations(pendingDates.current, dirtyGenerations.current)
-        const payload = buildDaysSyncPayload(stateRef.current)
+        const payload = buildDaysSyncPayload(stateRef.current, lastModified.current, pendingDates.current)
         if (payload.length > 0) {
           void upsertManyDays({ days: payload }).then(() => {
+            const now = Date.now()
             for (const [date, gen] of genSnapshot) {
               if ((dirtyGenerations.current.get(date) ?? 0) === gen) {
                 dirtyGenerations.current.delete(date)
+                echoSuppressUntil.current.set(date, now + ECHO_SUPPRESS_MS)
                 pendingDates.current.delete(date)
               }
             }
@@ -594,7 +651,13 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
         if (next.days[date] !== prev.days[date]) {
           dirtyGenerations.current.set(date, (dirtyGenerations.current.get(date) ?? 0) + 1)
           pendingDates.current.add(date)
+          lastModified.current.set(date, Date.now())
           datesChanged = true
+          syncDebug(
+            "update: mark dirty", date,
+            "gen=", dirtyGenerations.current.get(date),
+            "done:", doneIds(prev.days[date]?.tasks), "->", doneIds(next.days[date]?.tasks),
+          )
         }
       }
       if (datesChanged) writePendingDates(pendingDates.current)
