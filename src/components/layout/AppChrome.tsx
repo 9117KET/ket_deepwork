@@ -4,6 +4,16 @@
  * Global layout shell.
  * - Desktop (md+): fixed left sidebar + full-height scrollable main
  * - Mobile (<md): full-screen stack with optional bottom nav
+ *
+ * IMPORTANT: children are rendered exactly once. The old implementation rendered
+ * children in both a desktop container and a mobile container (each hidden at the
+ * other breakpoint), which caused: duplicate HTML IDs, double effects/timers,
+ * double localStorage writes, and Playwright strict-mode violations.
+ *
+ * Layout strategy:
+ *   - AppSidebar is `position:fixed` (always in the DOM, CSS-hidden on mobile).
+ *   - The main area uses `md:ml-[240px]` to offset for the fixed sidebar on desktop.
+ *   - Children are rendered once inside a single responsive <main>.
  */
 
 import type { ReactNode } from "react";
@@ -43,58 +53,41 @@ export function AppChrome({
   plannerTabHref,
   hideSidebar = false,
 }: AppChromeProps) {
-  // Desktop: plain full-width layout for marketing/landing pages
+  // Marketing / landing pages: no sidebar, simple full-width layout.
   if (hideSidebar) {
     return (
-      <>
-        {/* Desktop - no sidebar */}
-        <div className="hidden md:block min-h-screen bg-share-bg font-shareSans text-share-onBg selection:bg-share-primary/30">
-          {topBanner}
-          <main>{children}</main>
-        </div>
-
-        {/* Mobile */}
-        <div className="md:hidden flex flex-col min-h-screen bg-share-bg font-shareSans text-share-onBg selection:bg-share-primary/30">
-          {topBanner}
-          <main className="flex-1">{children}</main>
-          {showMobileNav && (
+      <div className="flex flex-col min-h-screen bg-share-bg font-shareSans text-share-onBg selection:bg-share-primary/30">
+        {topBanner}
+        <main className="flex-1">{children}</main>
+        {showMobileNav && (
+          <div className="md:hidden">
             <AppMobileNav
               active={mobileActive}
               plannerCurrent={plannerTabCurrent}
               plannerHref={plannerTabHref}
             />
-          )}
-        </div>
-      </>
+          </div>
+        )}
+      </div>
     );
   }
 
   return (
-    <>
-      {/* Desktop layout: sidebar + scrollable main */}
-      <div className="hidden md:flex h-screen overflow-hidden bg-share-bg font-shareSans text-share-onBg selection:bg-share-primary/30">
-        <AppSidebar
-          active={mobileActive}
-          showCalendarLink={showCalendarLink}
-          showHelp={showHelp}
-          onHelpClick={onHelpClick}
-          trailing={trailing}
-        />
-        {/* Main area - offset by sidebar width */}
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden ml-[240px]">
-          {topBanner}
-          <main className="flex-1 overflow-y-auto">
-            {children}
-          </main>
-        </div>
-      </div>
+    <div className="min-h-screen bg-share-bg font-shareSans text-share-onBg selection:bg-share-primary/30 md:h-screen md:overflow-hidden">
+      {/* Fixed sidebar — AppSidebar already has `hidden md:flex` so it is CSS-hidden on mobile */}
+      <AppSidebar
+        active={mobileActive}
+        showCalendarLink={showCalendarLink}
+        showHelp={showHelp}
+        onHelpClick={onHelpClick}
+        trailing={trailing}
+      />
 
-      {/* Mobile layout: full-screen stack */}
-      <div className="md:hidden flex flex-col min-h-screen bg-share-bg font-shareSans text-share-onBg selection:bg-share-primary/30">
-        {topBanner}
-        {/* Minimal mobile header - shows account menu when present */}
+      {/* Main area — offset by sidebar width on desktop; full-width on mobile */}
+      <div className="flex flex-col md:ml-[240px] md:h-screen md:overflow-hidden">
+        {/* Mobile-only header: app name + account menu / help icon */}
         {trailing && (
-          <div className="flex items-center justify-between px-4 py-2.5 border-b border-share-outlineVariant/20 flex-shrink-0">
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-share-outlineVariant/20 flex-shrink-0 md:hidden">
             <span className="font-shareHeadline font-black text-base text-share-onBg">Deepblock</span>
             <div className="flex items-center gap-1">
               {showHelp && (
@@ -111,15 +104,25 @@ export function AppChrome({
             </div>
           </div>
         )}
-        <main className="flex-1">{children}</main>
+
+        {topBanner}
+
+        {/* Children rendered exactly once */}
+        <main className="flex-1 md:overflow-y-auto">
+          {children}
+        </main>
+
+        {/* Mobile bottom nav */}
         {showMobileNav && (
-          <AppMobileNav
-            active={mobileActive}
-            plannerCurrent={plannerTabCurrent}
-            plannerHref={plannerTabHref}
-          />
+          <div className="md:hidden">
+            <AppMobileNav
+              active={mobileActive}
+              plannerCurrent={plannerTabCurrent}
+              plannerHref={plannerTabHref}
+            />
+          </div>
         )}
       </div>
-    </>
+    </div>
   );
 }

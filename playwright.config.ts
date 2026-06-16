@@ -15,6 +15,8 @@ export default defineConfig({
     viewport: { width: 1280, height: 900 },
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
+    // Set PW_SLOWMO=500 (ms) to slow each action down enough to watch live in --headed mode.
+    launchOptions: { slowMo: Number(process.env.PW_SLOWMO) || 0 },
   },
 
   projects: [

@@ -12,7 +12,13 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:convex": "vitest run --config vitest.convex.config.ts",
+    "test:crawl": "playwright test e2e/crawl.spec.ts --reporter=line",
+    "test:crawl:watch": "playwright test e2e/crawl.spec.ts --headed --reporter=line",
+    "test:crawl:ui": "playwright test e2e/crawl.spec.ts --ui",
+    "test:e2e": "playwright test --reporter=line",
+    "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
     "@convex-dev/auth": "^0.0.92",
@@ -26,6 +32,7 @@
     "react-router-dom": "^7.13.1"
   },
   "devDependencies": {
+    "@edge-runtime/vm": "^5.0.0",
     "@eslint/js": "^9.39.1",
     "@playwright/test": "^1.60.0",
     "@types/node": "^24.10.1",
@@ -33,6 +40,7 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
     "autoprefixer": "^10.4.27",
+    "convex-test": "^0.0.53",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
