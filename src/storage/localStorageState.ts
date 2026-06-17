@@ -610,6 +610,12 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
     if (typeof window === "undefined") return
 
     if (settingsSyncTimeoutRef.current) clearTimeout(settingsSyncTimeoutRef.current)
+    // Only sync when the user actually changed a setting. `update()` sets
+    // pendingSettings on a genuine local edit; the reactive userSettings echo
+    // never does. Without this guard, every server push re-armed a write
+    // (settingsDoc + derived activeDays come back as fresh references), forming
+    // an ~800ms write/read loop that burned the entire Convex I/O quota.
+    if (!pendingSettings.current) return
     settingsSyncTimeoutRef.current = setTimeout(() => {
       settingsSyncTimeoutRef.current = null
       void upsertSettings(buildSettingsSyncPayload(stateRef.current)).then(() => {
@@ -625,9 +631,11 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
       }
     }
   }, [
+    // NB: state.activeDays is intentionally NOT a dependency. It is derived from
+    // days on every reactive apply (a fresh array each time) and its server copy
+    // is never read back, so triggering a settings sync on it is pure churn.
     state.habitDefinitions,
     state.monthTitles,
-    state.activeDays,
     state.blockDurationRatios,
     state.notDoingList,
     state.identityStatement,
@@ -743,6 +751,9 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
         next.monthOneThings !== prev.monthOneThings ||
         next.monthlyReviews !== prev.monthlyReviews ||
         next.monthlyReviewQuestions !== prev.monthlyReviewQuestions ||
+        next.weeklyReviews !== prev.weeklyReviews ||
+        next.weeklyReviewQuestions !== prev.weeklyReviewQuestions ||
+        next.weeklyReviewDay !== prev.weeklyReviewDay ||
         next.weeklyProjectRotation !== prev.weeklyProjectRotation ||
         next.sideQuestDefs !== prev.sideQuestDefs ||
         next.sideQuestXp !== prev.sideQuestXp ||
