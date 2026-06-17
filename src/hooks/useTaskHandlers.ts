@@ -24,8 +24,12 @@ import {
   getOrderedTasksForSection,
   getDescendantIds,
   cloneTasksForDay,
+  pickMustsToCopyForward,
 } from "../domain/taskUtils";
 import { getOrCreateDay } from "../storage/localStorageState";
+
+/** Max MUSTs per day — mirrors MAX_MUSTS in TomorrowMustPanel. */
+const MAX_TOMORROW_MUSTS = 3;
 
 export function useTaskHandlers(
   updateAppState: (updater: (prev: AppState) => AppState) => void,
@@ -777,6 +781,46 @@ export function useTaskHandlers(
     });
   }, [selectedDay, updateAppState]);
 
+  /**
+   * Copy the currently-viewed day's MUSTs into tomorrow's MUST slots. Fills only
+   * the empty slots (cap of 3), skips titles already set for tomorrow, resets
+   * completion, and carries over scheduled time / duration. Lets the user repeat
+   * a recurring MUST for the next day with one click instead of retyping it.
+   */
+  const handleCopyTodayMustsToTomorrow = useCallback(() => {
+    const tomorrowDate = addDays(selectedDay, 1);
+    updateAppState((prev) => {
+      const sourceMusts = (prev.days[selectedDay]?.tasks ?? []).filter(
+        (t) => t.sectionId === 'mustDo' && !t.parentId,
+      );
+      if (sourceMusts.length === 0) return prev;
+
+      const tomorrow = getOrCreateDay(prev, tomorrowDate);
+      const existingMusts = tomorrow.tasks.filter((t) => t.sectionId === 'mustDo' && !t.parentId);
+      const toCopy = pickMustsToCopyForward(sourceMusts, existingMusts, MAX_TOMORROW_MUSTS);
+      if (toCopy.length === 0) return prev;
+
+      const stamp = Date.now();
+      const additions: Task[] = toCopy.map((src, i) => ({
+        id: `must-tmrw-${stamp}-${i}-${Math.random().toString(36).slice(2, 6)}`,
+        title: src.title,
+        sectionId: 'mustDo',
+        date: tomorrowDate,
+        isDone: false,
+        ...(src.scheduledAt ? { scheduledAt: src.scheduledAt } : {}),
+        ...(src.durationMinutes ? { durationMinutes: src.durationMinutes } : {}),
+      }));
+
+      return {
+        ...prev,
+        days: {
+          ...prev.days,
+          [tomorrowDate]: { ...tomorrow, tasks: [...tomorrow.tasks, ...additions] },
+        },
+      };
+    });
+  }, [selectedDay, updateAppState]);
+
   const handleReorderSubtask = useCallback(
     (parentId: string, subtaskId: string, insertIndex: number) => {
       updateAppState((prev) => {
@@ -898,6 +942,7 @@ export function useTaskHandlers(
     handleDeleteTomorrowMust,
     handleEditTomorrowMust,
     handleUpdateTomorrowMust,
+    handleCopyTodayMustsToTomorrow,
     handleReorderSubtask,
     handleMoveSubtask,
   };

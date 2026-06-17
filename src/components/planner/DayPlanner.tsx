@@ -248,6 +248,7 @@ export function DayPlanner({
     handleDeleteTomorrowMust,
     handleEditTomorrowMust,
     handleUpdateTomorrowMust,
+    handleCopyTodayMustsToTomorrow,
     handleReorderSubtask,
     handleMoveSubtask,
   } = taskHandlers;
@@ -883,10 +884,12 @@ export function DayPlanner({
               <TomorrowMustPanel
                 tomorrowDate={tomorrowDate}
                 tasks={tomorrowMustTasks}
+                sourceMustCount={(tasksBySection['mustDo'] ?? []).filter((t) => !t.parentId).length}
                 onAdd={handleAddTomorrowMust}
                 onDelete={handleDeleteTomorrowMust}
                 onEdit={handleEditTomorrowMust}
                 onUpdate={handleUpdateTomorrowMust}
+                onCopyFromToday={handleCopyTodayMustsToTomorrow}
               />
             )}
             </Fragment>

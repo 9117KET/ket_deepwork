@@ -18,6 +18,28 @@ export function reorderTasks<T>(arr: T[], fromIndex: number, toIndex: number): T
   return copy
 }
 
+/**
+ * Pick which source MUSTs to copy into a target day's MUST list.
+ *
+ * Fills only the target's empty slots (up to `max`), in source order, skipping
+ * any title already present in the target (case-insensitive, trimmed). Returns
+ * the source tasks to copy; the caller stamps fresh ids/date and resets state.
+ */
+export function pickMustsToCopyForward(source: Task[], existing: Task[], max: number): Task[] {
+  const slots = max - existing.length
+  if (slots <= 0) return []
+  const seen = new Set(existing.map((t) => t.title.trim().toLowerCase()))
+  const picked: Task[] = []
+  for (const t of source) {
+    if (picked.length >= slots) break
+    const key = t.title.trim().toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    picked.push(t)
+  }
+  return picked
+}
+
 /** Section tasks in display order: roots first (array order), then each root's children. */
 export function getOrderedTasksForSection(tasks: Task[]): Task[] {
   const roots = tasks.filter((t) => !t.parentId)

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { reorderTasks, getOrderedTasksForSection, getDescendantIds, cloneTasksForDay } from './taskUtils'
+import { reorderTasks, getOrderedTasksForSection, getDescendantIds, cloneTasksForDay, pickMustsToCopyForward } from './taskUtils'
 import type { Task } from './types'
 
 // ── helpers ─────────────────────────────────────────────────────────────────
@@ -171,5 +171,45 @@ describe('cloneTasksForDay', () => {
     const cloned = cloneTasksForDay(original, '2026-05-13', { resetTimes: false })
     expect(cloned[0]!.scheduledAt).toBe('09:00')
     expect(cloned[0]!.durationMinutes).toBe(60)
+  })
+})
+
+// ── pickMustsToCopyForward ───────────────────────────────────────────────────
+
+describe('pickMustsToCopyForward', () => {
+  it('copies all source MUSTs into an empty target up to the cap', () => {
+    const source = [task('a'), task('b'), task('c'), task('d')]
+    const picked = pickMustsToCopyForward(source, [], 3)
+    expect(picked.map(t => t.id)).toEqual(['a', 'b', 'c'])
+  })
+
+  it('fills only the remaining empty slots', () => {
+    const source = [task('a'), task('b'), task('c')]
+    const existing = [task('x'), task('y')] // 2 of 3 slots used → 1 free
+    const picked = pickMustsToCopyForward(source, existing, 3)
+    expect(picked.map(t => t.id)).toEqual(['a'])
+  })
+
+  it('returns nothing when the target is already full', () => {
+    const source = [task('a')]
+    const existing = [task('x'), task('y'), task('z')]
+    expect(pickMustsToCopyForward(source, existing, 3)).toEqual([])
+  })
+
+  it('skips titles already present (case-insensitive, trimmed)', () => {
+    const source = [task('s1', { title: 'Learn German' }), task('s2', { title: 'Programming' })]
+    const existing = [task('e1', { title: '  learn german  ' })]
+    const picked = pickMustsToCopyForward(source, existing, 3)
+    expect(picked.map(t => t.title)).toEqual(['Programming'])
+  })
+
+  it('does not copy duplicate titles within the source twice', () => {
+    const source = [task('s1', { title: 'Gym' }), task('s2', { title: 'gym' })]
+    const picked = pickMustsToCopyForward(source, [], 3)
+    expect(picked.map(t => t.id)).toEqual(['s1'])
+  })
+
+  it('returns an empty array for an empty source', () => {
+    expect(pickMustsToCopyForward([], [], 3)).toEqual([])
   })
 })

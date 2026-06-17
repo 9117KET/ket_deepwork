@@ -9,7 +9,7 @@
 import { useState, useRef, useEffect } from 'react'
 import type { Task } from '../../domain/types'
 import { normalizeHhmm } from '../../domain/dateUtils'
-import { Moon, ChevronUp, ChevronDown, X } from 'lucide-react'
+import { Moon, ChevronUp, ChevronDown, X, CopyPlus } from 'lucide-react'
 
 const DURATION_OPTIONS = [5, 10, 15, 20, 25, 30, 45, 60, 90, 120, 150, 180, 240, 300, 360, 420, 480]
 
@@ -22,15 +22,19 @@ function formatDuration(minutes: number): string {
 interface TomorrowMustPanelProps {
   tomorrowDate: string
   tasks: Task[]
+  /** Number of MUSTs on the currently-viewed day, available to copy forward. */
+  sourceMustCount?: number
   onAdd: (title: string) => void
   onDelete: (taskId: string) => void
   onEdit: (taskId: string, title: string) => void
   onUpdate: (taskId: string, patch: { scheduledAt?: string; durationMinutes?: number }) => void
+  /** Copy today's MUSTs into tomorrow's empty slots. */
+  onCopyFromToday?: () => void
 }
 
 const MAX_MUSTS = 3
 
-export function TomorrowMustPanel({ tomorrowDate, tasks, onAdd, onDelete, onEdit, onUpdate }: TomorrowMustPanelProps) {
+export function TomorrowMustPanel({ tomorrowDate, tasks, sourceMustCount = 0, onAdd, onDelete, onEdit, onUpdate, onCopyFromToday }: TomorrowMustPanelProps) {
   const [open, setOpen] = useState(false)
   const [input, setInput] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -111,6 +115,18 @@ export function TomorrowMustPanel({ tomorrowDate, tasks, onAdd, onDelete, onEdit
 
       {open && (
         <div className="mt-3 space-y-2">
+          {onCopyFromToday && sourceMustCount > 0 && tasks.length < MAX_MUSTS && (
+            <button
+              type="button"
+              onClick={onCopyFromToday}
+              className="flex w-full items-center justify-center gap-1.5 rounded border border-indigo-500/40 bg-indigo-500/10 px-2 py-1.5 text-xs font-medium text-indigo-300 hover:bg-indigo-500/20"
+              title="Copy today's MUSTs into tomorrow's empty slots (skips duplicates)"
+            >
+              <CopyPlus className="h-3.5 w-3.5" />
+              Copy today's MUSTs
+            </button>
+          )}
+
           {tasks.length === 0 && (
             <p className="text-[11px] italic text-share-onSurfaceVariant/60">
               No MUSTs set for tomorrow yet. Add up to 3 below.
