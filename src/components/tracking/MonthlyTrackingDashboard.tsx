@@ -452,7 +452,7 @@ export function MonthlyTrackingDashboard({
 
 /** Short display label for each section in the block grid. */
 const SECTION_SHORT_LABELS: Record<string, string> = {
-  mustDo: 'Must Do',
+  mustDo: 'Top 3',
   morningRoutine: 'Morning',
   highPriority: 'High',
   mediumPriority: 'Medium',

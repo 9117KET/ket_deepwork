@@ -135,7 +135,7 @@ export function WeeklyOverview({ state, referenceDay }: WeeklyOverviewProps) {
           <>
             {today.totalCount === 0 ? (
               <p>
-                You haven&apos;t planned any tasks for today yet. Add your 3 must-dos and let the day
+                You haven&apos;t planned any tasks for today yet. Add your top 3 and let the day
                 flow from there.
               </p>
             ) : (

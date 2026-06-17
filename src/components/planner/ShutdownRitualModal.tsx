@@ -206,7 +206,7 @@ export function ShutdownRitualModal({
 
             {tomorrowMustDos.length > 0 && (
               <div className="rounded border border-share-outlineVariant/20 bg-share-surfaceContainerLow px-3 py-2">
-                <p className="mb-1 text-[10px] font-medium text-share-onSurfaceVariant">Tomorrow's Must-Dos</p>
+                <p className="mb-1 text-[10px] font-medium text-share-onSurfaceVariant">Tomorrow's top 3</p>
                 {tomorrowMustDos.map(t => (
                   <p key={t.id} className="text-xs text-share-onSurface">• {t.title}</p>
                 ))}
@@ -214,7 +214,7 @@ export function ShutdownRitualModal({
             )}
             {tomorrowMustDos.length === 0 && (
               <p className="text-[10px] text-amber-300/80 italic">
-                ⚠ No Must-Dos set for tomorrow yet — add them in the planner before shutting down.
+                ⚠ No top 3 set for tomorrow yet — add them in the planner before shutting down.
               </p>
             )}
 

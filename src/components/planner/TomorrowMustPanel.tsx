@@ -2,8 +2,8 @@
  * components/planner/TomorrowMustPanel.tsx
  *
  * Rendered at the bottom of the Night Routine section.
- * Lets you pre-set tomorrow's 3 MUSTs the night before so they're waiting
- * when you wake up — keeping the MUST block intentional rather than reactive.
+ * Lets you pre-set tomorrow's top 3 the night before so they're waiting
+ * when you wake up — keeping the day intentional rather than reactive.
  */
 
 import { useState, useRef, useEffect } from 'react'
@@ -22,13 +22,13 @@ function formatDuration(minutes: number): string {
 interface TomorrowMustPanelProps {
   tomorrowDate: string
   tasks: Task[]
-  /** Number of MUSTs on the currently-viewed day, available to copy forward. */
+  /** Number of top-3 tasks on the currently-viewed day, available to copy forward. */
   sourceMustCount?: number
   onAdd: (title: string) => void
   onDelete: (taskId: string) => void
   onEdit: (taskId: string, title: string) => void
   onUpdate: (taskId: string, patch: { scheduledAt?: string; durationMinutes?: number }) => void
-  /** Copy today's MUSTs into tomorrow's empty slots. */
+  /** Copy today's top 3 into tomorrow's empty slots. */
   onCopyFromToday?: () => void
 }
 
@@ -89,7 +89,7 @@ export function TomorrowMustPanel({ tomorrowDate, tasks, sourceMustCount = 0, on
           <Moon className="h-4 w-4 shrink-0 text-indigo-400" />
           <div>
             <p className="text-xs font-semibold text-indigo-300">
-              Set tomorrow's MUSTs
+              Plan tomorrow's top 3
             </p>
             <p className="text-[10px] text-share-onSurfaceVariant/60">
               {tomorrowLabel}, {tasks.length}/{MAX_MUSTS} set
@@ -120,16 +120,16 @@ export function TomorrowMustPanel({ tomorrowDate, tasks, sourceMustCount = 0, on
               type="button"
               onClick={onCopyFromToday}
               className="flex w-full items-center justify-center gap-1.5 rounded border border-indigo-500/40 bg-indigo-500/10 px-2 py-1.5 text-xs font-medium text-indigo-300 hover:bg-indigo-500/20"
-              title="Copy today's MUSTs into tomorrow's empty slots (skips duplicates)"
+              title="Copy today's top 3 into tomorrow's empty slots (skips duplicates)"
             >
               <CopyPlus className="h-3.5 w-3.5" />
-              Copy today's MUSTs
+              Copy today's top 3
             </button>
           )}
 
           {tasks.length === 0 && (
             <p className="text-[11px] italic text-share-onSurfaceVariant/60">
-              No MUSTs set for tomorrow yet. Add up to 3 below.
+              No priorities set for tomorrow yet. Add up to 3 below.
             </p>
           )}
 
@@ -205,7 +205,7 @@ export function TomorrowMustPanel({ tomorrowDate, tasks, sourceMustCount = 0, on
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="What must get done tomorrow?"
+                placeholder="Add a top priority for tomorrow…"
                 className="min-w-0 flex-1 rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-2 py-1 text-xs text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               />
               <button
@@ -221,7 +221,7 @@ export function TomorrowMustPanel({ tomorrowDate, tasks, sourceMustCount = 0, on
 
           {allSet && (
             <p className="pt-1 text-[10px] text-indigo-400/70">
-              All 3 MUSTs locked in. Sleep well.
+              Top 3 locked in. Sleep well.
             </p>
           )}
         </div>

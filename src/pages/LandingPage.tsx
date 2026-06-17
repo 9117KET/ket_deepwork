@@ -19,7 +19,7 @@ const HOW_IT_WORKS_STEPS = [
   {
     icon: "checklist",
     title: "Plan your tasks by priority",
-    body: "Work through six sections top to bottom: 3 MUST Todo tasks, Morning routine, High priority, Medium and Low priority, then Night routine. Each task can carry a time and duration.",
+    body: "Work through six sections top to bottom: your Top 3 for today, Morning routine, High priority, Medium and Low priority, then Night routine. Each task can carry a time and duration.",
   },
   {
     icon: "timer",

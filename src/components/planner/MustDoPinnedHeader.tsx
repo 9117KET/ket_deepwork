@@ -1,9 +1,9 @@
 /**
  * components/planner/MustDoPinnedHeader.tsx
  *
- * Renders the 3 MUST Do tasks as a pinned bar inside the sticky date header.
- * - While any MUST is incomplete: tasks show as interactive checkboxes, always visible.
- * - When ALL are done: collapses to a compact "All MUSTs complete" banner and
+ * Renders the day's top 3 tasks as a pinned bar inside the sticky date header.
+ * - While any is incomplete: tasks show as interactive checkboxes, always visible.
+ * - When ALL are done: collapses to a compact "Top 3 complete" banner and
  *   becomes a regular (non-sticky) scrollable section below.
  *
  * This keeps your daily intentions visible at all times without needing to scroll
@@ -75,7 +75,7 @@ export function MustDoPinnedHeader({ tasks, onToggle, onAdd, onDelete, onUpdate 
           className="flex w-full items-center gap-2 px-3 py-2 text-left"
         >
           <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-          <span className="text-xs font-medium text-emerald-400">All MUSTs complete</span>
+          <span className="text-xs font-medium text-emerald-400">Top 3 complete</span>
           <span className="ml-auto flex items-center gap-2 text-[10px] text-share-onSurfaceVariant/60">
             {rootTasks.length}/{rootTasks.length} done
             {doneExpanded ? <ChevronUp className="h-3.5 w-3.5 text-emerald-600/70" /> : <ChevronDown className="h-3.5 w-3.5 text-emerald-600/70" />}
@@ -168,7 +168,7 @@ export function MustDoPinnedHeader({ tasks, onToggle, onAdd, onDelete, onUpdate 
       >
         <div className="flex items-center gap-2">
           <span className="text-[10px] font-semibold uppercase tracking-wider text-share-onSurfaceVariant">
-            3 MUSTs today
+            Your top 3 for today
           </span>
           {/* Progress pips */}
           <span className="flex gap-1">
@@ -278,7 +278,7 @@ export function MustDoPinnedHeader({ tasks, onToggle, onAdd, onDelete, onUpdate 
         {/* Empty slots */}
         {rootTasks.length === 0 && (
           <p className="text-xs italic text-share-onSurfaceVariant/50 px-1">
-            No MUSTs set — add up to 3 for today.
+            No priorities set — add up to 3 for today.
           </p>
         )}
 
@@ -297,7 +297,7 @@ export function MustDoPinnedHeader({ tasks, onToggle, onAdd, onDelete, onUpdate 
                 if (e.key === 'Enter') handleAdd()
                 if (e.key === 'Escape') { setShowAdd(false); setInput('') }
               }}
-              placeholder="What must get done today?"
+              placeholder="Add a top priority for today…"
               className="min-w-0 flex-1 rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-2 py-1 text-xs text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-share-primary focus:outline-none focus:ring-1 focus:ring-share-primary"
             />
             <button

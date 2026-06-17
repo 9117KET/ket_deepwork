@@ -29,7 +29,7 @@ const SECTIONS = [
     items: [
       [
         'Sections',
-        'Top to bottom: 3 Must-Do tasks (pinned, never overwritten by Fill), Morning routine, High Priority (protect for deep work), Medium / Low priority, Night routine.',
+        'Top to bottom: your Top 3 for today (pinned, never overwritten by Fill), Morning routine, High Priority (protect for deep work), Medium / Low priority, Night routine.',
       ],
       [
         'Time & duration',

@@ -248,7 +248,7 @@ test.describe('Planner — Must Do pinned header', () => {
 
   test('MustDo section renders and add-task works', async ({ page }) => {
     // The MustDoPinnedHeader has an inline add input
-    const mustDoInput = page.locator('[placeholder="Add a must-do task…"], input[placeholder*="must" i]')
+    const mustDoInput = page.locator('input[placeholder*="priority" i], input[placeholder*="must" i]')
     const hasMustDo = await mustDoInput.isVisible({ timeout: 3_000 }).catch(() => false)
 
     if (hasMustDo) {

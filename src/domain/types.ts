@@ -248,7 +248,7 @@ export interface WeeklyStats {
 export const FIXED_SECTIONS: TaskSection[] = [
   {
     id: "mustDo",
-    title: "3 MUST Todo task today",
+    title: "Your top 3 for today",
   },
   {
     id: "morningRoutine",

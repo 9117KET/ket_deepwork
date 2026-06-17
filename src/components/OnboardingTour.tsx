@@ -39,13 +39,13 @@ const TOUR_STEPS: TourStep[] = [
     id: 'fill-day',
     target: 'fill-day',
     title: 'Fill your day in one click',
-    body: '"Fill from last [weekday]" copies your recurring schedule from the same weekday last week. "Copy from yesterday" appears when no prior-week data exists. One click, no duplicates — then trim to what actually matters today. Your 3 Must-Do tasks at the top are pinned separately and do not get overwritten.',
+    body: '"Fill from last [weekday]" copies your recurring schedule from the same weekday last week. "Copy from yesterday" appears when no prior-week data exists. One click, no duplicates — then trim to what actually matters today. Your Top 3 for today at the top are pinned separately and do not get overwritten.',
   },
   {
     id: 'tasks-section',
     target: 'tasks-section',
     title: 'Task sections',
-    body: 'Work top to bottom: 3 Must-Do tasks → Morning routine → High Priority (protect this for deep work) → Medium / Low priority → Night routine. Right-click or tap ⋮ on any task to: edit, add above/below, add subtask, mark as shallow, move to Not-Doing, or abandon. Completing a parent auto-completes all subtasks. Once completed shallow tasks exceed 2 h, a warning appears to guard your deep work blocks.',
+    body: 'Work top to bottom: your Top 3 for today → Morning routine → High Priority (protect this for deep work) → Medium / Low priority → Night routine. Right-click or tap ⋮ on any task to: edit, add above/below, add subtask, mark as shallow, move to Not-Doing, or abandon. Completing a parent auto-completes all subtasks. Once completed shallow tasks exceed 2 h, a warning appears to guard your deep work blocks.',
   },
   {
     id: 'one-thing',
@@ -75,7 +75,7 @@ const TOUR_STEPS: TourStep[] = [
     id: 'done',
     target: null,
     title: "You're all set",
-    body: 'Daily rhythm: wake-up check-in → set today\'s ONE Thing → check off habits → fill your 3 Must-Dos → protect your High Priority block for deep work → log timer sessions. Weekly: review the scoreboard. Monthly: complete the 8-question review from the amber banner. Use Help anytime to replay this tour. Build every day with intention.',
+    body: 'Daily rhythm: wake-up check-in → set today\'s ONE Thing → check off habits → fill your Top 3 for today → protect your High Priority block for deep work → log timer sessions. Weekly: review the scoreboard. Monthly: complete the 8-question review from the amber banner. Use Help anytime to replay this tour. Build every day with intention.',
   },
 ]
 
