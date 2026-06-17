@@ -214,6 +214,28 @@ export function mergeRemoteDayState(local: DayState, remote: DayState, syncedTas
   }
 }
 
+/**
+ * Read-side recency guard, mirroring the server-side `isStaleWrite` guard.
+ *
+ * Returns true when an incoming remote day row must NOT be applied because this
+ * device already holds a strictly fresher copy: applying a stale/empty remote
+ * row would let `mergeRemoteDayState` delete tasks the user can still see (the
+ * "yesterday's todos vanished on refresh" bug). Last-write-wins by edit time,
+ * the same policy the server uses on writes.
+ *
+ * - No local copy → never stale (the remote is all we have, apply it).
+ * - Missing timestamps default to 0, so a backend that never stored `updatedAt`
+ *   makes local always win — safe: no day is ever wiped.
+ */
+export function isRemoteDayStale(
+  hasLocal: boolean,
+  localUpdatedAt: number | undefined,
+  remoteUpdatedAt: number | undefined,
+): boolean {
+  if (!hasLocal) return false
+  return (localUpdatedAt ?? 0) > (remoteUpdatedAt ?? 0)
+}
+
 // ─── Sync payload builders (shared by debounced sync and hide/unload flush) ──
 
 /**
@@ -485,7 +507,7 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
         // fresher local tasks. Keep local; our pending sync will reconcile.
         const remoteUpdatedAt = (doc as { updatedAt?: number }).updatedAt ?? 0
         const localUpdatedAt = lastModified.current.get(date) ?? 0
-        if (base[date] && localUpdatedAt > remoteUpdatedAt) {
+        if (isRemoteDayStale(Boolean(base[date]), localUpdatedAt, remoteUpdatedAt)) {
           syncDebug("apply: SKIP (local fresher)", date, "local=", localUpdatedAt, "remote=", remoteUpdatedAt)
           continue
         }
