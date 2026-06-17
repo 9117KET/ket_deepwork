@@ -25,6 +25,7 @@ const LEGACY_STORAGE_KEY = "ket_deepwork_state_v1"
 const PENDING_DATES_KEY = "deepblock_pending_dates_v1"
 const PENDING_SETTINGS_KEY = "deepblock_pending_settings_v1"
 const SYNCED_TASK_IDS_KEY = "deepblock_synced_task_ids_v1"
+const LAST_MODIFIED_KEY = "deepblock_last_modified_v1"
 const SCHEMA_VERSION = 1
 
 interface PersistedStateV1 {
@@ -341,6 +342,34 @@ function writePendingSettings(pending: boolean) {
   } catch { /* storage unavailable */ }
 }
 
+// ─── Per-day last-modified timestamps (survive reloads) ──────────────────────
+// The logical edit time (ms) of each day's last LOCAL change. Persisted so the
+// read-merge can tell, after a reload, whether the server's row for a day is
+// older than the copy this device already has - mirroring the server-side
+// `isStaleWrite` guard on the read side so a stale/empty remote row can't wipe
+// fresher local data on hydration. Without this, every refresh re-applied the
+// server's version of an already-synced past day with no recency check, which
+// could silently delete a full day's tasks if the server row was stale.
+
+function readLastModified(): Map<string, number> {
+  if (typeof window === "undefined") return new Map()
+  const raw = window.localStorage.getItem(LAST_MODIFIED_KEY)
+  if (!raw) return new Map()
+  try {
+    const obj = JSON.parse(raw) as Record<string, number>
+    return new Map(Object.entries(obj).filter(([, ms]) => typeof ms === "number"))
+  } catch {
+    return new Map()
+  }
+}
+
+function writeLastModified(map: Map<string, number>) {
+  if (typeof window === "undefined") return
+  try {
+    window.localStorage.setItem(LAST_MODIFIED_KEY, JSON.stringify(Object.fromEntries(map)))
+  } catch { /* storage unavailable */ }
+}
+
 // ─── Synced task ID snapshots (per day) ──────────────────────────────────────
 // Tracks which task IDs were present in this day the last time it was
 // reconciled with the server, so `mergeRemoteDayState` can tell "task I just
@@ -391,7 +420,9 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
   const dirtyGenerations = useRef<Map<string, number>>(new Map())
   // Per-date logical edit time (ms). Stamped onto each synced day so the server
   // can reject a write whose snapshot predates a fresher one that won the race.
-  const lastModified = useRef<Map<string, number>>(new Map())
+  // Persisted across reloads so the read-merge can also reject a stale remote
+  // row that would otherwise wipe fresher local data on hydration.
+  const lastModified = useRef<Map<string, number>>(readLastModified())
   // Echo-suppression window: ignore reactive updates for 3s after we clear a dirty flag
   const echoSuppressUntil = useRef<Map<string, number>>(new Map())
   const ECHO_SUPPRESS_MS = 3000
@@ -446,6 +477,16 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
         const suppressUntil = echoSuppressUntil.current.get(date)
         if (suppressUntil && Date.now() < suppressUntil) {
           syncDebug("apply: SKIP (echo-suppress)", date, "for", suppressUntil - Date.now(), "ms")
+          continue
+        }
+        // Recency guard (mirrors the server-side isStaleWrite guard on the read
+        // side). If this device's persisted last-edit time for the day is newer
+        // than the remote row's, the remote is stale - applying it could wipe
+        // fresher local tasks. Keep local; our pending sync will reconcile.
+        const remoteUpdatedAt = (doc as { updatedAt?: number }).updatedAt ?? 0
+        const localUpdatedAt = lastModified.current.get(date) ?? 0
+        if (base[date] && localUpdatedAt > remoteUpdatedAt) {
+          syncDebug("apply: SKIP (local fresher)", date, "local=", localUpdatedAt, "remote=", remoteUpdatedAt)
           continue
         }
         const dayState = docToDayState(doc as Record<string, unknown>)
@@ -660,7 +701,10 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
           )
         }
       }
-      if (datesChanged) writePendingDates(pendingDates.current)
+      if (datesChanged) {
+        writePendingDates(pendingDates.current)
+        writeLastModified(lastModified.current)
+      }
 
       const settingsChanged = (
         next.habitDefinitions !== prev.habitDefinitions ||
