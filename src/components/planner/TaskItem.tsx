@@ -328,11 +328,11 @@ export function TaskItem({
                 const v = e.target.value === '' ? undefined : Number(e.target.value)
                 onUpdateTask?.({ durationMinutes: v })
               }}
-              className="w-16 rounded border border-share-outlineVariant/40 bg-share-surfaceContainer px-1 py-0.5 text-xs tabular-nums text-share-onSurface"
+              className="w-24 rounded border border-share-outlineVariant/40 bg-share-surfaceContainer px-1 py-0.5 text-xs tabular-nums text-share-onSurface"
               aria-label="Task duration"
               title="Duration (optional)"
             >
-              <option value="">dur</option>
+              <option value="">Duration</option>
               {task.durationMinutes != null && !DURATION_OPTIONS.includes(task.durationMinutes) && (
                 <option value={task.durationMinutes}>{formatDuration(task.durationMinutes)}</option>
               )}

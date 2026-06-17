@@ -176,10 +176,10 @@ export function TomorrowMustPanel({ tomorrowDate, tasks, sourceMustCount = 0, on
                 <select
                   value={task.durationMinutes ?? ''}
                   onChange={e => onUpdate(task.id, { durationMinutes: e.target.value === '' ? undefined : Number(e.target.value) })}
-                  className="w-16 rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-1 py-0.5 text-xs tabular-nums text-share-onSurface"
+                  className="w-24 rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-1 py-0.5 text-xs tabular-nums text-share-onSurface"
                   title="Duration"
                 >
-                  <option value="">dur</option>
+                  <option value="">Duration</option>
                   {DURATION_OPTIONS.map(m => <option key={m} value={m}>{formatDuration(m)}</option>)}
                 </select>
               </span>
