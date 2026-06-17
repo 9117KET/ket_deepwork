@@ -26,6 +26,7 @@ import { CalendarCallbackPage } from "./pages/CalendarCallbackPage";
 import { PrivacyPage } from "./pages/PrivacyPage";
 import { TermsPage } from "./pages/TermsPage";
 import { SupportPage } from "./pages/SupportPage";
+import { RestorePage } from "./pages/RestorePage";
 
 function App() {
   const [searchParams] = useSearchParams();
@@ -175,6 +176,7 @@ function App() {
       <Route path="/privacy" element={<PrivacyPage />} />
       <Route path="/terms" element={<TermsPage />} />
       <Route path="/support" element={<SupportPage />} />
+      <Route path="/restore" element={<RestorePage />} />
     </Routes>
   );
 }
