@@ -24,6 +24,13 @@ interface Props {
   isToday: boolean
   /** Current minutes since midnight (already offset-adjusted by the caller). */
   nowMinutes: number
+  /**
+   * Capacity-aware block windows (Morning / High / Medium / Low / Night) drawn as
+   * labelled background bands so the day's structure is visible even for tasks
+   * without an explicit time. `over` tints the band amber (work exceeds its window).
+   * Times are minutes since midnight; bands ending past midnight are handled.
+   */
+  blocks?: { sectionId: string; startMin: number; endMin: number; label: string; over?: boolean }[]
 }
 
 const PX_PER_MIN = 0.9 // 54px per hour — compact but legible in the sidebar
@@ -62,6 +69,13 @@ function formatClock(minutes: number): string {
   const period = h24 >= 12 ? "PM" : "AM"
   const h12 = h24 % 12 === 0 ? 12 : h24 % 12
   return `${h12}:${String(m).padStart(2, "0")} ${period}`
+}
+
+function formatDur(mins: number): string {
+  const h = Math.floor(mins / 60)
+  const m = mins % 60
+  if (h <= 0) return `${m}m`
+  return m === 0 ? `${h}h` : `${h}h ${m}m`
 }
 
 /**
@@ -104,8 +118,8 @@ function assignLanes(items: { task: Task; startMin: number; endMin: number }[]):
   return result
 }
 
-export function DayTimeline({ tasks, wakeTime, sleepTarget, isToday, nowMinutes }: Props) {
-  const { positioned, startMin, endMin, hourMarks } = useMemo(() => {
+export function DayTimeline({ tasks, wakeTime, sleepTarget, isToday, nowMinutes, blocks }: Props) {
+  const { positioned, startMin, endMin, hourMarks, bands, sleep } = useMemo(() => {
     const scheduled = tasks
       .filter((t) => !t.parentId && t.scheduledAt != null && t.durationMinutes != null)
       .map((t) => {
@@ -122,12 +136,25 @@ export function DayTimeline({ tasks, wakeTime, sleepTarget, isToday, nowMinutes 
     let sleepMin = rawSleep == null ? 24 * 60 : rawSleep
     if (sleepMin <= wakeMin) sleepMin += 24 * 60
 
-    // Expand the window so any task scheduled outside wake/sleep still fits.
+    // Normalise a wrapped clock minute onto the wake-anchored axis (post-midnight → +1440).
+    const norm = (m: number) => (m < wakeMin ? m + 1440 : m)
+    const normBands = (blocks ?? []).map((b) => {
+      const bs = norm(b.startMin)
+      let be = norm(b.endMin)
+      if (be <= bs) be += 1440
+      return { sectionId: b.sectionId, label: b.label, over: b.over ?? false, startMin: bs, endMin: be }
+    })
+
+    // Expand the window so any task or band outside wake/sleep still fits.
     let lo = wakeMin
     let hi = sleepMin
     for (const s of scheduled) {
       if (s.startMin < lo) lo = s.startMin
       if (s.endMin > hi) hi = s.endMin
+    }
+    for (const b of normBands) {
+      if (b.startMin < lo) lo = b.startMin
+      if (b.endMin > hi) hi = b.endMin
     }
     // Snap to whole hours for clean gridlines.
     const start = Math.floor(lo / 60) * 60
@@ -141,8 +168,10 @@ export function DayTimeline({ tasks, wakeTime, sleepTarget, isToday, nowMinutes 
       startMin: start,
       endMin: end,
       hourMarks: marks,
+      bands: normBands,
+      sleep: { startMin: sleepMin, endMin: wakeMin + 1440, durMin: wakeMin + 1440 - sleepMin },
     }
-  }, [tasks, wakeTime, sleepTarget])
+  }, [tasks, wakeTime, sleepTarget, blocks])
 
   const totalMin = Math.max(60, endMin - startMin)
   const height = totalMin * PX_PER_MIN
@@ -155,12 +184,38 @@ export function DayTimeline({ tasks, wakeTime, sleepTarget, isToday, nowMinutes 
         Timeline
       </p>
 
-      {positioned.length === 0 ? (
+      {positioned.length === 0 && bands.length === 0 ? (
         <p className="text-share-onSurfaceVariant/70 py-2">
           No scheduled tasks yet. Set a time and duration on a task to see it here.
         </p>
       ) : (
         <div className="relative pl-12" style={{ height }}>
+          {/* Block windows (background bands) — the day's planned structure */}
+          {bands.map((b) => {
+            const top = (b.startMin - startMin) * PX_PER_MIN
+            const h = Math.max(0, (b.endMin - b.startMin) * PX_PER_MIN)
+            return (
+              <div
+                key={b.sectionId}
+                className={`absolute left-0 right-0 rounded border ${
+                  b.over
+                    ? "border-amber-500/30 bg-amber-500/[0.06]"
+                    : "border-share-outlineVariant/10 bg-share-surfaceContainerHighest/40"
+                }`}
+                style={{ top, height: h }}
+                title={`${b.label}: ${formatClock(b.startMin)} – ${formatClock(b.endMin)}${b.over ? " (over capacity)" : ""}`}
+              >
+                <span
+                  className={`absolute right-1 top-0.5 text-[8px] uppercase tracking-wide ${
+                    b.over ? "text-amber-400/80" : "text-share-onSurfaceVariant/40"
+                  }`}
+                >
+                  {b.label}
+                </span>
+              </div>
+            )
+          })}
+
           {/* Hour gridlines + labels */}
           {hourMarks.map((m) => {
             const top = (m - startMin) * PX_PER_MIN
@@ -223,6 +278,15 @@ export function DayTimeline({ tasks, wakeTime, sleepTarget, isToday, nowMinutes 
           )}
         </div>
       )}
+
+      {/* Sleep window — compact, not to scale, so the day stays legible */}
+      <div className="mt-2 flex items-center gap-1.5 rounded border border-indigo-500/20 bg-indigo-500/[0.07] px-2 py-1 text-[10px] text-indigo-300/80">
+        <span aria-hidden="true">🌙</span>
+        <span className="tabular-nums">
+          Sleep {formatClock(sleep.startMin)} – {formatClock(sleep.endMin)}
+        </span>
+        <span className="ml-auto tabular-nums opacity-70">{formatDur(sleep.durMin)}</span>
+      </div>
     </div>
   )
 }
