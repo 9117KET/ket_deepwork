@@ -63,11 +63,29 @@ export function useDayBlockEditor(
     return getDefaultBlockDurations(dayState.wakeTime, dayState.sleepTarget);
   }, [dayState, blockDurationRatios]);
 
-  // Per-day timeline blocks derived from effective durations.
+  // Total time allocated to today's Top 3 (mustDo) tasks. These are executed
+  // inside the high-priority deep-work block, so their duration is folded into
+  // that block's window (pushing later blocks later) rather than being scheduled
+  // on their own. Done tasks are still counted so the timeline stays stable as
+  // the day progresses.
+  const mustDoMinutes = useMemo(
+    () =>
+      (dayState.tasks ?? [])
+        .filter((t) => t.sectionId === 'mustDo' && !t.parentId && t.durationMinutes)
+        .reduce((sum, t) => sum + (t.durationMinutes ?? 0), 0),
+    [dayState.tasks],
+  );
+
+  // Per-day timeline blocks derived from effective durations. The high-priority
+  // block is extended by the Top 3 total so its window reflects that work.
   const computedBlocks = useMemo(() => {
     if (!dayState.wakeTime || !dayState.sleepTarget || !effectiveBlockDurations) return undefined;
-    return computeBlocksFromDurations(dayState.wakeTime, effectiveBlockDurations);
-  }, [dayState.wakeTime, dayState.sleepTarget, effectiveBlockDurations]);
+    const timelineDurations =
+      mustDoMinutes > 0
+        ? { ...effectiveBlockDurations, highPriority: effectiveBlockDurations.highPriority + mustDoMinutes }
+        : effectiveBlockDurations;
+    return computeBlocksFromDurations(dayState.wakeTime, timelineDurations);
+  }, [dayState.wakeTime, dayState.sleepTarget, effectiveBlockDurations, mustDoMinutes]);
 
   // Modal state: auto-open when today has no wake time; "Edit schedule" forces it open.
   const [daySetupOpen, setDaySetupOpen] = useState(false);
