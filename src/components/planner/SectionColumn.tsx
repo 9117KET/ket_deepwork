@@ -67,6 +67,12 @@ interface SectionColumnProps {
   plannedMinutes?: number
   /** Capacity-aware allocated window minutes for this section's time block. */
   windowMinutes?: number
+  /**
+   * True when auto-sizing deliberately compressed this block to its minimum to make
+   * the day fit. Its planned > window is then expected (not an alarm), so the badge
+   * reads as a neutral "squeezed" pill rather than amber "over capacity".
+   */
+  compressed?: boolean
 }
 
 type DropPosition = 'above' | 'below'
@@ -110,6 +116,7 @@ export function SectionColumn({
   overloadThreshold,
   plannedMinutes,
   windowMinutes,
+  compressed = false,
 }: SectionColumnProps) {
   const [dropTarget, setDropTarget] = useState<{ index: number; position: DropPosition } | null>(
     null,
@@ -290,9 +297,19 @@ export function SectionColumn({
                   <AlertTriangle className="h-3 w-3" /> {incompleteRootCount} tasks
                 </span>
               ) : null}
-              {overCapacity && (
+              {overCapacity && compressed && (
+                <span
+                  className="flex items-center gap-1 rounded bg-teal-500/15 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-teal-300"
+                  aria-label={`Squeezed: ${formatBlockMins(plannedMinutes!)} of work fitted into a ${formatBlockMins(windowMinutes!)} window so the day still makes bedtime`}
+                  title={`Squeezed to fit: ${formatBlockMins(plannedMinutes!)} of work in a ${formatBlockMins(windowMinutes!)} window so the day still makes bedtime`}
+                >
+                  squeezed {formatBlockMins(windowMinutes!)}
+                </span>
+              )}
+              {overCapacity && !compressed && (
                 <span
                   className="flex items-center gap-1 rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-amber-300"
+                  aria-label={`Over capacity: ${formatBlockMins(plannedMinutes!)} of work for a ${formatBlockMins(windowMinutes!)} window — trim it or the day runs later`}
                   title={`Planned ${formatBlockMins(plannedMinutes!)} of work for a ${formatBlockMins(windowMinutes!)} window — trim it or the day runs later`}
                 >
                   <AlertTriangle className="h-3 w-3" /> {formatBlockMins(plannedMinutes!)} / {formatBlockMins(windowMinutes!)}

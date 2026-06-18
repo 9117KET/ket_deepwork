@@ -8,6 +8,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import {
+  DEFAULT_TASK_MINUTES_BY_SECTION,
   FIXED_SECTIONS,
   type AppState,
   type BlockDurations,
@@ -90,12 +91,14 @@ export function useDayBlockEditor(
   // inside the high-priority deep-work block, so their duration is folded into
   // that block's window (pushing later blocks later) rather than being scheduled
   // on their own. Done tasks are still counted so the timeline stays stable as
-  // the day progresses.
+  // the day progresses. Tasks without an explicit duration use the same per-section
+  // default as computePlannedMinutesBySection, so the note and the manual-override
+  // fold agree with the capacity-aware sizing (which already reserves that default).
   const mustDoMinutes = useMemo(
     () =>
       (dayState.tasks ?? [])
-        .filter((t) => t.sectionId === 'mustDo' && !t.parentId && t.durationMinutes)
-        .reduce((sum, t) => sum + (t.durationMinutes ?? 0), 0),
+        .filter((t) => t.sectionId === 'mustDo' && !t.parentId)
+        .reduce((sum, t) => sum + (t.durationMinutes ?? DEFAULT_TASK_MINUTES_BY_SECTION.mustDo), 0),
     [dayState.tasks],
   );
 

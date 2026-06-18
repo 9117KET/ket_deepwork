@@ -281,7 +281,19 @@ export function DayPlanner({
     return map;
   }, [computedBlocks]);
 
+  // Which flex blocks auto-sizing squeezed to their minimum to make the day fit.
+  // Only meaningful in auto mode — under a manual override the windows are the
+  // user's own, so an over-capacity block is legitimate feedback, not a squeeze.
+  const compressedBySection = useMemo<Partial<Record<TaskSectionId, boolean>>>(() => {
+    if (isManualOverride || !capacity) return {};
+    return {
+      mediumPriority: capacity.compressed.mediumPriority,
+      lowPriority: capacity.compressed.lowPriority,
+    };
+  }, [isManualOverride, capacity]);
+
   // Block windows for the timeline's background bands + whether each overflows its planned work.
+  // A deliberately-squeezed block isn't flagged "over" — the day-level banner owns that story.
   const timelineBlocks = useMemo(() => {
     if (!computedBlocks) return undefined;
     const shortLabels: Partial<Record<TaskSectionId, string>> = {
@@ -296,20 +308,22 @@ export function DayPlanner({
         startMin: b.start,
         endMin: b.end,
         label: shortLabels[sid] ?? sid,
-        over: planned != null && planned > win + 5,
+        over: planned != null && planned > win + 5 && !compressedBySection[sid],
       };
     });
-  }, [computedBlocks, plannedBySection]);
+  }, [computedBlocks, plannedBySection, compressedBySection]);
 
   // Short note shown next to the High Priority window: how much of it is reserved
-  // for today's Top 3 tasks (e.g. "+1h30m Top 3").
+  // for today's Top 3 tasks. In auto mode the window already absorbed that time
+  // (capacity sizing folds Top 3 into High), so it reads "incl."; under a manual
+  // override the fold is added on top of the user's raw number, so it reads "+".
   const highPriorityTop3Note = useMemo(() => {
-    if (mustDoMinutes <= 0) return null;
+    if (shareMode || mustDoMinutes <= 0) return null;
     const h = Math.floor(mustDoMinutes / 60);
     const m = mustDoMinutes % 60;
     const dur = h > 0 ? `${h}h${m > 0 ? `${m}m` : ''}` : `${m}m`;
-    return `+${dur} Top 3`;
-  }, [mustDoMinutes]);
+    return `${isManualOverride ? '+' : 'incl. '}${dur} Top 3`;
+  }, [mustDoMinutes, isManualOverride, shareMode]);
 
   const { taskIdsDueNow, activeSectionIds, isSleepTimeNow, timeframeLabelsBySection } =
     useTimeAwareness(appState, timeOffsetMinutes, computedBlocks);
@@ -925,8 +939,11 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
               </div>
             )
           })()}
-          {/* Day capacity / bedtime readout — how the plan fits the wake→lights-out window */}
-          {!shareMode && capacity && capacity.plannedMinutes > 0 && (() => {
+          {/* Day capacity / bedtime readout — how the plan fits the wake→lights-out window.
+              Suppressed under a manual override: `capacity` reflects the AUTO plan, so its
+              "in bed by" time would contradict the user's hand-sized timeline. The manual
+              notice below takes its place. */}
+          {!shareMode && !isManualOverride && capacity && capacity.plannedMinutes > 0 && (() => {
             const fmtClock = (min: number) => {
               const x = ((min % 1440) + 1440) % 1440
               const h24 = Math.floor(x / 60)
@@ -958,7 +975,9 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
                       Bed slips to <span className="tabular-nums">{fmtClock(capacity.projectedLightsOutMin)}</span> — {fmtDur(capacity.overByMinutes)} over capacity
                     </p>
                     <p className="mt-0.5 text-amber-300/80">
-                      {squeezed ? `${squeezed} already squeezed to the minimum. ` : ''}Trim or defer Low/Medium tasks to make bed on time.
+                      {squeezed
+                        ? `${squeezed} already squeezed to the minimum — trim or defer your remaining tasks (Top 3 / High Priority included) to make bed on time.`
+                        : 'Trim or defer tasks to make bed on time.'}
                     </p>
                   </div>
                 </div>
@@ -1046,6 +1065,7 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
               }
               plannedMinutes={shareMode ? undefined : plannedBySection?.[section.id as keyof BlockDurations]}
               windowMinutes={shareMode ? undefined : blockWindowBySection[section.id]}
+              compressed={shareMode ? false : Boolean(compressedBySection[section.id])}
               headerAction={(() => {
                 if (shareMode || !effectiveBlockDurations) return undefined;
                 const sId = section.id as keyof BlockDurations;
