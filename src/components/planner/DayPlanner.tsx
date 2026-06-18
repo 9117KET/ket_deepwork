@@ -299,18 +299,22 @@ export function DayPlanner({
     const shortLabels: Partial<Record<TaskSectionId, string>> = {
       morningRoutine: 'Morning', highPriority: 'High', mediumPriority: 'Medium', lowPriority: 'Low', nightRoutine: 'Night',
     };
-    return computedBlocks.map((b) => {
-      const sid = b.sectionIds[0]!;
-      const win = b.end >= b.start ? b.end - b.start : b.end + 1440 - b.start;
-      const planned = plannedBySection?.[sid as keyof BlockDurations];
-      return {
-        sectionId: sid,
-        startMin: b.start,
-        endMin: b.end,
-        label: shortLabels[sid] ?? sid,
-        over: planned != null && planned > win + 5 && !compressedBySection[sid],
-      };
-    });
+    return computedBlocks
+      // Demand-first sizing collapses empty work blocks to 0 width; drop them so
+      // the timeline doesn't draw a label-less (or accidentally day-long) band.
+      .filter((b) => (b.end >= b.start ? b.end - b.start : b.end + 1440 - b.start) > 0)
+      .map((b) => {
+        const sid = b.sectionIds[0]!;
+        const win = b.end >= b.start ? b.end - b.start : b.end + 1440 - b.start;
+        const planned = plannedBySection?.[sid as keyof BlockDurations];
+        return {
+          sectionId: sid,
+          startMin: b.start,
+          endMin: b.end,
+          label: shortLabels[sid] ?? sid,
+          over: planned != null && planned > win + 5 && !compressedBySection[sid],
+        };
+      });
   }, [computedBlocks, plannedBySection, compressedBySection]);
 
   // Short note shown next to the High Priority window: how much of it is reserved
@@ -961,11 +965,14 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
               capacity.compressed.lowPriority && 'Low',
               capacity.compressed.mediumPriority && 'Medium',
             ].filter(Boolean).join(' & ')
-            // Actual planned task work (not the block-window sum, which ≈ the whole awake window).
+            // Actual planned task work (the raw task minutes the user entered).
             const workMinutes = plannedBySection
               ? Object.values(plannedBySection).reduce((a, b) => a + (b ?? 0), 0)
               : 0
-            const freeMinutes = Math.max(0, capacity.awakeMinutes - workMinutes)
+            // Demand-first sizing leaves real slack before bedtime; that slack is the
+            // user's to spend on side quests or earlier sleep. Use the block-derived
+            // value so it agrees with the projected lights-out time above.
+            const freeMinutes = capacity.freeMinutes
             if (capacity.overByMinutes > 0) {
               return (
                 <div className="flex items-start gap-2 rounded-md border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
@@ -988,7 +995,7 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
                 <Moon className="h-4 w-4 shrink-0 text-teal-400/80" />
                 <span>
                   In bed by <span className="font-semibold tabular-nums text-teal-100">{fmtClock(capacity.projectedLightsOutMin)}</span>
-                  <span className="text-teal-300/70"> · {fmtDur(workMinutes)} planned{freeMinutes > 0 ? `, ${fmtDur(freeMinutes)} free` : ''}{squeezed ? ` · ${squeezed} trimmed to fit` : ''}</span>
+                  <span className="text-teal-300/70"> · {fmtDur(workMinutes)} planned{freeMinutes > 0 ? `, ${fmtDur(freeMinutes)} free for side quests or rest` : ''}{squeezed ? ` · ${squeezed} trimmed to fit` : ''}</span>
                 </span>
               </div>
             )

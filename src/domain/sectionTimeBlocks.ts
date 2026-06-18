@@ -173,14 +173,24 @@ export interface CapacityResult {
 }
 
 /**
- * Capacity-aware, bedtime-anchored block sizing (hybrid).
+ * Capacity-aware, bedtime-anchored block sizing (demand-first).
  *
- * Starts from proportional floors (the ratio template if supplied, else the
- * wake/sleep default split) and expands each block to fit the minutes its tasks
- * actually need. If the focus blocks then overflow the awake window, Low priority
- * is compressed to its minimum first, then Medium — High/Top 3 and the sleep
- * window (lights-out → wake) are never auto-shrunk. Any remainder is reported as
- * `overByMinutes` (the plan won't fit before lights-out → "cut something").
+ * Each work block (High / Medium / Low) sizes to the minutes its tasks actually
+ * need — never the other way round. An empty work block collapses to 0 (and is
+ * dropped from the timeline); a populated one gets at least
+ * NONEMPTY_BLOCK_MIN_MINUTES so slivers stay readable. High already includes the
+ * Top 3 (folded in by computePlannedMinutesBySection). Morning & Night are
+ * routines, so they keep a habit floor and expand to fit their own tasks.
+ *
+ * Leftover awake time (surplus) cascades into the *populated* work blocks by
+ * priority — High first, then Medium, then Low — but only up to each block's
+ * realistic cap (BLOCK_SURPLUS_CAP). Whatever is left after the caps is NOT
+ * crammed into a block: it stays free, surfacing downstream as side-quest time
+ * and an earlier projected bedtime (more sleep).
+ *
+ * If the tasks themselves overflow the awake window, Low is compressed to its
+ * minimum first, then Medium — High/Top 3 and the sleep window are never
+ * auto-shrunk. Any remainder is reported as `overByMinutes` ("cut something").
  */
 export function computeCapacityAwareBlocks(
   wakeTimeHHMM: string,
@@ -191,27 +201,42 @@ export function computeCapacityAwareBlocks(
   const awake = computeAwakeMinutes(wakeTimeHHMM, sleepTargetHHMM)
   const floors = floorsOverride ?? getDefaultBlockDurations(wakeTimeHHMM, sleepTargetHHMM)
 
-  // Morning & night expand to fit their routines but never below their floor.
+  // Morning & night are routines: keep a habit floor, expand to fit their tasks.
   const morning = Math.max(floors.morningRoutine, planned.morningRoutine)
   const night = Math.max(floors.nightRoutine, planned.nightRoutine)
   const focusCapacity = Math.max(0, awake - morning - night)
 
-  // Expand focus blocks to fit tasks (never below proportional floor).
-  const high = Math.max(floors.highPriority, planned.highPriority)
-  let medium = Math.max(floors.mediumPriority, planned.mediumPriority)
-  let low = Math.max(floors.lowPriority, planned.lowPriority)
+  // Demand-first: a work block sizes to its tasks (min width when non-empty,
+  // 0 — and therefore hidden — when empty). Floors no longer reserve work time.
+  const base = (p: number) => (p > 0 ? Math.max(NONEMPTY_BLOCK_MIN_MINUTES, p) : 0)
+  let high = base(planned.highPriority)
+  let medium = base(planned.mediumPriority)
+  let low = base(planned.lowPriority)
 
   const compressed = { mediumPriority: false, lowPriority: false }
-  let over = high + medium + low - focusCapacity
+  let surplus = focusCapacity - (high + medium + low)
 
-  // Compress Low to its minimum first, then Medium. High/Top 3 are protected.
-  if (over > 0) {
-    const cut = Math.min(over, low - BLOCK_MIN_MINUTES.lowPriority)
-    if (cut > 0) { low -= cut; over -= cut; compressed.lowPriority = true }
-  }
-  if (over > 0) {
-    const cut = Math.min(over, medium - BLOCK_MIN_MINUTES.mediumPriority)
-    if (cut > 0) { medium -= cut; over -= cut; compressed.mediumPriority = true }
+  if (surplus < 0) {
+    // Over capacity: compress Low to its minimum first, then Medium. High protected.
+    let over = -surplus
+    const cutLow = Math.min(over, Math.max(0, low - BLOCK_MIN_MINUTES.lowPriority))
+    if (cutLow > 0) { low -= cutLow; over -= cutLow; compressed.lowPriority = true }
+    const cutMed = Math.min(over, Math.max(0, medium - BLOCK_MIN_MINUTES.mediumPriority))
+    if (cutMed > 0) { medium -= cutMed; over -= cutMed; compressed.mediumPriority = true }
+    // Any remaining `over` shows up as overByMinutes below (plan won't fit).
+  } else if (surplus > 0) {
+    // Under capacity: cascade leftover into POPULATED work blocks by priority, each
+    // only up to its cap. Empty blocks stay 0. Whatever remains after the caps is
+    // left free (becomes side-quest time / an earlier bedtime downstream).
+    const pad = (cur: number, cap: number) => {
+      if (cur <= 0 || surplus <= 0) return cur
+      const grow = Math.min(surplus, Math.max(0, cap - cur))
+      surplus -= grow
+      return cur + grow
+    }
+    high = pad(high, BLOCK_SURPLUS_CAP.highPriority)
+    medium = pad(medium, BLOCK_SURPLUS_CAP.mediumPriority)
+    low = pad(low, BLOCK_SURPLUS_CAP.lowPriority)
   }
 
   const durations: BlockDurations = {
@@ -306,6 +331,22 @@ export const BLOCK_MIN_MINUTES: Record<keyof BlockDurations, number> = {
   mediumPriority: 15,
   lowPriority:    15,
   nightRoutine:   15,
+}
+
+/** Minimum width for a work block that has at least one task (keeps slivers
+ *  readable). An empty work block stays at 0 and is hidden from the timeline. */
+export const NONEMPTY_BLOCK_MIN_MINUTES = 30
+
+/**
+ * Realistic per-block ceilings for surplus padding (minutes). A populated work
+ * block grows to fit its tasks, then absorbs leftover awake time only up to this
+ * cap; anything beyond stays free (side quests / earlier sleep). High = Cal
+ * Newport's ~4h deep-work ceiling. Tunable (could later vary by depthPhilosophy).
+ */
+export const BLOCK_SURPLUS_CAP: Record<'highPriority' | 'mediumPriority' | 'lowPriority', number> = {
+  highPriority:   4 * 60, // 240
+  mediumPriority: 2 * 60, // 120
+  lowPriority:    1 * 60, // 60
 }
 
 export const SLEEP_WARN_MINUTES = 7 * 60   // 420 min -- warn below 7h
@@ -497,6 +538,8 @@ export function getSectionTimeframeLabel(
   if (blocks && blocks.length > 0) {
     for (const block of blocks) {
       if (block.sectionIds.includes(sectionId)) {
+        // Empty (demand-first 0-minute) blocks have no window to show.
+        if (block.start === block.end) return null
         return `${formatTimeOfDay(block.start)} - ${formatTimeOfDay(block.end)}`
       }
     }
