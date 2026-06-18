@@ -180,10 +180,6 @@ export function DayTimeline({ tasks, wakeTime, sleepTarget, isToday, nowMinutes,
 
   return (
     <div className="rounded-lg border border-share-outlineVariant/25 bg-share-surfaceContainerLow p-3 text-xs">
-      <p className="text-[10px] uppercase tracking-widest text-share-onSurfaceVariant/60 font-semibold mb-2">
-        Timeline
-      </p>
-
       {positioned.length === 0 && bands.length === 0 ? (
         <p className="text-share-onSurfaceVariant/70 py-2">
           No scheduled tasks yet. Set a time and duration on a task to see it here.

@@ -381,10 +381,14 @@ function wrapMinutes(minutes: number): number {
   return m < 0 ? m + 24 * 60 : m
 }
 
-/** Parse "HH:MM" string to minutes since midnight. */
+/** Parse "HH:MM" string to minutes since midnight. Malformed parts fall back to 0
+ *  so a corrupt/legacy time string can't propagate NaN through every downstream
+ *  block computation (mirrors DayTimeline's own guard). */
 function parseHHMM(hhmm: string): number {
-  const [h, m] = hhmm.split(':').map(Number)
-  return (h ?? 0) * 60 + (m ?? 0)
+  const [h, m] = (hhmm ?? '').split(':').map(Number)
+  const hh = Number.isFinite(h) ? h : 0
+  const mm = Number.isFinite(m) ? m : 0
+  return hh * 60 + mm
 }
 
 function formatTimeOfDay(minutes: number): string {
