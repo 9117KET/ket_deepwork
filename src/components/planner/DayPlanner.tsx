@@ -267,7 +267,7 @@ export function DayPlanner({
     updateAppState,
     shareMode,
   );
-  const { effectiveBlockDurations, computedBlocks, mustDoMinutes, plannedBySection, capacity, setDaySetupOpen, handleBlockDurationChange } = blockEditor;
+  const { effectiveBlockDurations, computedBlocks, mustDoMinutes, plannedBySection, capacity, isManualOverride, resetBlocksToAuto, setDaySetupOpen, handleBlockDurationChange } = blockEditor;
 
   // Per-section allocated window minutes, derived from the actual rendered blocks
   // (single source of truth for the capacity-vs-plan chips on each section).
@@ -279,6 +279,26 @@ export function DayPlanner({
     }
     return map;
   }, [computedBlocks]);
+
+  // Block windows for the timeline's background bands + whether each overflows its planned work.
+  const timelineBlocks = useMemo(() => {
+    if (!computedBlocks) return undefined;
+    const shortLabels: Partial<Record<TaskSectionId, string>> = {
+      morningRoutine: 'Morning', highPriority: 'High', mediumPriority: 'Medium', lowPriority: 'Low', nightRoutine: 'Night',
+    };
+    return computedBlocks.map((b) => {
+      const sid = b.sectionIds[0]!;
+      const win = b.end >= b.start ? b.end - b.start : b.end + 1440 - b.start;
+      const planned = plannedBySection?.[sid as keyof BlockDurations];
+      return {
+        sectionId: sid,
+        startMin: b.start,
+        endMin: b.end,
+        label: shortLabels[sid] ?? sid,
+        over: planned != null && planned > win + 5,
+      };
+    });
+  }, [computedBlocks, plannedBySection]);
 
   // Short note shown next to the High Priority window: how much of it is reserved
   // for today's Top 3 tasks (e.g. "+1h30m Top 3").
@@ -939,6 +959,18 @@ export function DayPlanner({
               </div>
             )
           })()}
+          {!shareMode && isManualOverride && capacity && (
+            <div className="flex items-center justify-between gap-2 rounded border border-share-outlineVariant/30 bg-share-surfaceContainerLow px-3 py-1.5 text-xs text-share-onSurfaceVariant">
+              <span>Manual block sizes — auto-sizing from your tasks is paused.</span>
+              <button
+                type="button"
+                onClick={resetBlocksToAuto}
+                className="shrink-0 rounded border border-share-outlineVariant/40 bg-share-surfaceContainer px-2 py-1 text-share-onSurface hover:border-share-primary/60 hover:text-share-primary"
+              >
+                Reset to auto
+              </button>
+            </div>
+          )}
           {FIXED_SECTIONS.filter(s => s.id !== 'mustDo' && s.id !== 'sideQuest').map((section) => {
             const isActive = !shareMode && selectedDay === todayIso() && activeSectionIds.includes(section.id)
             const isDeepBlock = !shareMode && section.id === 'highPriority' && appState.depthPhilosophy === 'rhythmic'
@@ -1161,6 +1193,7 @@ export function DayPlanner({
                       sleepTarget={dayState.sleepTarget}
                       isToday={selectedDay === todayIso()}
                       nowMinutes={nowMinutes}
+                      blocks={timelineBlocks}
                     />
                   </SidebarCard>
                 );

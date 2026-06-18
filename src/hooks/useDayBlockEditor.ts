@@ -122,6 +122,17 @@ export function useDayBlockEditor(
     (daySetupOpen ||
       (selectedDay === todayIso() && !dayState.wakeTime && daySetupSkippedFor !== selectedDay));
 
+  // Drop this day's manual block sizes so blocks revert to capacity-aware auto sizing.
+  const resetBlocksToAuto = useCallback(() => {
+    updateAppState((prev) => {
+      const existing = getOrCreateDay(prev, selectedDay);
+      return {
+        ...prev,
+        days: { ...prev.days, [selectedDay]: { ...existing, blockDurations: null } },
+      };
+    });
+  }, [updateAppState, selectedDay]);
+
   const handleDaySetupSave = useCallback(
     (wakeTime: string, sleepTarget: string, bedTime: string) => {
       updateAppState((prev) => {
@@ -286,6 +297,7 @@ export function useDayBlockEditor(
     plannedBySection,
     capacity,
     isManualOverride,
+    resetBlocksToAuto,
     daySetupOpen,
     setDaySetupOpen,
     daySetupSkippedFor,
