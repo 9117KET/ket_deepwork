@@ -62,6 +62,7 @@ import { getDailyQuestSelection } from "../../domain/sideQuestAlgorithm";
 import { MobileTabBar, type MobileTab } from "./MobileTabBar";
 import { ActiveTripBanner } from "./ActiveTripBanner";
 import { DaySummaryCard } from "./DaySummaryCard";
+import { DayTimeline } from "./DayTimeline";
 import { useActiveTripStatus } from "../../hooks/useActiveTripStatus";
 import { ErrorBoundary } from "../ErrorBoundary";
 import { useDayContext } from "../../hooks/useDayContext";
@@ -961,6 +962,21 @@ export function DayPlanner({
             <div className="hidden lg:block space-y-3 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto lg:pr-1" data-tour="sidebar">
               {/* Cross-section day snapshot */}
               {!shareMode && <DaySummaryCard ctx={dayCtx} />}
+              {/* Time-block agenda: scheduled tasks visualised top-to-bottom */}
+              {!shareMode && (() => {
+                const now = new Date();
+                const nowMinutes =
+                  ((now.getHours() * 60 + now.getMinutes() - timeOffsetMinutes) % 1440 + 1440) % 1440;
+                return (
+                  <DayTimeline
+                    tasks={dayState.tasks}
+                    wakeTime={dayState.wakeTime}
+                    sleepTarget={dayState.sleepTarget}
+                    isToday={selectedDay === todayIso()}
+                    nowMinutes={nowMinutes}
+                  />
+                );
+              })()}
               {/* Deep work timer: most-used active tool — placed first for immediate reach */}
               {!shareMode && <DeepWorkTimer onSessionComplete={handleSessionComplete} />}
               {!shareMode && (
