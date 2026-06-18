@@ -99,9 +99,12 @@ export function TaskItem({
   onMoveDown,
 }: TaskItemProps) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
+  const [isEditing, setIsEditing] = useState(false)
+  const [draftTitle, setDraftTitle] = useState(task.title)
   const gripRef = useRef<HTMLDivElement | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
   const menuBtnRef = useRef<HTMLButtonElement | null>(null)
+  const editInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     if (!menu) return
@@ -114,13 +117,26 @@ export function TaskItem({
       ) return
       setMenu(null)
     }
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenu(null)
+    }
     document.addEventListener('mousedown', close)
     document.addEventListener('touchstart', close)
+    document.addEventListener('keydown', onKeyDown)
     return () => {
       document.removeEventListener('mousedown', close)
       document.removeEventListener('touchstart', close)
+      document.removeEventListener('keydown', onKeyDown)
     }
   }, [menu])
+
+  // Focus + select the inline title editor when it opens.
+  useEffect(() => {
+    if (isEditing) {
+      editInputRef.current?.focus()
+      editInputRef.current?.select()
+    }
+  }, [isEditing])
 
   const trimmedTitle = task.title.trim()
   const isUrl = /^https?:\/\/\S+$/i.test(trimmedTitle)
@@ -147,19 +163,52 @@ export function TaskItem({
     }
   }
 
+  // Keep the menu inside the viewport: the menu is min-w-[10rem] (160px) and its
+  // height grows with the number of items, so clamp against estimated dimensions.
+  const clampMenu = (x: number, y: number) => {
+    const MENU_WIDTH = 160
+    const MENU_HEIGHT = 320
+    const PAD = 8
+    const maxX = Math.max(PAD, window.innerWidth - MENU_WIDTH - PAD)
+    const maxY = Math.max(PAD, window.innerHeight - MENU_HEIGHT - PAD)
+    return {
+      x: Math.min(Math.max(x, PAD), maxX),
+      y: Math.min(Math.max(y, PAD), maxY),
+    }
+  }
+
   const handleContextMenu = (e: React.MouseEvent) => {
     if (!showContextMenu) return
     e.preventDefault()
     e.stopPropagation()
-    setMenu({ x: e.clientX, y: e.clientY })
+    setMenu(clampMenu(e.clientX, e.clientY))
   }
 
   const handleMenuButtonClick = () => {
     if (!showContextMenu) return
     const rect = menuBtnRef.current?.getBoundingClientRect()
     if (rect) {
-      setMenu({ x: rect.left, y: rect.bottom + 4 })
+      setMenu(clampMenu(rect.left, rect.bottom + 4))
     }
+  }
+
+  const startEditing = () => {
+    if (!onUpdateTask) return
+    setDraftTitle(task.title)
+    setIsEditing(true)
+  }
+
+  const commitEditing = () => {
+    const trimmed = draftTitle.trim()
+    if (trimmed !== '' && trimmed !== task.title) {
+      onUpdateTask?.({ title: trimmed })
+    }
+    setIsEditing(false)
+  }
+
+  const cancelEditing = () => {
+    setDraftTitle(task.title)
+    setIsEditing(false)
   }
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -272,18 +321,49 @@ export function TaskItem({
             onChange={onToggle}
             className="h-5 w-5 shrink-0 rounded border-share-outlineVariant/50 bg-share-surfaceContainer text-share-primary focus:ring-share-primary sm:h-4 sm:w-4"
           />
-          {isUrl ? (
+          {isEditing ? (
+            <input
+              ref={editInputRef}
+              type="text"
+              value={draftTitle}
+              onChange={(e) => setDraftTitle(e.target.value)}
+              onBlur={commitEditing}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  commitEditing()
+                } else if (e.key === 'Escape') {
+                  e.preventDefault()
+                  cancelEditing()
+                }
+              }}
+              onClick={(e) => e.preventDefault()}
+              className="min-w-0 flex-1 rounded border border-share-outlineVariant/40 bg-share-surfaceContainer px-1.5 py-0.5 text-sm text-share-onSurface focus:border-share-primary focus:outline-none focus:ring-1 focus:ring-share-primary"
+              aria-label="Edit task title"
+            />
+          ) : isUrl ? (
             <a
               href={trimmedTitle}
               target="_blank"
               rel="noreferrer"
               className={`${textClasses} break-words underline decoration-sky-500/60 underline-offset-2 hover:text-sky-300`}
               onClick={(event) => event.stopPropagation()}
+              onDoubleClick={(event) => {
+                if (!onUpdateTask) return
+                event.preventDefault()
+                event.stopPropagation()
+                startEditing()
+              }}
             >
               {trimmedTitle}
             </a>
           ) : (
-            <span className={`min-w-0 break-words ${textClasses}`}>{task.title}</span>
+            <span
+              className={`min-w-0 break-words ${textClasses}`}
+              onDoubleClick={onUpdateTask ? () => startEditing() : undefined}
+            >
+              {task.title}
+            </span>
           )}
           {task.isShallow && (
             <span className="ml-0.5 shrink-0 rounded border border-amber-500/40 bg-amber-500/10 px-1 py-0.5 text-[10px] text-amber-400">
@@ -355,14 +435,7 @@ export function TaskItem({
               type="button"
               role="menuitem"
               className="w-full px-3 py-1.5 text-left text-sm text-share-onSurface hover:bg-share-surfaceContainerHighest"
-              onClick={() => {
-                const newTitle = window.prompt('Edit task title:', task.title)
-                if (newTitle != null && newTitle.trim() !== '') {
-                  closeAnd(() => onUpdateTask?.({ title: newTitle.trim() }))
-                } else {
-                  setMenu(null)
-                }
-              }}
+              onClick={() => closeAnd(startEditing)}
             >
               Edit
             </button>
