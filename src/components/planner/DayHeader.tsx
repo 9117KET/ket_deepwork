@@ -37,11 +37,45 @@ export function DayHeader({
 }: DayHeaderProps) {
   const percentage =
     totalTaskCount <= 0 ? 0 : Math.max(0, Math.min(100, Math.round(completionRatio * 1000) / 10))
+
+  // Deep work today, formatted ("1h 30m"), used for the prominent pill.
+  const deepWorkLabel =
+    deepWorkMinutesToday != null && deepWorkMinutesToday > 0
+      ? (() => {
+          const h = Math.floor(deepWorkMinutesToday / 60)
+          const m = deepWorkMinutesToday % 60
+          return `${h > 0 ? `${h}h ` : ''}${m > 0 ? `${m}m` : ''}`.trim()
+        })()
+      : null
+
+  // Quiet, dot-separated secondary stats — folds the redundant badges
+  // (best streak, missed days, days-since-1st-use) into one low-weight line.
+  const secondaryStats: string[] = []
+  if (bestStreak != null && bestStreak > 0 && streak != null && streak > 0 && bestStreak > streak) {
+    secondaryStats.push(`best ${bestStreak} days`)
+  }
+  if (daysMissed != null && daysMissed > 0) {
+    secondaryStats.push(`${daysMissed} day${daysMissed !== 1 ? 's' : ''} missed`)
+  } else if (daysMissed != null && daysMissed === 0 && totalDays != null && totalDays > 0) {
+    secondaryStats.push('0 days missed')
+  }
+  if (totalDays != null && totalDays > 0) {
+    secondaryStats.push(`${totalDays} day${totalDays !== 1 ? 's' : ''} since 1st use`)
+  }
+  const depthLabel = depthPhilosophy
+    ? depthPhilosophy === 'rhythmic'
+      ? 'Rhythmic'
+      : depthPhilosophy === 'journalistic'
+        ? 'Journalistic'
+        : 'Bimodal'
+    : null
+
   return (
     <div className="mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-between">
       <div>
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <p className="text-xs uppercase tracking-wide text-share-primary/70">Today&apos;s plan</p>
+          {/* Prominent: streak + deep work today */}
           {streak != null && streak > 0 && (
             <span className="flex items-center gap-1 rounded border border-amber-500/50 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-200">
               <Flame className="h-3 w-3" />
@@ -49,55 +83,34 @@ export function DayHeader({
               {bestStreak != null && bestStreak > 0 && streak >= bestStreak ? ' (best)' : ''}
             </span>
           )}
-          {bestStreak != null &&
-            bestStreak > 0 &&
-            streak != null &&
-            streak > 0 &&
-            bestStreak > streak && (
-              <span
-                className="rounded border border-violet-500/50 bg-violet-500/10 px-2 py-0.5 text-xs font-medium text-violet-200"
-                title="Longest consecutive streak you have recorded"
-              >
-                Best {bestStreak} days
-              </span>
-            )}
-          {daysMissed != null && daysMissed === 0 && totalDays != null && totalDays > 0 && (
-            <span className="rounded border border-emerald-500/50 bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-300">
-              0 days missed
+          {deepWorkLabel && (
+            <span className="flex items-center gap-1 rounded border border-teal-500/50 bg-teal-500/10 px-2 py-0.5 text-xs font-medium text-teal-300">
+              <Timer className="h-3 w-3" />
+              {deepWorkLabel} deep today
             </span>
           )}
-          {daysMissed != null && daysMissed > 0 && (
-            <span className="rounded border border-red-500/60 bg-red-500/10 px-2 py-0.5 text-xs font-medium text-red-300">
-              {daysMissed} day{daysMissed !== 1 ? 's' : ''} missed
-            </span>
-          )}
-          {totalDays != null && totalDays > 0 && (
-            <span className="rounded border border-share-outlineVariant/30 bg-share-surfaceContainerLow px-2 py-0.5 text-xs text-share-onSurfaceVariant">
-              {totalDays} day{totalDays !== 1 ? 's' : ''} since 1st use
-            </span>
-          )}
-          {deepWorkMinutesToday != null && deepWorkMinutesToday > 0 && (() => {
-            const h = Math.floor(deepWorkMinutesToday / 60)
-            const m = deepWorkMinutesToday % 60
-            return (
-              <span className="flex items-center gap-1 rounded border border-teal-500/50 bg-teal-500/10 px-2 py-0.5 text-xs font-medium text-teal-300">
-                <Timer className="h-3 w-3" />
-                {h > 0 ? `${h}h ` : ''}{m > 0 ? `${m}m` : ''} deep today
-              </span>
-            )
-          })()}
-          {depthPhilosophy && (
-            <span className="flex items-center gap-1 rounded border border-violet-500/40 bg-violet-500/10 px-2 py-0.5 text-[10px] font-medium text-violet-300">
+          {depthLabel && (
+            <span className="flex items-center gap-1 text-[10px] font-medium text-violet-300/80">
               {depthPhilosophy === 'rhythmic' ? (
-                <><Zap className="h-3 w-3" /> Rhythmic</>
+                <Zap className="h-3 w-3" />
               ) : depthPhilosophy === 'journalistic' ? (
-                <><Calendar className="h-3 w-3" /> Journalistic</>
+                <Calendar className="h-3 w-3" />
               ) : (
-                <><Scale className="h-3 w-3" /> Bimodal</>
+                <Scale className="h-3 w-3" />
               )}
+              {depthLabel}
             </span>
           )}
         </div>
+        {/* Quiet secondary line — same info, lower visual weight */}
+        {secondaryStats.length > 0 && (
+          <p
+            className="mt-1 text-[11px] text-share-onSurfaceVariant/70"
+            title="Streak history and accountability stats"
+          >
+            {secondaryStats.join(' · ')}
+          </p>
+        )}
         <h2 className="text-xl sm:text-2xl font-semibold tracking-tight">{dateLabel}</h2>
         {totalTaskCount > 0 ? (
           <div className="mt-2 max-w-md">

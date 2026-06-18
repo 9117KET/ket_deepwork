@@ -23,6 +23,8 @@ import {
   toMonthId,
   sameWeekdayLastWeek,
   computeAccountabilityStats,
+  isEndOfMonth,
+  isWeeklyReviewDay,
 } from "../../domain/dateUtils";
 import {
   BLOCK_MIN_MINUTES,
@@ -615,29 +617,86 @@ export function DayPlanner({
             onUpdate={(id, patch) => handleUpdateTask(id, patch)}
           />
         )}
-        {!shareMode && (
-          <MonthlyReviewBanner
-            selectedDay={selectedDay}
-            review={appState.monthlyReviews?.[toMonthId(selectedDay)]}
-            onOpen={() => setReviewOpenTrigger((t) => t + 1)}
-          />
-        )}
-        {!shareMode && (
-          <WeeklyReviewBanner
-            selectedDay={selectedDay}
-            review={appState.weeklyReviews?.[selectedDay]}
-            reviewWeekday={appState.weeklyReviewDay ?? 5}
-            onOpen={() => setWeeklyReviewOpenTrigger((t) => t + 1)}
-          />
-        )}
+        {/* Monthly/Weekly review + goal: collapse into one thin "needs attention"
+            row when more than one would show; otherwise render the full banner. */}
         {!shareMode && (() => {
+          const showMonthly = isEndOfMonth(selectedDay)
+          const showWeekly = isWeeklyReviewDay(selectedDay, appState.weeklyReviewDay ?? 5)
           const goal = appState.goalCascade?.threeMonths ?? appState.goalCascade?.oneYear
-          if (!goal) return null
-          const label = appState.goalCascade?.threeMonths ? '3-month' : '1-year'
+          const goalLabel = appState.goalCascade?.threeMonths ? '3-month' : '1-year'
+
+          const activeCount = (showMonthly ? 1 : 0) + (showWeekly ? 1 : 0) + (goal ? 1 : 0)
+          if (activeCount === 0) return null
+
+          // Single active item → keep the existing full-width banner / goal line.
+          if (activeCount === 1) {
+            if (showMonthly) {
+              return (
+                <MonthlyReviewBanner
+                  selectedDay={selectedDay}
+                  review={appState.monthlyReviews?.[toMonthId(selectedDay)]}
+                  onOpen={() => setReviewOpenTrigger((t) => t + 1)}
+                />
+              )
+            }
+            if (showWeekly) {
+              return (
+                <WeeklyReviewBanner
+                  selectedDay={selectedDay}
+                  review={appState.weeklyReviews?.[selectedDay]}
+                  reviewWeekday={appState.weeklyReviewDay ?? 5}
+                  onOpen={() => setWeeklyReviewOpenTrigger((t) => t + 1)}
+                />
+              )
+            }
+            return (
+              <div className="mt-1 rounded border border-share-outlineVariant/30 bg-share-surfaceContainerLow px-3 py-1.5 text-xs text-share-onSurfaceVariant">
+                <span className="text-share-onSurfaceVariant/70">{goalLabel} goal: </span>
+                <span className="text-share-onBg">{goal}</span>
+              </div>
+            )
+          }
+
+          // Multiple active → one compact chip row.
+          const monthlyDone = Boolean(appState.monthlyReviews?.[toMonthId(selectedDay)]?.completedAt)
+          const weeklyDone = Boolean(appState.weeklyReviews?.[selectedDay]?.completedAt)
           return (
-            <div className="mt-1 rounded border border-share-outlineVariant/30 bg-share-surfaceContainerLow px-3 py-1.5 text-xs text-share-onSurfaceVariant">
-              <span className="text-share-onSurfaceVariant/70">{label} goal: </span>
-              <span className="text-share-onBg">{goal}</span>
+            <div className="mt-1 flex flex-wrap items-center gap-2 rounded border border-share-outlineVariant/30 bg-share-surfaceContainerLow px-2.5 py-1.5 text-[11px]">
+              <span className="uppercase tracking-wide text-share-onSurfaceVariant/60">Needs attention</span>
+              {showMonthly && (
+                <button
+                  type="button"
+                  onClick={() => setReviewOpenTrigger((t) => t + 1)}
+                  className={`rounded border px-2 py-0.5 font-medium transition-colors ${
+                    monthlyDone
+                      ? 'border-emerald-700/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
+                      : 'border-amber-600/50 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20'
+                  }`}
+                  title={monthlyDone ? 'Revisit your monthly review' : 'Open your monthly review'}
+                >
+                  Monthly review {monthlyDone ? '✓' : '↓'}
+                </button>
+              )}
+              {showWeekly && (
+                <button
+                  type="button"
+                  onClick={() => setWeeklyReviewOpenTrigger((t) => t + 1)}
+                  className={`rounded border px-2 py-0.5 font-medium transition-colors ${
+                    weeklyDone
+                      ? 'border-emerald-700/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
+                      : 'border-sky-600/50 bg-sky-500/10 text-sky-300 hover:bg-sky-500/20'
+                  }`}
+                  title={weeklyDone ? 'Revisit your weekly review' : 'Open your weekly review'}
+                >
+                  Weekly review {weeklyDone ? '✓' : '↓'}
+                </button>
+              )}
+              {goal && (
+                <span className="text-share-onSurfaceVariant/80" title={`${goalLabel} goal`}>
+                  <span className="text-share-onSurfaceVariant/60">{goalLabel} goal: </span>
+                  <span className="text-share-onBg">{goal}</span>
+                </span>
+              )}
             </div>
           )
         })()}
