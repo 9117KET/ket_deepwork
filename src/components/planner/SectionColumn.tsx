@@ -290,18 +290,12 @@ export function SectionColumn({
                   <AlertTriangle className="h-3 w-3" /> {incompleteRootCount} tasks
                 </span>
               ) : null}
-              {showCapacity && !collapsed && (
+              {overCapacity && (
                 <span
-                  className={`rounded px-1.5 py-0.5 text-[10px] font-medium tabular-nums ${
-                    overCapacity ? 'bg-amber-500/20 text-amber-300' : 'bg-teal-500/15 text-teal-300'
-                  }`}
-                  title={
-                    overCapacity
-                      ? `Planned ${formatBlockMins(plannedMinutes!)} of work for a ${formatBlockMins(windowMinutes!)} window — trim or it pushes the day later`
-                      : `Planned ${formatBlockMins(plannedMinutes!)} fits the ${formatBlockMins(windowMinutes!)} window`
-                  }
+                  className="flex items-center gap-1 rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-amber-300"
+                  title={`Planned ${formatBlockMins(plannedMinutes!)} of work for a ${formatBlockMins(windowMinutes!)} window — trim it or the day runs later`}
                 >
-                  {formatBlockMins(plannedMinutes!)} / {formatBlockMins(windowMinutes!)}
+                  <AlertTriangle className="h-3 w-3" /> {formatBlockMins(plannedMinutes!)} / {formatBlockMins(windowMinutes!)}
                 </span>
               )}
             </div>

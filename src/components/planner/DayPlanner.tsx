@@ -66,6 +66,7 @@ import { MobileTabBar, type MobileTab } from "./MobileTabBar";
 import { ActiveTripBanner } from "./ActiveTripBanner";
 import { DaySummaryCard } from "./DaySummaryCard";
 import { DayTimeline } from "./DayTimeline";
+import { Moon, AlertTriangle } from "lucide-react";
 import { useActiveTripStatus } from "../../hooks/useActiveTripStatus";
 import { ErrorBoundary } from "../ErrorBoundary";
 import { useDayContext } from "../../hooks/useDayContext";
@@ -812,7 +813,7 @@ export function DayPlanner({
         })()}
         {!shareMode && selectedTaskIds.size === 0 && dayState.tasks.length > 0 && (
           <p className="mt-2 text-[11px] text-share-onSurfaceVariant/70">
-            Tip: Ctrl/Cmd-click tasks to select several at once and act on them in bulk.
+Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
           </p>
         )}
         {selectedTaskIds.size > 0 && (
@@ -943,19 +944,33 @@ export function DayPlanner({
               capacity.compressed.lowPriority && 'Low',
               capacity.compressed.mediumPriority && 'Medium',
             ].filter(Boolean).join(' & ')
+            // Actual planned task work (not the block-window sum, which ≈ the whole awake window).
+            const workMinutes = plannedBySection
+              ? Object.values(plannedBySection).reduce((a, b) => a + (b ?? 0), 0)
+              : 0
+            const freeMinutes = Math.max(0, capacity.awakeMinutes - workMinutes)
             if (capacity.overByMinutes > 0) {
               return (
-                <div className="rounded border border-amber-500/50 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-300">
-                  Plan runs <span className="font-semibold">{fmtDur(capacity.overByMinutes)}</span> past lights-out — you&apos;d be in bed ~<span className="font-semibold tabular-nums">{fmtClock(capacity.projectedLightsOutMin)}</span>
-                  {squeezed ? ` even after squeezing ${squeezed}` : ''}. Trim or defer Low/Medium tasks to make bed on time.
+                <div className="flex items-start gap-2 rounded-md border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+                  <div className="min-w-0">
+                    <p className="font-medium text-amber-100">
+                      Bed slips to <span className="tabular-nums">{fmtClock(capacity.projectedLightsOutMin)}</span> — {fmtDur(capacity.overByMinutes)} over capacity
+                    </p>
+                    <p className="mt-0.5 text-amber-300/80">
+                      {squeezed ? `${squeezed} already squeezed to the minimum. ` : ''}Trim or defer Low/Medium tasks to make bed on time.
+                    </p>
+                  </div>
                 </div>
               )
             }
             return (
-              <div className="rounded border border-teal-600/30 bg-teal-900/15 px-3 py-1.5 text-xs text-teal-300/90">
-                Planned <span className="font-semibold tabular-nums">{fmtDur(capacity.plannedMinutes)}</span> of {fmtDur(capacity.awakeMinutes)} awake
-                {capacity.freeMinutes > 0 ? ` · ${fmtDur(capacity.freeMinutes)} free` : ''} · in bed by ~<span className="font-semibold tabular-nums">{fmtClock(capacity.projectedLightsOutMin)}</span>
-                {squeezed ? ` · ${squeezed} compressed to fit` : ''}
+              <div className="flex items-center gap-2 rounded-md border border-teal-600/30 bg-teal-900/15 px-3 py-1.5 text-xs text-teal-200/90">
+                <Moon className="h-4 w-4 shrink-0 text-teal-400/80" />
+                <span>
+                  In bed by <span className="font-semibold tabular-nums text-teal-100">{fmtClock(capacity.projectedLightsOutMin)}</span>
+                  <span className="text-teal-300/70"> · {fmtDur(workMinutes)} planned{freeMinutes > 0 ? `, ${fmtDur(freeMinutes)} free` : ''}{squeezed ? ` · ${squeezed} trimmed to fit` : ''}</span>
+                </span>
               </div>
             )
           })()}
