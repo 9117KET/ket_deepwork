@@ -20,6 +20,8 @@ interface SectionColumnProps {
   isTimeBlockActive?: boolean
   /** Human-readable timeframe label for this section (already adjusted for any global offset). */
   timeframeLabel?: string | null
+  /** Short note rendered next to the timeframe label (e.g. "+1h30m Top 3" on the high-priority block). */
+  timeframeNote?: string | null
   /** Task currently being dragged (for cross-section drag); used to show drop targets and isDragging. */
   draggedTask?: { sectionId: TaskSectionId; taskId: string } | null
   onDragStart?: (sectionId: TaskSectionId, taskId: string) => void
@@ -70,6 +72,7 @@ export function SectionColumn({
   defaultCollapsed = false,
   isTimeBlockActive = false,
   timeframeLabel = null,
+  timeframeNote = null,
   draggedTask = null,
   onDragStart,
   onDragEnd,
@@ -258,6 +261,11 @@ export function SectionColumn({
             {timeframeLabel ? (
               <p className="text-xs text-share-onSurfaceVariant">
                 {timeframeLabel}
+                {timeframeNote ? (
+                  <span className="ml-1 text-teal-400" title="Time reserved for today's Top 3 tasks">
+                    {timeframeNote}
+                  </span>
+                ) : null}
                 {dynamicDescription ? ` / ${dynamicDescription}` : null}
               </p>
             ) : dynamicDescription ? (

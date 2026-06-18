@@ -257,6 +257,7 @@ export function useDayBlockEditor(
   return {
     effectiveBlockDurations,
     computedBlocks,
+    mustDoMinutes,
     daySetupOpen,
     setDaySetupOpen,
     daySetupSkippedFor,

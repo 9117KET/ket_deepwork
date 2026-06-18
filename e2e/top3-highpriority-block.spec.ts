@@ -107,6 +107,8 @@ test.describe('Top 3 duration folds into the High Priority block window', () => 
     const high = sectionLabel(page, 'High Priority (Focus Tasks)')
     // Base 08:00-10:00 + 90 min Top 3 => 08:00-11:30
     await expect(high).toContainText('8 AM - 11:30 AM', { timeout: 10_000 })
+    // Note shows how much of the window is reserved for the Top 3
+    await expect(high).toContainText('+1h30m Top 3')
 
     // Medium block shifted 90 min later: was 10:00-11:00, now 11:30-12:30
     const medium = sectionLabel(page, 'Medium Priority (Supplementary Tasks)')
@@ -121,5 +123,7 @@ test.describe('Top 3 duration folds into the High Priority block window', () => 
     const high = sectionLabel(page, 'High Priority (Focus Tasks)')
     // Base window only: 08:00-10:00
     await expect(high).toContainText('8 AM - 10 AM', { timeout: 10_000 })
+    // No Top 3 durations => no reserved-time note
+    await expect(high).not.toContainText('Top 3')
   })
 })

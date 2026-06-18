@@ -260,7 +260,17 @@ export function DayPlanner({
     updateAppState,
     shareMode,
   );
-  const { effectiveBlockDurations, computedBlocks, setDaySetupOpen, handleBlockDurationChange } = blockEditor;
+  const { effectiveBlockDurations, computedBlocks, mustDoMinutes, setDaySetupOpen, handleBlockDurationChange } = blockEditor;
+
+  // Short note shown next to the High Priority window: how much of it is reserved
+  // for today's Top 3 tasks (e.g. "+1h30m Top 3").
+  const highPriorityTop3Note = useMemo(() => {
+    if (mustDoMinutes <= 0) return null;
+    const h = Math.floor(mustDoMinutes / 60);
+    const m = mustDoMinutes % 60;
+    const dur = h > 0 ? `${h}h${m > 0 ? `${m}m` : ''}` : `${m}m`;
+    return `+${dur} Top 3`;
+  }, [mustDoMinutes]);
 
   const { taskIdsDueNow, activeSectionIds, isSleepTimeNow, timeframeLabelsBySection } =
     useTimeAwareness(appState, timeOffsetMinutes, computedBlocks);
@@ -787,6 +797,7 @@ export function DayPlanner({
               }
               isTimeBlockActive={activeSectionIds.includes(section.id)}
               timeframeLabel={timeframeLabelsBySection[section.id]}
+              timeframeNote={section.id === 'highPriority' ? highPriorityTop3Note : null}
               draggedTask={shareMode ? null : draggedTask}
               onDragStart={shareMode ? () => undefined : handleDragStart}
               onDragEnd={shareMode ? () => undefined : handleDragEnd}
