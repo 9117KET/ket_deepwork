@@ -78,6 +78,73 @@ export function useTaskHandlers(
     setSelectedTaskIds(new Set());
   };
 
+  /** Mark every selected task (and its descendants) complete. Mirrors handleToggleTask's activeDays recompute. */
+  const handleCompleteSelected = () => {
+    if (selectedTaskIds.size === 0) return;
+    updateAppState((prev) => {
+      const existingDay = getOrCreateDay(prev, selectedDay);
+      const toComplete = new Set<string>(selectedTaskIds);
+      for (const id of selectedTaskIds) {
+        getDescendantIds(existingDay.tasks, id).forEach((desc) => toComplete.add(desc));
+      }
+      const nextTasks = existingDay.tasks.map((t) =>
+        toComplete.has(t.id) ? { ...t, isDone: true } : t,
+      );
+      const nextDays = {
+        ...prev.days,
+        [selectedDay]: { ...existingDay, tasks: nextTasks },
+      };
+      return {
+        ...prev,
+        days: nextDays,
+        activeDays: deriveActiveDaysFromDays(nextDays),
+      };
+    });
+    setSelectedTaskIds(new Set());
+  };
+
+  /** Mark every selected task shallow (value=true) or deep (value=false). */
+  const handleSetShallowSelected = (value: boolean) => {
+    if (selectedTaskIds.size === 0) return;
+    updateAppState((prev) => {
+      const existingDay = getOrCreateDay(prev, selectedDay);
+      const nextTasks = existingDay.tasks.map((t) =>
+        selectedTaskIds.has(t.id) ? { ...t, isShallow: value } : t,
+      );
+      return {
+        ...prev,
+        days: {
+          ...prev.days,
+          [selectedDay]: { ...existingDay, tasks: nextTasks },
+        },
+      };
+    });
+    setSelectedTaskIds(new Set());
+  };
+
+  /** Move every selected root task (and its descendants) to another section, appended to the end. */
+  const handleMoveSelectedToSection = (toSectionId: TaskSectionId) => {
+    if (selectedTaskIds.size === 0) return;
+    updateAppState((prev) => {
+      const existingDay = getOrCreateDay(prev, selectedDay);
+      const toMove = new Set<string>(selectedTaskIds);
+      for (const id of selectedTaskIds) {
+        getDescendantIds(existingDay.tasks, id).forEach((desc) => toMove.add(desc));
+      }
+      const nextTasks = existingDay.tasks.map((t) =>
+        toMove.has(t.id) ? { ...t, sectionId: toSectionId } : t,
+      );
+      return {
+        ...prev,
+        days: {
+          ...prev.days,
+          [selectedDay]: { ...existingDay, tasks: nextTasks },
+        },
+      };
+    });
+    setSelectedTaskIds(new Set());
+  };
+
   const handleDragStart = (sectionId: TaskSectionId, taskId: string) => {
     draggedTaskRef.current = { sectionId, taskId };
     setDraggedTask({ sectionId, taskId });
@@ -913,6 +980,9 @@ export function useTaskHandlers(
     selectedTaskIds,
     handleToggleSelect,
     handleDeleteSelected,
+    handleCompleteSelected,
+    handleSetShallowSelected,
+    handleMoveSelectedToSection,
     handleDragStart,
     handleDragEnd,
     handleDrop,

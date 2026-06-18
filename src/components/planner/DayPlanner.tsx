@@ -220,6 +220,9 @@ export function DayPlanner({
     selectedTaskIds,
     handleToggleSelect,
     handleDeleteSelected,
+    handleCompleteSelected,
+    handleSetShallowSelected,
+    handleMoveSelectedToSection,
     handleDragStart,
     handleDragEnd,
     handleDrop,
@@ -436,6 +439,7 @@ export function DayPlanner({
 
   const [editHabitsOpen, setEditHabitsOpen] = useState(false);
   const [moveSubtaskId, setMoveSubtaskId] = useState<string | null>(null);
+  const [bulkMoveOpen, setBulkMoveOpen] = useState(false);
   const [editSideQuestOpen, setEditSideQuestOpen] = useState(false);
   const [reviewOpenTrigger, setReviewOpenTrigger] = useState(0);
   const [weeklyReviewOpenTrigger, setWeeklyReviewOpenTrigger] = useState(0);
@@ -704,11 +708,67 @@ export function DayPlanner({
             </div>
           );
         })()}
+        {!shareMode && selectedTaskIds.size === 0 && dayState.tasks.length > 0 && (
+          <p className="mt-2 text-[11px] text-share-onSurfaceVariant/70">
+            Tip: Ctrl/Cmd-click tasks to select several at once and act on them in bulk.
+          </p>
+        )}
         {selectedTaskIds.size > 0 && (
           <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md border border-sky-600/60 bg-sky-500/10 px-2 py-1.5 text-xs">
             <span className="text-share-onBg">
               {selectedTaskIds.size} selected
             </span>
+            {!shareMode && (
+              <>
+                <button
+                  type="button"
+                  onClick={handleCompleteSelected}
+                  className="rounded border border-emerald-600/60 bg-emerald-500/20 px-2 py-1 text-emerald-300 hover:bg-emerald-500/30"
+                >
+                  Mark complete
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSetShallowSelected(true)}
+                  className="rounded border border-amber-600/60 bg-amber-500/20 px-2 py-1 text-amber-300 hover:bg-amber-500/30"
+                >
+                  Mark shallow
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSetShallowSelected(false)}
+                  className="rounded border border-teal-600/60 bg-teal-500/20 px-2 py-1 text-teal-300 hover:bg-teal-500/30"
+                >
+                  Mark deep
+                </button>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setBulkMoveOpen((o) => !o)}
+                    className="rounded border border-share-outlineVariant/40 bg-share-surfaceContainer px-2 py-1 text-share-onSurface hover:border-share-primary/60 hover:text-share-primary"
+                  >
+                    Move to section ▾
+                  </button>
+                  {bulkMoveOpen && (
+                    <div className="absolute left-0 top-full z-30 mt-1 w-48 rounded-md border border-share-outlineVariant/50 bg-share-surfaceContainerHigh py-1 shadow-2xl">
+                      {FIXED_SECTIONS.map((section) => (
+                        <button
+                          key={section.id}
+                          type="button"
+                          className="block w-full px-3 py-1.5 text-left text-share-onSurface hover:bg-share-surfaceContainerHighest"
+                          onClick={() => {
+                            handleMoveSelectedToSection(section.id);
+                            setBulkMoveOpen(false);
+                          }}
+                        >
+                          {section.title}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
             <button
               type="button"
               onClick={handleDeleteSelected}
@@ -718,7 +778,10 @@ export function DayPlanner({
             </button>
             <button
               type="button"
-              onClick={() => setSelectedTaskIds(new Set())}
+              onClick={() => {
+                setSelectedTaskIds(new Set());
+                setBulkMoveOpen(false);
+              }}
               className="rounded border border-share-outlineVariant/40 px-2 py-1 text-share-onSurfaceVariant hover:bg-share-surfaceContainer"
             >
               Clear selection
