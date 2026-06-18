@@ -10,6 +10,7 @@ import type { Task, TaskSection, TaskSectionId } from '../../domain/types'
 import { AddTaskInput } from './AddTaskInput'
 import { TaskItem } from './TaskItem'
 import { ChevronRight, ChevronDown, AlertTriangle } from 'lucide-react'
+import { getSectionCollapsed, setSectionCollapsed } from '../../storage/uiPrefs'
 
 interface SectionColumnProps {
   section: TaskSection
@@ -102,10 +103,22 @@ export function SectionColumn({
   const [draggedSubtask, setDraggedSubtask] = useState<{ parentId: string; subtaskId: string } | null>(null)
   const draggedSubtaskRef = useRef<{ parentId: string; subtaskId: string } | null>(null)
   const [subtaskDropTarget, setSubtaskDropTarget] = useState<{ subtaskId: string; position: DropPosition } | null>(null)
-  const [collapsed, setCollapsed] = useState(() => isTimeBlockActive ? false : defaultCollapsed)
+  const [collapsed, setCollapsed] = useState(() => {
+    // Active time block always opens the section; otherwise a persisted user
+    // choice wins over the static default, falling back to defaultCollapsed.
+    if (isTimeBlockActive) return false
+    const persisted = getSectionCollapsed(section.id)
+    return persisted ?? defaultCollapsed
+  })
   const [pendingCollapse, setPendingCollapse] = useState<'done' | 'timeEnd' | null>(null)
   const collapsedRef = useRef(collapsed)
   collapsedRef.current = collapsed
+
+  // Persist the collapse choice (device-local UI pref; never touches AppState
+  // / Convex sync). Layers on top of auto-expand-on-active and the prompt.
+  const persistCollapsed = useCallback((value: boolean) => {
+    setSectionCollapsed(section.id, value)
+  }, [section.id])
 
   const rootTasks = tasks.filter((t) => !t.parentId)
   const incompleteRootCount = rootTasks.filter((t) => !t.isDone).length
@@ -228,7 +241,7 @@ export function SectionColumn({
         <div className="flex min-w-0 flex-1 items-start gap-2">
           <button
             type="button"
-            onClick={() => { setCollapsed((c) => !c); setPendingCollapse(null) }}
+            onClick={() => { setCollapsed((c) => { persistCollapsed(!c); return !c }); setPendingCollapse(null) }}
             className="mt-0.5 shrink-0 text-share-onSurfaceVariant hover:text-share-onSurface"
             aria-label={collapsed ? 'Expand section' : 'Collapse section'}
           >
@@ -290,7 +303,7 @@ export function SectionColumn({
             </button>
             <button
               type="button"
-              onClick={() => { setCollapsed(true); setPendingCollapse(null) }}
+              onClick={() => { setCollapsed(true); persistCollapsed(true); setPendingCollapse(null) }}
               className="rounded bg-teal-800/60 px-2 py-0.5 text-teal-200 hover:bg-teal-700/60"
             >
               Collapse

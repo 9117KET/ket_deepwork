@@ -51,6 +51,7 @@ import { HabitChecklist } from "../habits/HabitChecklist";
 import { NorthStarCard } from "../goals/NorthStarCard";
 import { OneThingCard } from "../goals/OneThingCard";
 import { WeeklyProjectCard } from "./WeeklyProjectCard";
+import { SidebarCard } from "./SidebarCard";
 import { TomorrowMustPanel } from "./TomorrowMustPanel";
 import { MustDoPinnedHeader } from "./MustDoPinnedHeader";
 import { MonthlyReviewBanner } from "../goals/MonthlyReviewBanner";
@@ -1035,80 +1036,106 @@ export function DayPlanner({
 
             <div className="hidden lg:block space-y-3 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto lg:pr-1" data-tour="sidebar">
               {/* Cross-section day snapshot */}
-              {!shareMode && <DaySummaryCard ctx={dayCtx} />}
+              {!shareMode && (
+                <SidebarCard cardId="daySummary" title="Day snapshot">
+                  <DaySummaryCard ctx={dayCtx} />
+                </SidebarCard>
+              )}
               {/* Time-block agenda: scheduled tasks visualised top-to-bottom */}
               {!shareMode && (() => {
                 const now = new Date();
                 const nowMinutes =
                   ((now.getHours() * 60 + now.getMinutes() - timeOffsetMinutes) % 1440 + 1440) % 1440;
                 return (
-                  <DayTimeline
-                    tasks={dayState.tasks}
-                    wakeTime={dayState.wakeTime}
-                    sleepTarget={dayState.sleepTarget}
-                    isToday={selectedDay === todayIso()}
-                    nowMinutes={nowMinutes}
-                  />
+                  <SidebarCard cardId="timeline" title="Timeline">
+                    <DayTimeline
+                      tasks={dayState.tasks}
+                      wakeTime={dayState.wakeTime}
+                      sleepTarget={dayState.sleepTarget}
+                      isToday={selectedDay === todayIso()}
+                      nowMinutes={nowMinutes}
+                    />
+                  </SidebarCard>
                 );
               })()}
               {/* Deep work timer: most-used active tool — placed first for immediate reach */}
-              {!shareMode && <DeepWorkTimer onSessionComplete={handleSessionComplete} />}
               {!shareMode && (
-                <HabitChecklist
-                  habits={habits}
-                  completions={dayState.habitCompletions ?? {}}
-                  streaks={habitStreaks}
-                  atRiskHabitIds={atRiskHabitIds}
-                  identityStatement={appState.identityStatement ?? ''}
-                  onToggle={handleToggleHabit}
-                  onSetIdentity={handleSetIdentity}
-                  onEditHabits={() => setEditHabitsOpen(true)}
-                  travelingToday={travelingToday}
-                />
+                <SidebarCard cardId="deepWorkTimer" title="Deep work timer">
+                  <DeepWorkTimer onSessionComplete={handleSessionComplete} />
+                </SidebarCard>
+              )}
+              {!shareMode && (
+                <SidebarCard cardId="habits" title="Habits">
+                  <HabitChecklist
+                    habits={habits}
+                    completions={dayState.habitCompletions ?? {}}
+                    streaks={habitStreaks}
+                    atRiskHabitIds={atRiskHabitIds}
+                    identityStatement={appState.identityStatement ?? ''}
+                    onToggle={handleToggleHabit}
+                    onSetIdentity={handleSetIdentity}
+                    onEditHabits={() => setEditHabitsOpen(true)}
+                    travelingToday={travelingToday}
+                  />
+                </SidebarCard>
               )}
               {/* The ONE Thing: day/week/month focus — consulted daily */}
               {!shareMode && (
-                <OneThingCard
-                  selectedDay={selectedDay}
-                  dayOneThings={appState.dayOneThings ?? {}}
-                  weekOneThings={appState.weekOneThings ?? {}}
-                  monthOneThings={appState.monthOneThings ?? {}}
-                  onSetDay={handleSetDayOneThing}
-                  onSetWeek={handleSetWeekOneThing}
-                  onSetMonth={handleSetMonthOneThing}
-                />
+                <SidebarCard cardId="oneThing" title="The ONE thing">
+                  <OneThingCard
+                    selectedDay={selectedDay}
+                    dayOneThings={appState.dayOneThings ?? {}}
+                    weekOneThings={appState.weekOneThings ?? {}}
+                    monthOneThings={appState.monthOneThings ?? {}}
+                    onSetDay={handleSetDayOneThing}
+                    onSetWeek={handleSetWeekOneThing}
+                    onSetMonth={handleSetMonthOneThing}
+                  />
+                </SidebarCard>
               )}
               {/* Weekly overview: glanceable passive stats */}
-              <WeeklyOverview
-                state={appState as AppState}
-                referenceDay={selectedDay}
-              />
+              <SidebarCard cardId="weeklyOverview" title="Weekly overview">
+                <WeeklyOverview
+                  state={appState as AppState}
+                  referenceDay={selectedDay}
+                />
+              </SidebarCard>
               {/* North Star: long-term vision — reviewed occasionally */}
               {!shareMode && (
-                <NorthStarCard
-                  northStar={appState.northStar ?? ''}
-                  onSetNorthStar={handleSetNorthStar}
-                />
+                <SidebarCard cardId="northStar" title="North Star">
+                  <NorthStarCard
+                    northStar={appState.northStar ?? ''}
+                    onSetNorthStar={handleSetNorthStar}
+                  />
+                </SidebarCard>
               )}
               {/* Weekly project rotation: side commitments pinned to specific days */}
               {!shareMode && (
-                <WeeklyProjectCard
-                  selectedDate={selectedDay}
-                  projects={appState.weeklyProjectRotation ?? []}
-                  onUpdate={handleUpdateWeeklyProjects}
-                />
+                <SidebarCard cardId="weeklyProjects" title="Weekly projects">
+                  <WeeklyProjectCard
+                    selectedDate={selectedDay}
+                    projects={appState.weeklyProjectRotation ?? []}
+                    onUpdate={handleUpdateWeeklyProjects}
+                  />
+                </SidebarCard>
               )}
-              {!shareMode && <MotivationCard />}
               {!shareMode && (
-                <NotDoingPanel
-                  globalList={appState.notDoingList ?? []}
-                  dayList={dayState.notDoingItems ?? []}
-                  selectedDay={selectedDay}
-                  onAddGlobal={handleAddToNotDoing}
-                  onRemoveGlobal={handleRemoveFromNotDoing}
-                  onAddDay={handleAddDayNotDoing}
-                  onRemoveDay={handleRemoveDayNotDoing}
-                />
+                <SidebarCard cardId="motivation" title="Motivation">
+                  <MotivationCard />
+                </SidebarCard>
+              )}
+              {!shareMode && (
+                <SidebarCard cardId="notDoing" title="Not doing">
+                  <NotDoingPanel
+                    globalList={appState.notDoingList ?? []}
+                    dayList={dayState.notDoingItems ?? []}
+                    selectedDay={selectedDay}
+                    onAddGlobal={handleAddToNotDoing}
+                    onRemoveGlobal={handleRemoveFromNotDoing}
+                    onAddDay={handleAddDayNotDoing}
+                    onRemoveDay={handleRemoveDayNotDoing}
+                  />
+                </SidebarCard>
               )}
             </div>
           </>
