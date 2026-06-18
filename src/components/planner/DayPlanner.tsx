@@ -267,7 +267,18 @@ export function DayPlanner({
     updateAppState,
     shareMode,
   );
-  const { effectiveBlockDurations, computedBlocks, mustDoMinutes, setDaySetupOpen, handleBlockDurationChange } = blockEditor;
+  const { effectiveBlockDurations, computedBlocks, mustDoMinutes, plannedBySection, capacity, setDaySetupOpen, handleBlockDurationChange } = blockEditor;
+
+  // Per-section allocated window minutes, derived from the actual rendered blocks
+  // (single source of truth for the capacity-vs-plan chips on each section).
+  const blockWindowBySection = useMemo(() => {
+    const map: Partial<Record<TaskSectionId, number>> = {};
+    for (const b of computedBlocks ?? []) {
+      const dur = b.end >= b.start ? b.end - b.start : b.end + 1440 - b.start;
+      for (const sid of b.sectionIds) map[sid] = dur;
+    }
+    return map;
+  }, [computedBlocks]);
 
   // Short note shown next to the High Priority window: how much of it is reserved
   // for today's Top 3 tasks (e.g. "+1h30m Top 3").
@@ -893,6 +904,41 @@ export function DayPlanner({
               </div>
             )
           })()}
+          {/* Day capacity / bedtime readout — how the plan fits the wake→lights-out window */}
+          {!shareMode && capacity && capacity.plannedMinutes > 0 && (() => {
+            const fmtClock = (min: number) => {
+              const x = ((min % 1440) + 1440) % 1440
+              const h24 = Math.floor(x / 60)
+              const mm = x % 60
+              const period = h24 >= 12 ? 'PM' : 'AM'
+              const h12 = h24 % 12 === 0 ? 12 : h24 % 12
+              return `${h12}:${String(mm).padStart(2, '0')} ${period}`
+            }
+            const fmtDur = (min: number) => {
+              const h = Math.floor(min / 60)
+              const m = min % 60
+              return h > 0 ? `${h}h${m > 0 ? ` ${m}m` : ''}` : `${m}m`
+            }
+            const squeezed = [
+              capacity.compressed.lowPriority && 'Low',
+              capacity.compressed.mediumPriority && 'Medium',
+            ].filter(Boolean).join(' & ')
+            if (capacity.overByMinutes > 0) {
+              return (
+                <div className="rounded border border-amber-500/50 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-300">
+                  Plan runs <span className="font-semibold">{fmtDur(capacity.overByMinutes)}</span> past lights-out — you&apos;d be in bed ~<span className="font-semibold tabular-nums">{fmtClock(capacity.projectedLightsOutMin)}</span>
+                  {squeezed ? ` even after squeezing ${squeezed}` : ''}. Trim or defer Low/Medium tasks to make bed on time.
+                </div>
+              )
+            }
+            return (
+              <div className="rounded border border-teal-600/30 bg-teal-900/15 px-3 py-1.5 text-xs text-teal-300/90">
+                Planned <span className="font-semibold tabular-nums">{fmtDur(capacity.plannedMinutes)}</span> of {fmtDur(capacity.awakeMinutes)} awake
+                {capacity.freeMinutes > 0 ? ` · ${fmtDur(capacity.freeMinutes)} free` : ''} · in bed by ~<span className="font-semibold tabular-nums">{fmtClock(capacity.projectedLightsOutMin)}</span>
+                {squeezed ? ` · ${squeezed} compressed to fit` : ''}
+              </div>
+            )
+          })()}
           {FIXED_SECTIONS.filter(s => s.id !== 'mustDo' && s.id !== 'sideQuest').map((section) => {
             const isActive = !shareMode && selectedDay === todayIso() && activeSectionIds.includes(section.id)
             const isDeepBlock = !shareMode && section.id === 'highPriority' && appState.depthPhilosophy === 'rhythmic'
@@ -951,6 +997,8 @@ export function DayPlanner({
                 : section.id === 'highPriority' ? 5
                 : undefined
               }
+              plannedMinutes={shareMode ? undefined : plannedBySection?.[section.id as keyof BlockDurations]}
+              windowMinutes={shareMode ? undefined : blockWindowBySection[section.id]}
               headerAction={(() => {
                 if (shareMode || !effectiveBlockDurations) return undefined;
                 const sId = section.id as keyof BlockDurations;

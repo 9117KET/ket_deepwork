@@ -63,9 +63,21 @@ interface SectionColumnProps {
    * Undefined = no nudge for this section.
    */
   overloadThreshold?: number
+  /** Capacity-aware planned task minutes for this section (Top 3 folded into High). */
+  plannedMinutes?: number
+  /** Capacity-aware allocated window minutes for this section's time block. */
+  windowMinutes?: number
 }
 
 type DropPosition = 'above' | 'below'
+
+/** Compact "1h 20m" / "45m" minute formatter for capacity labels. */
+function formatBlockMins(mins: number): string {
+  const h = Math.floor(mins / 60)
+  const m = Math.round(mins % 60)
+  if (h <= 0) return `${m}m`
+  return m === 0 ? `${h}h` : `${h}h ${m}m`
+}
 
 export function SectionColumn({
   section,
@@ -96,6 +108,8 @@ export function SectionColumn({
   onReorderSubtask,
   onRequestMoveSubtask,
   overloadThreshold,
+  plannedMinutes,
+  windowMinutes,
 }: SectionColumnProps) {
   const [dropTarget, setDropTarget] = useState<{ index: number; position: DropPosition } | null>(
     null,
@@ -150,6 +164,12 @@ export function SectionColumn({
   const isOverloaded = overloadThreshold !== undefined && incompleteRootCount > overloadThreshold
   // Critical overload: more than 2x the threshold — renders a stronger visual warning
   const isCriticalOverload = overloadThreshold !== undefined && incompleteRootCount > overloadThreshold * 2
+
+  // Capacity highlight: planned task minutes vs the block's allocated window.
+  // Amber when the section's work won't fit its window (5-min tolerance).
+  const showCapacity =
+    plannedMinutes != null && windowMinutes != null && windowMinutes > 0 && plannedMinutes > 0
+  const overCapacity = showCapacity && plannedMinutes! > windowMinutes! + 5
 
   // Dynamic description: live stats shown instead of the static section.description string
   const dynamicDescription = (() => {
@@ -270,6 +290,20 @@ export function SectionColumn({
                   <AlertTriangle className="h-3 w-3" /> {incompleteRootCount} tasks
                 </span>
               ) : null}
+              {showCapacity && !collapsed && (
+                <span
+                  className={`rounded px-1.5 py-0.5 text-[10px] font-medium tabular-nums ${
+                    overCapacity ? 'bg-amber-500/20 text-amber-300' : 'bg-teal-500/15 text-teal-300'
+                  }`}
+                  title={
+                    overCapacity
+                      ? `Planned ${formatBlockMins(plannedMinutes!)} of work for a ${formatBlockMins(windowMinutes!)} window — trim or it pushes the day later`
+                      : `Planned ${formatBlockMins(plannedMinutes!)} fits the ${formatBlockMins(windowMinutes!)} window`
+                  }
+                >
+                  {formatBlockMins(plannedMinutes!)} / {formatBlockMins(windowMinutes!)}
+                </span>
+              )}
             </div>
             {timeframeLabel ? (
               <p className="text-xs text-share-onSurfaceVariant">

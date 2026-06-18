@@ -282,6 +282,23 @@ export const FIXED_SECTIONS: TaskSection[] = [
   },
 ];
 
+/**
+ * Fallback duration (minutes) assumed for a task that has no explicit
+ * `durationMinutes`, keyed by section. Used for day-capacity math only —
+ * these are never written onto the task, so estimates stay honest and the
+ * user can still set a real duration later. `sideQuest` is excluded from
+ * block-capacity sizing (it's optional/bonus work).
+ */
+export const DEFAULT_TASK_MINUTES_BY_SECTION: Record<TaskSectionId, number> = {
+  mustDo: 30,
+  morningRoutine: 10,
+  highPriority: 45,
+  mediumPriority: 20,
+  lowPriority: 20,
+  nightRoutine: 10,
+  sideQuest: 15,
+};
+
 /** Default habit list for the tracking dashboard when user has none. */
 export const DEFAULT_HABIT_DEFINITIONS: HabitDefinition[] = [
   { id: "habit-gym", label: "Gym" },

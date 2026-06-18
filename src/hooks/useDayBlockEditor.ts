@@ -22,8 +22,11 @@ import {
   blockDurationsToRatios,
   computeAwakeMinutes,
   computeBlocksFromDurations,
+  computeCapacityAwareBlocks,
+  computePlannedMinutesBySection,
   getDefaultBlockDurations,
   ratiosToBlockDurations,
+  type CapacityResult,
 } from "../domain/sectionTimeBlocks";
 import { getOrCreateDay } from "../storage/localStorageState";
 
@@ -51,17 +54,37 @@ export function useDayBlockEditor(
   updateAppState: (updater: (prev: AppState) => AppState) => void,
   shareMode: 'view' | 'edit' | undefined,
 ) {
-  // Resolved block minutes: per-day override > global ratio template > wake/sleep defaults.
-  const effectiveBlockDurations = useMemo<BlockDurations | null>(() => {
+  // Planned minutes per block from the day's tasks (Top 3 folds into High).
+  const plannedBySection = useMemo(
+    () => computePlannedMinutesBySection(dayState.tasks ?? []),
+    [dayState.tasks],
+  );
+
+  // Proportional "shape" floors: the global ratio template if the user set one,
+  // otherwise the wake/sleep default split. Capacity-aware sizing expands from these.
+  const blockFloors = useMemo<BlockDurations | null>(() => {
     if (!dayState.wakeTime || !dayState.sleepTarget) return null;
-    if (dayState.blockDurations) return dayState.blockDurations;
-    const ratios = blockDurationRatios;
-    if (ratios) {
+    if (blockDurationRatios) {
       const awake = computeAwakeMinutes(dayState.wakeTime, dayState.sleepTarget);
-      return ratiosToBlockDurations(ratios, awake);
+      return ratiosToBlockDurations(blockDurationRatios, awake);
     }
     return getDefaultBlockDurations(dayState.wakeTime, dayState.sleepTarget);
-  }, [dayState, blockDurationRatios]);
+  }, [dayState.wakeTime, dayState.sleepTarget, blockDurationRatios]);
+
+  // Capacity-aware, bedtime-anchored sizing (null when wake/sleep not set).
+  const capacity = useMemo<CapacityResult | null>(() => {
+    if (!dayState.wakeTime || !dayState.sleepTarget || !blockFloors) return null;
+    return computeCapacityAwareBlocks(dayState.wakeTime, dayState.sleepTarget, plannedBySection, blockFloors);
+  }, [dayState.wakeTime, dayState.sleepTarget, plannedBySection, blockFloors]);
+
+  // Whether the user has manually pinned this day's block sizes.
+  const isManualOverride = Boolean(dayState.blockDurations);
+
+  // Resolved block minutes: per-day manual override > capacity-aware sizing > floors.
+  const effectiveBlockDurations = useMemo<BlockDurations | null>(() => {
+    if (dayState.blockDurations) return dayState.blockDurations;
+    return capacity?.durations ?? blockFloors;
+  }, [dayState.blockDurations, capacity, blockFloors]);
 
   // Total time allocated to today's Top 3 (mustDo) tasks. These are executed
   // inside the high-priority deep-work block, so their duration is folded into
@@ -80,12 +103,14 @@ export function useDayBlockEditor(
   // block is extended by the Top 3 total so its window reflects that work.
   const computedBlocks = useMemo(() => {
     if (!dayState.wakeTime || !dayState.sleepTarget || !effectiveBlockDurations) return undefined;
+    // Capacity-aware durations already fold Top 3 into High; only add it on top of a
+    // manual override (where High is the user's raw, un-folded number).
     const timelineDurations =
-      mustDoMinutes > 0
+      isManualOverride && mustDoMinutes > 0
         ? { ...effectiveBlockDurations, highPriority: effectiveBlockDurations.highPriority + mustDoMinutes }
         : effectiveBlockDurations;
     return computeBlocksFromDurations(dayState.wakeTime, timelineDurations);
-  }, [dayState.wakeTime, dayState.sleepTarget, effectiveBlockDurations, mustDoMinutes]);
+  }, [dayState.wakeTime, dayState.sleepTarget, effectiveBlockDurations, isManualOverride, mustDoMinutes]);
 
   // Modal state: auto-open when today has no wake time; "Edit schedule" forces it open.
   const [daySetupOpen, setDaySetupOpen] = useState(false);
@@ -258,6 +283,9 @@ export function useDayBlockEditor(
     effectiveBlockDurations,
     computedBlocks,
     mustDoMinutes,
+    plannedBySection,
+    capacity,
+    isManualOverride,
     daySetupOpen,
     setDaySetupOpen,
     daySetupSkippedFor,

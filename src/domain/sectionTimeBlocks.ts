@@ -12,7 +12,8 @@
  *    When computed blocks are provided, they shadow the static BLOCKS array.
  */
 
-import type { TaskSectionId, BlockDurations, BlockDurationRatios } from './types'
+import type { Task, TaskSectionId, BlockDurations, BlockDurationRatios } from './types'
+import { DEFAULT_TASK_MINUTES_BY_SECTION } from './types'
 
 /** Minutes since midnight. Ranges are [start, end) (end exclusive). */
 const MINS = {
@@ -124,6 +125,104 @@ export function computeAwakeMinutes(wakeTimeHHMM: string, sleepTargetHHMM: strin
   const rawSleep = parseHHMM(sleepTargetHHMM)
   const sleepMin = rawSleep <= wakeMin ? rawSleep + 1440 : rawSleep
   return Math.min(sleepMin - wakeMin, 1439)
+}
+
+/**
+ * Sum planned minutes per awake block from the day's tasks. Tasks without an
+ * explicit duration contribute their per-section default (DEFAULT_TASK_MINUTES_BY_SECTION)
+ * so unscheduled work still counts toward capacity. Top 3 (mustDo) folds into the
+ * High-priority block (it's executed inside the deep-work window). Subtasks and
+ * side quests are excluded. Done tasks are counted so the plan stays stable as the
+ * day progresses (mirrors the existing mustDo-fold behaviour).
+ */
+export function computePlannedMinutesBySection(tasks: Task[]): BlockDurations {
+  const acc: BlockDurations = {
+    morningRoutine: 0, highPriority: 0, mediumPriority: 0, lowPriority: 0, nightRoutine: 0,
+  }
+  for (const t of tasks) {
+    if (!t || t.parentId) continue
+    const mins = t.durationMinutes ?? DEFAULT_TASK_MINUTES_BY_SECTION[t.sectionId] ?? 0
+    switch (t.sectionId) {
+      case 'mustDo':
+      case 'highPriority':   acc.highPriority += mins; break
+      case 'morningRoutine': acc.morningRoutine += mins; break
+      case 'mediumPriority': acc.mediumPriority += mins; break
+      case 'lowPriority':    acc.lowPriority += mins; break
+      case 'nightRoutine':   acc.nightRoutine += mins; break
+      // sideQuest excluded from capacity sizing
+    }
+  }
+  return acc
+}
+
+export interface CapacityResult {
+  /** Final per-block minutes after expand-to-fit + compress. Drives the timeline windows. */
+  durations: BlockDurations
+  /** Total awake capacity (wake → lights-out), minutes. */
+  awakeMinutes: number
+  /** Sum of all five block minutes after sizing. */
+  plannedMinutes: number
+  /** Minutes the plan runs past lights-out after compressing flex blocks (0 = fits). */
+  overByMinutes: number
+  /** Free minutes left before lights-out (0 when over capacity). */
+  freeMinutes: number
+  /** Projected lights-out time, minutes since midnight (wrapped 0–1439). */
+  projectedLightsOutMin: number
+  /** Which flex blocks were squeezed to make room. */
+  compressed: { mediumPriority: boolean; lowPriority: boolean }
+}
+
+/**
+ * Capacity-aware, bedtime-anchored block sizing (hybrid).
+ *
+ * Starts from proportional floors (the ratio template if supplied, else the
+ * wake/sleep default split) and expands each block to fit the minutes its tasks
+ * actually need. If the focus blocks then overflow the awake window, Low priority
+ * is compressed to its minimum first, then Medium — High/Top 3 and the sleep
+ * window (lights-out → wake) are never auto-shrunk. Any remainder is reported as
+ * `overByMinutes` (the plan won't fit before lights-out → "cut something").
+ */
+export function computeCapacityAwareBlocks(
+  wakeTimeHHMM: string,
+  sleepTargetHHMM: string,
+  planned: BlockDurations,
+  floorsOverride?: BlockDurations,
+): CapacityResult {
+  const awake = computeAwakeMinutes(wakeTimeHHMM, sleepTargetHHMM)
+  const floors = floorsOverride ?? getDefaultBlockDurations(wakeTimeHHMM, sleepTargetHHMM)
+
+  // Morning & night expand to fit their routines but never below their floor.
+  const morning = Math.max(floors.morningRoutine, planned.morningRoutine)
+  const night = Math.max(floors.nightRoutine, planned.nightRoutine)
+  const focusCapacity = Math.max(0, awake - morning - night)
+
+  // Expand focus blocks to fit tasks (never below proportional floor).
+  const high = Math.max(floors.highPriority, planned.highPriority)
+  let medium = Math.max(floors.mediumPriority, planned.mediumPriority)
+  let low = Math.max(floors.lowPriority, planned.lowPriority)
+
+  const compressed = { mediumPriority: false, lowPriority: false }
+  let over = high + medium + low - focusCapacity
+
+  // Compress Low to its minimum first, then Medium. High/Top 3 are protected.
+  if (over > 0) {
+    const cut = Math.min(over, low - BLOCK_MIN_MINUTES.lowPriority)
+    if (cut > 0) { low -= cut; over -= cut; compressed.lowPriority = true }
+  }
+  if (over > 0) {
+    const cut = Math.min(over, medium - BLOCK_MIN_MINUTES.mediumPriority)
+    if (cut > 0) { medium -= cut; over -= cut; compressed.mediumPriority = true }
+  }
+
+  const durations: BlockDurations = {
+    morningRoutine: morning, highPriority: high, mediumPriority: medium, lowPriority: low, nightRoutine: night,
+  }
+  const plannedMinutes = morning + high + medium + low + night
+  const overByMinutes = Math.max(0, plannedMinutes - awake)
+  const freeMinutes = Math.max(0, awake - plannedMinutes)
+  const projectedLightsOutMin = wrapMinutes(parseHHMM(wakeTimeHHMM) + plannedMinutes)
+
+  return { durations, awakeMinutes: awake, plannedMinutes, overByMinutes, freeMinutes, projectedLightsOutMin, compressed }
 }
 
 export function blockDurationsToRatios(d: BlockDurations): BlockDurationRatios {
