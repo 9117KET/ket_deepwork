@@ -14,7 +14,7 @@ import type { FocusHijacker } from '../../domain/types'
 import { BookOpen } from 'lucide-react'
 
 const HIJACKER_OPTIONS: { value: FocusHijacker; label: string }[] = [
-  { value: 'none', label: 'None — day went as planned' },
+  { value: 'none', label: 'None. Day went as planned' },
   { value: 'meetings', label: 'Meetings / calls' },
   { value: 'shallow', label: 'Shallow work / admin' },
   { value: 'distraction', label: 'Distractions / social' },
@@ -99,7 +99,7 @@ export function DayJournalCard({
           </div>
 
           <p className="text-[9px] text-share-onSurfaceVariant/40 italic">
-            Cal Newport: "Track not just what you planned, but what actually happened — the gap is where the insight lives."
+            Cal Newport: "Track not just what you planned, but what actually happened. The gap is where the insight lives."
           </p>
         </div>
       )}

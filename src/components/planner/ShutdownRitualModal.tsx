@@ -12,11 +12,11 @@
 
 import { useState, useRef, useCallback } from 'react'
 import type { Task, FocusHijacker } from '../../domain/types'
-import { CheckCircle, ArrowRight, Trash2, Calendar } from 'lucide-react'
+import { CheckCircle, ArrowRight, Trash2 } from 'lucide-react'
 import { AudioTextarea } from '../ui/AudioInput'
 
 const HIJACKER_OPTIONS: { value: FocusHijacker; label: string }[] = [
-  { value: 'none', label: 'None — day went as planned' },
+  { value: 'none', label: 'None. Day went as planned' },
   { value: 'meetings', label: 'Meetings / calls' },
   { value: 'shallow', label: 'Shallow work / admin' },
   { value: 'distraction', label: 'Distractions / social' },
@@ -37,7 +37,6 @@ interface ShutdownRitualModalProps {
   /** Today's habit completion fraction (0–1). */
   habitFraction: number
   onSaveJournal: (note: string, hijacker: FocusHijacker) => void
-  onCarryTask: (task: Task) => void
   onDropTask: (task: Task) => void
   onComplete: () => void
   onClose: () => void
@@ -53,7 +52,6 @@ export function ShutdownRitualModal({
   deepWorkMinutesToday,
   habitFraction,
   onSaveJournal,
-  onCarryTask,
   onDropTask,
   onComplete,
   onClose,
@@ -73,11 +71,6 @@ export function ShutdownRitualModal({
   })()
 
   const pendingTriage = incompleteTasks.filter(t => !triaged.has(t.id))
-
-  function handleCarry(task: Task) {
-    onCarryTask(task)
-    setTriaged(prev => new Set([...prev, task.id]))
-  }
 
   function handleDrop(task: Task) {
     onDropTask(task)
@@ -115,7 +108,7 @@ export function ShutdownRitualModal({
             </p>
             <h3 className="text-sm font-semibold text-share-onBg">
               {step === 'journal' && 'How did today actually go?'}
-              {step === 'triage' && 'Incomplete tasks — decide now'}
+              {step === 'triage' && 'Incomplete tasks: decide now'}
               {step === 'close' && 'Shutdown complete ✓'}
             </h3>
           </div>
@@ -184,16 +177,8 @@ export function ShutdownRitualModal({
                     <div className="flex shrink-0 gap-1">
                       <button
                         type="button"
-                        onClick={() => handleCarry(task)}
-                        title="Carry to tomorrow"
-                        className="flex items-center gap-0.5 rounded border border-sky-700/50 bg-sky-500/10 px-1.5 py-0.5 text-[10px] text-sky-300 hover:bg-sky-500/20"
-                      >
-                        <Calendar className="h-2.5 w-2.5" /> Tomorrow
-                      </button>
-                      <button
-                        type="button"
                         onClick={() => handleDrop(task)}
-                        title="Drop it"
+                        title="Drop it and move on"
                         className="flex items-center gap-0.5 rounded border border-red-700/50 bg-red-500/10 px-1.5 py-0.5 text-[10px] text-red-300 hover:bg-red-500/20"
                       >
                         <Trash2 className="h-2.5 w-2.5" /> Drop
@@ -206,7 +191,7 @@ export function ShutdownRitualModal({
 
             {tomorrowMustDos.length > 0 && (
               <div className="rounded border border-share-outlineVariant/20 bg-share-surfaceContainerLow px-3 py-2">
-                <p className="mb-1 text-[10px] font-medium text-share-onSurfaceVariant">Tomorrow's top 3</p>
+                <p className="mb-1 text-[10px] font-medium text-share-onSurfaceVariant">Tomorrow's Top Three Priorities</p>
                 {tomorrowMustDos.map(t => (
                   <p key={t.id} className="text-xs text-share-onSurface">• {t.title}</p>
                 ))}
@@ -214,7 +199,7 @@ export function ShutdownRitualModal({
             )}
             {tomorrowMustDos.length === 0 && (
               <p className="text-[10px] text-amber-300/80 italic">
-                ⚠ No top 3 set for tomorrow yet — add them in the planner before shutting down.
+                ⚠ No Top Three Priorities set for tomorrow yet. Add them in the planner before shutting down.
               </p>
             )}
 
@@ -253,7 +238,7 @@ export function ShutdownRitualModal({
             </div>
 
             <p className="text-[10px] text-share-onSurfaceVariant/50">
-              Cal Newport: The shutdown ritual signals to your brain that work is truly done — preventing the cognitive residue that bleeds into rest.
+              Cal Newport: The shutdown ritual signals to your brain that work is truly done, preventing the cognitive residue that bleeds into rest.
             </p>
 
             <button

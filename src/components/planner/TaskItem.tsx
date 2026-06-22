@@ -148,7 +148,6 @@ export function TaskItem({
   const showContextMenu = Boolean(
     onUpdateTask ?? onAddTaskAbove ?? onAddTaskBelow ?? onAddSubtask ?? onMoveToNotDoing ?? onAbandon ?? onDelete ?? onMoveToAnotherParent,
   )
-  const postponedCount = task.postponedCount ?? 0
 
   const handleDragStart = (e: React.DragEvent) => {
     try {
@@ -371,18 +370,6 @@ export function TaskItem({
             </span>
           )}
         </label>
-        {postponedCount >= 2 && (
-          <span
-            className={`shrink-0 rounded px-1 py-0.5 text-[10px] font-medium tabular-nums ${
-              postponedCount >= 5
-                ? 'bg-red-500/20 text-red-400'
-                : 'bg-amber-500/20 text-amber-400'
-            }`}
-            title={`Carried forward ${postponedCount} day${postponedCount === 1 ? '' : 's'} — do you still want to do this?`}
-          >
-            ×{postponedCount} stale
-          </span>
-        )}
         {canEditTime && (
           <span className="flex shrink-0 items-center gap-1">
             <div className="relative" title="Scheduled time (24h)">
@@ -393,11 +380,11 @@ export function TaskItem({
                   const v = e.target.value
                   onUpdateTask?.({ scheduledAt: v ? normalizeHhmm(v) : undefined })
                 }}
-                className={`w-16 rounded border border-share-outlineVariant/40 bg-share-surfaceContainer px-1 py-0.5 text-xs tabular-nums [color-scheme:dark] ${task.scheduledAt ? 'text-share-onSurface' : 'text-transparent'}`}
+                className={`w-32 rounded border border-share-outlineVariant/40 bg-share-surfaceContainer px-2.5 py-1.5 text-sm tabular-nums [color-scheme:dark] ${task.scheduledAt ? 'text-share-onSurface' : 'text-transparent'}`}
                 aria-label="Scheduled time"
               />
               {!task.scheduledAt && (
-                <span className="pointer-events-none absolute inset-0 flex items-center px-1 text-xs text-share-onSurfaceVariant/50">
+                <span className="pointer-events-none absolute inset-0 flex items-center px-2.5 text-sm text-share-onSurfaceVariant/50">
                   time
                 </span>
               )}
@@ -408,7 +395,7 @@ export function TaskItem({
                 const v = e.target.value === '' ? undefined : Number(e.target.value)
                 onUpdateTask?.({ durationMinutes: v })
               }}
-              className="w-24 rounded border border-share-outlineVariant/40 bg-share-surfaceContainer px-1 py-0.5 text-xs tabular-nums text-share-onSurface"
+              className="w-24 rounded border border-share-outlineVariant/40 bg-share-surfaceContainer px-1 py-1 text-sm tabular-nums text-share-onSurface"
               aria-label="Task duration"
               title="Duration (optional)"
             >

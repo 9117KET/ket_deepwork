@@ -89,7 +89,7 @@ export function TomorrowMustPanel({ tomorrowDate, tasks, sourceMustCount = 0, on
           <Moon className="h-4 w-4 shrink-0 text-indigo-400" />
           <div>
             <p className="text-xs font-semibold text-indigo-300">
-              Plan tomorrow's top 3
+              Plan tomorrow's Top Three Priorities
             </p>
             <p className="text-[10px] text-share-onSurfaceVariant/60">
               {tomorrowLabel}, {tasks.length}/{MAX_MUSTS} set
@@ -120,10 +120,10 @@ export function TomorrowMustPanel({ tomorrowDate, tasks, sourceMustCount = 0, on
               type="button"
               onClick={onCopyFromToday}
               className="flex w-full items-center justify-center gap-1.5 rounded border border-indigo-500/40 bg-indigo-500/10 px-2 py-1.5 text-xs font-medium text-indigo-300 hover:bg-indigo-500/20"
-              title="Copy today's top 3 into tomorrow's empty slots (skips duplicates)"
+              title="Copy today's Top Three Priorities into tomorrow's empty slots (skips duplicates)"
             >
               <CopyPlus className="h-3.5 w-3.5" />
-              Copy today's top 3
+              Copy today's Top Three Priorities
             </button>
           )}
 
@@ -221,7 +221,7 @@ export function TomorrowMustPanel({ tomorrowDate, tasks, sourceMustCount = 0, on
 
           {allSet && (
             <p className="pt-1 text-[10px] text-indigo-400/70">
-              Top 3 locked in. Sleep well.
+              Top Three Priorities locked in. Sleep well.
             </p>
           )}
         </div>
