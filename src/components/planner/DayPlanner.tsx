@@ -30,7 +30,6 @@ import {
   BLOCK_MIN_MINUTES,
   BLOCK_ORDER,
   SLEEP_MIN_MINUTES,
-  getSleepWindowLabel,
 } from "../../domain/sectionTimeBlocks";
 import { useTaskHandlers } from "../../hooks/useTaskHandlers";
 import { useDayBlockEditor } from "../../hooks/useDayBlockEditor";
@@ -65,7 +64,6 @@ import { getDailyQuestSelection } from "../../domain/sideQuestAlgorithm";
 import { MobileTabBar, type MobileTab } from "./MobileTabBar";
 import { ActiveTripBanner } from "./ActiveTripBanner";
 import { DaySummaryCard } from "./DaySummaryCard";
-import { Moon, AlertTriangle } from "lucide-react";
 import { useActiveTripStatus } from "../../hooks/useActiveTripStatus";
 import { ErrorBoundary } from "../ErrorBoundary";
 import { useDayContext } from "../../hooks/useDayContext";
@@ -266,7 +264,7 @@ export function DayPlanner({
     updateAppState,
     shareMode,
   );
-  const { effectiveBlockDurations, computedBlocks, mustDoMinutes, plannedBySection, capacity, isManualOverride, resetBlocksToAuto, setDaySetupOpen, handleBlockDurationChange } = blockEditor;
+  const { effectiveBlockDurations, computedBlocks, mustDoMinutes, plannedBySection, isManualOverride, setDaySetupOpen, handleBlockDurationChange } = blockEditor;
 
   // Per-section allocated window minutes, derived from the actual rendered blocks
   // (single source of truth for the capacity-vs-plan chips on each section).
@@ -881,65 +879,6 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
               </div>
             )
           })()}
-          {/* Day capacity / bedtime readout — how the plan fits the wake→lights-out window.
-              Suppressed under a manual override: `capacity` reflects the AUTO plan, so its
-              "in bed by" time would contradict the user's hand-sized timeline. The manual
-              notice below takes its place. */}
-          {!shareMode && !isManualOverride && capacity && capacity.plannedMinutes > 0 && (() => {
-            const fmtClock = (min: number) => {
-              const x = ((min % 1440) + 1440) % 1440
-              const h24 = Math.floor(x / 60)
-              const mm = x % 60
-              const period = h24 >= 12 ? 'PM' : 'AM'
-              const h12 = h24 % 12 === 0 ? 12 : h24 % 12
-              return `${h12}:${String(mm).padStart(2, '0')} ${period}`
-            }
-            const fmtDur = (min: number) => {
-              const h = Math.floor(min / 60)
-              const m = min % 60
-              return h > 0 ? `${h}h${m > 0 ? ` ${m}m` : ''}` : `${m}m`
-            }
-            // Actual planned task work (the raw task minutes the user entered).
-            const workMinutes = plannedBySection
-              ? Object.values(plannedBySection).reduce((a, b) => a + (b ?? 0), 0)
-              : 0
-            if (capacity.overByMinutes > 0) {
-              const [th, tm] = (dayState.sleepTarget ?? '23:00').split(':').map(Number)
-              const targetClock = fmtClock((th ?? 23) * 60 + (tm ?? 0))
-              return (
-                <div className="flex items-start gap-2 rounded-md border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
-                  <div className="min-w-0">
-                    <p className="font-medium text-amber-100">
-                      Bed slips to <span className="tabular-nums">{fmtClock(capacity.projectedLightsOutMin)}</span>, {fmtDur(capacity.overByMinutes)} past your {targetClock} target
-                    </p>
-                    <p className="mt-0.5 text-amber-300/80">Trim or defer a task to make bed on time.</p>
-                  </div>
-                </div>
-              )
-            }
-            return (
-              <div className="flex items-center gap-2 rounded-md border border-teal-600/30 bg-teal-900/15 px-3 py-1.5 text-xs text-teal-200/90">
-                <Moon className="h-4 w-4 shrink-0 text-teal-400/80" />
-                <span>
-                  In bed by <span className="font-semibold tabular-nums text-teal-100">{fmtClock(capacity.projectedLightsOutMin)}</span>
-                  <span className="text-teal-300/70"> · {fmtDur(workMinutes)} planned</span>
-                </span>
-              </div>
-            )
-          })()}
-          {!shareMode && isManualOverride && capacity && (
-            <div className="flex items-center justify-between gap-2 rounded border border-share-outlineVariant/30 bg-share-surfaceContainerLow px-3 py-1.5 text-xs text-share-onSurfaceVariant">
-              <span>Manual block sizes. Auto-sizing from your tasks is paused.</span>
-              <button
-                type="button"
-                onClick={resetBlocksToAuto}
-                className="shrink-0 rounded border border-share-outlineVariant/40 bg-share-surfaceContainer px-2 py-1 text-share-onSurface hover:border-share-primary/60 hover:text-share-primary"
-              >
-                Reset to auto
-              </button>
-            </div>
-          )}
           {FIXED_SECTIONS.filter(s => s.id !== 'mustDo' && s.id !== 'sideQuest').map((section) => {
             const isActive = !shareMode && selectedDay === todayIso() && activeSectionIds.includes(section.id)
             const isDeepBlock = !shareMode && section.id === 'highPriority' && appState.depthPhilosophy === 'rhythmic'
@@ -1094,7 +1033,17 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
                   Sleep
                 </h3>
                 <p className="text-xs text-share-onSurfaceVariant">
-                  Timeframe: {getSleepWindowLabel(timeOffsetMinutes, computedBlocks)}
+                  {(() => {
+                    const wake = dayState.wakeTime ?? '07:00';
+                    const bed = dayState.sleepTarget ?? '23:00';
+                    const [wh, wm] = wake.split(':').map(Number);
+                    const [bh, bm] = bed.split(':').map(Number);
+                    const sleepMins = (((wh ?? 0) * 60 + (wm ?? 0)) - ((bh ?? 0) * 60 + (bm ?? 0)) + 1440) % 1440;
+                    const h = Math.floor(sleepMins / 60);
+                    const m = sleepMins % 60;
+                    const dur = m > 0 ? `${h}h ${m}m` : `${h}h`;
+                    return `${bed} → ${wake} · ${dur}`;
+                  })()}
                 </p>
               </div>
               {!shareMode && (

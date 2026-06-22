@@ -51,9 +51,9 @@ function formatDuration(mins: number): string {
   return m === 0 ? `${h}h` : `${h}h ${m}m`;
 }
 
-/** Infer sleep duration in whole hours (clamped 4–12) from actual sleep minutes. */
+/** Infer sleep duration in whole hours (clamped to the 6–8h target range). */
 function inferDurationHours(mins: number): number {
-  return Math.max(4, Math.min(12, Math.round(mins / 60)));
+  return Math.max(6, Math.min(8, Math.round(mins / 60)));
 }
 
 /** Calculate bedtime given wake time and planned sleep duration in hours. */
@@ -216,7 +216,7 @@ export function DaySetupModal({
               onChange={(e) => setTargetDurationHours(Number(e.target.value))}
               className="rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-3 py-2 text-sm text-share-onBg focus:border-share-primary focus:outline-none"
             >
-              {[4, 5, 6, 7, 8, 9, 10, 11, 12].map((h) => (
+              {[6, 7, 8].map((h) => (
                 <option key={h} value={h}>{h} hours</option>
               ))}
             </select>
