@@ -309,8 +309,8 @@ export function SectionColumn({
               {overCapacity && !compressed && (
                 <span
                   className="flex items-center gap-1 rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-amber-300"
-                  aria-label={`Over capacity: ${formatBlockMins(plannedMinutes!)} of work for a ${formatBlockMins(windowMinutes!)} window — trim it or the day runs later`}
-                  title={`Planned ${formatBlockMins(plannedMinutes!)} of work for a ${formatBlockMins(windowMinutes!)} window — trim it or the day runs later`}
+                  aria-label={`Over capacity: ${formatBlockMins(plannedMinutes!)} of work for a ${formatBlockMins(windowMinutes!)} window. Trim it or the day runs later`}
+                  title={`Planned ${formatBlockMins(plannedMinutes!)} of work for a ${formatBlockMins(windowMinutes!)} window. Trim it or the day runs later`}
                 >
                   <AlertTriangle className="h-3 w-3" /> {formatBlockMins(plannedMinutes!)} / {formatBlockMins(windowMinutes!)}
                 </span>
@@ -320,7 +320,7 @@ export function SectionColumn({
               <p className="text-xs text-share-onSurfaceVariant">
                 {timeframeLabel}
                 {timeframeNote ? (
-                  <span className="ml-1 text-teal-400" title="Time reserved for today's Top 3 tasks">
+                  <span className="ml-1 text-teal-400" title="Time reserved for today's Top Three Priorities">
                     {timeframeNote}
                   </span>
                 ) : null}

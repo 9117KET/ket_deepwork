@@ -7,7 +7,6 @@ import {
   isSleepTime,
   getActiveSectionIds,
   getSectionTimeframeLabel,
-  BLOCK_SURPLUS_CAP,
   NONEMPTY_BLOCK_MIN_MINUTES,
 } from './sectionTimeBlocks'
 import type { BlockDurations, Task, TaskSectionId } from './types'
@@ -92,10 +91,12 @@ describe('computePlannedMinutesBySection', () => {
   })
 })
 
-// ── computeCapacityAwareBlocks (demand-first) ─────────────────────────────────
+// ── computeCapacityAwareBlocks (demand-first, simple bedtime) ─────────────────
 //
-// All scenarios use a 07:00→23:00 day (awake 960) and FLOORS, so morning/night
-// floors are 60 each and focusCapacity = 960 − 60 − 60 = 840.
+// All scenarios use a 07:00→23:00 day (awake 960, target bedtime 23:00) and
+// FLOORS, so morning/night floors are 60 each. Work blocks size to demand only —
+// no surplus padding — and the bedtime stays at the 23:00 target until the planned
+// work runs past it.
 
 describe('computeCapacityAwareBlocks (demand-first)', () => {
   const planned = (o: Partial<BlockDurations> = {}): BlockDurations => ({
@@ -110,93 +111,51 @@ describe('computeCapacityAwareBlocks (demand-first)', () => {
     expect(r.durations.morningRoutine).toBe(60) // routine floor
     expect(r.durations.nightRoutine).toBe(60)   // routine floor
     expect(r.overByMinutes).toBe(0)
-    // Whole focus pool is free → surplus goes to side quests / earlier sleep.
-    expect(r.freeMinutes).toBe(840)
-    expect(r.projectedLightsOutMin).toBe(540) // 07:00 + 120 = 09:00
+    expect(r.projectedLightsOutMin).toBe(1380) // light day → stays at the 23:00 target
   })
 
-  it('sizes a populated block to its tasks and pads High up to its cap', () => {
-    // 1h of High work: High gets first dibs on surplus, up to the 4h cap.
+  it('sizes a populated block to exactly its task demand (no padding)', () => {
     const r = computeCapacityAwareBlocks('07:00', '23:00', planned({ highPriority: 60 }), FLOORS)
-    expect(r.durations.highPriority).toBe(BLOCK_SURPLUS_CAP.highPriority) // 240
+    expect(r.durations.highPriority).toBe(60) // not inflated toward any cap
     expect(r.durations.mediumPriority).toBe(0) // empty → hidden
     expect(r.durations.lowPriority).toBe(0)
-    expect(r.freeMinutes).toBe(960 - (60 + 240 + 60)) // 600 free → side quests / sleep
+    expect(r.overByMinutes).toBe(0)
+    expect(r.projectedLightsOutMin).toBe(1380) // still fits before 23:00 → target
   })
 
-  it('never pads a block beyond its task demand when demand already exceeds the cap', () => {
-    // 5h of High work > 4h cap: keep the full demand, cap only limits *padding*.
+  it('keeps full demand when a block exceeds its old cap (no ceiling anymore)', () => {
     const r = computeCapacityAwareBlocks('07:00', '23:00', planned({ highPriority: 300 }), FLOORS)
     expect(r.durations.highPriority).toBe(300)
     expect(r.durations.mediumPriority).toBe(0)
     expect(r.overByMinutes).toBe(0)
   })
 
-  it('cascades surplus High→Medium and leaves empty Low hidden', () => {
-    const r = computeCapacityAwareBlocks('07:00', '23:00', planned({ highPriority: 30, mediumPriority: 30 }), FLOORS)
-    expect(r.durations.highPriority).toBe(BLOCK_SURPLUS_CAP.highPriority)   // 240, filled first
-    expect(r.durations.mediumPriority).toBe(BLOCK_SURPLUS_CAP.mediumPriority) // 120, filled next
-    expect(r.durations.lowPriority).toBe(0) // empty → never padded
+  it('leaves empty blocks at 0 and sizes populated ones to demand', () => {
+    const r = computeCapacityAwareBlocks('07:00', '23:00', planned({ highPriority: 30, mediumPriority: 45 }), FLOORS)
+    expect(r.durations.highPriority).toBe(30)
+    expect(r.durations.mediumPriority).toBe(45)
+    expect(r.durations.lowPriority).toBe(0) // empty → hidden
   })
 
-  it('only feeds surplus to populated blocks (a lone Low task absorbs it, not High)', () => {
+  it('applies the non-empty minimum width to a tiny task', () => {
     const r = computeCapacityAwareBlocks('07:00', '23:00', planned({ lowPriority: 10 }), FLOORS)
-    expect(r.durations.highPriority).toBe(0)   // no High tasks → stays hidden
+    expect(r.durations.highPriority).toBe(0)
     expect(r.durations.mediumPriority).toBe(0)
-    expect(r.durations.lowPriority).toBe(BLOCK_SURPLUS_CAP.lowPriority) // padded 30→60
+    expect(r.durations.lowPriority).toBe(NONEMPTY_BLOCK_MIN_MINUTES) // 10 → 30
   })
 
-  it('applies the non-empty minimum width to a tiny task when capacity is tight', () => {
-    // Fill the focus pool with High so no surplus remains to pad a 10-min Low task.
-    const r = computeCapacityAwareBlocks(
-      '07:00', '23:00',
-      planned({ highPriority: 840 - NONEMPTY_BLOCK_MIN_MINUTES, lowPriority: 10 }),
-      FLOORS,
-    )
-    expect(r.durations.lowPriority).toBe(NONEMPTY_BLOCK_MIN_MINUTES) // 30, not 10
-    expect(r.overByMinutes).toBe(0)
-  })
-
-  it('compresses Low before Medium when tasks overflow capacity', () => {
-    // high+med+low demand = 600+200+200 = 1000 > 840 → over 160, all from Low.
+  it('slips the bedtime past the target and reports overByMinutes when work overflows', () => {
+    // morning 60 + high 600 + medium 200 + low 200 + night 60 = 1120 > 960 awake.
     const r = computeCapacityAwareBlocks(
       '07:00', '23:00',
       planned({ highPriority: 600, mediumPriority: 200, lowPriority: 200 }),
       FLOORS,
     )
-    expect(r.compressed).toEqual({ lowPriority: true, mediumPriority: false })
-    expect(r.durations.lowPriority).toBe(40) // 200 - 160
-    expect(r.durations.mediumPriority).toBe(200) // untouched
-    expect(r.durations.highPriority).toBe(600) // protected
-    expect(r.overByMinutes).toBe(0)
-  })
-
-  it('compresses Medium too when Low alone is not enough', () => {
-    // over = 700+200+200 - 840 = 260; Low → 15 (cut 185), remaining 75 from Medium → 125.
-    const r = computeCapacityAwareBlocks(
-      '07:00', '23:00',
-      planned({ highPriority: 700, mediumPriority: 200, lowPriority: 200 }),
-      FLOORS,
-    )
-    expect(r.compressed).toEqual({ lowPriority: true, mediumPriority: true })
-    expect(r.durations.lowPriority).toBe(15)
-    expect(r.durations.mediumPriority).toBe(125)
-    expect(r.overByMinutes).toBe(0)
-  })
-
-  it('never shrinks High, and reports overByMinutes when the plan cannot fit', () => {
-    // High alone (900) blows the focus capacity; Low+Medium floored at 15 each, still over.
-    const r = computeCapacityAwareBlocks(
-      '07:00', '23:00',
-      planned({ highPriority: 900, mediumPriority: 200, lowPriority: 200 }),
-      FLOORS,
-    )
-    expect(r.durations.highPriority).toBe(900) // protected, never compressed
-    expect(r.durations.lowPriority).toBe(15)
-    expect(r.durations.mediumPriority).toBe(15)
-    expect(r.overByMinutes).toBe(90) // 1050 planned - 960 awake
-    expect(r.freeMinutes).toBe(0)
-    expect(r.projectedLightsOutMin).toBe(30) // wraps past midnight: 07:00 + 1050 = 00:30
+    expect(r.durations.highPriority).toBe(600) // demand kept as-is, never compressed
+    expect(r.durations.mediumPriority).toBe(200)
+    expect(r.durations.lowPriority).toBe(200)
+    expect(r.overByMinutes).toBe(160) // 1120 planned - 960 awake
+    expect(r.projectedLightsOutMin).toBe(100) // 07:00 + 1120 = 01:40, wrapped
   })
 
   it('expands a routine block to fit its tasks above the floor', () => {

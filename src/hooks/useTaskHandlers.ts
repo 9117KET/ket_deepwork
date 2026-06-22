@@ -523,57 +523,6 @@ export function useTaskHandlers(
     [selectedDay, updateAppState],
   );
 
-  /**
-   * Append incomplete tasks from yesterday into today's existing plan.
-   * Preserves scheduledAt and durationMinutes. Skips done parents even if
-   * they have incomplete subtasks.
-   */
-  const handleCarryForward = useCallback(() => {
-    const yesterday = addDays(selectedDay, -1);
-    updateAppState((prev) => {
-      const sourceTasks = getOrCreateDay(prev, yesterday).tasks;
-      if (sourceTasks.every((t) => t.parentId || t.isDone)) return prev;
-
-      const existingDay = getOrCreateDay(prev, selectedDay);
-      // Build a dedup set from today's existing root tasks (title + sectionId)
-      const existingKeys = new Set(
-        existingDay.tasks
-          .filter((t) => !t.parentId)
-          .map((t) => `${t.sectionId}:${t.title.trim().toLowerCase()}`),
-      );
-      const dedupedRootIds = new Set(
-        sourceTasks
-          .filter((t) => !t.parentId && !t.isDone)
-          .filter((t) => !existingKeys.has(`${t.sectionId}:${t.title.trim().toLowerCase()}`))
-          .map((t) => t.id),
-      );
-      if (dedupedRootIds.size === 0) return prev;
-
-      const toCarry = sourceTasks.filter(
-        (t) => dedupedRootIds.has(t.id) || (t.parentId != null && dedupedRootIds.has(t.parentId) && !t.isDone),
-      );
-
-      const idMap = new Map<string, string>();
-      const carried = toCarry.map((t) => {
-        const newId = createTaskId();
-        idMap.set(t.id, newId);
-        // Increment postponedCount for root tasks being carried forward.
-        const postponedCount = t.parentId ? (t.postponedCount ?? 0) : (t.postponedCount ?? 0) + 1;
-        return { ...t, id: newId, date: selectedDay, isDone: false, postponedCount };
-      }).map((t) => ({
-        ...t,
-        parentId: t.parentId ? (idMap.get(t.parentId) ?? undefined) : undefined,
-      }));
-      return {
-        ...prev,
-        days: {
-          ...prev.days,
-          [selectedDay]: { ...existingDay, tasks: [...existingDay.tasks, ...carried] },
-        },
-      };
-    });
-  }, [selectedDay, updateAppState]);
-
   const handleUpdateTask = (
     taskId: string,
     patch: {
@@ -995,7 +944,6 @@ export function useTaskHandlers(
     handleReorderTask,
     handleMoveTask,
     handleCopyFromDay,
-    handleCarryForward,
     handleUpdateTask,
     handleUpdateMonthlyReview,
     handleUpdateWeeklyReview,

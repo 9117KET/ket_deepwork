@@ -75,7 +75,7 @@ export function MustDoPinnedHeader({ tasks, onToggle, onAdd, onDelete, onUpdate 
           className="flex w-full items-center gap-2 px-3 py-2 text-left"
         >
           <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-          <span className="text-xs font-medium text-emerald-400">Top 3 complete</span>
+          <span className="text-xs font-medium text-emerald-400">Top Three Priorities complete</span>
           <span className="ml-auto flex items-center gap-2 text-[10px] text-share-onSurfaceVariant/60">
             {rootTasks.length}/{rootTasks.length} done
             {doneExpanded ? <ChevronUp className="h-3.5 w-3.5 text-emerald-600/70" /> : <ChevronDown className="h-3.5 w-3.5 text-emerald-600/70" />}
@@ -125,16 +125,16 @@ export function MustDoPinnedHeader({ tasks, onToggle, onAdd, onDelete, onUpdate 
                       type="time"
                       value={task.scheduledAt ?? ''}
                       onChange={e => onUpdate(task.id, { scheduledAt: e.target.value ? normalizeHhmm(e.target.value) : undefined })}
-                      className={`w-24 rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-1 py-0.5 text-xs tabular-nums [color-scheme:dark] ${task.scheduledAt ? 'text-share-onSurface' : 'text-transparent'}`}
+                      className={`w-32 rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-2.5 py-1.5 text-sm tabular-nums [color-scheme:dark] ${task.scheduledAt ? 'text-share-onSurface' : 'text-transparent'}`}
                     />
                     {!task.scheduledAt && (
-                      <span className="pointer-events-none absolute inset-0 flex items-center px-1 text-xs text-share-onSurfaceVariant/50">time</span>
+                      <span className="pointer-events-none absolute inset-0 flex items-center px-2.5 text-sm text-share-onSurfaceVariant/50">time</span>
                     )}
                   </div>
                   <select
                     value={task.durationMinutes ?? ''}
                     onChange={e => onUpdate(task.id, { durationMinutes: e.target.value === '' ? undefined : Number(e.target.value) })}
-                    className="w-24 rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-1 py-0.5 text-xs tabular-nums text-share-onSurface"
+                    className="w-24 rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-1 py-1 text-sm tabular-nums text-share-onSurface"
                     title="Duration"
                   >
                     <option value="">Duration</option>
@@ -168,7 +168,7 @@ export function MustDoPinnedHeader({ tasks, onToggle, onAdd, onDelete, onUpdate 
       >
         <div className="flex items-center gap-2">
           <span className="text-[10px] font-semibold uppercase tracking-wider text-share-onSurfaceVariant">
-            Your top 3 for today
+            Your Top Three Priorities for today
           </span>
           {/* Progress pips */}
           <span className="flex gap-1">
@@ -248,16 +248,16 @@ export function MustDoPinnedHeader({ tasks, onToggle, onAdd, onDelete, onUpdate 
                   type="time"
                   value={task.scheduledAt ?? ''}
                   onChange={e => onUpdate(task.id, { scheduledAt: e.target.value ? normalizeHhmm(e.target.value) : undefined })}
-                  className={`w-24 rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-1 py-0.5 text-xs tabular-nums [color-scheme:dark] ${task.scheduledAt ? 'text-share-onSurface' : 'text-transparent'}`}
+                  className={`w-32 rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-2.5 py-1.5 text-sm tabular-nums [color-scheme:dark] ${task.scheduledAt ? 'text-share-onSurface' : 'text-transparent'}`}
                 />
                 {!task.scheduledAt && (
-                  <span className="pointer-events-none absolute inset-0 flex items-center px-1 text-xs text-share-onSurfaceVariant/50">time</span>
+                  <span className="pointer-events-none absolute inset-0 flex items-center px-2.5 text-sm text-share-onSurfaceVariant/50">time</span>
                 )}
               </div>
               <select
                 value={task.durationMinutes ?? ''}
                 onChange={e => onUpdate(task.id, { durationMinutes: e.target.value === '' ? undefined : Number(e.target.value) })}
-                className="w-24 rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-1 py-0.5 text-xs tabular-nums text-share-onSurface"
+                className="w-24 rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-1 py-1 text-sm tabular-nums text-share-onSurface"
                 title="Duration"
               >
                 <option value="">Duration</option>
@@ -278,7 +278,7 @@ export function MustDoPinnedHeader({ tasks, onToggle, onAdd, onDelete, onUpdate 
         {/* Empty slots */}
         {rootTasks.length === 0 && (
           <p className="text-xs italic text-share-onSurfaceVariant/50 px-1">
-            No priorities set — add up to 3 for today.
+            No priorities set. Add up to 3 for today.
           </p>
         )}
 

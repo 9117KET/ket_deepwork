@@ -65,7 +65,6 @@ import { getDailyQuestSelection } from "../../domain/sideQuestAlgorithm";
 import { MobileTabBar, type MobileTab } from "./MobileTabBar";
 import { ActiveTripBanner } from "./ActiveTripBanner";
 import { DaySummaryCard } from "./DaySummaryCard";
-import { DayTimeline } from "./DayTimeline";
 import { Moon, AlertTriangle } from "lucide-react";
 import { useActiveTripStatus } from "../../hooks/useActiveTripStatus";
 import { ErrorBoundary } from "../ErrorBoundary";
@@ -239,7 +238,6 @@ export function DayPlanner({
     handleAddSubtask,
     handleReorderTask,
     handleCopyFromDay,
-    handleCarryForward,
     handleUpdateTask,
     handleUpdateMonthlyReview: _handleUpdateMonthlyReview,
     handleUpdateWeeklyReview,
@@ -281,42 +279,6 @@ export function DayPlanner({
     return map;
   }, [computedBlocks]);
 
-  // Which flex blocks auto-sizing squeezed to their minimum to make the day fit.
-  // Only meaningful in auto mode — under a manual override the windows are the
-  // user's own, so an over-capacity block is legitimate feedback, not a squeeze.
-  const compressedBySection = useMemo<Partial<Record<TaskSectionId, boolean>>>(() => {
-    if (isManualOverride || !capacity) return {};
-    return {
-      mediumPriority: capacity.compressed.mediumPriority,
-      lowPriority: capacity.compressed.lowPriority,
-    };
-  }, [isManualOverride, capacity]);
-
-  // Block windows for the timeline's background bands + whether each overflows its planned work.
-  // A deliberately-squeezed block isn't flagged "over" — the day-level banner owns that story.
-  const timelineBlocks = useMemo(() => {
-    if (!computedBlocks) return undefined;
-    const shortLabels: Partial<Record<TaskSectionId, string>> = {
-      morningRoutine: 'Morning', highPriority: 'High', mediumPriority: 'Medium', lowPriority: 'Low', nightRoutine: 'Night',
-    };
-    return computedBlocks
-      // Demand-first sizing collapses empty work blocks to 0 width; drop them so
-      // the timeline doesn't draw a label-less (or accidentally day-long) band.
-      .filter((b) => (b.end >= b.start ? b.end - b.start : b.end + 1440 - b.start) > 0)
-      .map((b) => {
-        const sid = b.sectionIds[0]!;
-        const win = b.end >= b.start ? b.end - b.start : b.end + 1440 - b.start;
-        const planned = plannedBySection?.[sid as keyof BlockDurations];
-        return {
-          sectionId: sid,
-          startMin: b.start,
-          endMin: b.end,
-          label: shortLabels[sid] ?? sid,
-          over: planned != null && planned > win + 5 && !compressedBySection[sid],
-        };
-      });
-  }, [computedBlocks, plannedBySection, compressedBySection]);
-
   // Short note shown next to the High Priority window: how much of it is reserved
   // for today's Top 3 tasks. In auto mode the window already absorbed that time
   // (capacity sizing folds Top 3 into High), so it reads "incl."; under a manual
@@ -326,7 +288,7 @@ export function DayPlanner({
     const h = Math.floor(mustDoMinutes / 60);
     const m = mustDoMinutes % 60;
     const dur = h > 0 ? `${h}h${m > 0 ? `${m}m` : ''}` : `${m}m`;
-    return `${isManualOverride ? '+' : 'incl. '}${dur} Top 3`;
+    return `${isManualOverride ? '+' : 'incl. '}${dur} Top Three`;
   }, [mustDoMinutes, isManualOverride, shareMode]);
 
   const { taskIdsDueNow, activeSectionIds, isSleepTimeNow, timeframeLabelsBySection } =
@@ -805,30 +767,6 @@ export function DayPlanner({
             </div>
           );
         })()}
-        {(() => {
-          if (shareMode || dayState.tasks.length === 0) return null;
-          const todayKeys = new Set(
-            dayState.tasks
-              .filter((t) => !t.parentId)
-              .map((t) => `${t.sectionId}:${t.title.trim().toLowerCase()}`),
-          );
-          const incompletePrevTasks = prevDayState.tasks.filter(
-            (t) => !t.parentId && !t.isDone && !todayKeys.has(`${t.sectionId}:${t.title.trim().toLowerCase()}`),
-          );
-          if (incompletePrevTasks.length === 0) return null;
-          return (
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-              <button
-                type="button"
-                onClick={handleCarryForward}
-                className="rounded-md border border-share-outlineVariant/40 bg-share-surfaceContainer px-2 py-1.5 text-share-onSurface hover:border-amber-500/60 hover:text-amber-300"
-                title="Append incomplete tasks from yesterday to today's plan"
-              >
-                ↑ {incompletePrevTasks.length} incomplete from yesterday — carry forward
-              </button>
-            </div>
-          );
-        })()}
         {!shareMode && selectedTaskIds.size === 0 && dayState.tasks.length > 0 && (
           <p className="mt-2 text-[11px] text-share-onSurfaceVariant/70">
 Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
@@ -939,7 +877,7 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
             const label = h > 0 ? `${h}h ${m > 0 ? `${m}m` : ''}`.trim() : `${m}m`
             return (
               <div className="rounded border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-300">
-                Shallow time: {label} / 2h daily limit — protect your deep work blocks
+                Shallow time: {label} / 2h daily limit. Protect your deep work blocks
               </div>
             )
           })()}
@@ -961,31 +899,21 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
               const m = min % 60
               return h > 0 ? `${h}h${m > 0 ? ` ${m}m` : ''}` : `${m}m`
             }
-            const squeezed = [
-              capacity.compressed.lowPriority && 'Low',
-              capacity.compressed.mediumPriority && 'Medium',
-            ].filter(Boolean).join(' & ')
             // Actual planned task work (the raw task minutes the user entered).
             const workMinutes = plannedBySection
               ? Object.values(plannedBySection).reduce((a, b) => a + (b ?? 0), 0)
               : 0
-            // Demand-first sizing leaves real slack before bedtime; that slack is the
-            // user's to spend on side quests or earlier sleep. Use the block-derived
-            // value so it agrees with the projected lights-out time above.
-            const freeMinutes = capacity.freeMinutes
             if (capacity.overByMinutes > 0) {
+              const [th, tm] = (dayState.sleepTarget ?? '23:00').split(':').map(Number)
+              const targetClock = fmtClock((th ?? 23) * 60 + (tm ?? 0))
               return (
                 <div className="flex items-start gap-2 rounded-md border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
                   <div className="min-w-0">
                     <p className="font-medium text-amber-100">
-                      Bed slips to <span className="tabular-nums">{fmtClock(capacity.projectedLightsOutMin)}</span> — {fmtDur(capacity.overByMinutes)} over capacity
+                      Bed slips to <span className="tabular-nums">{fmtClock(capacity.projectedLightsOutMin)}</span>, {fmtDur(capacity.overByMinutes)} past your {targetClock} target
                     </p>
-                    <p className="mt-0.5 text-amber-300/80">
-                      {squeezed
-                        ? `${squeezed} already squeezed to the minimum — trim or defer your remaining tasks (Top 3 / High Priority included) to make bed on time.`
-                        : 'Trim or defer tasks to make bed on time.'}
-                    </p>
+                    <p className="mt-0.5 text-amber-300/80">Trim or defer a task to make bed on time.</p>
                   </div>
                 </div>
               )
@@ -995,14 +923,14 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
                 <Moon className="h-4 w-4 shrink-0 text-teal-400/80" />
                 <span>
                   In bed by <span className="font-semibold tabular-nums text-teal-100">{fmtClock(capacity.projectedLightsOutMin)}</span>
-                  <span className="text-teal-300/70"> · {fmtDur(workMinutes)} planned{freeMinutes > 0 ? `, ${fmtDur(freeMinutes)} free for side quests or rest` : ''}{squeezed ? ` · ${squeezed} trimmed to fit` : ''}</span>
+                  <span className="text-teal-300/70"> · {fmtDur(workMinutes)} planned</span>
                 </span>
               </div>
             )
           })()}
           {!shareMode && isManualOverride && capacity && (
             <div className="flex items-center justify-between gap-2 rounded border border-share-outlineVariant/30 bg-share-surfaceContainerLow px-3 py-1.5 text-xs text-share-onSurfaceVariant">
-              <span>Manual block sizes — auto-sizing from your tasks is paused.</span>
+              <span>Manual block sizes. Auto-sizing from your tasks is paused.</span>
               <button
                 type="button"
                 onClick={resetBlocksToAuto}
@@ -1072,7 +1000,6 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
               }
               plannedMinutes={shareMode ? undefined : plannedBySection?.[section.id as keyof BlockDurations]}
               windowMinutes={shareMode ? undefined : blockWindowBySection[section.id]}
-              compressed={shareMode ? false : Boolean(compressedBySection[section.id])}
               headerAction={(() => {
                 if (shareMode || !effectiveBlockDurations) return undefined;
                 const sId = section.id as keyof BlockDurations;
@@ -1222,25 +1149,7 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
                   <DaySummaryCard ctx={dayCtx} />
                 </SidebarCard>
               )}
-              {/* Time-block agenda: scheduled tasks visualised top-to-bottom */}
-              {!shareMode && (() => {
-                const now = new Date();
-                const nowMinutes =
-                  ((now.getHours() * 60 + now.getMinutes() - timeOffsetMinutes) % 1440 + 1440) % 1440;
-                return (
-                  <SidebarCard cardId="timeline" title="Timeline">
-                    <DayTimeline
-                      tasks={dayState.tasks}
-                      wakeTime={dayState.wakeTime}
-                      sleepTarget={dayState.sleepTarget}
-                      isToday={selectedDay === todayIso()}
-                      nowMinutes={nowMinutes}
-                      blocks={timelineBlocks}
-                    />
-                  </SidebarCard>
-                );
-              })()}
-              {/* Deep work timer: most-used active tool — placed first for immediate reach */}
+              {/* Deep work timer: most-used active tool, placed first for immediate reach */}
               {!shareMode && (
                 <SidebarCard cardId="deepWorkTimer" title="Deep work timer">
                   <DeepWorkTimer onSessionComplete={handleSessionComplete} />
@@ -1405,23 +1314,6 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
             onSaveJournal={(note, hijacker) => {
               handleSaveDayJournal(note);
               handleSaveFocusHijacker(hijacker);
-            }}
-            onCarryTask={task => {
-              const tDate = addDays(selectedDay, 1);
-              updateAppState(prev => {
-                const tomorrow = getOrCreateDay(prev, tDate);
-                const newTask: import("../../domain/types").Task = {
-                  id: `${Date.now()}-carried`,
-                  title: task.title,
-                  isDone: false,
-                  sectionId: task.sectionId,
-                  date: tDate,
-                };
-                return {
-                  ...prev,
-                  days: { ...prev.days, [tDate]: { ...tomorrow, tasks: [...tomorrow.tasks, newTask] } },
-                };
-              });
             }}
             onDropTask={task => handleAbandonTask(task.id)}
             onComplete={handleShutdownComplete}

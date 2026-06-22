@@ -139,7 +139,7 @@ export function SharedPlannerShell({
               </span>
             </div>
             <h2 className="relative mt-4 font-shareHeadline text-2xl font-bold leading-tight text-share-onSurface md:text-3xl lg:text-4xl">
-              {mainObjective?.title ?? "Add a Top 3 task in the planner to pin your top outcome here."}
+              {mainObjective?.title ?? "Add a Top Three Priorities task in the planner to pin your top outcome here."}
             </h2>
             <p className="relative mt-3 text-sm text-share-onSurfaceVariant">
               {rootTasks.length > 0

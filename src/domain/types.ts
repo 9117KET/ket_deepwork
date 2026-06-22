@@ -32,8 +32,6 @@ export interface Task {
   scheduledAt?: string;
   /** Planned duration in minutes (for display / future timer link). */
   durationMinutes?: number;
-  /** Number of times this task has been carried forward from a previous day. */
-  postponedCount?: number;
   /** True when this task is shallow work (logistical, non-cognitively demanding). */
   isShallow?: boolean;
 }

@@ -207,7 +207,7 @@ export function WeeklyProjectCard({ selectedDate, projects, onUpdate }: WeeklyPr
                 </span>
                 {proj ? (
                   <div
-                    title={`${proj.name}${proj.description ? ` — ${proj.description}` : ''}`}
+                    title={`${proj.name}${proj.description ? `: ${proj.description}` : ''}`}
                     className={`flex h-7 w-full items-center justify-center rounded border text-[9px] font-semibold leading-tight text-center px-0.5 ${cls!.badge} ${isToday ? 'ring-1 ring-sky-400/50' : ''}`}
                   >
                     {proj.name.length > 6 ? proj.name.slice(0, 5) + '…' : proj.name}
