@@ -30,6 +30,9 @@ import {
   BLOCK_MIN_MINUTES,
   BLOCK_ORDER,
   SLEEP_MIN_MINUTES,
+  SLEEP_WARN_MINUTES,
+  computeSleepWindow,
+  formatTimeOfDay,
 } from "../../domain/sectionTimeBlocks";
 import { useTaskHandlers } from "../../hooks/useTaskHandlers";
 import { useDayBlockEditor } from "../../hooks/useDayBlockEditor";
@@ -865,6 +868,22 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
         }
       >
         <div className={`space-y-3${!shareShellLayout && mobileTab !== 'plan' ? ' hidden lg:block' : ''}`} data-tour="tasks-section">
+         <ErrorBoundary
+           resetKeys={[selectedDay]}
+           fallback={(reset) => (
+             <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-200">
+               <p className="font-medium">This section hit a snag.</p>
+               <p className="mt-1 text-amber-200/80">Your tasks are saved. Reload this section to continue.</p>
+               <button
+                 type="button"
+                 onClick={reset}
+                 className="mt-3 rounded border border-amber-400/50 bg-amber-500/20 px-3 py-1.5 text-xs font-medium text-amber-100 hover:bg-amber-500/30"
+               >
+                 Reload tasks
+               </button>
+             </div>
+           )}
+         >
           {!shareMode && (() => {
             const shallowMinutesUsed = (appState.days[selectedDay]?.tasks ?? [])
               .filter((t) => t.isShallow && t.isDone && t.durationMinutes)
@@ -1032,19 +1051,40 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
                 <h3 className="text-sm sm:text-base font-semibold text-share-onBg">
                   Sleep
                 </h3>
-                <p className="text-xs text-share-onSurfaceVariant">
-                  {(() => {
-                    const wake = dayState.wakeTime ?? '07:00';
-                    const bed = dayState.sleepTarget ?? '23:00';
-                    const [wh, wm] = wake.split(':').map(Number);
-                    const [bh, bm] = bed.split(':').map(Number);
-                    const sleepMins = (((wh ?? 0) * 60 + (wm ?? 0)) - ((bh ?? 0) * 60 + (bm ?? 0)) + 1440) % 1440;
-                    const h = Math.floor(sleepMins / 60);
-                    const m = sleepMins % 60;
-                    const dur = m > 0 ? `${h}h ${m}m` : `${h}h`;
-                    return `${bed} → ${wake} · ${dur}`;
-                  })()}
-                </p>
+                {(() => {
+                  // Sleep starts a short wind-down after the day's last block ends
+                  // (demand-first): an early finish becomes a longer night rather
+                  // than idle time before a fixed bedtime.
+                  const wake = dayState.wakeTime ?? '07:00';
+                  const [wh, wm] = wake.split(':').map(Number);
+                  const wakeMin = (wh ?? 0) * 60 + (wm ?? 0);
+                  const win = computeSleepWindow(computedBlocks);
+                  const startMin = win
+                    ? win.startMin
+                    : (() => {
+                        const [bh, bm] = (dayState.sleepTarget ?? '23:00').split(':').map(Number);
+                        return (bh ?? 0) * 60 + (bm ?? 0);
+                      })();
+                  const durationMin = win ? win.durationMin : ((wakeMin - startMin + 1440) % 1440);
+                  const h = Math.floor(durationMin / 60);
+                  const m = durationMin % 60;
+                  const dur = m > 0 ? `${h}h ${m}m` : `${h}h`;
+                  const tooLittle = durationMin < SLEEP_MIN_MINUTES;
+                  const underTarget = !tooLittle && durationMin < SLEEP_WARN_MINUTES;
+                  return (
+                    <>
+                      <p className="text-xs text-share-onSurfaceVariant tabular-nums">
+                        {formatTimeOfDay(startMin)} → {formatTimeOfDay(wakeMin)} · {dur}
+                        {win && !win.capped ? <span className="ml-1 text-share-onSurfaceVariant/50">(after 20m wind-down)</span> : null}
+                      </p>
+                      {tooLittle ? (
+                        <p className="mt-0.5 text-xs text-red-400">Below the 5h floor — you'll need to catch up.</p>
+                      ) : underTarget ? (
+                        <p className="mt-0.5 text-xs text-amber-400">Under 6h — aim for 6–8h.</p>
+                      ) : null}
+                    </>
+                  );
+                })()}
               </div>
               {!shareMode && (
                 <div className="flex shrink-0 items-center gap-2">
@@ -1081,6 +1121,7 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
               )}
             </header>
           </section>
+         </ErrorBoundary>
         </div>
 
         {!shareShellLayout && (
@@ -1098,10 +1139,14 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
                   <DaySummaryCard ctx={dayCtx} />
                 </SidebarCard>
               )}
-              {/* Deep work timer: most-used active tool, placed first for immediate reach */}
+              {/* Deep work timer: most-used active tool. Motivation lives here too
+                  (a nudge while you work) rather than as its own card. */}
               {!shareMode && (
                 <SidebarCard cardId="deepWorkTimer" title="Deep work timer">
-                  <DeepWorkTimer onSessionComplete={handleSessionComplete} />
+                  <div className="space-y-3">
+                    <DeepWorkTimer onSessionComplete={handleSessionComplete} />
+                    <MotivationCard />
+                  </div>
                 </SidebarCard>
               )}
               {!shareMode && (
@@ -1119,39 +1164,39 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
                   />
                 </SidebarCard>
               )}
-              {/* The ONE Thing: day/week/month focus — consulted daily */}
+              {/* Focus: the daily/weekly/monthly ONE thing plus the long-term North
+                  Star, consolidated into a single "what matters" card. */}
               {!shareMode && (
-                <SidebarCard cardId="oneThing" title="The ONE thing">
-                  <OneThingCard
-                    selectedDay={selectedDay}
-                    dayOneThings={appState.dayOneThings ?? {}}
-                    weekOneThings={appState.weekOneThings ?? {}}
-                    monthOneThings={appState.monthOneThings ?? {}}
-                    onSetDay={handleSetDayOneThing}
-                    onSetWeek={handleSetWeekOneThing}
-                    onSetMonth={handleSetMonthOneThing}
-                  />
+                <SidebarCard cardId="focus" title="Focus">
+                  <div className="space-y-3">
+                    <OneThingCard
+                      selectedDay={selectedDay}
+                      dayOneThings={appState.dayOneThings ?? {}}
+                      weekOneThings={appState.weekOneThings ?? {}}
+                      monthOneThings={appState.monthOneThings ?? {}}
+                      onSetDay={handleSetDayOneThing}
+                      onSetWeek={handleSetWeekOneThing}
+                      onSetMonth={handleSetMonthOneThing}
+                    />
+                    <div className="border-t border-share-outlineVariant/20 pt-3">
+                      <NorthStarCard
+                        northStar={appState.northStar ?? ''}
+                        onSetNorthStar={handleSetNorthStar}
+                      />
+                    </div>
+                  </div>
                 </SidebarCard>
               )}
-              {/* Weekly overview: glanceable passive stats */}
-              <SidebarCard cardId="weeklyOverview" title="Weekly overview">
+              {/* Glanceable / occasional cards — collapsed by default to keep the
+                  sidebar short; expand state is remembered per card. */}
+              <SidebarCard cardId="weeklyOverview" title="Weekly overview" defaultCollapsed>
                 <WeeklyOverview
                   state={appState as AppState}
                   referenceDay={selectedDay}
                 />
               </SidebarCard>
-              {/* North Star: long-term vision — reviewed occasionally */}
               {!shareMode && (
-                <SidebarCard cardId="northStar" title="North Star">
-                  <NorthStarCard
-                    northStar={appState.northStar ?? ''}
-                    onSetNorthStar={handleSetNorthStar}
-                  />
-                </SidebarCard>
-              )}
-              {/* Weekly project rotation: side commitments pinned to specific days */}
-              {!shareMode && (
-                <SidebarCard cardId="weeklyProjects" title="Weekly projects">
+                <SidebarCard cardId="weeklyProjects" title="Weekly projects" defaultCollapsed>
                   <WeeklyProjectCard
                     selectedDate={selectedDay}
                     projects={appState.weeklyProjectRotation ?? []}
@@ -1160,12 +1205,7 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
                 </SidebarCard>
               )}
               {!shareMode && (
-                <SidebarCard cardId="motivation" title="Motivation">
-                  <MotivationCard />
-                </SidebarCard>
-              )}
-              {!shareMode && (
-                <SidebarCard cardId="notDoing" title="Not doing">
+                <SidebarCard cardId="notDoing" title="Not doing" defaultCollapsed>
                   <NotDoingPanel
                     globalList={appState.notDoingList ?? []}
                     dayList={dayState.notDoingItems ?? []}
