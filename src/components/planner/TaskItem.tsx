@@ -150,6 +150,15 @@ export function TaskItem({
   )
 
   const handleDragStart = (e: React.DragEvent) => {
+    // The whole row is draggable, but a drag must NOT start when the gesture
+    // begins on an interactive control — let the checkbox, time/duration pickers,
+    // inline editor, links, and the menu button behave normally. The grip is a
+    // role="button" <div> (not matched here), so it still initiates a drag.
+    const target = e.target as HTMLElement | null
+    if (target?.closest('input, select, textarea, button, a')) {
+      e.preventDefault()
+      return
+    }
     try {
       if (e.dataTransfer) {
         e.dataTransfer.effectAllowed = 'move'
@@ -257,6 +266,9 @@ export function TaskItem({
       )}
       <div
         tabIndex={0}
+        draggable={isReorderable}
+        onDragStart={isReorderable ? handleDragStart : undefined}
+        onDragEnd={isReorderable ? onDragEnd : undefined}
         onClickCapture={handleRowClickCapture}
         onKeyDown={(e) => {
           if ((e.ctrlKey || e.metaKey) && (e.key === 'Enter' || e.key === ' ')) {
@@ -264,7 +276,7 @@ export function TaskItem({
             onToggleSelect?.()
           }
         }}
-        className={`group flex flex-wrap items-center gap-2 py-1.5 ${isDragging ? 'opacity-50' : ''} ${isDueNow ? 'rounded-md border border-amber-500/70 bg-amber-500/10' : ''} ${isSelected ? 'rounded-md bg-sky-500/20 ring-1 ring-sky-500/50' : ''} ${onToggleSelect ? 'cursor-default' : ''}`}
+        className={`group flex flex-wrap items-center gap-2 py-1.5 ${isReorderable ? 'cursor-grab active:cursor-grabbing' : ''} ${isDragging ? 'opacity-50' : ''} ${isDueNow ? 'rounded-md border border-amber-500/70 bg-amber-500/10' : ''} ${isSelected ? 'rounded-md bg-sky-500/20 ring-1 ring-sky-500/50' : ''}`}
         onDragOver={handleDragOver}
         onDragLeave={onDragLeave}
         onDrop={handleDrop}
@@ -274,11 +286,8 @@ export function TaskItem({
             ref={gripRef}
             role="button"
             tabIndex={0}
-            draggable
-            onDragStart={handleDragStart}
-            onDragEnd={onDragEnd}
             onContextMenu={handleContextMenu}
-            className="hidden cursor-grab touch-none rounded p-0.5 text-share-onSurfaceVariant/50 hover:bg-share-surfaceContainerHigh hover:text-share-onSurfaceVariant active:cursor-grabbing sm:block"
+            className="hidden shrink-0 touch-none rounded p-0.5 text-share-onSurfaceVariant/50 hover:bg-share-surfaceContainerHigh hover:text-share-onSurfaceVariant sm:block"
             aria-label="Drag to reorder; right-click for menu"
           >
             <GripIcon />
