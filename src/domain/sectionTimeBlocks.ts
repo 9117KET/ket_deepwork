@@ -302,8 +302,19 @@ export const BLOCK_MIN_MINUTES: Record<keyof BlockDurations, number> = {
  *  readable). An empty work block stays at 0 and is hidden from the timeline. */
 export const NONEMPTY_BLOCK_MIN_MINUTES = 30
 
-export const SLEEP_WARN_MINUTES = 7 * 60   // 420 min -- warn below 7h
-export const SLEEP_MIN_MINUTES  = 6 * 60   // 360 min -- hard floor
+export const SLEEP_WARN_MINUTES = 6 * 60   // 360 min -- warn below 6h (ideal is 6-8h)
+export const SLEEP_MIN_MINUTES  = 5 * 60   // 300 min -- hard floor (survivable, but detrimental)
+export const SLEEP_MAX_MINUTES  = 10 * 60  // 600 min -- catch-up ceiling: cap the night so a
+                                           //   lightly-planned day (blocks end early) doesn't
+                                           //   show an absurd 15h+ "sleep"; the early end is just
+                                           //   open evening time before this latest sleep start.
+
+/**
+ * Wind-down buffer (minutes) between the end of the last block (Night routine)
+ * and the start of sleep. Sleep begins where the day's work ends + this buffer,
+ * rather than at a fixed clock bedtime — so finishing early means more rest.
+ */
+export const SLEEP_WINDDOWN_BUFFER_MINUTES = 20
 
 export const BLOCK_ORDER: (keyof BlockDurations)[] = [
   'morningRoutine', 'highPriority', 'mediumPriority', 'lowPriority', 'nightRoutine',
@@ -385,7 +396,34 @@ function parseHHMM(hhmm: string): number {
   return hh * 60 + mm
 }
 
-function formatTimeOfDay(minutes: number): string {
+/**
+ * Sleep window derived from the day's blocks: it starts a short wind-down buffer
+ * after the last block ends and runs until wake (the first block's start). This
+ * is the demand-first sleep model — the day's actual end drives bedtime, so an
+ * early finish yields a longer night rather than idle time before a fixed bedtime.
+ */
+export function computeSleepWindow(
+  blocks?: DayBlocks,
+): { startMin: number; endMin: number; durationMin: number; capped: boolean } | null {
+  if (!blocks || blocks.length === 0) return null
+  const first = blocks[0]!
+  const last = blocks[blocks.length - 1]!
+  const endMin = first.start
+  let startMin = wrapMinutes(last.end + SLEEP_WINDDOWN_BUFFER_MINUTES)
+  const raw = (endMin - startMin + 1440) % 1440
+  let durationMin = raw === 0 ? 1440 : raw
+  // Cap the night so a lightly-planned day (blocks collapse early) doesn't claim
+  // an absurd 15h+ sleep. The time before this latest start is just open evening.
+  let capped = false
+  if (durationMin > SLEEP_MAX_MINUTES) {
+    durationMin = SLEEP_MAX_MINUTES
+    startMin = wrapMinutes(endMin - SLEEP_MAX_MINUTES)
+    capped = true
+  }
+  return { startMin, endMin, durationMin, capped }
+}
+
+export function formatTimeOfDay(minutes: number): string {
   const mins = wrapMinutes(minutes)
   const hours24 = Math.floor(mins / 60)
   const minsPart = mins % 60

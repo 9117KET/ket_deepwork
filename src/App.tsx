@@ -16,6 +16,7 @@ import {
   fetchSharedPlannerState,
   upsertSharedDay,
 } from "./storage/convexSharing";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { LandingPage } from "./pages/LandingPage";
 import { PlannerPage } from "./pages/PlannerPage";
 import { TravelPlannerPage } from "./pages/TravelPlannerPage";
@@ -165,19 +166,24 @@ function App() {
   }
 
   return (
-    <Routes>
-      <Route path="/" element={<LandingPage />} />
-      <Route path="/planner" element={<PlannerPage />} />
-      <Route path="/travel" element={<TravelPlannerPage />} />
-      <Route path="/travel/:tripId" element={<TripDetailPage />} />
-      <Route path="/finance" element={<FinancialPlannerPage />} />
-      <Route path="/calendar" element={<CalendarSyncPage />} />
-      <Route path="/calendar/callback" element={<CalendarCallbackPage />} />
-      <Route path="/privacy" element={<PrivacyPage />} />
-      <Route path="/terms" element={<TermsPage />} />
-      <Route path="/support" element={<SupportPage />} />
-      <Route path="/restore" element={<RestorePage />} />
-    </Routes>
+    // Top-level safety net: a render throw anywhere below (e.g. an edge case in
+    // drag-and-drop) shows a recoverable card instead of blanking the whole app
+    // and forcing a manual refresh. Auto-resets when the route changes.
+    <ErrorBoundary resetKeys={[searchParams.toString()]}>
+      <Routes>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/planner" element={<PlannerPage />} />
+        <Route path="/travel" element={<TravelPlannerPage />} />
+        <Route path="/travel/:tripId" element={<TripDetailPage />} />
+        <Route path="/finance" element={<FinancialPlannerPage />} />
+        <Route path="/calendar" element={<CalendarSyncPage />} />
+        <Route path="/calendar/callback" element={<CalendarCallbackPage />} />
+        <Route path="/privacy" element={<PrivacyPage />} />
+        <Route path="/terms" element={<TermsPage />} />
+        <Route path="/support" element={<SupportPage />} />
+        <Route path="/restore" element={<RestorePage />} />
+      </Routes>
+    </ErrorBoundary>
   );
 }
 

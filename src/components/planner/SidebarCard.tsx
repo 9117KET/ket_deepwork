@@ -19,11 +19,13 @@ interface SidebarCardProps {
   cardId: string
   /** Short label shown in the collapse header. */
   title: string
+  /** Initial collapsed state when the user hasn't set a preference yet. */
+  defaultCollapsed?: boolean
   children: ReactNode
 }
 
-export function SidebarCard({ cardId, title, children }: SidebarCardProps) {
-  const [collapsed, setCollapsed] = useState(() => getSidebarCardCollapsed(cardId) ?? false)
+export function SidebarCard({ cardId, title, defaultCollapsed = false, children }: SidebarCardProps) {
+  const [collapsed, setCollapsed] = useState(() => getSidebarCardCollapsed(cardId) ?? defaultCollapsed)
 
   const toggle = useCallback(() => {
     setCollapsed((c) => {
