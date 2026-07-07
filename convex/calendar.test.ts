@@ -454,6 +454,48 @@ describe('syncFromGoogle (import)', () => {
     })
   })
 
+  test('imports many events on one day in a single day write (batched)', async () => {
+    const t = convexTest(schema, modules)
+    const asUser = await connectAndSelect(t)
+    mock.eventsList = [
+      { id: 'g1', summary: 'A', start: { dateTime: '2026-06-20T09:00:00Z' }, end: { dateTime: '2026-06-20T10:00:00Z' } },
+      { id: 'g2', summary: 'B', start: { dateTime: '2026-06-20T11:00:00Z' }, end: { dateTime: '2026-06-20T12:00:00Z' } },
+      { id: 'g3', summary: 'C', start: { dateTime: '2026-06-21T09:00:00Z' }, end: { dateTime: '2026-06-21T09:30:00Z' } },
+    ]
+    const res = await asUser.action(api.calendar.syncFromGoogle, {
+      startDate: '2026-06-20',
+      endDate: '2026-06-21',
+      timezone: 'UTC',
+    })
+    expect(res.imported).toBe(3)
+
+    await t.run(async (ctx) => {
+      const days = await ctx.db.query('plannerDays').collect()
+      // One row per day (a per-event write bug would still pass this, but a
+      // grouping bug that splits a day would not).
+      expect(days.map((d) => d.date).sort()).toEqual(['2026-06-20', '2026-06-21'])
+      const day20 = days.find((d) => d.date === '2026-06-20')!
+      expect((day20.tasks as Array<Record<string, unknown>>).map((t) => t.title).sort()).toEqual(['A', 'B'])
+      const links = await ctx.db.query('calendarEventLinks').collect()
+      expect(links).toHaveLength(3)
+    })
+
+    // Re-import: updates in place, still no duplicates.
+    const again = await asUser.action(api.calendar.syncFromGoogle, {
+      startDate: '2026-06-20',
+      endDate: '2026-06-21',
+      timezone: 'UTC',
+    })
+    expect(again.imported).toBe(0)
+    await t.run(async (ctx) => {
+      const day20 = await ctx.db
+        .query('plannerDays')
+        .filter((q) => q.eq(q.field('date'), '2026-06-20'))
+        .first()
+      expect(day20!.tasks as unknown[]).toHaveLength(2)
+    })
+  })
+
   test('throws when no calendar has been selected', async () => {
     const t = convexTest(schema, modules)
     const asUser = await connect(t) // connected but no selectCalendar

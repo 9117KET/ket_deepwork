@@ -62,21 +62,6 @@ export const deleteConnection = internalMutation({
   },
 })
 
-export const getEventLink = internalQuery({
-  args: { userId: v.string(), googleCalendarId: v.string(), googleEventId: v.string() },
-  handler: async (ctx, args) => {
-    return await ctx.db
-      .query("calendarEventLinks")
-      .withIndex("by_user_event", (q) =>
-        q
-          .eq("userId", args.userId)
-          .eq("googleCalendarId", args.googleCalendarId)
-          .eq("googleEventId", args.googleEventId),
-      )
-      .unique()
-  },
-})
-
 export const getTaskEventLink = internalQuery({
   args: { userId: v.string(), taskDate: v.string(), taskId: v.string() },
   handler: async (ctx, args) => {
@@ -157,11 +142,36 @@ export const updateEventLinkEtag = internalMutation({
 export const getPlannerDaysInRange = internalQuery({
   args: { userId: v.string(), startDate: v.string(), endDate: v.string() },
   handler: async (ctx, args) => {
-    const all = await ctx.db
+    // Range over the by_user_date index; collecting every day the user has
+    // ever planned and filtering in JS reads the whole table per call.
+    return await ctx.db
       .query("plannerDays")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_user_date", (q) =>
+        q.eq("userId", args.userId).gte("date", args.startDate).lte("date", args.endDate),
+      )
       .collect()
-    return all.filter((d) => d.date >= args.startDate && d.date <= args.endDate)
+  },
+})
+
+export const getPlannerDay = internalQuery({
+  args: { userId: v.string(), date: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("plannerDays")
+      .withIndex("by_user_date", (q) => q.eq("userId", args.userId).eq("date", args.date))
+      .unique()
+  },
+})
+
+export const getEventLinksForCalendar = internalQuery({
+  args: { userId: v.string(), googleCalendarId: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("calendarEventLinks")
+      .withIndex("by_user_event", (q) =>
+        q.eq("userId", args.userId).eq("googleCalendarId", args.googleCalendarId),
+      )
+      .collect()
   },
 })
 

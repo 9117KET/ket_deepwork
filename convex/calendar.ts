@@ -211,153 +211,131 @@ export const syncFromGoogle = action({
     }
 
     const items = data.items ?? []
-    let imported = 0
 
-    for (const ev of items) {
+    // Parse timed events up front (all-day events have no dateTime → skipped).
+    const events = items.flatMap((ev) => {
       const startDt = ev.start?.dateTime
       const endDt = ev.end?.dateTime
-      if (!startDt || !endDt) continue // skip all-day events
-
+      if (!startDt || !endDt) return []
       const startDateObj = new Date(startDt)
       const endDateObj = new Date(endDt)
-      const isoDay = toLocalIsoDay(startDateObj, userTimezone)
-      const scheduledAt = hhmmFromDate(startDateObj, userTimezone)
-      const durationMinutes = Math.max(
-        1,
-        Math.round((endDateObj.getTime() - startDateObj.getTime()) / 60000),
-      )
+      return [{
+        id: ev.id,
+        summary: ev.summary,
+        etag: ev.etag,
+        isoDay: toLocalIsoDay(startDateObj, userTimezone),
+        scheduledAt: hhmmFromDate(startDateObj, userTimezone),
+        durationMinutes: Math.max(
+          1,
+          Math.round((endDateObj.getTime() - startDateObj.getTime()) / 60000),
+        ),
+      }]
+    })
+    if (events.length === 0) return { ok: true, imported: 0 }
 
-      const link = await ctx.runQuery(internal.calendarInternal.getEventLink, {
-        userId,
-        googleCalendarId: conn.selectedCalendarId,
-        googleEventId: ev.id,
-      })
+    // Load all of this calendar's links in one read, then each affected day
+    // exactly once (the events' own days plus any old day a moved task lives
+    // on). The previous per-event lookups re-read the day rows once or twice
+    // per event, multiplying I/O by the number of events.
+    const allLinks = await ctx.runQuery(internal.calendarInternal.getEventLinksForCalendar, {
+      userId,
+      googleCalendarId: conn.selectedCalendarId,
+    })
+    const linkByEventId = new Map(allLinks.map((l) => [l.googleEventId, l]))
 
+    const affectedDates = new Set<string>()
+    for (const e of events) {
+      affectedDates.add(e.isoDay)
+      const link = linkByEventId.get(e.id)
+      if (link) affectedDates.add(link.taskDate)
+    }
+    const dayTasks = new Map<string, Array<Record<string, unknown>>>()
+    for (const date of affectedDates) {
+      const day = await ctx.runQuery(internal.calendarInternal.getPlannerDay, { userId, date })
+      dayTasks.set(date, (day?.tasks as Array<Record<string, unknown>>) ?? [])
+    }
+
+    // Apply every event to the in-memory day map, then write each changed day
+    // once. Link upserts remap taskId/taskDate, so a vanished linked task is
+    // healed simply by re-importing under the same event id.
+    let imported = 0
+    const changedDates = new Set<string>()
+    const linkUpserts: Array<{ taskId: string; taskDate: string; googleEventId: string; etag?: string }> = []
+
+    for (const e of events) {
+      const link = linkByEventId.get(e.id)
       let updatedExisting = false
-      if (link?.taskId && link.taskDate !== isoDay) {
-        // The event moved to a different day in Google. Take the task out of
-        // the day the link points at and carry it (same id, done-state etc.)
-        // to the event's new day; looking up only the new day would miss the
-        // task entirely and silently leave it on the old day forever.
-        const oldDays = await ctx.runQuery(internal.calendarInternal.getPlannerDaysInRange, {
-          userId,
-          startDate: link.taskDate,
-          endDate: link.taskDate,
-        })
-        const oldDay = oldDays[0]
-        const oldTasks = (oldDay?.tasks as Array<Record<string, unknown>>) ?? []
+
+      if (link && link.taskDate !== e.isoDay) {
+        // The event moved to a different day in Google. Carry the task (same
+        // id, done-state etc.) from the day the link points at to the event's
+        // new day; looking up only the new day would miss the task entirely
+        // and silently leave it on the old day forever.
+        const oldTasks = dayTasks.get(link.taskDate) ?? []
         const moved = oldTasks.find((t) => t.id === link.taskId)
         if (moved) {
-          await ctx.runMutation(internal.calendarInternal.upsertPlannerDay, {
-            userId,
-            date: link.taskDate,
-            tasks: oldTasks.filter((t) => t.id !== link.taskId),
-          })
-          const newDays = await ctx.runQuery(internal.calendarInternal.getPlannerDaysInRange, {
-            userId,
-            startDate: isoDay,
-            endDate: isoDay,
-          })
-          const newDay = newDays[0]
-          const newTasks = (newDay?.tasks as Array<Record<string, unknown>>) ?? []
-          await ctx.runMutation(internal.calendarInternal.upsertPlannerDay, {
-            userId,
-            date: isoDay,
-            tasks: [
-              ...newTasks,
-              { ...moved, title: ev.summary ?? moved.title, date: isoDay, scheduledAt, durationMinutes },
-            ],
-            deepWorkSessions: newDay?.deepWorkSessions ?? [],
-            habitCompletions: newDay?.habitCompletions,
-            sleepHours: newDay?.sleepHours,
-            mood: newDay?.mood,
-          })
-          await ctx.runMutation(internal.calendarInternal.upsertEventLink, {
-            userId,
-            taskId: link.taskId,
-            taskDate: isoDay,
-            googleCalendarId: conn.selectedCalendarId,
-            googleEventId: ev.id,
-            etag: ev.etag,
-          })
+          dayTasks.set(link.taskDate, oldTasks.filter((t) => t.id !== link.taskId))
+          changedDates.add(link.taskDate)
+          dayTasks.set(e.isoDay, [
+            ...(dayTasks.get(e.isoDay) ?? []),
+            { ...moved, title: e.summary ?? moved.title, date: e.isoDay, scheduledAt: e.scheduledAt, durationMinutes: e.durationMinutes },
+          ])
+          changedDates.add(e.isoDay)
+          linkUpserts.push({ taskId: link.taskId, taskDate: e.isoDay, googleEventId: e.id, etag: e.etag })
           updatedExisting = true
-        } else {
-          // The linked task vanished from its day: drop the link and re-import.
-          await ctx.runMutation(internal.calendarInternal.deleteEventLink, {
-            userId,
-            googleCalendarId: conn.selectedCalendarId,
-            googleEventId: ev.id,
-          })
         }
-      } else if (link?.taskId) {
-        // Update existing linked task - we need to modify the day's tasks array
-        const days = await ctx.runQuery(internal.calendarInternal.getPlannerDaysInRange, {
-          userId,
-          startDate: isoDay,
-          endDate: isoDay,
-        })
-        const day = days[0]
-        const tasks = (day?.tasks as Array<Record<string, unknown>>) ?? []
+        // else: the linked task vanished — fall through and re-import below.
+      } else if (link) {
+        const tasks = dayTasks.get(e.isoDay) ?? []
         if (tasks.some((t) => t.id === link.taskId)) {
-          const next = tasks.map((t) =>
+          dayTasks.set(e.isoDay, tasks.map((t) =>
             t.id === link.taskId
-              ? { ...t, title: ev.summary ?? t.title, scheduledAt, durationMinutes }
+              ? { ...t, title: e.summary ?? t.title, scheduledAt: e.scheduledAt, durationMinutes: e.durationMinutes }
               : t,
-          )
-          await ctx.runMutation(internal.calendarInternal.upsertPlannerDay, {
-            userId,
-            date: isoDay,
-            tasks: next,
-          })
+          ))
+          changedDates.add(e.isoDay)
           updatedExisting = true
-        } else {
-          // The linked task no longer exists (deleted or overwritten by a
-          // client sync). Drop the stale link so the event re-imports below
-          // instead of being silently unreachable forever.
-          await ctx.runMutation(internal.calendarInternal.deleteEventLink, {
-            userId,
-            googleCalendarId: conn.selectedCalendarId,
-            googleEventId: ev.id,
-          })
         }
+        // else: the linked task was deleted/overwritten by a client sync —
+        // fall through and re-import so the event isn't unreachable forever.
       }
+
       if (!updatedExisting) {
         const taskId = crypto.randomUUID()
-        const days = await ctx.runQuery(internal.calendarInternal.getPlannerDaysInRange, {
-          userId,
-          startDate: isoDay,
-          endDate: isoDay,
-        })
-        const day = days[0]
-        const existingTasks = (day?.tasks as Array<Record<string, unknown>>) ?? []
-        const newTask = {
-          id: taskId,
-          title: ev.summary ?? "(Calendar event)",
-          sectionId: "highPriority",
-          date: isoDay,
-          isDone: false,
-          scheduledAt,
-          durationMinutes,
-        }
-        await ctx.runMutation(internal.calendarInternal.upsertPlannerDay, {
-          userId,
-          date: isoDay,
-          tasks: [...existingTasks, newTask],
-          deepWorkSessions: day?.deepWorkSessions ?? [],
-          habitCompletions: day?.habitCompletions,
-          sleepHours: day?.sleepHours,
-          mood: day?.mood,
-        })
-        await ctx.runMutation(internal.calendarInternal.upsertEventLink, {
-          userId,
-          taskId,
-          taskDate: isoDay,
-          googleCalendarId: conn.selectedCalendarId,
-          googleEventId: ev.id,
-          etag: ev.etag,
-        })
+        dayTasks.set(e.isoDay, [
+          ...(dayTasks.get(e.isoDay) ?? []),
+          {
+            id: taskId,
+            title: e.summary ?? "(Calendar event)",
+            sectionId: "highPriority",
+            date: e.isoDay,
+            isDone: false,
+            scheduledAt: e.scheduledAt,
+            durationMinutes: e.durationMinutes,
+          },
+        ])
+        changedDates.add(e.isoDay)
+        linkUpserts.push({ taskId, taskDate: e.isoDay, googleEventId: e.id, etag: e.etag })
         imported += 1
       }
+    }
+
+    for (const date of [...changedDates].sort()) {
+      await ctx.runMutation(internal.calendarInternal.upsertPlannerDay, {
+        userId,
+        date,
+        tasks: dayTasks.get(date)!,
+      })
+    }
+    for (const lu of linkUpserts) {
+      await ctx.runMutation(internal.calendarInternal.upsertEventLink, {
+        userId,
+        taskId: lu.taskId,
+        taskDate: lu.taskDate,
+        googleCalendarId: conn.selectedCalendarId,
+        googleEventId: lu.googleEventId,
+        etag: lu.etag,
+      })
     }
 
     return { ok: true, imported }
