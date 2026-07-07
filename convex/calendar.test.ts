@@ -49,6 +49,9 @@ function installFetchMock() {
     const method = (init?.method ?? 'GET').toUpperCase()
     fetchCalls.push({ url, method })
 
+    if (url.startsWith('https://oauth2.googleapis.com/revoke')) {
+      return new Response('{}', { status: 200 })
+    }
     if (url.startsWith(TOKEN_URL)) {
       // Serves both the auth-code exchange (reads refresh_token) and the
       // refresh-token grant (reads access_token).
@@ -612,7 +615,7 @@ describe('syncToGoogle (push)', () => {
 // ── Disconnect ───────────────────────────────────────────────────────────────
 
 describe('disconnect', () => {
-  test('removes the connection and all event links', async () => {
+  test('revokes the token at Google and removes the connection and all event links', async () => {
     const t = convexTest(schema, modules)
     const asUser = await connect(t)
     await asUser.mutation(api.calendar.selectCalendar, { calendarId: CAL_ID })
@@ -622,7 +625,13 @@ describe('disconnect', () => {
       })
     })
 
-    await asUser.mutation(api.calendar.disconnectGoogle, {})
+    fetchCalls = []
+    await asUser.action(api.calendar.disconnectGoogle, {})
+
+    // The refresh token must be revoked at Google, not just deleted locally.
+    const revokes = fetchCalls.filter((c) => c.url.startsWith('https://oauth2.googleapis.com/revoke'))
+    expect(revokes).toHaveLength(1)
+    expect(revokes[0].method).toBe('POST')
 
     const status = await asUser.query(api.calendar.connectionStatus, {})
     expect(status.connected).toBe(false)
@@ -630,6 +639,24 @@ describe('disconnect', () => {
       expect(await ctx.db.query('googleCalendarConnections').collect()).toHaveLength(0)
       expect(await ctx.db.query('calendarEventLinks').collect()).toHaveLength(0)
     })
+  })
+
+  test('still disconnects when the revoke call fails', async () => {
+    const t = convexTest(schema, modules)
+    const asUser = await connect(t)
+    const realFetch = globalThis.fetch
+    vi.stubGlobal('fetch', vi.fn(async (input: string, init?: RequestInit) => {
+      const url = String(input)
+      if (url.startsWith('https://oauth2.googleapis.com/revoke')) {
+        throw new Error('network down')
+      }
+      return realFetch(input, init)
+    }))
+
+    await asUser.action(api.calendar.disconnectGoogle, {})
+
+    const status = await asUser.query(api.calendar.connectionStatus, {})
+    expect(status.connected).toBe(false)
   })
 })
 
@@ -644,7 +671,7 @@ describe('auth guards', () => {
     await expect(t.action(api.calendar.syncFromGoogle, {})).rejects.toThrow(/not authenticated/i)
     await expect(t.action(api.calendar.syncToGoogle, {})).rejects.toThrow(/not authenticated/i)
     await expect(t.mutation(api.calendar.selectCalendar, { calendarId: CAL_ID })).rejects.toThrow(/not authenticated/i)
-    await expect(t.mutation(api.calendar.disconnectGoogle, {})).rejects.toThrow(/not authenticated/i)
+    await expect(t.action(api.calendar.disconnectGoogle, {})).rejects.toThrow(/not authenticated/i)
 
     // The public connection-status query must not leak: anonymous = not connected.
     const status = await t.query(api.calendar.connectionStatus, {})

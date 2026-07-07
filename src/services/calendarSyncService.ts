@@ -103,5 +103,6 @@ export async function syncToGoogle(params?: {
 }
 
 export async function disconnectGoogle(): Promise<void> {
-  await convex.mutation(api.calendar.disconnectGoogle, {})
+  // Action (not mutation): the backend also revokes the token at Google.
+  await convex.action(api.calendar.disconnectGoogle, {})
 }

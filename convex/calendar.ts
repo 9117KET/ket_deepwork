@@ -6,6 +6,7 @@ import { internal } from "./_generated/api"
 import {
   GOOGLE_AUTH_BASE,
   GOOGLE_TOKEN_URL,
+  GOOGLE_REVOKE_URL,
   GOOGLE_CALENDAR_BASE,
   GOOGLE_SCOPES,
   buildRedirectUri,
@@ -488,24 +489,30 @@ export const syncToGoogle = action({
 
 // ─── Disconnect ────────────────────────────────────────────────────────────────
 
-export const disconnectGoogle = mutation({
+export const disconnectGoogle = action({
   args: {},
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) throw new Error("Not authenticated")
     const userId = getUserId(identity.subject)
 
-    const links = await ctx.db
-      .query("calendarEventLinks")
-      .withIndex("by_user_task", (q) => q.eq("userId", userId))
-      .collect()
-    for (const link of links) {
-      await ctx.db.delete(link._id)
+    // Best-effort revoke at Google before deleting our copy: without it the
+    // refresh token stays valid indefinitely even though the user asked to
+    // disconnect. Failures (already revoked, network) never block disconnect.
+    const conn = await ctx.runQuery(internal.calendarInternal.getConnection, { userId })
+    if (conn) {
+      try {
+        const refreshToken = await decryptFromEnvelope(conn.encryptedRefreshToken)
+        await fetch(GOOGLE_REVOKE_URL, {
+          method: "POST",
+          headers: { "content-type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({ token: refreshToken }),
+        })
+      } catch {
+        // Revoke is hygiene, not a precondition — always finish disconnecting.
+      }
     }
-    const conn = await ctx.db
-      .query("googleCalendarConnections")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .unique()
-    if (conn) await ctx.db.delete(conn._id)
+
+    await ctx.runMutation(internal.calendarInternal.deleteConnection, { userId })
   },
 })
