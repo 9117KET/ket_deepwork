@@ -86,6 +86,16 @@ test.describe('toLocalIsoDay / hhmmFromDate — event placement', () => {
     expect(hhmmFromDate(ev, 'Europe/Berlin')).toBe('00:30')
   })
 
+  test('an event starting exactly at local midnight renders 00:00, never 24:00', () => {
+    // hour12:false resolves to the h24 cycle in some ICU builds, turning
+    // midnight into "24:00" — which downstream HH:MM parsers read as minute
+    // 1440 (the next day). hourCycle:'h23' pins it to "00:00".
+    const ev = new Date('2026-06-15T00:00:00+02:00')
+    expect(hhmmFromDate(ev, 'Europe/Berlin')).toBe('00:00')
+    expect(toLocalIsoDay(ev, 'Europe/Berlin')).toBe('2026-06-15')
+    expect(hhmmFromDate(new Date('2026-06-15T00:00:00Z'), 'UTC')).toBe('00:00')
+  })
+
   test('same instant, different zones, different local day/time', () => {
     const instant = new Date('2026-06-15T03:00:00Z')
     expect(toLocalIsoDay(instant, 'Europe/Berlin')).toBe('2026-06-15') // 05:00 CEST

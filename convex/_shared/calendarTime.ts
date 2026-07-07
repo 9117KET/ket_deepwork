@@ -18,11 +18,13 @@ export function toLocalIsoDay(d: Date, timezone: string): string {
 
 /** `HH:MM` (24h) for instant `d` as seen in `timezone`. */
 export function hhmmFromDate(d: Date, timezone: string): string {
+  // hourCycle (not hour12:false) pins midnight to "00": hour12:false resolves
+  // to the h24 cycle in some ICU builds, which renders midnight as "24".
   const parts = new Intl.DateTimeFormat("en-GB", {
     timeZone: timezone,
     hour: "2-digit",
     minute: "2-digit",
-    hour12: false,
+    hourCycle: "h23",
   }).formatToParts(d)
   const h = parts.find((p) => p.type === "hour")?.value ?? "00"
   const m = parts.find((p) => p.type === "minute")?.value ?? "00"
