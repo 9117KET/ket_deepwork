@@ -98,13 +98,17 @@ export function CalendarSyncPage() {
     setBusy("pull");
     setBanner(null);
     try {
-      const { imported } = await syncFromGoogle({ startDate, endDate });
+      const { imported, updated, removed } = await syncFromGoogle({ startDate, endDate });
+      const parts: string[] = [];
+      if (imported > 0) parts.push(`${imported} new event${imported === 1 ? "" : "s"} imported`);
+      if (updated > 0) parts.push(`${updated} updated`);
+      if (removed > 0) parts.push(`${removed} removed`);
       setBanner({
         kind: "ok",
         text:
-          imported > 0
-            ? `Imported ${imported} event${imported === 1 ? "" : "s"} into your planner.`
-            : "Already up to date — no new events to import.",
+          parts.length > 0
+            ? `Synced from Google: ${parts.join(", ")}.`
+            : "Already up to date — nothing to import.",
       });
     } catch (e) {
       setBanner({ kind: "error", text: (e as Error).message });

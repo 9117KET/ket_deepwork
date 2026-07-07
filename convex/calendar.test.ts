@@ -499,6 +499,47 @@ describe('syncFromGoogle (import)', () => {
     })
   })
 
+  test('an event cancelled in Google removes its imported task and link', async () => {
+    const t = convexTest(schema, modules)
+    const asUser = await connectAndSelect(t)
+    mock.eventsList = [
+      { id: 'g1', summary: 'Keep', start: { dateTime: '2026-06-20T09:00:00Z' }, end: { dateTime: '2026-06-20T10:00:00Z' } },
+      { id: 'g2', summary: 'Cancel me', start: { dateTime: '2026-06-20T11:00:00Z' }, end: { dateTime: '2026-06-20T12:00:00Z' } },
+    ]
+    await asUser.action(api.calendar.syncFromGoogle, {
+      startDate: '2026-06-20', endDate: '2026-06-20', timezone: 'UTC',
+    })
+
+    // The events request must ask for cancelled events at all.
+    const listCall = fetchCalls.find((c) => c.method === 'GET' && c.url.includes('/events?'))
+    expect(listCall!.url).toContain('showDeleted=true')
+
+    // g2 is deleted in Google; a never-imported cancelled event is ignored.
+    mock.eventsList = [
+      { id: 'g1', summary: 'Keep', etag: 'e1b', start: { dateTime: '2026-06-20T09:00:00Z' }, end: { dateTime: '2026-06-20T10:00:00Z' } },
+      { id: 'g2', status: 'cancelled' },
+      { id: 'g_unknown', status: 'cancelled' },
+    ]
+    const res = await asUser.action(api.calendar.syncFromGoogle, {
+      startDate: '2026-06-20', endDate: '2026-06-20', timezone: 'UTC',
+    })
+    expect(res.imported).toBe(0)
+    expect(res.updated).toBe(1) // g1 refreshed in place
+    expect(res.removed).toBe(1) // g2's task deleted
+
+    await t.run(async (ctx) => {
+      const day = await ctx.db
+        .query('plannerDays')
+        .filter((q) => q.eq(q.field('date'), '2026-06-20'))
+        .first()
+      const tasks = day!.tasks as Array<Record<string, unknown>>
+      expect(tasks.map((t) => t.title)).toEqual(['Keep'])
+      const links = await ctx.db.query('calendarEventLinks').collect()
+      expect(links).toHaveLength(1)
+      expect(links[0].googleEventId).toBe('g1')
+    })
+  })
+
   test('throws when no calendar has been selected', async () => {
     const t = convexTest(schema, modules)
     const asUser = await connect(t) // connected but no selectCalendar

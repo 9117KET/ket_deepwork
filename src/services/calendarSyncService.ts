@@ -84,12 +84,16 @@ export async function selectGoogleCalendar(params: {
 export async function syncFromGoogle(params?: {
   startDate?: string
   endDate?: string
-}): Promise<{ imported: number }> {
-  const result = await convex.action(api.calendar.syncFromGoogle, {
+}): Promise<{ imported: number; updated: number; removed: number }> {
+  const result = (await convex.action(api.calendar.syncFromGoogle, {
     ...params,
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-  })
-  return { imported: (result as { imported: number }).imported }
+  })) as { imported: number; updated?: number; removed?: number }
+  return {
+    imported: result.imported,
+    updated: result.updated ?? 0,
+    removed: result.removed ?? 0,
+  }
 }
 
 export async function syncToGoogle(params?: {

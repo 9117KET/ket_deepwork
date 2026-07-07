@@ -196,6 +196,9 @@ export const syncFromGoogle = action({
     url.searchParams.set("orderBy", "startTime")
     url.searchParams.set("timeMin", start.toISOString())
     url.searchParams.set("timeMax", end.toISOString())
+    // Include cancelled events so a deletion in Google removes its planner
+    // task instead of leaving it orphaned forever.
+    url.searchParams.set("showDeleted", "true")
 
     const resp = await fetch(url.toString(), {
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -204,6 +207,7 @@ export const syncFromGoogle = action({
     const data = (await resp.json()) as {
       items?: Array<{
         id: string
+        status?: string
         summary?: string
         etag?: string
         start?: { dateTime?: string; date?: string }
@@ -213,8 +217,12 @@ export const syncFromGoogle = action({
 
     const items = data.items ?? []
 
+    // Cancelled events only matter if we imported them before (have a link).
+    const cancelledIds = items.filter((ev) => ev.status === "cancelled").map((ev) => ev.id)
+
     // Parse timed events up front (all-day events have no dateTime → skipped).
     const events = items.flatMap((ev) => {
+      if (ev.status === "cancelled") return []
       const startDt = ev.start?.dateTime
       const endDt = ev.end?.dateTime
       if (!startDt || !endDt) return []
@@ -232,7 +240,9 @@ export const syncFromGoogle = action({
         ),
       }]
     })
-    if (events.length === 0) return { ok: true, imported: 0 }
+    if (events.length === 0 && cancelledIds.length === 0) {
+      return { ok: true, imported: 0, updated: 0, removed: 0 }
+    }
 
     // Load all of this calendar's links in one read, then each affected day
     // exactly once (the events' own days plus any old day a moved task lives
@@ -250,6 +260,10 @@ export const syncFromGoogle = action({
       const link = linkByEventId.get(e.id)
       if (link) affectedDates.add(link.taskDate)
     }
+    for (const id of cancelledIds) {
+      const link = linkByEventId.get(id)
+      if (link) affectedDates.add(link.taskDate)
+    }
     const dayTasks = new Map<string, Array<Record<string, unknown>>>()
     for (const date of affectedDates) {
       const day = await ctx.runQuery(internal.calendarInternal.getPlannerDay, { userId, date })
@@ -260,8 +274,24 @@ export const syncFromGoogle = action({
     // once. Link upserts remap taskId/taskDate, so a vanished linked task is
     // healed simply by re-importing under the same event id.
     let imported = 0
+    let updated = 0
+    let removed = 0
     const changedDates = new Set<string>()
     const linkUpserts: Array<{ taskId: string; taskDate: string; googleEventId: string; etag?: string }> = []
+    const linkDeletes: string[] = []
+
+    // Deletions in Google remove the linked task from its day.
+    for (const id of cancelledIds) {
+      const link = linkByEventId.get(id)
+      if (!link) continue
+      const tasks = dayTasks.get(link.taskDate) ?? []
+      if (tasks.some((t) => t.id === link.taskId)) {
+        dayTasks.set(link.taskDate, tasks.filter((t) => t.id !== link.taskId))
+        changedDates.add(link.taskDate)
+        removed += 1
+      }
+      linkDeletes.push(id)
+    }
 
     for (const e of events) {
       const link = linkByEventId.get(e.id)
@@ -283,6 +313,7 @@ export const syncFromGoogle = action({
           ])
           changedDates.add(e.isoDay)
           linkUpserts.push({ taskId: link.taskId, taskDate: e.isoDay, googleEventId: e.id, etag: e.etag })
+          updated += 1
           updatedExisting = true
         }
         // else: the linked task vanished — fall through and re-import below.
@@ -295,6 +326,7 @@ export const syncFromGoogle = action({
               : t,
           ))
           changedDates.add(e.isoDay)
+          updated += 1
           updatedExisting = true
         }
         // else: the linked task was deleted/overwritten by a client sync —
@@ -338,8 +370,15 @@ export const syncFromGoogle = action({
         etag: lu.etag,
       })
     }
+    for (const id of linkDeletes) {
+      await ctx.runMutation(internal.calendarInternal.deleteEventLink, {
+        userId,
+        googleCalendarId: conn.selectedCalendarId,
+        googleEventId: id,
+      })
+    }
 
-    return { ok: true, imported }
+    return { ok: true, imported, updated, removed }
   },
 })
 
@@ -381,8 +420,10 @@ export const syncToGoogle = action({
 
     const userTimezone = args.timezone ?? "UTC"
     const now = new Date()
-    const startDate = args.startDate ?? now.toISOString().slice(0, 10)
-    const endDate = args.endDate ?? new Date(now.getTime() + 14 * 864e5).toISOString().slice(0, 10)
+    // Planner day keys are the user's local days; deriving defaults from the
+    // server's UTC clock would shift the window by the user's UTC offset.
+    const startDate = args.startDate ?? toLocalIsoDay(now, userTimezone)
+    const endDate = args.endDate ?? toLocalIsoDay(new Date(now.getTime() + 14 * 864e5), userTimezone)
 
     const dayRows = await ctx.runQuery(internal.calendarInternal.getPlannerDaysInRange, {
       userId,
