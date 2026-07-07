@@ -50,7 +50,12 @@ export async function completeGoogleOAuth(code: string, returnedState?: string):
       return null
     }
   })()
-  if (expected && returnedState && expected !== returnedState) {
+  // If we issued a state for this connect, the callback must echo it exactly.
+  // A missing returned state is treated as a mismatch — accepting it would let
+  // a forged callback (login-CSRF) skip the check simply by omitting `state`.
+  // Only when sessionStorage itself is unavailable (expected === null) do we
+  // proceed unverified.
+  if (expected && expected !== returnedState) {
     throw new Error("OAuth state mismatch — possible CSRF. Please try connecting again.")
   }
   try {

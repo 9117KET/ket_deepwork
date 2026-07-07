@@ -99,6 +99,20 @@ test.describe('Calendar callback page (no auth required)', () => {
     await page.goto('/calendar/callback?code=fake-code&state=attacker-state')
     await expect(page.getByText(/state mismatch|CSRF/i).first()).toBeVisible()
   })
+
+  test('rejects a callback that omits the state when one was issued (CSRF guard)', async ({
+    page,
+  }) => {
+    // A forged callback must not bypass the check by simply dropping `state`.
+    await page.addInitScript(
+      ([key]) => {
+        window.sessionStorage.setItem(key, 'expected-state')
+      },
+      [OAUTH_STATE_KEY],
+    )
+    await page.goto('/calendar/callback?code=fake-code')
+    await expect(page.getByText(/state mismatch|CSRF/i).first()).toBeVisible()
+  })
 })
 
 test.describe('Calendar page', () => {
