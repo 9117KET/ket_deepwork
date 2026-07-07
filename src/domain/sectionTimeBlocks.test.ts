@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
+  applyBlockDurationChange,
   computePlannedMinutesBySection,
   computeCapacityAwareBlocks,
   computeAwakeMinutes,
@@ -184,6 +185,39 @@ describe('getSectionTimeframeLabel with computed blocks', () => {
     expect(getSectionTimeframeLabel('mediumPriority', undefined, blocks)).toBeNull()
     expect(getSectionTimeframeLabel('lowPriority', undefined, blocks)).toBeNull()
     expect(getSectionTimeframeLabel('highPriority', undefined, blocks)).not.toBeNull()
+  })
+})
+
+// ── applyBlockDurationChange (with demand-first collapsed blocks) ─────────────
+//
+// Capacity-aware sizing legitimately produces 0-minute work blocks, which sit
+// below BLOCK_MIN_MINUTES. Growing an earlier block must skip them (nothing to
+// take), not "take" negative minutes — which used to grow the empty blocks and
+// inflate the delta cascaded into sleep.
+
+describe('applyBlockDurationChange with collapsed blocks', () => {
+  const collapsed: BlockDurations = {
+    morningRoutine: 60, highPriority: 120, mediumPriority: 0, lowPriority: 0, nightRoutine: 60,
+  }
+  const SLEEP = 480
+
+  it('growing a block skips empty blocks and takes from the next non-empty one', () => {
+    const r = applyBlockDurationChange(collapsed, 'highPriority', 150, SLEEP)
+    expect(r).not.toBeNull()
+    expect(r!.durations.mediumPriority).toBe(0) // untouched, not inflated to 15
+    expect(r!.durations.lowPriority).toBe(0)
+    expect(r!.durations.nightRoutine).toBe(30)  // 60 - 30 taken (floor 15 respected)
+    expect(r!.sleepMinutes).toBe(SLEEP)         // covered without touching sleep
+  })
+
+  it('growing past the available slack eats exactly the shortfall from sleep', () => {
+    // +80: night can give 45 (60→15); the remaining 35 comes from sleep.
+    const r = applyBlockDurationChange(collapsed, 'highPriority', 200, SLEEP)
+    expect(r).not.toBeNull()
+    expect(r!.durations.mediumPriority).toBe(0)
+    expect(r!.durations.lowPriority).toBe(0)
+    expect(r!.durations.nightRoutine).toBe(15)
+    expect(r!.sleepMinutes).toBe(SLEEP - 35)
   })
 })
 

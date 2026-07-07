@@ -342,8 +342,10 @@ export function applyBlockDurationChange(
   for (let i = idx + 1; i < BLOCK_ORDER.length && remaining !== 0; i++) {
     const key = BLOCK_ORDER[i]!
     if (delta > 0) {
-      // Growing: shrink next block
-      const available = result[key] - BLOCK_MIN_MINUTES[key]
+      // Growing: shrink next block. Demand-first sizing can hand us collapsed
+      // (0-minute) blocks below their floor; clamp so a negative "available"
+      // doesn't grow the empty block and inflate the remaining delta.
+      const available = Math.max(0, result[key] - BLOCK_MIN_MINUTES[key])
       const take = Math.min(remaining, available)
       result[key] -= take
       remaining -= take
