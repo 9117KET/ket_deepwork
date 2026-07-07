@@ -6,7 +6,9 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist', 'supabase/functions']),
+  // .claude holds agent worktrees (stale repo copies) — linting them triples
+  // every warning and slows CI. convex/_generated is codegen output.
+  globalIgnores(['dist', 'supabase/functions', '.claude', 'convex/_generated']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [

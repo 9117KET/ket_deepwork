@@ -5,6 +5,7 @@ import {
   computeCapacityAwareBlocks,
   computeAwakeMinutes,
   computeBlocksFromDurations,
+  computeBlocksFromWakeSleep,
   isSleepTime,
   getActiveSectionIds,
   getSectionTimeframeLabel,
@@ -185,6 +186,32 @@ describe('getSectionTimeframeLabel with computed blocks', () => {
     expect(getSectionTimeframeLabel('mediumPriority', undefined, blocks)).toBeNull()
     expect(getSectionTimeframeLabel('lowPriority', undefined, blocks)).toBeNull()
     expect(getSectionTimeframeLabel('highPriority', undefined, blocks)).not.toBeNull()
+  })
+})
+
+// ── computeBlocksFromWakeSleep (degenerate awake windows) ─────────────────────
+
+describe('computeBlocksFromWakeSleep with a tiny awake window', () => {
+  it('never allocates more block time than the awake window has', () => {
+    // Awake 07:00→08:00 = 60 min: morning 30 + night 30 leaves a 0-min focus
+    // pool. The old fixed 15-min medium/low floors overflowed the window.
+    const blocks = computeBlocksFromWakeSleep('07:00', '08:00')
+    const total = blocks.reduce(
+      (sum, b) => sum + ((b.end - b.start + 1440) % 1440 === 0 ? 0 : (b.end - b.start + 1440) % 1440),
+      0,
+    )
+    expect(total).toBeLessThanOrEqual(60)
+  })
+
+  it('keeps the normal split for a regular day', () => {
+    // Awake 07:00→23:00 = 960: morning/night 90 each, focus 780.
+    const blocks = computeBlocksFromWakeSleep('07:00', '23:00')
+    const dur = (i: number) => (blocks[i]!.end - blocks[i]!.start + 1440) % 1440
+    expect(dur(0)).toBe(90)  // morning (10% capped at 90)
+    expect(dur(1)).toBe(351) // high: floor(780 * 0.45)
+    expect(dur(2)).toBe(273) // medium: floor(780 * 0.35)
+    expect(dur(3)).toBe(156) // low: remainder
+    expect(dur(4)).toBe(90)  // night
   })
 })
 

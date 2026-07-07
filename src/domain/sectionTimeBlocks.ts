@@ -57,8 +57,11 @@ export function computeBlocksFromWakeSleep(
   const nightDur   = Math.max(30, Math.min(90, Math.floor(awake * 0.10)))
   const focusDur   = Math.max(0, awake - morningDur - nightDur)
   const highDur    = Math.floor(focusDur * 0.45)
-  const mediumDur  = Math.max(15, Math.floor(focusDur * 0.35))
-  const lowDur     = Math.max(15, focusDur - highDur - mediumDur)
+  // Cap the medium/low floors by what the focus pool actually has left, so a
+  // very short awake window can't allocate more block time than exists and
+  // push the night routine past the sleep target.
+  const mediumDur  = Math.min(Math.max(15, Math.floor(focusDur * 0.35)), Math.max(0, focusDur - highDur))
+  const lowDur     = Math.max(0, focusDur - highDur - mediumDur)
 
   let cursor = wakeMin
   const next = (dur: number) => { const s = cursor; cursor += dur; return { s, e: wrapMinutes(cursor) } }
