@@ -28,10 +28,11 @@ export function CalendarCallbackPage() {
     const params = new URLSearchParams(location.search);
     const code = params.get("code");
     if (!code) return;
+    const returnedState = params.get("state") ?? undefined;
 
     (async () => {
       try {
-        await completeGoogleOAuth(code);
+        await completeGoogleOAuth(code, returnedState);
         setStatus("ok");
         setMessage("Google Calendar connected.");
         setTimeout(() => navigate("/calendar"), 800);

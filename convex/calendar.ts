@@ -1,6 +1,6 @@
 declare const process: { env: Record<string, string | undefined> }
 
-import { action, mutation } from "./_generated/server"
+import { action, mutation, query } from "./_generated/server"
 import { v } from "convex/values"
 import { internal } from "./_generated/api"
 import {
@@ -13,6 +13,28 @@ import {
 } from "./_shared/google"
 import { encryptToEnvelope, decryptFromEnvelope } from "./_shared/crypto"
 import { getUserId } from "./_shared/auth"
+import { toLocalIsoDay, hhmmFromDate, zonedWallTimeToUtc } from "./_shared/calendarTime"
+
+// ─── Connection status (client-readable, no secrets) ───────────────────────────
+
+export const connectionStatus = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) return { connected: false as const }
+    const userId = getUserId(identity.subject)
+    const conn = await ctx.db
+      .query("googleCalendarConnections")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .unique()
+    if (!conn) return { connected: false as const }
+    return {
+      connected: true as const,
+      selectedCalendarId: conn.selectedCalendarId,
+      selectedCalendarSummary: conn.selectedCalendarSummary,
+    }
+  },
+})
 
 // ─── OAuth ────────────────────────────────────────────────────────────────────
 
@@ -135,27 +157,6 @@ export const selectCalendar = mutation({
 
 // ─── Sync pull (Google → planner) ─────────────────────────────────────────────
 
-function toLocalIsoDay(d: Date, timezone: string): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: timezone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(d)
-}
-
-function hhmmFromDate(d: Date, timezone: string): string {
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: timezone,
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).formatToParts(d)
-  const h = parts.find((p) => p.type === "hour")?.value ?? "00"
-  const m = parts.find((p) => p.type === "minute")?.value ?? "00"
-  return `${h}:${m}`
-}
-
 export const syncFromGoogle = action({
   args: {
     startDate: v.optional(v.string()),
@@ -175,11 +176,16 @@ export const syncFromGoogle = action({
     const refreshToken = await decryptFromEnvelope(conn.encryptedRefreshToken)
     const { accessToken } = await getGoogleAccessToken({ refreshToken, clientId, clientSecret })
 
-    const userTimezone = args.timezone ?? "UTC"
+    const userTimezone = args.timezone || "UTC"
     const now = new Date()
-    const start = args.startDate ? new Date(`${args.startDate}T00:00:00`) : new Date(now)
+    // Build the fetch window from the user's LOCAL day boundaries, not the
+    // server's UTC clock, so a "Jun 14–28" import covers Jun 14 00:00 → Jun 28
+    // 23:59 in the user's zone (was off by the UTC offset → wrong-day imports).
+    const start = args.startDate
+      ? zonedWallTimeToUtc(args.startDate, "00:00:00", userTimezone)
+      : new Date(now)
     const end = args.endDate
-      ? new Date(`${args.endDate}T23:59:59`)
+      ? zonedWallTimeToUtc(args.endDate, "23:59:59", userTimezone)
       : new Date(now.getTime() + 14 * 864e5)
 
     const url = new URL(

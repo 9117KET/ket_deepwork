@@ -50,6 +50,56 @@ Goal: make the Grow/Setup tabs trustworthy and wire them into the waterfall.
 
 ---
 
+## Google Calendar — phase status
+
+The integration was **migrated off Supabase Edge Functions onto Convex** (the
+CLAUDE.md "Supabase Edge Functions" section is stale — the live code is in
+`convex/calendar.ts` + `convex/calendarInternal.ts`).
+
+### ✅ Phase 1 (shipped)
+Full Convex backend + driving UI.
+- **Backend** (`convex/calendar.ts`): OAuth start/callback, `listCalendars`,
+  `selectCalendar`, `syncFromGoogle` (Google → planner), `syncToGoogle`
+  (planner → Google), `disconnectGoogle`, and a client-readable
+  `connectionStatus` query (no secrets). Refresh tokens are AES-encrypted at
+  rest (`_shared/crypto.ts`); access tokens are minted per call.
+- **Schema:** `googleCalendarConnections` (one per user) + `calendarEventLinks`
+  (task ↔ google event, with etag for optimistic concurrency on push).
+- **Sync model:** imported timed events become `highPriority` tasks; only tasks
+  with `scheduledAt` + `durationMinutes` (and no `parentId`) are pushed.
+  All-day events are skipped. Idempotent via `calendarEventLinks`.
+- **UI** (`CalendarSyncPage.tsx`): auth gate → connect → calendar picker →
+  date-range Import/Push → disconnect, with result banners. OAuth `state` is
+  stashed in `sessionStorage` and verified in the callback (CSRF mitigation).
+
+**Prod blocker (see `DEPLOYMENT.md` step 2):** copy `GOOGLE_CLIENT_ID`,
+`GOOGLE_CLIENT_SECRET`, `GOOGLE_TOKEN_ENCRYPTION_KEY_B64` to the **prod** Convex
+deployment and add the prod `/calendar/callback` redirect URI to the Google OAuth
+client. Until then sync only works on dev.
+
+### ⏳ Phase 2 — Reliability & reach (NEXT)
+- **All-day events:** currently dropped on import. Decide a representation
+  (unscheduled task on the day vs. a date-only block) and round-trip them.
+- **Deletions:** neither side propagates deletes. A deleted Google event leaves a
+  stale linked task (and vice-versa). Use `calendarEventLinks` to reconcile —
+  prune links whose event/task no longer exists.
+- **CSRF hardening (server-side):** `state` is only checked client-side today.
+  Persist it server-side in `googleOauthStart` and verify in `googleOauthCallback`.
+- **Push scope:** pushes every scheduled task in range on each run. Consider an
+  opt-in flag per task or a "don't push shallow tasks" toggle.
+- **412 on push:** etag conflicts are silently `skipped`. Surface a "N had
+  conflicting Google edits" nudge and offer re-pull.
+
+### 🔭 Phase 3 — Automation (later)
+- **Auto-sync:** a Convex cron / scheduled action to pull+push the rolling window
+  instead of manual buttons. Needs token-refresh resilience + per-user opt-in.
+- **Calendar → planner time-blocking:** feed imported events into the rhythmic
+  deep-work block window so the planner respects real commitments.
+- **Travel ↔ Calendar:** push trip day-plan blocks (from `travelTrips.dailyPlan`)
+  to Google as part of the cross-feature map below.
+
+---
+
 ## Cross-feature communication map
 
 How the pillars share state. All signed-in sync rides Convex tables; guests use
