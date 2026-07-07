@@ -467,16 +467,31 @@ export const syncToGoogle = action({
           created += 1
         } else {
           const url = `${GOOGLE_CALENDAR_BASE}/calendars/${encodeURIComponent(conn.selectedCalendarId)}/events/${encodeURIComponent(link.googleEventId)}`
-          const resp = await fetch(url, {
-            method: "PUT",
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-              "content-type": "application/json",
-              ...(link.etag ? { "If-Match": String(link.etag) } : {}),
-            },
-            body: JSON.stringify(eventBody),
-          })
-          if (resp.status === 412 || !resp.ok) { skipped += 1; continue }
+          const putEvent = (etag?: string) =>
+            fetch(url, {
+              method: "PUT",
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                "content-type": "application/json",
+                ...(etag ? { "If-Match": etag } : {}),
+              },
+              body: JSON.stringify(eventBody),
+            })
+          let resp = await putEvent(link.etag ? String(link.etag) : undefined)
+          if (resp.status === 412) {
+            // Stale etag: the event changed in Google since we stored it.
+            // Push is planner-wins, so refresh the etag and retry once —
+            // skipping while keeping the stale etag would make every future
+            // push of this task 412 as well, deadlocking it permanently.
+            const current = await fetch(url, {
+              headers: { Authorization: `Bearer ${accessToken}` },
+            })
+            if (current.ok) {
+              const currentEv = (await current.json()) as { etag?: string }
+              resp = await putEvent(currentEv.etag)
+            }
+          }
+          if (!resp.ok) { skipped += 1; continue }
           const updatedEv = (await resp.json()) as { etag?: string }
           await ctx.runMutation(internal.calendarInternal.updateEventLinkEtag, {
             userId,

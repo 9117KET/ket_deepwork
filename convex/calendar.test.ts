@@ -31,7 +31,11 @@ type MockState = {
   calendarList: Array<{ id: string; summary: string; primary?: boolean }>
   createdEvent: { id: string; etag?: string }
   updatedEvent: { etag?: string }
+  /** Returned by a single-event GET (etag refresh after a 412). */
+  singleEvent: { id: string; etag?: string }
   putStatus: number
+  /** Per-call PUT statuses consumed before falling back to putStatus. */
+  putStatusQueue: number[]
   postStatus: number
 }
 
@@ -60,6 +64,10 @@ function installFetchMock() {
     // update (PUT .../events/<id>).
     if (url.includes('/events')) {
       if (method === 'GET') {
+        // Single-event GET (etag refresh) vs. the events list.
+        if (/\/events\/[^/?]+/.test(url)) {
+          return new Response(JSON.stringify(mock.singleEvent), { status: 200 })
+        }
         return new Response(JSON.stringify({ items: mock.eventsList }), { status: 200 })
       }
       if (method === 'POST') {
@@ -67,7 +75,8 @@ function installFetchMock() {
         return new Response(JSON.stringify(mock.createdEvent), { status: 200 })
       }
       if (method === 'PUT') {
-        if (mock.putStatus !== 200) return new Response('{}', { status: mock.putStatus })
+        const status = mock.putStatusQueue.length > 0 ? mock.putStatusQueue.shift()! : mock.putStatus
+        if (status !== 200) return new Response('{}', { status })
         return new Response(JSON.stringify(mock.updatedEvent), { status: 200 })
       }
     }
@@ -85,7 +94,9 @@ beforeEach(() => {
     calendarList: [{ id: 'primary', summary: 'Personal', primary: true }],
     createdEvent: { id: 'gevent_new', etag: 'etag_1' },
     updatedEvent: { etag: 'etag_2' },
+    singleEvent: { id: 'gevent_new', etag: 'etag_fresh' },
     putStatus: 200,
+    putStatusQueue: [],
     postStatus: 200,
   }
   installFetchMock()
@@ -513,6 +524,37 @@ describe('syncToGoogle (push)', () => {
     expect(res.updated).toBe(1)
     const puts = fetchCalls.filter((c) => c.method === 'PUT')
     expect(puts).toHaveLength(1)
+  })
+
+  test('recovers from a stale etag (412): refreshes it and retries the update once', async () => {
+    const t = convexTest(schema, modules)
+    const asUser = await seedSchedulableTask(t)
+    // First push creates the event and stores etag_1 on the link.
+    await asUser.action(api.calendar.syncToGoogle, { startDate: '2026-06-20', endDate: '2026-06-20', timezone: 'UTC' })
+
+    // The event was edited in Google meanwhile: the stored etag is stale, so
+    // the first PUT 412s. The action must GET the fresh etag and retry.
+    mock.putStatusQueue = [412]
+    fetchCalls = []
+    const res = await asUser.action(api.calendar.syncToGoogle, {
+      startDate: '2026-06-20',
+      endDate: '2026-06-20',
+      timezone: 'UTC',
+    })
+    expect(res.updated).toBe(1)
+    expect(res.skipped).toBe(0)
+
+    const puts = fetchCalls.filter((c) => c.method === 'PUT')
+    expect(puts).toHaveLength(2) // stale attempt + retry
+    const gets = fetchCalls.filter((c) => c.method === 'GET' && /\/events\/[^/?]+/.test(c.url))
+    expect(gets).toHaveLength(1) // one etag refresh
+
+    // The link stores the etag from the successful retry, so the next push
+    // is back on the normal single-PUT path (no permanent 412 deadlock).
+    await t.run(async (ctx) => {
+      const links = await ctx.db.query('calendarEventLinks').collect()
+      expect(links[0].etag).toBe('etag_2')
+    })
   })
 
   test('counts a task as skipped when Google rejects the create', async () => {
