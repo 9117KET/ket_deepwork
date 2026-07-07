@@ -116,6 +116,22 @@ export const upsertEventLink = internalMutation({
   },
 })
 
+export const deleteEventLink = internalMutation({
+  args: { userId: v.string(), googleCalendarId: v.string(), googleEventId: v.string() },
+  handler: async (ctx, args) => {
+    const link = await ctx.db
+      .query("calendarEventLinks")
+      .withIndex("by_user_event", (q) =>
+        q
+          .eq("userId", args.userId)
+          .eq("googleCalendarId", args.googleCalendarId)
+          .eq("googleEventId", args.googleEventId),
+      )
+      .unique()
+    if (link) await ctx.db.delete(link._id)
+  },
+})
+
 export const updateEventLinkEtag = internalMutation({
   args: { userId: v.string(), googleCalendarId: v.string(), googleEventId: v.string(), etag: v.optional(v.string()) },
   handler: async (ctx, args) => {
@@ -159,13 +175,17 @@ export const upsertPlannerDay = internalMutation({
       .query("plannerDays")
       .withIndex("by_user_date", (q) => q.eq("userId", userId).eq("date", args.date))
       .unique()
+    // Stamp updatedAt like a client write would. Without it the row keeps its
+    // old client stamp, so devices treat the imported tasks as stale (never
+    // applying them) and the next client sync clobbers them off the server.
+    const stamped = { ...rest, updatedAt: Date.now() }
     if (existing) {
-      await ctx.db.patch(existing._id, rest)
+      await ctx.db.patch(existing._id, stamped)
     } else {
       await ctx.db.insert("plannerDays", {
         userId,
         deepWorkSessions: [],
-        ...rest,
+        ...stamped,
       })
     }
   },

@@ -271,6 +271,103 @@ describe('syncFromGoogle (import)', () => {
     })
   })
 
+  test('stamps updatedAt on the planner day so clients treat the import as fresh', async () => {
+    const t = convexTest(schema, modules)
+    const asUser = await connectAndSelect(t)
+    mock.eventsList = [
+      {
+        id: 'g1',
+        summary: 'Standup',
+        start: { dateTime: '2026-06-20T09:00:00Z' },
+        end: { dateTime: '2026-06-20T09:30:00Z' },
+      },
+    ]
+
+    // Simulate a day the client last synced a while ago: without a fresh
+    // updatedAt stamp, the client-side recency guard would treat the imported
+    // row as stale and never apply it, and the next client push would then
+    // clobber the imported task off the server.
+    const staleStamp = Date.now() - 60_000
+    await t.run(async (ctx) => {
+      await ctx.db.insert('plannerDays', {
+        userId: 'testuser123',
+        date: '2026-06-20',
+        deepWorkSessions: [],
+        tasks: [],
+        updatedAt: staleStamp,
+      })
+    })
+
+    const before = Date.now()
+    await asUser.action(api.calendar.syncFromGoogle, {
+      startDate: '2026-06-20',
+      endDate: '2026-06-20',
+      timezone: 'UTC',
+    })
+
+    await t.run(async (ctx) => {
+      const day = await ctx.db
+        .query('plannerDays')
+        .filter((q) => q.eq(q.field('date'), '2026-06-20'))
+        .first()
+      expect(day!.updatedAt).toBeGreaterThanOrEqual(before)
+    })
+  })
+
+  test('re-creates the task when the linked task was deleted out from under the link', async () => {
+    const t = convexTest(schema, modules)
+    const asUser = await connectAndSelect(t)
+    mock.eventsList = [
+      {
+        id: 'g1',
+        summary: 'Deep work block',
+        etag: 'e1',
+        start: { dateTime: '2026-06-20T09:00:00Z' },
+        end: { dateTime: '2026-06-20T10:00:00Z' },
+      },
+    ]
+    const first = await asUser.action(api.calendar.syncFromGoogle, {
+      startDate: '2026-06-20',
+      endDate: '2026-06-20',
+      timezone: 'UTC',
+    })
+    expect(first.imported).toBe(1)
+
+    // A client sync replaces the day's tasks without the imported one (the
+    // clobber scenario). The event link still exists but now dangles.
+    await t.run(async (ctx) => {
+      const day = await ctx.db
+        .query('plannerDays')
+        .filter((q) => q.eq(q.field('date'), '2026-06-20'))
+        .first()
+      await ctx.db.patch(day!._id, {
+        tasks: [{ id: 'clientTask', title: 'Client-side task', sectionId: 'mustDo', date: '2026-06-20', isDone: false }],
+      })
+    })
+
+    const second = await asUser.action(api.calendar.syncFromGoogle, {
+      startDate: '2026-06-20',
+      endDate: '2026-06-20',
+      timezone: 'UTC',
+    })
+    expect(second.imported).toBe(1)
+
+    await t.run(async (ctx) => {
+      const day = await ctx.db
+        .query('plannerDays')
+        .filter((q) => q.eq(q.field('date'), '2026-06-20'))
+        .first()
+      const tasks = day!.tasks as Array<Record<string, unknown>>
+      // Both the client's task and the re-imported event survive.
+      expect(tasks.map((t) => t.title).sort()).toEqual(['Client-side task', 'Deep work block'])
+      // The link points at the re-created task, not the dead one.
+      const links = await ctx.db.query('calendarEventLinks').collect()
+      expect(links).toHaveLength(1)
+      const reimported = tasks.find((t) => t.title === 'Deep work block')!
+      expect(links[0].taskId).toBe(reimported.id)
+    })
+  })
+
   test('throws when no calendar has been selected', async () => {
     const t = convexTest(schema, modules)
     const asUser = await connect(t) // connected but no selectCalendar

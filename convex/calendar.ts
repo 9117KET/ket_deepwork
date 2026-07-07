@@ -233,6 +233,7 @@ export const syncFromGoogle = action({
         googleEventId: ev.id,
       })
 
+      let updatedExisting = false
       if (link?.taskId) {
         // Update existing linked task - we need to modify the day's tasks array
         const days = await ctx.runQuery(internal.calendarInternal.getPlannerDaysInRange, {
@@ -241,8 +242,8 @@ export const syncFromGoogle = action({
           endDate: isoDay,
         })
         const day = days[0]
-        if (day) {
-          const tasks = (day.tasks as Array<Record<string, unknown>>) ?? []
+        const tasks = (day?.tasks as Array<Record<string, unknown>>) ?? []
+        if (tasks.some((t) => t.id === link.taskId)) {
           const next = tasks.map((t) =>
             t.id === link.taskId
               ? { ...t, title: ev.summary ?? t.title, scheduledAt, durationMinutes }
@@ -253,8 +254,19 @@ export const syncFromGoogle = action({
             date: isoDay,
             tasks: next,
           })
+          updatedExisting = true
+        } else {
+          // The linked task no longer exists (deleted or overwritten by a
+          // client sync). Drop the stale link so the event re-imports below
+          // instead of being silently unreachable forever.
+          await ctx.runMutation(internal.calendarInternal.deleteEventLink, {
+            userId,
+            googleCalendarId: conn.selectedCalendarId,
+            googleEventId: ev.id,
+          })
         }
-      } else {
+      }
+      if (!updatedExisting) {
         const taskId = crypto.randomUUID()
         const days = await ctx.runQuery(internal.calendarInternal.getPlannerDaysInRange, {
           userId,
