@@ -234,7 +234,62 @@ export const syncFromGoogle = action({
       })
 
       let updatedExisting = false
-      if (link?.taskId) {
+      if (link?.taskId && link.taskDate !== isoDay) {
+        // The event moved to a different day in Google. Take the task out of
+        // the day the link points at and carry it (same id, done-state etc.)
+        // to the event's new day; looking up only the new day would miss the
+        // task entirely and silently leave it on the old day forever.
+        const oldDays = await ctx.runQuery(internal.calendarInternal.getPlannerDaysInRange, {
+          userId,
+          startDate: link.taskDate,
+          endDate: link.taskDate,
+        })
+        const oldDay = oldDays[0]
+        const oldTasks = (oldDay?.tasks as Array<Record<string, unknown>>) ?? []
+        const moved = oldTasks.find((t) => t.id === link.taskId)
+        if (moved) {
+          await ctx.runMutation(internal.calendarInternal.upsertPlannerDay, {
+            userId,
+            date: link.taskDate,
+            tasks: oldTasks.filter((t) => t.id !== link.taskId),
+          })
+          const newDays = await ctx.runQuery(internal.calendarInternal.getPlannerDaysInRange, {
+            userId,
+            startDate: isoDay,
+            endDate: isoDay,
+          })
+          const newDay = newDays[0]
+          const newTasks = (newDay?.tasks as Array<Record<string, unknown>>) ?? []
+          await ctx.runMutation(internal.calendarInternal.upsertPlannerDay, {
+            userId,
+            date: isoDay,
+            tasks: [
+              ...newTasks,
+              { ...moved, title: ev.summary ?? moved.title, date: isoDay, scheduledAt, durationMinutes },
+            ],
+            deepWorkSessions: newDay?.deepWorkSessions ?? [],
+            habitCompletions: newDay?.habitCompletions,
+            sleepHours: newDay?.sleepHours,
+            mood: newDay?.mood,
+          })
+          await ctx.runMutation(internal.calendarInternal.upsertEventLink, {
+            userId,
+            taskId: link.taskId,
+            taskDate: isoDay,
+            googleCalendarId: conn.selectedCalendarId,
+            googleEventId: ev.id,
+            etag: ev.etag,
+          })
+          updatedExisting = true
+        } else {
+          // The linked task vanished from its day: drop the link and re-import.
+          await ctx.runMutation(internal.calendarInternal.deleteEventLink, {
+            userId,
+            googleCalendarId: conn.selectedCalendarId,
+            googleEventId: ev.id,
+          })
+        }
+      } else if (link?.taskId) {
         // Update existing linked task - we need to modify the day's tasks array
         const days = await ctx.runQuery(internal.calendarInternal.getPlannerDaysInRange, {
           userId,

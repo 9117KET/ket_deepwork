@@ -109,7 +109,13 @@ export const upsertEventLink = internalMutation({
       )
       .unique()
     if (existing) {
-      await ctx.db.patch(existing._id, { etag: args.etag })
+      // Patch the full mapping, not just the etag: the task id/date change
+      // when an event moves days or its task is re-created after deletion.
+      await ctx.db.patch(existing._id, {
+        taskId: args.taskId,
+        taskDate: args.taskDate,
+        etag: args.etag,
+      })
     } else {
       await ctx.db.insert("calendarEventLinks", args)
     }

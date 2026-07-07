@@ -368,6 +368,81 @@ describe('syncFromGoogle (import)', () => {
     })
   })
 
+  test('moves the task (same id, done-state kept) when the event moves to another day', async () => {
+    const t = convexTest(schema, modules)
+    const asUser = await connectAndSelect(t)
+    mock.eventsList = [
+      {
+        id: 'g1',
+        summary: 'Dentist',
+        etag: 'e1',
+        start: { dateTime: '2026-06-20T09:00:00Z' },
+        end: { dateTime: '2026-06-20T10:00:00Z' },
+      },
+    ]
+    await asUser.action(api.calendar.syncFromGoogle, {
+      startDate: '2026-06-20',
+      endDate: '2026-06-27',
+      timezone: 'UTC',
+    })
+
+    // Mark the imported task done locally, then move the event 3 days out.
+    let taskId = ''
+    await t.run(async (ctx) => {
+      const day = await ctx.db
+        .query('plannerDays')
+        .filter((q) => q.eq(q.field('date'), '2026-06-20'))
+        .first()
+      const tasks = day!.tasks as Array<Record<string, unknown>>
+      taskId = tasks[0].id as string
+      await ctx.db.patch(day!._id, { tasks: [{ ...tasks[0], isDone: true }] })
+    })
+
+    mock.eventsList = [
+      {
+        id: 'g1',
+        summary: 'Dentist (moved)',
+        etag: 'e2',
+        start: { dateTime: '2026-06-23T14:00:00Z' },
+        end: { dateTime: '2026-06-23T15:00:00Z' },
+      },
+    ]
+    const res = await asUser.action(api.calendar.syncFromGoogle, {
+      startDate: '2026-06-20',
+      endDate: '2026-06-27',
+      timezone: 'UTC',
+    })
+    expect(res.imported).toBe(0) // a move is an update, not a new import
+
+    await t.run(async (ctx) => {
+      const oldDay = await ctx.db
+        .query('plannerDays')
+        .filter((q) => q.eq(q.field('date'), '2026-06-20'))
+        .first()
+      expect((oldDay!.tasks as unknown[])).toHaveLength(0)
+
+      const newDay = await ctx.db
+        .query('plannerDays')
+        .filter((q) => q.eq(q.field('date'), '2026-06-23'))
+        .first()
+      const tasks = newDay!.tasks as Array<Record<string, unknown>>
+      expect(tasks).toHaveLength(1)
+      expect(tasks[0].id).toBe(taskId)
+      expect(tasks[0].title).toBe('Dentist (moved)')
+      expect(tasks[0].isDone).toBe(true)
+      expect(tasks[0].date).toBe('2026-06-23')
+      expect(tasks[0].scheduledAt).toBe('14:00')
+
+      // The link now points at the new day (upsertEventLink patches the
+      // full mapping, not just the etag).
+      const links = await ctx.db.query('calendarEventLinks').collect()
+      expect(links).toHaveLength(1)
+      expect(links[0].taskDate).toBe('2026-06-23')
+      expect(links[0].taskId).toBe(taskId)
+      expect(links[0].etag).toBe('e2')
+    })
+  })
+
   test('throws when no calendar has been selected', async () => {
     const t = convexTest(schema, modules)
     const asUser = await connect(t) // connected but no selectCalendar
