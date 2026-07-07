@@ -62,21 +62,6 @@ export const deleteConnection = internalMutation({
   },
 })
 
-export const getEventLink = internalQuery({
-  args: { userId: v.string(), googleCalendarId: v.string(), googleEventId: v.string() },
-  handler: async (ctx, args) => {
-    return await ctx.db
-      .query("calendarEventLinks")
-      .withIndex("by_user_event", (q) =>
-        q
-          .eq("userId", args.userId)
-          .eq("googleCalendarId", args.googleCalendarId)
-          .eq("googleEventId", args.googleEventId),
-      )
-      .unique()
-  },
-})
-
 export const getTaskEventLink = internalQuery({
   args: { userId: v.string(), taskDate: v.string(), taskId: v.string() },
   handler: async (ctx, args) => {
@@ -109,10 +94,32 @@ export const upsertEventLink = internalMutation({
       )
       .unique()
     if (existing) {
-      await ctx.db.patch(existing._id, { etag: args.etag })
+      // Patch the full mapping, not just the etag: the task id/date change
+      // when an event moves days or its task is re-created after deletion.
+      await ctx.db.patch(existing._id, {
+        taskId: args.taskId,
+        taskDate: args.taskDate,
+        etag: args.etag,
+      })
     } else {
       await ctx.db.insert("calendarEventLinks", args)
     }
+  },
+})
+
+export const deleteEventLink = internalMutation({
+  args: { userId: v.string(), googleCalendarId: v.string(), googleEventId: v.string() },
+  handler: async (ctx, args) => {
+    const link = await ctx.db
+      .query("calendarEventLinks")
+      .withIndex("by_user_event", (q) =>
+        q
+          .eq("userId", args.userId)
+          .eq("googleCalendarId", args.googleCalendarId)
+          .eq("googleEventId", args.googleEventId),
+      )
+      .unique()
+    if (link) await ctx.db.delete(link._id)
   },
 })
 
@@ -135,11 +142,36 @@ export const updateEventLinkEtag = internalMutation({
 export const getPlannerDaysInRange = internalQuery({
   args: { userId: v.string(), startDate: v.string(), endDate: v.string() },
   handler: async (ctx, args) => {
-    const all = await ctx.db
+    // Range over the by_user_date index; collecting every day the user has
+    // ever planned and filtering in JS reads the whole table per call.
+    return await ctx.db
       .query("plannerDays")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_user_date", (q) =>
+        q.eq("userId", args.userId).gte("date", args.startDate).lte("date", args.endDate),
+      )
       .collect()
-    return all.filter((d) => d.date >= args.startDate && d.date <= args.endDate)
+  },
+})
+
+export const getPlannerDay = internalQuery({
+  args: { userId: v.string(), date: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("plannerDays")
+      .withIndex("by_user_date", (q) => q.eq("userId", args.userId).eq("date", args.date))
+      .unique()
+  },
+})
+
+export const getEventLinksForCalendar = internalQuery({
+  args: { userId: v.string(), googleCalendarId: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("calendarEventLinks")
+      .withIndex("by_user_event", (q) =>
+        q.eq("userId", args.userId).eq("googleCalendarId", args.googleCalendarId),
+      )
+      .collect()
   },
 })
 
@@ -159,13 +191,17 @@ export const upsertPlannerDay = internalMutation({
       .query("plannerDays")
       .withIndex("by_user_date", (q) => q.eq("userId", userId).eq("date", args.date))
       .unique()
+    // Stamp updatedAt like a client write would. Without it the row keeps its
+    // old client stamp, so devices treat the imported tasks as stale (never
+    // applying them) and the next client sync clobbers them off the server.
+    const stamped = { ...rest, updatedAt: Date.now() }
     if (existing) {
-      await ctx.db.patch(existing._id, rest)
+      await ctx.db.patch(existing._id, stamped)
     } else {
       await ctx.db.insert("plannerDays", {
         userId,
         deepWorkSessions: [],
-        ...rest,
+        ...stamped,
       })
     }
   },

@@ -57,8 +57,11 @@ export function computeBlocksFromWakeSleep(
   const nightDur   = Math.max(30, Math.min(90, Math.floor(awake * 0.10)))
   const focusDur   = Math.max(0, awake - morningDur - nightDur)
   const highDur    = Math.floor(focusDur * 0.45)
-  const mediumDur  = Math.max(15, Math.floor(focusDur * 0.35))
-  const lowDur     = Math.max(15, focusDur - highDur - mediumDur)
+  // Cap the medium/low floors by what the focus pool actually has left, so a
+  // very short awake window can't allocate more block time than exists and
+  // push the night routine past the sleep target.
+  const mediumDur  = Math.min(Math.max(15, Math.floor(focusDur * 0.35)), Math.max(0, focusDur - highDur))
+  const lowDur     = Math.max(0, focusDur - highDur - mediumDur)
 
   let cursor = wakeMin
   const next = (dur: number) => { const s = cursor; cursor += dur; return { s, e: wrapMinutes(cursor) } }
@@ -342,8 +345,10 @@ export function applyBlockDurationChange(
   for (let i = idx + 1; i < BLOCK_ORDER.length && remaining !== 0; i++) {
     const key = BLOCK_ORDER[i]!
     if (delta > 0) {
-      // Growing: shrink next block
-      const available = result[key] - BLOCK_MIN_MINUTES[key]
+      // Growing: shrink next block. Demand-first sizing can hand us collapsed
+      // (0-minute) blocks below their floor; clamp so a negative "available"
+      // doesn't grow the empty block and inflate the remaining delta.
+      const available = Math.max(0, result[key] - BLOCK_MIN_MINUTES[key])
       const take = Math.min(remaining, available)
       result[key] -= take
       remaining -= take

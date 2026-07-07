@@ -90,14 +90,26 @@ DeepWorkSession
 | `supabase/functions/` | Edge Functions for Google Calendar OAuth + sync |
 | `supabase/migrations/` | SQL schema (5 migration files) |
 
-### Supabase Edge Functions (Google Calendar)
+### Google Calendar (Convex)
 
-Six Deno edge functions under `supabase/functions/`:
-- `google-oauth-start` / `google-oauth-callback` — OAuth flow
-- `google-calendars-list` / `google-calendar-select` — calendar selection
-- `google-sync-pull` / `google-sync-push` — bidirectional event sync
+> Migrated off Supabase Edge Functions onto Convex. Any `supabase/functions/*`
+> calendar code is legacy/unused — the live integration is below. See
+> `docs/ROADMAP.md` (Google Calendar phase status) for the backlog.
 
-Tokens are stored server-side in the `google_calendar_sync` table; the client never sees them.
+- **Backend:** `convex/calendar.ts` (public actions/queries) + `convex/calendarInternal.ts`
+  (internal queries/mutations). Shared Google helpers in `convex/_shared/google.ts`,
+  envelope encryption in `convex/_shared/crypto.ts`.
+- **Public API:** `connectionStatus` (query), `googleOauthStart` / `googleOauthCallback`,
+  `listCalendars`, `selectCalendar`, `syncFromGoogle`, `syncToGoogle`, `disconnectGoogle`.
+- **Tables:** `googleCalendarConnections` (encrypted refresh token + selected calendar)
+  and `calendarEventLinks` (task ↔ google event mapping + etag). The client never
+  sees tokens — actions decrypt the refresh token and mint short-lived access tokens.
+- **Frontend:** `src/services/calendarSyncService.ts` wraps the actions;
+  `CalendarSyncPage.tsx` is the UI, `CalendarCallbackPage.tsx` handles the OAuth redirect.
+- **Sync rules:** import = timed events → `highPriority` tasks (all-day skipped);
+  push = tasks with `scheduledAt` + `durationMinutes` and no `parentId`.
+- **Env vars** (Convex dashboard): `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
+  `GOOGLE_TOKEN_ENCRYPTION_KEY_B64`. Prod still needs these copied over (DEPLOYMENT.md step 2).
 
 ### Sharing
 

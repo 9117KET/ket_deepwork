@@ -31,7 +31,11 @@ type MockState = {
   calendarList: Array<{ id: string; summary: string; primary?: boolean }>
   createdEvent: { id: string; etag?: string }
   updatedEvent: { etag?: string }
+  /** Returned by a single-event GET (etag refresh after a 412). */
+  singleEvent: { id: string; etag?: string }
   putStatus: number
+  /** Per-call PUT statuses consumed before falling back to putStatus. */
+  putStatusQueue: number[]
   postStatus: number
 }
 
@@ -45,6 +49,9 @@ function installFetchMock() {
     const method = (init?.method ?? 'GET').toUpperCase()
     fetchCalls.push({ url, method })
 
+    if (url.startsWith('https://oauth2.googleapis.com/revoke')) {
+      return new Response('{}', { status: 200 })
+    }
     if (url.startsWith(TOKEN_URL)) {
       // Serves both the auth-code exchange (reads refresh_token) and the
       // refresh-token grant (reads access_token).
@@ -60,6 +67,10 @@ function installFetchMock() {
     // update (PUT .../events/<id>).
     if (url.includes('/events')) {
       if (method === 'GET') {
+        // Single-event GET (etag refresh) vs. the events list.
+        if (/\/events\/[^/?]+/.test(url)) {
+          return new Response(JSON.stringify(mock.singleEvent), { status: 200 })
+        }
         return new Response(JSON.stringify({ items: mock.eventsList }), { status: 200 })
       }
       if (method === 'POST') {
@@ -67,7 +78,8 @@ function installFetchMock() {
         return new Response(JSON.stringify(mock.createdEvent), { status: 200 })
       }
       if (method === 'PUT') {
-        if (mock.putStatus !== 200) return new Response('{}', { status: mock.putStatus })
+        const status = mock.putStatusQueue.length > 0 ? mock.putStatusQueue.shift()! : mock.putStatus
+        if (status !== 200) return new Response('{}', { status })
         return new Response(JSON.stringify(mock.updatedEvent), { status: 200 })
       }
     }
@@ -85,7 +97,9 @@ beforeEach(() => {
     calendarList: [{ id: 'primary', summary: 'Personal', primary: true }],
     createdEvent: { id: 'gevent_new', etag: 'etag_1' },
     updatedEvent: { etag: 'etag_2' },
+    singleEvent: { id: 'gevent_new', etag: 'etag_fresh' },
     putStatus: 200,
+    putStatusQueue: [],
     postStatus: 200,
   }
   installFetchMock()
@@ -271,6 +285,261 @@ describe('syncFromGoogle (import)', () => {
     })
   })
 
+  test('stamps updatedAt on the planner day so clients treat the import as fresh', async () => {
+    const t = convexTest(schema, modules)
+    const asUser = await connectAndSelect(t)
+    mock.eventsList = [
+      {
+        id: 'g1',
+        summary: 'Standup',
+        start: { dateTime: '2026-06-20T09:00:00Z' },
+        end: { dateTime: '2026-06-20T09:30:00Z' },
+      },
+    ]
+
+    // Simulate a day the client last synced a while ago: without a fresh
+    // updatedAt stamp, the client-side recency guard would treat the imported
+    // row as stale and never apply it, and the next client push would then
+    // clobber the imported task off the server.
+    const staleStamp = Date.now() - 60_000
+    await t.run(async (ctx) => {
+      await ctx.db.insert('plannerDays', {
+        userId: 'testuser123',
+        date: '2026-06-20',
+        deepWorkSessions: [],
+        tasks: [],
+        updatedAt: staleStamp,
+      })
+    })
+
+    const before = Date.now()
+    await asUser.action(api.calendar.syncFromGoogle, {
+      startDate: '2026-06-20',
+      endDate: '2026-06-20',
+      timezone: 'UTC',
+    })
+
+    await t.run(async (ctx) => {
+      const day = await ctx.db
+        .query('plannerDays')
+        .filter((q) => q.eq(q.field('date'), '2026-06-20'))
+        .first()
+      expect(day!.updatedAt).toBeGreaterThanOrEqual(before)
+    })
+  })
+
+  test('re-creates the task when the linked task was deleted out from under the link', async () => {
+    const t = convexTest(schema, modules)
+    const asUser = await connectAndSelect(t)
+    mock.eventsList = [
+      {
+        id: 'g1',
+        summary: 'Deep work block',
+        etag: 'e1',
+        start: { dateTime: '2026-06-20T09:00:00Z' },
+        end: { dateTime: '2026-06-20T10:00:00Z' },
+      },
+    ]
+    const first = await asUser.action(api.calendar.syncFromGoogle, {
+      startDate: '2026-06-20',
+      endDate: '2026-06-20',
+      timezone: 'UTC',
+    })
+    expect(first.imported).toBe(1)
+
+    // A client sync replaces the day's tasks without the imported one (the
+    // clobber scenario). The event link still exists but now dangles.
+    await t.run(async (ctx) => {
+      const day = await ctx.db
+        .query('plannerDays')
+        .filter((q) => q.eq(q.field('date'), '2026-06-20'))
+        .first()
+      await ctx.db.patch(day!._id, {
+        tasks: [{ id: 'clientTask', title: 'Client-side task', sectionId: 'mustDo', date: '2026-06-20', isDone: false }],
+      })
+    })
+
+    const second = await asUser.action(api.calendar.syncFromGoogle, {
+      startDate: '2026-06-20',
+      endDate: '2026-06-20',
+      timezone: 'UTC',
+    })
+    expect(second.imported).toBe(1)
+
+    await t.run(async (ctx) => {
+      const day = await ctx.db
+        .query('plannerDays')
+        .filter((q) => q.eq(q.field('date'), '2026-06-20'))
+        .first()
+      const tasks = day!.tasks as Array<Record<string, unknown>>
+      // Both the client's task and the re-imported event survive.
+      expect(tasks.map((t) => t.title).sort()).toEqual(['Client-side task', 'Deep work block'])
+      // The link points at the re-created task, not the dead one.
+      const links = await ctx.db.query('calendarEventLinks').collect()
+      expect(links).toHaveLength(1)
+      const reimported = tasks.find((t) => t.title === 'Deep work block')!
+      expect(links[0].taskId).toBe(reimported.id)
+    })
+  })
+
+  test('moves the task (same id, done-state kept) when the event moves to another day', async () => {
+    const t = convexTest(schema, modules)
+    const asUser = await connectAndSelect(t)
+    mock.eventsList = [
+      {
+        id: 'g1',
+        summary: 'Dentist',
+        etag: 'e1',
+        start: { dateTime: '2026-06-20T09:00:00Z' },
+        end: { dateTime: '2026-06-20T10:00:00Z' },
+      },
+    ]
+    await asUser.action(api.calendar.syncFromGoogle, {
+      startDate: '2026-06-20',
+      endDate: '2026-06-27',
+      timezone: 'UTC',
+    })
+
+    // Mark the imported task done locally, then move the event 3 days out.
+    let taskId = ''
+    await t.run(async (ctx) => {
+      const day = await ctx.db
+        .query('plannerDays')
+        .filter((q) => q.eq(q.field('date'), '2026-06-20'))
+        .first()
+      const tasks = day!.tasks as Array<Record<string, unknown>>
+      taskId = tasks[0].id as string
+      await ctx.db.patch(day!._id, { tasks: [{ ...tasks[0], isDone: true }] })
+    })
+
+    mock.eventsList = [
+      {
+        id: 'g1',
+        summary: 'Dentist (moved)',
+        etag: 'e2',
+        start: { dateTime: '2026-06-23T14:00:00Z' },
+        end: { dateTime: '2026-06-23T15:00:00Z' },
+      },
+    ]
+    const res = await asUser.action(api.calendar.syncFromGoogle, {
+      startDate: '2026-06-20',
+      endDate: '2026-06-27',
+      timezone: 'UTC',
+    })
+    expect(res.imported).toBe(0) // a move is an update, not a new import
+
+    await t.run(async (ctx) => {
+      const oldDay = await ctx.db
+        .query('plannerDays')
+        .filter((q) => q.eq(q.field('date'), '2026-06-20'))
+        .first()
+      expect((oldDay!.tasks as unknown[])).toHaveLength(0)
+
+      const newDay = await ctx.db
+        .query('plannerDays')
+        .filter((q) => q.eq(q.field('date'), '2026-06-23'))
+        .first()
+      const tasks = newDay!.tasks as Array<Record<string, unknown>>
+      expect(tasks).toHaveLength(1)
+      expect(tasks[0].id).toBe(taskId)
+      expect(tasks[0].title).toBe('Dentist (moved)')
+      expect(tasks[0].isDone).toBe(true)
+      expect(tasks[0].date).toBe('2026-06-23')
+      expect(tasks[0].scheduledAt).toBe('14:00')
+
+      // The link now points at the new day (upsertEventLink patches the
+      // full mapping, not just the etag).
+      const links = await ctx.db.query('calendarEventLinks').collect()
+      expect(links).toHaveLength(1)
+      expect(links[0].taskDate).toBe('2026-06-23')
+      expect(links[0].taskId).toBe(taskId)
+      expect(links[0].etag).toBe('e2')
+    })
+  })
+
+  test('imports many events on one day in a single day write (batched)', async () => {
+    const t = convexTest(schema, modules)
+    const asUser = await connectAndSelect(t)
+    mock.eventsList = [
+      { id: 'g1', summary: 'A', start: { dateTime: '2026-06-20T09:00:00Z' }, end: { dateTime: '2026-06-20T10:00:00Z' } },
+      { id: 'g2', summary: 'B', start: { dateTime: '2026-06-20T11:00:00Z' }, end: { dateTime: '2026-06-20T12:00:00Z' } },
+      { id: 'g3', summary: 'C', start: { dateTime: '2026-06-21T09:00:00Z' }, end: { dateTime: '2026-06-21T09:30:00Z' } },
+    ]
+    const res = await asUser.action(api.calendar.syncFromGoogle, {
+      startDate: '2026-06-20',
+      endDate: '2026-06-21',
+      timezone: 'UTC',
+    })
+    expect(res.imported).toBe(3)
+
+    await t.run(async (ctx) => {
+      const days = await ctx.db.query('plannerDays').collect()
+      // One row per day (a per-event write bug would still pass this, but a
+      // grouping bug that splits a day would not).
+      expect(days.map((d) => d.date).sort()).toEqual(['2026-06-20', '2026-06-21'])
+      const day20 = days.find((d) => d.date === '2026-06-20')!
+      expect((day20.tasks as Array<Record<string, unknown>>).map((t) => t.title).sort()).toEqual(['A', 'B'])
+      const links = await ctx.db.query('calendarEventLinks').collect()
+      expect(links).toHaveLength(3)
+    })
+
+    // Re-import: updates in place, still no duplicates.
+    const again = await asUser.action(api.calendar.syncFromGoogle, {
+      startDate: '2026-06-20',
+      endDate: '2026-06-21',
+      timezone: 'UTC',
+    })
+    expect(again.imported).toBe(0)
+    await t.run(async (ctx) => {
+      const day20 = await ctx.db
+        .query('plannerDays')
+        .filter((q) => q.eq(q.field('date'), '2026-06-20'))
+        .first()
+      expect(day20!.tasks as unknown[]).toHaveLength(2)
+    })
+  })
+
+  test('an event cancelled in Google removes its imported task and link', async () => {
+    const t = convexTest(schema, modules)
+    const asUser = await connectAndSelect(t)
+    mock.eventsList = [
+      { id: 'g1', summary: 'Keep', start: { dateTime: '2026-06-20T09:00:00Z' }, end: { dateTime: '2026-06-20T10:00:00Z' } },
+      { id: 'g2', summary: 'Cancel me', start: { dateTime: '2026-06-20T11:00:00Z' }, end: { dateTime: '2026-06-20T12:00:00Z' } },
+    ]
+    await asUser.action(api.calendar.syncFromGoogle, {
+      startDate: '2026-06-20', endDate: '2026-06-20', timezone: 'UTC',
+    })
+
+    // The events request must ask for cancelled events at all.
+    const listCall = fetchCalls.find((c) => c.method === 'GET' && c.url.includes('/events?'))
+    expect(listCall!.url).toContain('showDeleted=true')
+
+    // g2 is deleted in Google; a never-imported cancelled event is ignored.
+    mock.eventsList = [
+      { id: 'g1', summary: 'Keep', etag: 'e1b', start: { dateTime: '2026-06-20T09:00:00Z' }, end: { dateTime: '2026-06-20T10:00:00Z' } },
+      { id: 'g2', status: 'cancelled' },
+      { id: 'g_unknown', status: 'cancelled' },
+    ]
+    const res = await asUser.action(api.calendar.syncFromGoogle, {
+      startDate: '2026-06-20', endDate: '2026-06-20', timezone: 'UTC',
+    })
+    expect(res.imported).toBe(0)
+    expect(res.updated).toBe(1) // g1 refreshed in place
+    expect(res.removed).toBe(1) // g2's task deleted
+
+    await t.run(async (ctx) => {
+      const day = await ctx.db
+        .query('plannerDays')
+        .filter((q) => q.eq(q.field('date'), '2026-06-20'))
+        .first()
+      const tasks = day!.tasks as Array<Record<string, unknown>>
+      expect(tasks.map((t) => t.title)).toEqual(['Keep'])
+      const links = await ctx.db.query('calendarEventLinks').collect()
+      expect(links).toHaveLength(1)
+      expect(links[0].googleEventId).toBe('g1')
+    })
+  })
+
   test('throws when no calendar has been selected', async () => {
     const t = convexTest(schema, modules)
     const asUser = await connect(t) // connected but no selectCalendar
@@ -343,6 +612,37 @@ describe('syncToGoogle (push)', () => {
     expect(puts).toHaveLength(1)
   })
 
+  test('recovers from a stale etag (412): refreshes it and retries the update once', async () => {
+    const t = convexTest(schema, modules)
+    const asUser = await seedSchedulableTask(t)
+    // First push creates the event and stores etag_1 on the link.
+    await asUser.action(api.calendar.syncToGoogle, { startDate: '2026-06-20', endDate: '2026-06-20', timezone: 'UTC' })
+
+    // The event was edited in Google meanwhile: the stored etag is stale, so
+    // the first PUT 412s. The action must GET the fresh etag and retry.
+    mock.putStatusQueue = [412]
+    fetchCalls = []
+    const res = await asUser.action(api.calendar.syncToGoogle, {
+      startDate: '2026-06-20',
+      endDate: '2026-06-20',
+      timezone: 'UTC',
+    })
+    expect(res.updated).toBe(1)
+    expect(res.skipped).toBe(0)
+
+    const puts = fetchCalls.filter((c) => c.method === 'PUT')
+    expect(puts).toHaveLength(2) // stale attempt + retry
+    const gets = fetchCalls.filter((c) => c.method === 'GET' && /\/events\/[^/?]+/.test(c.url))
+    expect(gets).toHaveLength(1) // one etag refresh
+
+    // The link stores the etag from the successful retry, so the next push
+    // is back on the normal single-PUT path (no permanent 412 deadlock).
+    await t.run(async (ctx) => {
+      const links = await ctx.db.query('calendarEventLinks').collect()
+      expect(links[0].etag).toBe('etag_2')
+    })
+  })
+
   test('counts a task as skipped when Google rejects the create', async () => {
     const t = convexTest(schema, modules)
     const asUser = await seedSchedulableTask(t)
@@ -356,7 +656,7 @@ describe('syncToGoogle (push)', () => {
 // ── Disconnect ───────────────────────────────────────────────────────────────
 
 describe('disconnect', () => {
-  test('removes the connection and all event links', async () => {
+  test('revokes the token at Google and removes the connection and all event links', async () => {
     const t = convexTest(schema, modules)
     const asUser = await connect(t)
     await asUser.mutation(api.calendar.selectCalendar, { calendarId: CAL_ID })
@@ -366,7 +666,13 @@ describe('disconnect', () => {
       })
     })
 
-    await asUser.mutation(api.calendar.disconnectGoogle, {})
+    fetchCalls = []
+    await asUser.action(api.calendar.disconnectGoogle, {})
+
+    // The refresh token must be revoked at Google, not just deleted locally.
+    const revokes = fetchCalls.filter((c) => c.url.startsWith('https://oauth2.googleapis.com/revoke'))
+    expect(revokes).toHaveLength(1)
+    expect(revokes[0].method).toBe('POST')
 
     const status = await asUser.query(api.calendar.connectionStatus, {})
     expect(status.connected).toBe(false)
@@ -374,6 +680,24 @@ describe('disconnect', () => {
       expect(await ctx.db.query('googleCalendarConnections').collect()).toHaveLength(0)
       expect(await ctx.db.query('calendarEventLinks').collect()).toHaveLength(0)
     })
+  })
+
+  test('still disconnects when the revoke call fails', async () => {
+    const t = convexTest(schema, modules)
+    const asUser = await connect(t)
+    const realFetch = globalThis.fetch
+    vi.stubGlobal('fetch', vi.fn(async (input: string, init?: RequestInit) => {
+      const url = String(input)
+      if (url.startsWith('https://oauth2.googleapis.com/revoke')) {
+        throw new Error('network down')
+      }
+      return realFetch(input, init)
+    }))
+
+    await asUser.action(api.calendar.disconnectGoogle, {})
+
+    const status = await asUser.query(api.calendar.connectionStatus, {})
+    expect(status.connected).toBe(false)
   })
 })
 
@@ -388,7 +712,7 @@ describe('auth guards', () => {
     await expect(t.action(api.calendar.syncFromGoogle, {})).rejects.toThrow(/not authenticated/i)
     await expect(t.action(api.calendar.syncToGoogle, {})).rejects.toThrow(/not authenticated/i)
     await expect(t.mutation(api.calendar.selectCalendar, { calendarId: CAL_ID })).rejects.toThrow(/not authenticated/i)
-    await expect(t.mutation(api.calendar.disconnectGoogle, {})).rejects.toThrow(/not authenticated/i)
+    await expect(t.action(api.calendar.disconnectGoogle, {})).rejects.toThrow(/not authenticated/i)
 
     // The public connection-status query must not leak: anonymous = not connected.
     const status = await t.query(api.calendar.connectionStatus, {})
