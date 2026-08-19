@@ -16,7 +16,11 @@ const TABS: { id: MobileTab; label: string }[] = [
 
 export function MobileTabBar({ activeTab, onTabChange }: MobileTabBarProps) {
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-[60] border-t border-share-outlineVariant/30 bg-share-bg/95 backdrop-blur-sm lg:hidden">
+    // Hidden at lg+, where the planner's right rail replaces these tabs. Between
+    // md and lg the AppChrome sidebar (fixed, 240px) is already showing, so the
+    // bar starts after it instead of spanning the full width and covering the
+    // sidebar's account menu.
+    <div className="fixed bottom-0 left-0 right-0 md:left-[240px] z-[60] border-t border-share-outlineVariant/30 bg-share-bg/95 backdrop-blur-sm lg:hidden">
       <div className="flex">
         <Link
           to="/"
