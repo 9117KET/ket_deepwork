@@ -64,6 +64,14 @@ async function prepareBase(page: Page) {
     // Keep review reminders dismissed by default for non-reminder tests
     window.sessionStorage.setItem('review_reminder_dismissed_monthly', '1')
     window.sessionStorage.setItem('review_reminder_dismissed_weekly', '1')
+    // The planner auto-opens the shutdown ritual (a full-screen overlay that
+    // swallows clicks) from 9 PM local time. Without this the whole suite fails
+    // when run in the evening. Key must match DayPlanner's local-date todayIso().
+    {
+      const d = new Date()
+      const localIso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      window.sessionStorage.setItem(`shutdown_reminder_shown_${localIso}`, '1')
+    }
   })
 }
 
@@ -96,6 +104,14 @@ async function prepareShutdownTest(page: Page) {
     }
     window.sessionStorage.setItem('review_reminder_dismissed_monthly', '1')
     window.sessionStorage.setItem('review_reminder_dismissed_weekly', '1')
+    // The planner auto-opens the shutdown ritual (a full-screen overlay that
+    // swallows clicks) from 9 PM local time. Without this the whole suite fails
+    // when run in the evening. Key must match DayPlanner's local-date todayIso().
+    {
+      const d = new Date()
+      const localIso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      window.sessionStorage.setItem(`shutdown_reminder_shown_${localIso}`, '1')
+    }
   })
 }
 
@@ -484,6 +500,14 @@ test.describe('ReviewReminderModal — monthly review due (last 3 days of month)
       }
       // Dismiss weekly but NOT monthly so the monthly reminder fires
       window.sessionStorage.setItem('review_reminder_dismissed_weekly', '1')
+      // The planner auto-opens the shutdown ritual (a full-screen overlay that
+      // swallows clicks) from 9 PM local time. Without this the whole suite fails
+      // when run in the evening. Key must match DayPlanner's local-date todayIso().
+      {
+        const d = new Date()
+        const localIso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+        window.sessionStorage.setItem(`shutdown_reminder_shown_${localIso}`, '1')
+      }
       window.sessionStorage.removeItem('review_reminder_dismissed_monthly')
     })
     await openPlanner(page)
