@@ -32,7 +32,10 @@ function formatMonthKey(key: string): string {
 }
 
 function eur(n: number): string {
-  return `€${Math.round(n).toLocaleString('de-DE')}`
+  // `+ 0` collapses negative zero: rows like "− Savings this month" negate a 0
+  // amount to -0, which slips past the `amount < 0` check (-0 < 0 is false) and
+  // would otherwise render as "€-0".
+  return `€${(Math.round(n) + 0).toLocaleString('de-DE')}`
 }
 
 /** A planned trip surfaced for the critical-expense picker. */
