@@ -28,10 +28,20 @@ export interface Task {
   isDone: boolean;
   /** Parent task id; when set, this task is a subtask. Completing parent marks all subtasks done. */
   parentId?: string;
-  /** Time of day to start/remind (local), e.g. "09:00". */
+  /**
+   * Time of day to start/remind (local), e.g. "09:00". Opt-in anchor, set from
+   * the task menu, for tasks with an externally fixed time (a lecture, a call).
+   * Most tasks leave this unset and are budgeted by duration instead.
+   */
   scheduledAt?: string;
-  /** Planned duration in minutes (for display / future timer link). */
+  /** Planned duration in minutes. Drives the 30-min progress boxes. */
   durationMinutes?: number;
+  /**
+   * Minutes logged by hand, always in 30-min increments. Timer minutes are NOT
+   * stored here - they live in DayState.deepWorkSessions keyed by taskId, so a
+   * filled-by-timer box can never be faked. See domain/taskProgress.ts.
+   */
+  manualLoggedMinutes?: number;
   /** True when this task is shallow work (logistical, non-cognitively demanding). */
   isShallow?: boolean;
 }
@@ -60,6 +70,8 @@ export interface DeepWorkSession {
   startedAt: string; // ISO timestamp
   finishedAt?: string;
   cancelledAt?: string;
+  /** Task this session was worked against, when the timer was started from one. */
+  taskId?: string;
 }
 
 export interface DayState {

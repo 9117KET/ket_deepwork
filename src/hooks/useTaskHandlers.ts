@@ -603,14 +603,19 @@ export function useTaskHandlers(
     updateAppState((prev) => ({ ...prev, sideQuestDefs: defs }))
   }, [updateAppState])
 
-  /** Record a completed deep work session into the current day. */
-  const handleSessionComplete = useCallback((label: string, durationMinutes: number) => {
+  /**
+   * Record a completed deep work session into the current day. When the timer
+   * was pointed at a task, `taskId` attributes the minutes to it - that is what
+   * fills the task's progress boxes as earned rather than self-reported work.
+   */
+  const handleSessionComplete = useCallback((label: string, durationMinutes: number, taskId?: string) => {
     updateAppState((prev) => {
       const day = getOrCreateDay(prev, selectedDay);
       const session: DeepWorkSession = {
         id: `dw-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         label,
         durationMinutes,
+        ...(taskId ? { taskId } : {}),
         startedAt: new Date(Date.now() - durationMinutes * 60_000).toISOString(),
         finishedAt: new Date().toISOString(),
       };
@@ -620,6 +625,27 @@ export function useTaskHandlers(
           ...prev.days,
           [selectedDay]: { ...day, deepWorkSessions: [...day.deepWorkSessions, session] },
         },
+      };
+    });
+  }, [selectedDay, updateAppState]);
+
+  /**
+   * Add or remove hand-logged minutes on a task. Kept separate from the timer
+   * path on purpose: these minutes are self-reported, are the only ones the user
+   * can take back, and never touch deepWorkSessions, so the weekly deep work
+   * scoreboard stays a record of time actually worked.
+   */
+  const handleAdjustManualMinutes = useCallback((taskId: string, deltaMinutes: number) => {
+    updateAppState((prev) => {
+      const day = getOrCreateDay(prev, selectedDay);
+      const nextTasks = day.tasks.map((task) => {
+        if (task.id !== taskId) return task;
+        const next = Math.max(0, (task.manualLoggedMinutes ?? 0) + deltaMinutes);
+        return { ...task, manualLoggedMinutes: next === 0 ? undefined : next };
+      });
+      return {
+        ...prev,
+        days: { ...prev.days, [selectedDay]: { ...day, tasks: nextTasks } },
       };
     });
   }, [selectedDay, updateAppState]);
@@ -950,6 +976,7 @@ export function useTaskHandlers(
     handleToggleSideQuestCompletion,
     handleSaveSideQuestDefs,
     handleSessionComplete,
+    handleAdjustManualMinutes,
     handleMoveToNotDoing,
     handleAbandonTask,
     handleAddToNotDoing,

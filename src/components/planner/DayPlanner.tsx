@@ -34,10 +34,12 @@ import {
   computeSleepWindow,
   formatTimeOfDay,
 } from "../../domain/sectionTimeBlocks";
+import { MIN_TRACKABLE_MINUTES, computeTaskProgress } from "../../domain/taskProgress";
 import { useTaskHandlers } from "../../hooks/useTaskHandlers";
 import { useDayBlockEditor } from "../../hooks/useDayBlockEditor";
 import { useTimeAwareness } from "../../hooks/useTimeAwareness";
 import { PlannerModals } from "./PlannerModals";
+import { TaskProgressSheet } from "./TaskProgressSheet";
 import { NotDoingPanel } from "./NotDoingPanel";
 import { BlockDurationEditor } from "./BlockDurationEditor";
 import {
@@ -49,7 +51,7 @@ import { DayHeader } from "./DayHeader";
 import { SectionColumn } from "./SectionColumn";
 import { WeeklyOverview } from "./WeeklyOverview";
 import { MonthlyTrackingDashboard } from "../tracking";
-import { DeepWorkTimer } from "../timer/DeepWorkTimer";
+import { DeepWorkTimer, type TimerTaskOption } from "../timer/DeepWorkTimer";
 import { MotivationCard } from "../timer/MotivationCard";
 import { HabitChecklist } from "../habits/HabitChecklist";
 import { NorthStarCard } from "../goals/NorthStarCard";
@@ -245,6 +247,7 @@ export function DayPlanner({
     handleToggleSideQuestCompletion,
     handleSaveSideQuestDefs,
     handleSessionComplete,
+    handleAdjustManualMinutes,
     handleMoveToNotDoing,
     handleAbandonTask,
     handleAddToNotDoing,
@@ -471,6 +474,46 @@ export function DayPlanner({
   const [reviewOpenTrigger, setReviewOpenTrigger] = useState(0);
   const [weeklyReviewOpenTrigger, setWeeklyReviewOpenTrigger] = useState(0);
   const [showShutdown, setShowShutdown] = useState(false);
+  /** Task the deep work timer is currently pointed at, if any. */
+  const [timerTaskId, setTimerTaskId] = useState<string | undefined>(undefined);
+  /** Task whose progress actions sheet is open (phones). */
+  const [progressSheetTaskId, setProgressSheetTaskId] = useState<string | null>(null);
+
+  /** Unfinished tasks big enough to track, offered to the timer for attribution. */
+  const timerTaskOptions = useMemo<TimerTaskOption[]>(() =>
+    dayState.tasks
+      .filter((t) => !t.isDone && (t.durationMinutes ?? 0) >= MIN_TRACKABLE_MINUTES)
+      .map((t) => ({ id: t.id, title: t.title })),
+    [dayState.tasks],
+  );
+
+  // Drop the selection when the task is finished, deleted or moved off the day,
+  // so the timer never credits a block to something no longer on the plan.
+  useEffect(() => {
+    if (timerTaskId && !timerTaskOptions.some((option) => option.id === timerTaskId)) {
+      setTimerTaskId(undefined);
+    }
+  }, [timerTaskId, timerTaskOptions]);
+
+  const progressSheetTask = useMemo(
+    () => dayState.tasks.find((t) => t.id === progressSheetTaskId) ?? null,
+    [dayState.tasks, progressSheetTaskId],
+  );
+  // Recomputed from live state, so the sheet's boxes move as you log into them.
+  const progressSheetProgress = useMemo(
+    () => (progressSheetTask ? computeTaskProgress(progressSheetTask, dayState.deepWorkSessions) : null),
+    [progressSheetTask, dayState.deepWorkSessions],
+  );
+
+  /**
+   * Hand the task to the timer and show it. Deliberately stops short of
+   * starting the countdown - a block should begin because you chose to start
+   * it, not as a side effect of tapping a progress row.
+   */
+  const handleStartTimerOnTask = useCallback((taskId: string) => {
+    setTimerTaskId(taskId);
+    setMobileTab('timer');
+  }, []);
 
   const tomorrowDate = useMemo(() => addDays(selectedDay, 1), [selectedDay]);
 
@@ -644,6 +687,9 @@ export function DayPlanner({
             onAdd={(title) => handleAddTask('mustDo', title)}
             onDelete={handleDeleteTask}
             onUpdate={(id, patch) => handleUpdateTask(id, patch)}
+            deepWorkSessions={dayState.deepWorkSessions}
+            onAdjustManualMinutes={handleAdjustManualMinutes}
+            onOpenProgressSheet={setProgressSheetTaskId}
           />
         )}
         {/* Monthly/Weekly review + goal: collapse into one thin "needs attention"
@@ -944,6 +990,9 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
               onToggleTask={shareMode === 'view' ? () => undefined : (taskId) => handleToggleTask(taskId)}
               onDeleteTask={shareMode === 'view' ? () => undefined : (taskId) => handleDeleteTask(taskId)}
               onUpdateTask={shareMode === 'view' ? () => undefined : handleUpdateTask}
+              deepWorkSessions={dayState.deepWorkSessions}
+              onAdjustManualMinutes={shareMode === 'view' ? undefined : handleAdjustManualMinutes}
+              onOpenProgressSheet={shareMode === 'view' ? undefined : setProgressSheetTaskId}
               taskIdsDueNow={taskIdsDueNow}
               onMoveTaskUp={shareMode === 'view' ? undefined : (taskId) => handleReorderTask(taskId, section.id, 'up')}
               onMoveTaskDown={shareMode === 'view' ? undefined : (taskId) => handleReorderTask(taskId, section.id, 'down')}
@@ -1014,6 +1063,9 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
                   onToggleTask={handleToggleTask}
                   onDeleteTask={handleDeleteTask}
                   onUpdateTask={handleUpdateTask}
+                  deepWorkSessions={dayState.deepWorkSessions}
+                  onAdjustManualMinutes={handleAdjustManualMinutes}
+                  onOpenProgressSheet={setProgressSheetTaskId}
                   taskIdsDueNow={taskIdsDueNow}
                   onMoveTaskUp={(taskId) => handleReorderTask(taskId, 'sideQuest', 'up')}
                   onMoveTaskDown={(taskId) => handleReorderTask(taskId, 'sideQuest', 'down')}
@@ -1144,7 +1196,12 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
               {!shareMode && (
                 <SidebarCard cardId="deepWorkTimer" title="Deep work timer">
                   <div className="space-y-3">
-                    <DeepWorkTimer onSessionComplete={handleSessionComplete} />
+                    <DeepWorkTimer
+                      onSessionComplete={handleSessionComplete}
+                      taskOptions={timerTaskOptions}
+                      selectedTaskId={timerTaskId}
+                      onSelectTask={setTimerTaskId}
+                    />
                     <MotivationCard />
                   </div>
                 </SidebarCard>
@@ -1227,7 +1284,12 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
         <>
           {mobileTab === 'timer' && (
             <div className="mt-3 lg:hidden">
-              <DeepWorkTimer onSessionComplete={handleSessionComplete} />
+              <DeepWorkTimer
+                onSessionComplete={handleSessionComplete}
+                taskOptions={timerTaskOptions}
+                selectedTaskId={timerTaskId}
+                onSelectTask={setTimerTaskId}
+              />
             </div>
           )}
           {mobileTab === 'habits' && (
@@ -1379,6 +1441,17 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
           </div>
         )
       })()}
+
+      {progressSheetTask && progressSheetProgress && (
+        <TaskProgressSheet
+          taskTitle={progressSheetTask.title}
+          progress={progressSheetProgress}
+          onLogManual={(minutes) => handleAdjustManualMinutes(progressSheetTask.id, minutes)}
+          onUndoManual={(minutes) => handleAdjustManualMinutes(progressSheetTask.id, -minutes)}
+          onStartTimer={() => handleStartTimerOnTask(progressSheetTask.id)}
+          onClose={() => setProgressSheetTaskId(null)}
+        />
+      )}
 
       <PlannerModals
         selectedDay={selectedDay}

@@ -6,10 +6,12 @@
  * Delete is only via this menu (no ✕ button) to avoid accidental removal.
  */
 
-import { useEffect, useRef, useState } from 'react'
-import type { Task } from '../../domain/types'
-import { normalizeHhmm } from '../../domain/dateUtils'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import type { DeepWorkSession, Task } from '../../domain/types'
+import { computeTaskProgress } from '../../domain/taskProgress'
 import { ArrowUp, ArrowDown, MoreVertical } from 'lucide-react'
+import { TaskProgressBoxes } from './TaskProgressBoxes'
+import { TimeAnchor } from './TimeAnchor'
 
 const DURATION_OPTIONS = [5, 10, 15, 20, 25, 30, 45, 60, 90, 120, 150, 180, 240, 300, 360, 420, 480]
 
@@ -51,6 +53,12 @@ interface TaskItemProps {
   onMoveUp?: () => void
   /** Mobile: move this task down within its section. Undefined = already last. */
   onMoveDown?: () => void
+  /** The day's deep work sessions, used to fill this task's progress boxes. */
+  deepWorkSessions?: DeepWorkSession[]
+  /** Add (or, with a negative delta, remove) hand-logged minutes. */
+  onAdjustManualMinutes?: (deltaMinutes: number) => void
+  /** Open the progress actions sheet (phones, where the boxes are untappable). */
+  onOpenProgressSheet?: () => void
 }
 
 function GripIcon() {
@@ -97,9 +105,13 @@ export function TaskItem({
   onDragEnd,
   onMoveUp,
   onMoveDown,
+  deepWorkSessions,
+  onAdjustManualMinutes,
+  onOpenProgressSheet,
 }: TaskItemProps) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
   const [isEditing, setIsEditing] = useState(false)
+  const [isEditingTime, setIsEditingTime] = useState(false)
   const [draftTitle, setDraftTitle] = useState(task.title)
   const gripRef = useRef<HTMLDivElement | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
@@ -145,6 +157,13 @@ export function TaskItem({
   }`
   const isReorderable = typeof onDragStart === 'function' && typeof onDrop === 'function'
   const canEditTime = typeof onUpdateTask === 'function'
+
+  // Done tasks keep their row - it is the record of what the work actually
+  // cost, which is the only way the next estimate gets better.
+  const progress = useMemo(
+    () => computeTaskProgress(task, deepWorkSessions ?? []),
+    [task, deepWorkSessions],
+  )
   const showContextMenu = Boolean(
     onUpdateTask ?? onAddTaskAbove ?? onAddTaskBelow ?? onAddSubtask ?? onMoveToNotDoing ?? onAbandon ?? onDelete ?? onMoveToAnotherParent,
   )
@@ -381,23 +400,12 @@ export function TaskItem({
         </label>
         {canEditTime && (
           <span className="flex shrink-0 items-center gap-1">
-            <div className="relative" title="Scheduled time (24h)">
-              <input
-                type="time"
-                value={task.scheduledAt ?? ''}
-                onChange={(e) => {
-                  const v = e.target.value
-                  onUpdateTask?.({ scheduledAt: v ? normalizeHhmm(v) : undefined })
-                }}
-                className={`w-[5.5rem] rounded border border-share-outlineVariant/40 bg-share-surfaceContainer px-1.5 py-1 text-xs tabular-nums [color-scheme:dark] ${task.scheduledAt ? 'text-share-onSurface' : 'text-transparent'}`}
-                aria-label="Scheduled time"
-              />
-              {!task.scheduledAt && (
-                <span className="pointer-events-none absolute inset-0 flex items-center px-1.5 text-xs text-share-onSurfaceVariant/50">
-                  time
-                </span>
-              )}
-            </div>
+            <TimeAnchor
+              value={task.scheduledAt}
+              onChange={(next) => onUpdateTask?.({ scheduledAt: next })}
+              isEditing={isEditingTime}
+              onEditingChange={setIsEditingTime}
+            />
             <select
               value={task.durationMinutes ?? ''}
               onChange={(e) => {
@@ -417,6 +425,14 @@ export function TaskItem({
               ))}
             </select>
           </span>
+        )}
+        {progress && (
+          <TaskProgressBoxes
+            progress={progress}
+            onLogManual={onAdjustManualMinutes ? (minutes) => onAdjustManualMinutes(minutes) : undefined}
+            onUndoManual={onAdjustManualMinutes ? (minutes) => onAdjustManualMinutes(-minutes) : undefined}
+            onRequestActions={onOpenProgressSheet}
+          />
         )}
       </div>
       {menu && (
@@ -444,6 +460,21 @@ export function TaskItem({
               onClick={() => closeAnd(() => onUpdateTask?.({ isShallow: !task.isShallow }))}
             >
               {task.isShallow ? 'Mark as deep work' : 'Mark as shallow'}
+            </button>
+          )}
+          {onUpdateTask && (
+            <button
+              type="button"
+              role="menuitem"
+              className="w-full px-3 py-1.5 text-left text-sm text-share-onSurface hover:bg-share-surfaceContainerHighest"
+              onClick={() =>
+                closeAnd(() => {
+                  if (task.scheduledAt) onUpdateTask?.({ scheduledAt: undefined })
+                  else setIsEditingTime(true)
+                })
+              }
+            >
+              {task.scheduledAt ? 'Remove time anchor' : 'Anchor to a time'}
             </button>
           )}
           {onAddTaskAbove && (

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react'
-import type { Task, TaskSection, TaskSectionId, SideQuestDef } from '../../domain/types'
+import type { DeepWorkSession, Task, TaskSection, TaskSectionId, SideQuestDef } from '../../domain/types'
 import { SectionColumn } from './SectionColumn'
 import { getSideQuestRank } from '../../domain/sideQuestAlgorithm'
 import {
@@ -59,6 +59,9 @@ interface SideQuestSectionProps {
   onMoveTaskDown?: (taskId: string) => void
   onMoveToNotDoing?: (taskId: string) => void
   onAbandonTask?: (taskId: string) => void
+  deepWorkSessions?: DeepWorkSession[]
+  onAdjustManualMinutes?: (taskId: string, deltaMinutes: number) => void
+  onOpenProgressSheet?: (taskId: string) => void
 }
 
 export function SideQuestSection({

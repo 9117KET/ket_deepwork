@@ -11,9 +11,11 @@
  */
 
 import { useState } from 'react'
-import type { Task } from '../../domain/types'
-import { normalizeHhmm } from '../../domain/dateUtils'
+import type { DeepWorkSession, Task } from '../../domain/types'
+import { computeTaskProgress } from '../../domain/taskProgress'
 import { CheckCircle2, ChevronUp, ChevronDown, X } from 'lucide-react'
+import { TaskProgressBoxes } from './TaskProgressBoxes'
+import { TimeAnchor } from './TimeAnchor'
 
 const DURATION_OPTIONS = [5, 10, 15, 20, 25, 30, 45, 60, 90, 120, 150, 180, 240, 300, 360, 420, 480]
 
@@ -25,6 +27,12 @@ function formatDuration(minutes: number): string {
 
 interface MustDoPinnedHeaderProps {
   tasks: Task[]
+  /** The day's deep work sessions, used to fill each MUST's progress boxes. */
+  deepWorkSessions?: DeepWorkSession[]
+  /** Add or remove hand-logged minutes on a MUST. */
+  onAdjustManualMinutes?: (taskId: string, deltaMinutes: number) => void
+  /** Open the progress actions sheet for a MUST (phones). */
+  onOpenProgressSheet?: (taskId: string) => void
   onToggle: (taskId: string) => void
   onAdd: (title: string) => void
   onDelete: (taskId: string) => void
@@ -33,12 +41,37 @@ interface MustDoPinnedHeaderProps {
 
 const MAX = 3
 
-export function MustDoPinnedHeader({ tasks, onToggle, onAdd, onDelete, onUpdate }: MustDoPinnedHeaderProps) {
+export function MustDoPinnedHeader({
+  tasks,
+  onToggle,
+  onAdd,
+  onDelete,
+  onUpdate,
+  deepWorkSessions,
+  onAdjustManualMinutes,
+  onOpenProgressSheet,
+}: MustDoPinnedHeaderProps) {
+  /** The progress row for a MUST, or null when it is too short to track. */
+  const renderProgress = (task: Task) => {
+    const progress = computeTaskProgress(task, deepWorkSessions ?? [])
+    if (!progress) return null
+    return (
+      <TaskProgressBoxes
+        progress={progress}
+        onLogManual={onAdjustManualMinutes ? (m) => onAdjustManualMinutes(task.id, m) : undefined}
+        onUndoManual={onAdjustManualMinutes ? (m) => onAdjustManualMinutes(task.id, -m) : undefined}
+        onRequestActions={onOpenProgressSheet ? () => onOpenProgressSheet(task.id) : undefined}
+      />
+    )
+  }
+
   const rootTasks = tasks.filter(t => !t.parentId)
   const allDone = rootTasks.length > 0 && rootTasks.every(t => t.isDone)
   const donePct = rootTasks.length === 0 ? 0 : Math.round((rootTasks.filter(t => t.isDone).length / rootTasks.length) * 100)
 
   const [showAdd, setShowAdd] = useState(false)
+  /** MUST whose time anchor is being edited, if any. */
+  const [timeEditTaskId, setTimeEditTaskId] = useState<string | null>(null)
   const [input, setInput] = useState('')
   const [doneExpanded, setDoneExpanded] = useState(false)
   // Collapses when all 3 slots are filled; user can re-expand by clicking the header row.
@@ -120,17 +153,14 @@ export function MustDoPinnedHeader({ tasks, onToggle, onAdd, onDelete, onUpdate 
                   )}
                 </label>
                 <span className="flex shrink-0 items-center gap-1">
-                  <div className="relative" title="Scheduled time">
-                    <input
-                      type="time"
-                      value={task.scheduledAt ?? ''}
-                      onChange={e => onUpdate(task.id, { scheduledAt: e.target.value ? normalizeHhmm(e.target.value) : undefined })}
-                      className={`w-32 rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-2.5 py-1.5 text-sm tabular-nums [color-scheme:dark] ${task.scheduledAt ? 'text-share-onSurface' : 'text-transparent'}`}
-                    />
-                    {!task.scheduledAt && (
-                      <span className="pointer-events-none absolute inset-0 flex items-center px-2.5 text-sm text-share-onSurfaceVariant/50">time</span>
-                    )}
-                  </div>
+                  <TimeAnchor
+                    value={task.scheduledAt}
+                    onChange={next => onUpdate(task.id, { scheduledAt: next })}
+                    isEditing={timeEditTaskId === task.id}
+                    onEditingChange={editing => setTimeEditTaskId(editing ? task.id : null)}
+                    showAddButton
+                    size="md"
+                  />
                   <select
                     value={task.durationMinutes ?? ''}
                     onChange={e => onUpdate(task.id, { durationMinutes: e.target.value === '' ? undefined : Number(e.target.value) })}
@@ -141,6 +171,7 @@ export function MustDoPinnedHeader({ tasks, onToggle, onAdd, onDelete, onUpdate 
                     {DURATION_OPTIONS.map(m => <option key={m} value={m}>{formatDuration(m)}</option>)}
                   </select>
                 </span>
+                {renderProgress(task)}
                 <button
                   type="button"
                   onClick={() => onDelete(task.id)}
@@ -243,17 +274,14 @@ export function MustDoPinnedHeader({ tasks, onToggle, onAdd, onDelete, onUpdate 
               )}
             </label>
             <span className="flex shrink-0 items-center gap-1">
-              <div className="relative" title="Scheduled time">
-                <input
-                  type="time"
-                  value={task.scheduledAt ?? ''}
-                  onChange={e => onUpdate(task.id, { scheduledAt: e.target.value ? normalizeHhmm(e.target.value) : undefined })}
-                  className={`w-32 rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-2.5 py-1.5 text-sm tabular-nums [color-scheme:dark] ${task.scheduledAt ? 'text-share-onSurface' : 'text-transparent'}`}
+              <TimeAnchor
+                  value={task.scheduledAt}
+                  onChange={next => onUpdate(task.id, { scheduledAt: next })}
+                  isEditing={timeEditTaskId === task.id}
+                  onEditingChange={editing => setTimeEditTaskId(editing ? task.id : null)}
+                  showAddButton
+                  size="md"
                 />
-                {!task.scheduledAt && (
-                  <span className="pointer-events-none absolute inset-0 flex items-center px-2.5 text-sm text-share-onSurfaceVariant/50">time</span>
-                )}
-              </div>
               <select
                 value={task.durationMinutes ?? ''}
                 onChange={e => onUpdate(task.id, { durationMinutes: e.target.value === '' ? undefined : Number(e.target.value) })}
@@ -264,6 +292,7 @@ export function MustDoPinnedHeader({ tasks, onToggle, onAdd, onDelete, onUpdate 
                 {DURATION_OPTIONS.map(m => <option key={m} value={m}>{formatDuration(m)}</option>)}
               </select>
             </span>
+            {renderProgress(task)}
             <button
               type="button"
               onClick={() => onDelete(task.id)}
