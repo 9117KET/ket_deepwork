@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect, useRef, type ReactNode, useCallback } from 'react'
-import type { Task, TaskSection, TaskSectionId } from '../../domain/types'
+import type { DeepWorkSession, Task, TaskSection, TaskSectionId } from '../../domain/types'
 import { AddTaskInput } from './AddTaskInput'
 import { TaskItem } from './TaskItem'
 import { ChevronRight, ChevronDown, AlertTriangle } from 'lucide-react'
@@ -63,6 +63,12 @@ interface SectionColumnProps {
    * Undefined = no nudge for this section.
    */
   overloadThreshold?: number
+  /** The day's deep work sessions, passed down so each task can fill its progress boxes. */
+  deepWorkSessions?: DeepWorkSession[]
+  /** Add or remove hand-logged minutes on a task. */
+  onAdjustManualMinutes?: (taskId: string, deltaMinutes: number) => void
+  /** Open the progress actions sheet for a task (phones). */
+  onOpenProgressSheet?: (taskId: string) => void
   /** Capacity-aware planned task minutes for this section (Top 3 folded into High). */
   plannedMinutes?: number
   /** Capacity-aware allocated window minutes for this section's time block. */
@@ -117,6 +123,9 @@ export function SectionColumn({
   plannedMinutes,
   windowMinutes,
   compressed = false,
+  deepWorkSessions,
+  onAdjustManualMinutes,
+  onOpenProgressSheet,
 }: SectionColumnProps) {
   const [dropTarget, setDropTarget] = useState<{ index: number; position: DropPosition } | null>(
     null,
@@ -412,6 +421,13 @@ export function SectionColumn({
                 onAddTaskBelow={onAddTaskBelow ? () => onAddTaskBelow(task.id) : undefined}
                 onAddSubtask={!task.parentId && onAddSubtask ? () => onAddSubtask(task.id) : undefined}
                 onUpdateTask={(patch) => onUpdateTask(task.id, patch)}
+                deepWorkSessions={deepWorkSessions}
+                onAdjustManualMinutes={
+                  onAdjustManualMinutes ? (delta) => onAdjustManualMinutes(task.id, delta) : undefined
+                }
+                onOpenProgressSheet={
+                  onOpenProgressSheet ? () => onOpenProgressSheet(task.id) : undefined
+                }
                 onDragStart={
                   task.parentId && onReorderSubtask
                     ? () => handleSubtaskDragStart(task.parentId!, task.id)

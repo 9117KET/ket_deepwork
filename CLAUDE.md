@@ -11,7 +11,11 @@ npm run lint      # ESLint check
 npm run preview   # Local preview of production build
 ```
 
-No test runner is configured. CI runs `lint` then `build` on push/PR to `main`.
+Unit tests run under Vitest (`npm test`, `npm run test:watch`); Playwright covers
+e2e (`npm run test:e2e`). CI runs `lint` then `build` on push/PR to `main`.
+
+On Windows the `build` script (`tsc -b && vite build`) fails under PowerShell 5,
+which rejects `&&`. Run `npx tsc -b` and `npx vite build` separately there.
 
 ## Deployment
 
@@ -58,12 +62,14 @@ DayState
 Task
   id, title, isDone, sectionId, date
   parentId?      ← subtask; completing parent auto-completes children
-  scheduledAt?   ← "HH:MM"
-  durationMinutes?
+  scheduledAt?   ← "HH:MM"; opt-in anchor for externally fixed times only
+  durationMinutes?    ← the planned cost; drives the 30-min progress boxes
+  manualLoggedMinutes?  ← hand-logged progress (timer minutes live on the session)
   isShallow?     ← marks logistical / non-deep work (Cal Newport)
 
 DeepWorkSession
   id, label, durationMinutes, startedAt, finishedAt?
+  taskId?        ← task the block was worked against (earned progress)
   ← recorded automatically when the sidebar timer completes
 ```
 
@@ -121,9 +127,9 @@ Streaks require at least one task created **and** at least one task completed on
 
 ### Deep Work framework (Cal Newport)
 
-Five features built around the *Deep Work* philosophy:
+Seven features built around the *Deep Work* philosophy:
 
-1. **Session recording** — `DeepWorkTimer` in the sidebar calls `onSessionComplete(label, minutes)` when the countdown ends. `DayPlanner.handleSessionComplete` appends a `DeepWorkSession` to `DayState.deepWorkSessions`, which is persisted via the normal Supabase sync path (`planner_days.deep_work_sessions` JSONB column).
+1. **Session recording** — `DeepWorkTimer` in the sidebar calls `onSessionComplete(label, minutes, taskId?)` when the countdown ends. A "Working on" selector attributes the block to one of the day's trackable tasks; the selection locks while a session is running or paused. `DayPlanner.handleSessionComplete` appends a `DeepWorkSession` to `DayState.deepWorkSessions`, which is persisted via the normal Supabase sync path (`planner_days.deep_work_sessions` JSONB column).
 
 2. **Daily total badge** — `DayHeader` receives `deepWorkMinutesToday` (computed by `computeDailyDeepWorkMinutes` in `stats.ts`) and renders a teal pill when > 0.
 
@@ -133,7 +139,27 @@ Five features built around the *Deep Work* philosophy:
 
 5. **Depth philosophy** — Three chips (Rhythmic / Journalistic / Bimodal) in the tracking dashboard set `AppState.depthPhilosophy`. When set to `rhythmic`, a teal banner above the *High Priority* section shows the current deep block time window.
 
-Both `depthPhilosophy` and `deepWorkGoalHoursPerWeek` are global settings synced via `user_settings` JSONB — no migration required.
+6. **Task progress boxes** — a task with `durationMinutes >= 30` renders a row of
+   30-minute boxes (`TaskProgressBoxes`), collapsing to a segmented bar past six.
+   `computeTaskProgress` in `src/domain/taskProgress.ts` fills them: solid teal for
+   minutes earned from an attributed `DeepWorkSession`, faded teal for
+   `Task.manualLoggedMinutes`, amber for anything logged past the estimate. Timer
+   minutes always fill from the left, so earned work is one contiguous run and can
+   never be confused with self-reported time. Only manual minutes can be undone.
+   On phones the row is one button opening `TaskProgressSheet`, which offers the
+   timer first and hand-logging second. Rendered by `TaskItem` (via
+   `SectionColumn` / `SideQuestSection`), `MustDoPinnedHeader`, and read-only in
+   `TomorrowMustPanel` (tomorrow has no logged work yet).
+
+7. **Time as an opt-in anchor** — `Task.scheduledAt` is no longer a field on the
+   task row. Sections already say when work happens, so tasks are budgeted by
+   duration; a clock time is set only for externally fixed commitments, via
+   `TimeAnchor` (the ⋮ menu in `TaskItem`, a hover clock icon in the MUST panels).
+   Everything keyed on `scheduledAt` — `useTimeAwareness` nudges,
+   `TaskConflictModal`, calendar push in `convex/calendar.ts` — is unchanged and
+   now fires only on anchored tasks.
+
+Both `depthPhilosophy` and `deepWorkGoalHoursPerWeek` are global settings synced via `user_settings` JSONB — no migration required. `manualLoggedMinutes` and `taskId` are additive optional fields on existing JSON payloads — no migration either.
 
 ### Atomic Habits features
 

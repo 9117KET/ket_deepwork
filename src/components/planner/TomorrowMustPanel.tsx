@@ -8,8 +8,10 @@
 
 import { useState, useRef, useEffect } from 'react'
 import type { Task } from '../../domain/types'
-import { normalizeHhmm } from '../../domain/dateUtils'
+import { computeTaskProgress } from '../../domain/taskProgress'
 import { Moon, ChevronUp, ChevronDown, X, CopyPlus } from 'lucide-react'
+import { TaskProgressBoxes } from './TaskProgressBoxes'
+import { TimeAnchor } from './TimeAnchor'
 
 const DURATION_OPTIONS = [5, 10, 15, 20, 25, 30, 45, 60, 90, 120, 150, 180, 240, 300, 360, 420, 480]
 
@@ -38,6 +40,8 @@ export function TomorrowMustPanel({ tomorrowDate, tasks, sourceMustCount = 0, on
   const [open, setOpen] = useState(false)
   const [input, setInput] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
+  /** MUST whose time anchor is being edited, if any. */
+  const [timeEditTaskId, setTimeEditTaskId] = useState<string | null>(null)
   const [editValue, setEditValue] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -134,7 +138,7 @@ export function TomorrowMustPanel({ tomorrowDate, tasks, sourceMustCount = 0, on
           )}
 
           {tasks.map((task, idx) => (
-            <div key={task.id} className="flex flex-wrap items-center gap-2">
+            <div key={task.id} className="group flex flex-wrap items-center gap-2">
               <span className="w-4 shrink-0 text-center text-[10px] font-bold text-indigo-400">
                 {idx + 1}
               </span>
@@ -162,17 +166,13 @@ export function TomorrowMustPanel({ tomorrowDate, tasks, sourceMustCount = 0, on
                 </button>
               )}
               <span className="flex shrink-0 items-center gap-1">
-                <div className="relative" title="Scheduled time">
-                  <input
-                    type="time"
-                    value={task.scheduledAt ?? ''}
-                    onChange={e => onUpdate(task.id, { scheduledAt: e.target.value ? normalizeHhmm(e.target.value) : undefined })}
-                    className={`w-24 rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-1 py-0.5 text-xs tabular-nums [color-scheme:dark] ${task.scheduledAt ? 'text-share-onSurface' : 'text-transparent'}`}
-                  />
-                  {!task.scheduledAt && (
-                    <span className="pointer-events-none absolute inset-0 flex items-center px-1 text-xs text-share-onSurfaceVariant/50">time</span>
-                  )}
-                </div>
+                <TimeAnchor
+                  value={task.scheduledAt}
+                  onChange={next => onUpdate(task.id, { scheduledAt: next })}
+                  isEditing={timeEditTaskId === task.id}
+                  onEditingChange={editing => setTimeEditTaskId(editing ? task.id : null)}
+                  showAddButton
+                />
                 <select
                   value={task.durationMinutes ?? ''}
                   onChange={e => onUpdate(task.id, { durationMinutes: e.target.value === '' ? undefined : Number(e.target.value) })}
@@ -183,6 +183,13 @@ export function TomorrowMustPanel({ tomorrowDate, tasks, sourceMustCount = 0, on
                   {DURATION_OPTIONS.map(m => <option key={m} value={m}>{formatDuration(m)}</option>)}
                 </select>
               </span>
+              {/* Read-only here: tomorrow has no logged work yet, and offering to
+                  log some would be logging time on a day that has not happened.
+                  The empty row still shows the shape of what is being committed to. */}
+              {(() => {
+                const progress = computeTaskProgress(task, [])
+                return progress ? <TaskProgressBoxes progress={progress} /> : null
+              })()}
               <button
                 type="button"
                 onClick={() => onDelete(task.id)}
