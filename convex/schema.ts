@@ -42,6 +42,8 @@ export default defineSchema({
     identityStatement: v.optional(v.string()),
     depthPhilosophy: v.optional(v.string()),
     deepWorkGoalHours: v.optional(v.number()),
+    focusBlockMinutes: v.optional(v.number()),
+    focusBreakMinutes: v.optional(v.number()),
     oneThingData: v.optional(v.any()),
     weeklyProjectRotation: v.optional(v.array(v.any())),
     sideQuestDefs: v.optional(v.array(v.any())),

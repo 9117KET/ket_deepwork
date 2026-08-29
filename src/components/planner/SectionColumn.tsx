@@ -65,9 +65,9 @@ interface SectionColumnProps {
   overloadThreshold?: number
   /** The day's deep work sessions, passed down so each task can fill its progress boxes. */
   deepWorkSessions?: DeepWorkSession[]
-  /** Add or remove hand-logged minutes on a task. */
-  onAdjustManualMinutes?: (taskId: string, deltaMinutes: number) => void
-  /** Open the progress actions sheet for a task (phones). */
+  /** Start a focus block on a task. */
+  onStartBlock?: (taskId: string, minutes: number) => void
+  /** Open the progress actions sheet for a task. */
   onOpenProgressSheet?: (taskId: string) => void
   /** Capacity-aware planned task minutes for this section (Top 3 folded into High). */
   plannedMinutes?: number
@@ -124,7 +124,7 @@ export function SectionColumn({
   windowMinutes,
   compressed = false,
   deepWorkSessions,
-  onAdjustManualMinutes,
+  onStartBlock,
   onOpenProgressSheet,
 }: SectionColumnProps) {
   const [dropTarget, setDropTarget] = useState<{ index: number; position: DropPosition } | null>(
@@ -422,8 +422,8 @@ export function SectionColumn({
                 onAddSubtask={!task.parentId && onAddSubtask ? () => onAddSubtask(task.id) : undefined}
                 onUpdateTask={(patch) => onUpdateTask(task.id, patch)}
                 deepWorkSessions={deepWorkSessions}
-                onAdjustManualMinutes={
-                  onAdjustManualMinutes ? (delta) => onAdjustManualMinutes(task.id, delta) : undefined
+                onStartBlock={
+                  onStartBlock ? (minutes) => onStartBlock(task.id, minutes) : undefined
                 }
                 onOpenProgressSheet={
                   onOpenProgressSheet ? () => onOpenProgressSheet(task.id) : undefined

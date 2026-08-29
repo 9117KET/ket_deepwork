@@ -34,7 +34,8 @@ import {
   computeSleepWindow,
   formatTimeOfDay,
 } from "../../domain/sectionTimeBlocks";
-import { MIN_TRACKABLE_MINUTES, computeTaskProgress } from "../../domain/taskProgress";
+import { computeTaskProgress, minTrackableMinutes } from "../../domain/taskProgress";
+import { normalizeFocusBlockMinutes, suggestedBreakMinutes } from "../../domain/focusBlocks";
 import { useTaskHandlers } from "../../hooks/useTaskHandlers";
 import { useDayBlockEditor } from "../../hooks/useDayBlockEditor";
 import { useTimeAwareness } from "../../hooks/useTimeAwareness";
@@ -51,7 +52,9 @@ import { DayHeader } from "./DayHeader";
 import { SectionColumn } from "./SectionColumn";
 import { WeeklyOverview } from "./WeeklyOverview";
 import { MonthlyTrackingDashboard } from "../tracking";
-import { DeepWorkTimer, type TimerTaskOption } from "../timer/DeepWorkTimer";
+import { DeepWorkTimer } from "../timer/DeepWorkTimer";
+import { useDeepWorkTimer, type TimerTaskOption } from "../timer/useDeepWorkTimer";
+import { FocusBlockContext } from "./focusBlockContext";
 import { MotivationCard } from "../timer/MotivationCard";
 import { HabitChecklist } from "../habits/HabitChecklist";
 import { NorthStarCard } from "../goals/NorthStarCard";
@@ -445,6 +448,8 @@ export function DayPlanner({
       monthTitles?: Record<string, string>;
       depthPhilosophy?: AppState['depthPhilosophy'];
       deepWorkGoalHoursPerWeek?: number;
+      focusBlockMinutes?: number;
+      focusBreakMinutes?: number;
       goalCascade?: AppState['goalCascade'];
       monthlyReviews?: AppState['monthlyReviews'];
       weeklyReviews?: AppState['weeklyReviews'];
@@ -457,6 +462,8 @@ export function DayPlanner({
         monthTitles: patch.monthTitles ?? prev.monthTitles,
         depthPhilosophy: patch.depthPhilosophy !== undefined ? patch.depthPhilosophy : prev.depthPhilosophy,
         deepWorkGoalHoursPerWeek: patch.deepWorkGoalHoursPerWeek !== undefined ? patch.deepWorkGoalHoursPerWeek : prev.deepWorkGoalHoursPerWeek,
+        focusBlockMinutes: patch.focusBlockMinutes !== undefined ? patch.focusBlockMinutes : prev.focusBlockMinutes,
+        focusBreakMinutes: patch.focusBreakMinutes !== undefined ? patch.focusBreakMinutes : prev.focusBreakMinutes,
         goalCascade: patch.goalCascade !== undefined ? patch.goalCascade : prev.goalCascade,
         monthlyReviews: patch.monthlyReviews !== undefined ? patch.monthlyReviews : prev.monthlyReviews,
         weeklyReviews: patch.weeklyReviews !== undefined ? patch.weeklyReviews : prev.weeklyReviews,
@@ -479,13 +486,20 @@ export function DayPlanner({
   /** Task whose progress actions sheet is open (phones). */
   const [progressSheetTaskId, setProgressSheetTaskId] = useState<string | null>(null);
 
+  /** Why a chip could not start a block, shown briefly. */
+  const [blockNotice, setBlockNotice] = useState<string | null>(null);
+
+  /** The unit the whole planner counts in: one block, one run of the timer. */
+  const blockMinutes = normalizeFocusBlockMinutes(appState.focusBlockMinutes);
+  const breakMinutes = appState.focusBreakMinutes ?? suggestedBreakMinutes(blockMinutes);
+
   /** Unfinished tasks big enough to track, offered to the timer for attribution. */
-  const timerTaskOptions = useMemo<TimerTaskOption[]>(() =>
-    dayState.tasks
-      .filter((t) => !t.isDone && (t.durationMinutes ?? 0) >= MIN_TRACKABLE_MINUTES)
-      .map((t) => ({ id: t.id, title: t.title })),
-    [dayState.tasks],
-  );
+  const timerTaskOptions = useMemo<TimerTaskOption[]>(() => {
+    const floor = minTrackableMinutes(blockMinutes);
+    return dayState.tasks
+      .filter((t) => !t.isDone && (t.durationMinutes ?? 0) >= floor)
+      .map((t) => ({ id: t.id, title: t.title }));
+  }, [dayState.tasks, blockMinutes]);
 
   // Drop the selection when the task is finished, deleted or moved off the day,
   // so the timer never credits a block to something no longer on the plan.
@@ -501,19 +515,49 @@ export function DayPlanner({
   );
   // Recomputed from live state, so the sheet's boxes move as you log into them.
   const progressSheetProgress = useMemo(
-    () => (progressSheetTask ? computeTaskProgress(progressSheetTask, dayState.deepWorkSessions) : null),
-    [progressSheetTask, dayState.deepWorkSessions],
+    () => (progressSheetTask ? computeTaskProgress(progressSheetTask, dayState.deepWorkSessions, blockMinutes) : null),
+    [progressSheetTask, dayState.deepWorkSessions, blockMinutes],
   );
 
+  // One countdown for the whole planner. The sidebar and the mobile tab are two
+  // views of it, and a task's progress chip is a third way to start it.
+  const timer = useDeepWorkTimer({
+    onSessionComplete: handleSessionComplete,
+    taskOptions: timerTaskOptions,
+    selectedTaskId: timerTaskId,
+    onSelectTask: setTimerTaskId,
+    blockMinutes,
+  });
+
   /**
-   * Hand the task to the timer and show it. Deliberately stops short of
-   * starting the countdown - a block should begin because you chose to start
-   * it, not as a side effect of tapping a progress row.
+   * Start a block against a task from its progress row. Refuses while another
+   * block is under way rather than retargeting it - those minutes are already
+   * being earned by something else.
    */
-  const handleStartTimerOnTask = useCallback((taskId: string) => {
-    setTimerTaskId(taskId);
-    setMobileTab('timer');
-  }, []);
+  const handleStartBlock = useCallback((taskId: string, minutes: number) => {
+    const task = dayState.tasks.find((t) => t.id === taskId);
+    const result = timer.startBlock({ taskId, minutes, label: task?.title });
+    if (result === 'busy') {
+      setBlockNotice('A block is already running - finish or reset it first.');
+    }
+    return result;
+  }, [dayState.tasks, timer]);
+
+  useEffect(() => {
+    if (!blockNotice) return;
+    const id = window.setTimeout(() => setBlockNotice(null), 4000);
+    return () => window.clearTimeout(id);
+  }, [blockNotice]);
+
+  const focusBlockValue = useMemo(() => ({
+    blockMinutes,
+    breakMinutes,
+    activeBlock: timer.activeBlock,
+    startBlock: shareMode === 'view'
+      ? undefined
+      : ({ taskId, minutes }: { taskId: string; minutes: number; label: string }) =>
+          handleStartBlock(taskId, minutes),
+  }), [blockMinutes, breakMinutes, timer.activeBlock, shareMode, handleStartBlock]);
 
   const tomorrowDate = useMemo(() => addDays(selectedDay, 1), [selectedDay]);
 
@@ -654,7 +698,16 @@ export function DayPlanner({
   }
 
   return (
+    <FocusBlockContext.Provider value={focusBlockValue}>
     <div className="space-y-4 sm:space-y-6">
+      {blockNotice && (
+        <div
+          role="status"
+          className="fixed inset-x-3 bottom-20 z-[70] mx-auto max-w-sm rounded-lg border border-amber-500/40 bg-share-surfaceContainerHigh px-3 py-2 text-center text-xs text-amber-200 shadow-lg lg:bottom-6"
+        >
+          {blockNotice}
+        </div>
+      )}
       <div
         className={
           shareShellLayout
@@ -688,7 +741,7 @@ export function DayPlanner({
             onDelete={handleDeleteTask}
             onUpdate={(id, patch) => handleUpdateTask(id, patch)}
             deepWorkSessions={dayState.deepWorkSessions}
-            onAdjustManualMinutes={handleAdjustManualMinutes}
+            onStartBlock={handleStartBlock}
             onOpenProgressSheet={setProgressSheetTaskId}
           />
         )}
@@ -991,7 +1044,7 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
               onDeleteTask={shareMode === 'view' ? () => undefined : (taskId) => handleDeleteTask(taskId)}
               onUpdateTask={shareMode === 'view' ? () => undefined : handleUpdateTask}
               deepWorkSessions={dayState.deepWorkSessions}
-              onAdjustManualMinutes={shareMode === 'view' ? undefined : handleAdjustManualMinutes}
+              onStartBlock={shareMode === 'view' ? undefined : handleStartBlock}
               onOpenProgressSheet={shareMode === 'view' ? undefined : setProgressSheetTaskId}
               taskIdsDueNow={taskIdsDueNow}
               onMoveTaskUp={shareMode === 'view' ? undefined : (taskId) => handleReorderTask(taskId, section.id, 'up')}
@@ -1064,7 +1117,7 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
                   onDeleteTask={handleDeleteTask}
                   onUpdateTask={handleUpdateTask}
                   deepWorkSessions={dayState.deepWorkSessions}
-                  onAdjustManualMinutes={handleAdjustManualMinutes}
+                  onStartBlock={handleStartBlock}
                   onOpenProgressSheet={setProgressSheetTaskId}
                   taskIdsDueNow={taskIdsDueNow}
                   onMoveTaskUp={(taskId) => handleReorderTask(taskId, 'sideQuest', 'up')}
@@ -1196,12 +1249,7 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
               {!shareMode && (
                 <SidebarCard cardId="deepWorkTimer" title="Deep work timer">
                   <div className="space-y-3">
-                    <DeepWorkTimer
-                      onSessionComplete={handleSessionComplete}
-                      taskOptions={timerTaskOptions}
-                      selectedTaskId={timerTaskId}
-                      onSelectTask={setTimerTaskId}
-                    />
+                    <DeepWorkTimer timer={timer} />
                     <MotivationCard />
                   </div>
                 </SidebarCard>
@@ -1284,12 +1332,7 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
         <>
           {mobileTab === 'timer' && (
             <div className="mt-3 lg:hidden">
-              <DeepWorkTimer
-                onSessionComplete={handleSessionComplete}
-                taskOptions={timerTaskOptions}
-                selectedTaskId={timerTaskId}
-                onSelectTask={setTimerTaskId}
-              />
+              <DeepWorkTimer timer={timer} />
             </div>
           )}
           {mobileTab === 'habits' && (
@@ -1444,11 +1487,12 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
 
       {progressSheetTask && progressSheetProgress && (
         <TaskProgressSheet
+          taskId={progressSheetTask.id}
           taskTitle={progressSheetTask.title}
           progress={progressSheetProgress}
           onLogManual={(minutes) => handleAdjustManualMinutes(progressSheetTask.id, minutes)}
           onUndoManual={(minutes) => handleAdjustManualMinutes(progressSheetTask.id, -minutes)}
-          onStartTimer={() => handleStartTimerOnTask(progressSheetTask.id)}
+          onStartBlock={shareMode === 'view' ? undefined : (minutes) => handleStartBlock(progressSheetTask.id, minutes)}
           onClose={() => setProgressSheetTaskId(null)}
         />
       )}
@@ -1473,6 +1517,7 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
         <MobileTabBar activeTab={mobileTab} onTabChange={setMobileTab} />
       )}
     </div>
+    </FocusBlockContext.Provider>
   );
 }
 

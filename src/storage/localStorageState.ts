@@ -285,6 +285,8 @@ function buildSettingsSyncPayload(s: AppState) {
     identityStatement: s.identityStatement ?? "",
     depthPhilosophy: s.depthPhilosophy,
     deepWorkGoalHours: s.deepWorkGoalHoursPerWeek ?? undefined,
+    focusBlockMinutes: s.focusBlockMinutes ?? undefined,
+    focusBreakMinutes: s.focusBreakMinutes ?? undefined,
     oneThingData: {
       northStar: s.northStar ?? "",
       goalCascade: s.goalCascade ?? null,
@@ -545,6 +547,8 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
           identityStatement: settingsDoc.identityStatement ?? prev.identityStatement,
           depthPhilosophy: (settingsDoc.depthPhilosophy as AppState["depthPhilosophy"]) ?? prev.depthPhilosophy,
           deepWorkGoalHoursPerWeek: (settingsDoc.deepWorkGoalHours as number | undefined) ?? prev.deepWorkGoalHoursPerWeek,
+          focusBlockMinutes: (settingsDoc.focusBlockMinutes as number | undefined) ?? prev.focusBlockMinutes,
+          focusBreakMinutes: (settingsDoc.focusBreakMinutes as number | undefined) ?? prev.focusBreakMinutes,
           northStar: (ot.northStar as string | undefined) ?? prev.northStar,
           goalCascade: (ot.goalCascade as AppState["goalCascade"] | undefined) ?? prev.goalCascade,
           dayOneThings: (ot.dayOneThings as Record<string, string> | undefined) ?? prev.dayOneThings,
@@ -641,6 +645,8 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
     state.identityStatement,
     state.depthPhilosophy,
     state.deepWorkGoalHoursPerWeek,
+    state.focusBlockMinutes,
+    state.focusBreakMinutes,
     state.northStar,
     state.goalCascade,
     state.dayOneThings,
@@ -744,6 +750,8 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
         next.identityStatement !== prev.identityStatement ||
         next.depthPhilosophy !== prev.depthPhilosophy ||
         next.deepWorkGoalHoursPerWeek !== prev.deepWorkGoalHoursPerWeek ||
+        next.focusBlockMinutes !== prev.focusBlockMinutes ||
+        next.focusBreakMinutes !== prev.focusBreakMinutes ||
         next.northStar !== prev.northStar ||
         next.goalCascade !== prev.goalCascade ||
         next.dayOneThings !== prev.dayOneThings ||
