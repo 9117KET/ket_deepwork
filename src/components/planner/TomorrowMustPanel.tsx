@@ -11,15 +11,9 @@ import type { Task } from '../../domain/types'
 import { computeTaskProgress } from '../../domain/taskProgress'
 import { Moon, ChevronUp, ChevronDown, X, CopyPlus } from 'lucide-react'
 import { TaskProgressBoxes } from './TaskProgressBoxes'
+import { TaskDurationPicker } from './TaskDurationPicker'
 import { TimeAnchor } from './TimeAnchor'
-
-const DURATION_OPTIONS = [5, 10, 15, 20, 25, 30, 45, 60, 90, 120, 150, 180, 240, 300, 360, 420, 480]
-
-function formatDuration(minutes: number): string {
-  if (minutes < 60) return `${minutes}m`
-  const h = minutes / 60
-  return Number.isInteger(h) ? `${h}h` : `${Math.floor(h)}h${minutes % 60}m`
-}
+import { useFocusBlocks } from './focusBlockContext'
 
 interface TomorrowMustPanelProps {
   tomorrowDate: string
@@ -37,6 +31,7 @@ interface TomorrowMustPanelProps {
 const MAX_MUSTS = 3
 
 export function TomorrowMustPanel({ tomorrowDate, tasks, sourceMustCount = 0, onAdd, onDelete, onEdit, onUpdate, onCopyFromToday }: TomorrowMustPanelProps) {
+  const { blockMinutes } = useFocusBlocks()
   const [open, setOpen] = useState(false)
   const [input, setInput] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -173,22 +168,18 @@ export function TomorrowMustPanel({ tomorrowDate, tasks, sourceMustCount = 0, on
                   onEditingChange={editing => setTimeEditTaskId(editing ? task.id : null)}
                   showAddButton
                 />
-                <select
-                  value={task.durationMinutes ?? ''}
-                  onChange={e => onUpdate(task.id, { durationMinutes: e.target.value === '' ? undefined : Number(e.target.value) })}
-                  className="w-24 rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-1 py-0.5 text-xs tabular-nums text-share-onSurface"
-                  title="Duration"
-                >
-                  <option value="">Duration</option>
-                  {DURATION_OPTIONS.map(m => <option key={m} value={m}>{formatDuration(m)}</option>)}
-                </select>
+                <TaskDurationPicker
+                  value={task.durationMinutes}
+                  onChange={minutes => onUpdate(task.id, { durationMinutes: minutes })}
+                  className="w-[7.5rem]"
+                />
               </span>
               {/* Read-only here: tomorrow has no logged work yet, and offering to
                   log some would be logging time on a day that has not happened.
                   The empty row still shows the shape of what is being committed to. */}
               {(() => {
-                const progress = computeTaskProgress(task, [])
-                return progress ? <TaskProgressBoxes progress={progress} /> : null
+                const progress = computeTaskProgress(task, [], blockMinutes)
+                return progress ? <TaskProgressBoxes progress={progress} taskId={task.id} /> : null
               })()}
               <button
                 type="button"

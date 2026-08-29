@@ -15,23 +15,17 @@ import type { DeepWorkSession, Task } from '../../domain/types'
 import { computeTaskProgress } from '../../domain/taskProgress'
 import { CheckCircle2, ChevronUp, ChevronDown, X } from 'lucide-react'
 import { TaskProgressBoxes } from './TaskProgressBoxes'
+import { TaskDurationPicker } from './TaskDurationPicker'
 import { TimeAnchor } from './TimeAnchor'
-
-const DURATION_OPTIONS = [5, 10, 15, 20, 25, 30, 45, 60, 90, 120, 150, 180, 240, 300, 360, 420, 480]
-
-function formatDuration(minutes: number): string {
-  if (minutes < 60) return `${minutes}m`
-  const h = minutes / 60
-  return Number.isInteger(h) ? `${h}h` : `${Math.floor(h)}h${minutes % 60}m`
-}
+import { useFocusBlocks } from './focusBlockContext'
 
 interface MustDoPinnedHeaderProps {
   tasks: Task[]
   /** The day's deep work sessions, used to fill each MUST's progress boxes. */
   deepWorkSessions?: DeepWorkSession[]
-  /** Add or remove hand-logged minutes on a MUST. */
-  onAdjustManualMinutes?: (taskId: string, deltaMinutes: number) => void
-  /** Open the progress actions sheet for a MUST (phones). */
+  /** Start a focus block on a MUST. */
+  onStartBlock?: (taskId: string, minutes: number) => void
+  /** Open the progress actions sheet for a MUST. */
   onOpenProgressSheet?: (taskId: string) => void
   onToggle: (taskId: string) => void
   onAdd: (title: string) => void
@@ -48,19 +42,21 @@ export function MustDoPinnedHeader({
   onDelete,
   onUpdate,
   deepWorkSessions,
-  onAdjustManualMinutes,
+  onStartBlock,
   onOpenProgressSheet,
 }: MustDoPinnedHeaderProps) {
+  const { blockMinutes } = useFocusBlocks()
+
   /** The progress row for a MUST, or null when it is too short to track. */
   const renderProgress = (task: Task) => {
-    const progress = computeTaskProgress(task, deepWorkSessions ?? [])
+    const progress = computeTaskProgress(task, deepWorkSessions ?? [], blockMinutes)
     if (!progress) return null
     return (
       <TaskProgressBoxes
         progress={progress}
-        onLogManual={onAdjustManualMinutes ? (m) => onAdjustManualMinutes(task.id, m) : undefined}
-        onUndoManual={onAdjustManualMinutes ? (m) => onAdjustManualMinutes(task.id, -m) : undefined}
-        onRequestActions={onOpenProgressSheet ? () => onOpenProgressSheet(task.id) : undefined}
+        taskId={task.id}
+        onStartBlock={onStartBlock ? (minutes) => onStartBlock(task.id, minutes) : undefined}
+        onOpenActions={onOpenProgressSheet ? () => onOpenProgressSheet(task.id) : undefined}
       />
     )
   }
@@ -119,11 +115,11 @@ export function MustDoPinnedHeader({
         {doneExpanded && (
           <div className="border-t border-emerald-500/20 px-3 pb-3 pt-2 space-y-1">
             {rootTasks.map((task, idx) => (
-              <div key={task.id} className="flex items-center gap-2 group">
+              <div key={task.id} className="flex flex-wrap items-center gap-x-2 gap-y-1 group">
                 <span className="w-4 shrink-0 text-center text-[10px] font-bold text-emerald-700">
                   {idx + 1}
                 </span>
-                <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
+                <label className="flex min-w-0 flex-1 basis-[55%] cursor-pointer items-center gap-2">
                   <input
                     type="checkbox"
                     checked={task.isDone}
@@ -161,15 +157,11 @@ export function MustDoPinnedHeader({
                     showAddButton
                     size="md"
                   />
-                  <select
-                    value={task.durationMinutes ?? ''}
-                    onChange={e => onUpdate(task.id, { durationMinutes: e.target.value === '' ? undefined : Number(e.target.value) })}
-                    className="w-24 rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-1 py-1 text-sm tabular-nums text-share-onSurface"
-                    title="Duration"
-                  >
-                    <option value="">Duration</option>
-                    {DURATION_OPTIONS.map(m => <option key={m} value={m}>{formatDuration(m)}</option>)}
-                  </select>
+                  <TaskDurationPicker
+                    value={task.durationMinutes}
+                    onChange={minutes => onUpdate(task.id, { durationMinutes: minutes })}
+                    className="w-[7.5rem]"
+                  />
                 </span>
                 {renderProgress(task)}
                 <button
@@ -236,11 +228,11 @@ export function MustDoPinnedHeader({
       {/* Task rows — hidden when collapsed */}
       {!listCollapsed && <div className="space-y-1">
         {rootTasks.map((task, idx) => (
-          <div key={task.id} className="flex items-center gap-2 group">
+          <div key={task.id} className="flex flex-wrap items-center gap-x-2 gap-y-1 group">
             <span className="w-4 shrink-0 text-center text-[10px] font-bold text-share-onSurfaceVariant/50">
               {idx + 1}
             </span>
-            <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
+            <label className="flex min-w-0 flex-1 basis-[55%] cursor-pointer items-center gap-2">
               <input
                 type="checkbox"
                 checked={task.isDone}
@@ -282,15 +274,11 @@ export function MustDoPinnedHeader({
                   showAddButton
                   size="md"
                 />
-              <select
-                value={task.durationMinutes ?? ''}
-                onChange={e => onUpdate(task.id, { durationMinutes: e.target.value === '' ? undefined : Number(e.target.value) })}
-                className="w-24 rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-1 py-1 text-sm tabular-nums text-share-onSurface"
-                title="Duration"
-              >
-                <option value="">Duration</option>
-                {DURATION_OPTIONS.map(m => <option key={m} value={m}>{formatDuration(m)}</option>)}
-              </select>
+              <TaskDurationPicker
+                value={task.durationMinutes}
+                onChange={minutes => onUpdate(task.id, { durationMinutes: minutes })}
+                className="w-[7.5rem]"
+              />
             </span>
             {renderProgress(task)}
             <button

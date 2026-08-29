@@ -4,9 +4,10 @@ import {
   computeTimerMinutesForTask,
   describeTaskProgress,
   formatMinutes,
+  minTrackableMinutes,
   MIN_TRACKABLE_MINUTES,
-  SLOT_MINUTES,
 } from './taskProgress'
+import { DEFAULT_FOCUS_BLOCK_MINUTES } from './focusBlocks'
 import type { DeepWorkSession, Task } from './types'
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -36,8 +37,8 @@ function session(overrides: Partial<DeepWorkSession> = {}): DeepWorkSession {
 }
 
 /** Compact view of a row: capacity, timer, manual, overflow. */
-function shape(t: Task, sessions: DeepWorkSession[] = []) {
-  const progress = computeTaskProgress(t, sessions)
+function shape(t: Task, sessions: DeepWorkSession[] = [], blockMinutes = 30) {
+  const progress = computeTaskProgress(t, sessions, blockMinutes)
   return progress?.slots.map((s) => [s.capacityMinutes, s.timerMinutes, s.manualMinutes, s.isOverflow])
 }
 
@@ -52,13 +53,54 @@ describe('computeTaskProgress trackability', () => {
     expect(computeTaskProgress(task({ durationMinutes: MIN_TRACKABLE_MINUTES - 1 }), [])).toBeNull()
   })
 
-  it('tracks a task at exactly one slot', () => {
-    expect(shape(task({ durationMinutes: SLOT_MINUTES }))).toEqual([[30, 0, 0, false]])
+  it('tracks a task at exactly one block', () => {
+    expect(shape(task({ durationMinutes: 30 }))).toEqual([[30, 0, 0, false]])
   })
 
   it('ignores a nonsense duration', () => {
     expect(computeTaskProgress(task({ durationMinutes: Number.NaN }), [])).toBeNull()
     expect(computeTaskProgress(task({ durationMinutes: -120 }), [])).toBeNull()
+  })
+
+  it('never demands more than half an hour, however long the block', () => {
+    expect(minTrackableMinutes(90)).toBe(30)
+    expect(computeTaskProgress(task({ durationMinutes: 30 }), [], 90)).not.toBeNull()
+  })
+
+  it('lets a short block lower the bar to one block', () => {
+    expect(minTrackableMinutes(25)).toBe(25)
+    expect(computeTaskProgress(task({ durationMinutes: 25 }), [], 25)).not.toBeNull()
+    expect(computeTaskProgress(task({ durationMinutes: 24 }), [], 25)).toBeNull()
+  })
+})
+
+// ── block sizing ─────────────────────────────────────────────────────────────
+
+describe('block sizing', () => {
+  it('defaults to the configured default block length', () => {
+    const progress = computeTaskProgress(task({ durationMinutes: 90 }), [])
+    expect(progress?.blockMinutes).toBe(DEFAULT_FOCUS_BLOCK_MINUTES)
+    expect(progress?.slots).toHaveLength(2)
+  })
+
+  it('makes a 45-minute task exactly one block at a 45-minute block length', () => {
+    expect(shape(task({ durationMinutes: 45 }), [], 45)).toEqual([[45, 0, 0, false]])
+  })
+
+  it('re-buckets the same task when the block length changes', () => {
+    expect(shape(task({ durationMinutes: 90 }), [], 45)).toEqual([
+      [45, 0, 0, false],
+      [45, 0, 0, false],
+    ])
+    expect(shape(task({ durationMinutes: 90 }), [], 60)).toEqual([
+      [60, 0, 0, false],
+      [30, 0, 0, false],
+    ])
+  })
+
+  it('clamps an out-of-range block length rather than dividing by nonsense', () => {
+    expect(computeTaskProgress(task({ durationMinutes: 60 }), [], 0)?.blockMinutes).toBe(10)
+    expect(computeTaskProgress(task({ durationMinutes: 60 }), [], 9999)?.blockMinutes).toBe(120)
   })
 })
 
@@ -74,15 +116,21 @@ describe('slot layout', () => {
     ])
   })
 
-  it('gives the trailing slot the remainder rather than a full 30', () => {
+  it('gives the trailing slot the remainder rather than a full block', () => {
     expect(shape(task({ durationMinutes: 45 }))).toEqual([
       [30, 0, 0, false],
       [15, 0, 0, false],
     ])
   })
 
+  it('draws a short trailing slot narrow, in proportion', () => {
+    const progress = computeTaskProgress(task({ durationMinutes: 45 }), [], 30)!
+    expect(progress.slots[0].widthRatio).toBe(1)
+    expect(progress.slots[1].widthRatio).toBe(0.5)
+  })
+
   it('handles a long task', () => {
-    const progress = computeTaskProgress(task({ durationMinutes: 480 }), [])
+    const progress = computeTaskProgress(task({ durationMinutes: 480 }), [], 30)
     expect(progress?.slots).toHaveLength(16)
     expect(progress?.slots.every((s) => s.capacityMinutes === 30)).toBe(true)
   })
@@ -131,7 +179,7 @@ describe('filling slots', () => {
   it('part-fills a slot from a short session instead of rounding it away', () => {
     const progress = computeTaskProgress(task({ durationMinutes: 60 }), [
       session({ taskId: 't1', durationMinutes: 25 }),
-    ])
+    ], 30)
     expect(progress?.slots[0].timerMinutes).toBe(25)
     expect(progress?.slots[0].filledRatio).toBeCloseTo(25 / 30)
     expect(progress?.slots[1].filledRatio).toBe(0)
@@ -184,19 +232,19 @@ describe('overflow', () => {
   it('adds overflow slots when more is logged than planned', () => {
     const progress = computeTaskProgress(task({ durationMinutes: 60 }), [
       session({ taskId: 't1', durationMinutes: 90 }),
-    ])
+    ], 30)
     expect(progress?.isOverflowing).toBe(true)
-    expect(progress?.slots).toEqual([
-      { capacityMinutes: 30, timerMinutes: 30, manualMinutes: 0, filledRatio: 1, isOverflow: false },
-      { capacityMinutes: 30, timerMinutes: 30, manualMinutes: 0, filledRatio: 1, isOverflow: false },
-      { capacityMinutes: 30, timerMinutes: 30, manualMinutes: 0, filledRatio: 1, isOverflow: true },
+    expect(progress?.slots.map((s) => [s.capacityMinutes, s.timerMinutes, s.isOverflow])).toEqual([
+      [30, 30, false],
+      [30, 30, false],
+      [30, 30, true],
     ])
   })
 
   it('part-fills a trailing overflow slot', () => {
     const progress = computeTaskProgress(task({ durationMinutes: 30 }), [
       session({ taskId: 't1', durationMinutes: 40 }),
-    ])
+    ], 30)
     expect(progress?.slots).toHaveLength(2)
     expect(progress?.slots[1].isOverflow).toBe(true)
     expect(progress?.slots[1].timerMinutes).toBe(10)
@@ -205,7 +253,7 @@ describe('overflow', () => {
   it('is not overflowing when logged exactly matches planned', () => {
     const progress = computeTaskProgress(task({ durationMinutes: 60 }), [
       session({ taskId: 't1', durationMinutes: 60 }),
-    ])
+    ], 30)
     expect(progress?.isOverflowing).toBe(false)
     expect(progress?.isComplete).toBe(true)
     expect(progress?.slots).toHaveLength(2)

@@ -1,13 +1,13 @@
 /**
  * components/planner/TaskProgressSheet.tsx
  *
- * The actions behind a task's progress row on a phone, where the 14px boxes are
- * far too small to tap. Opens as a bottom sheet.
+ * The actions behind a task's progress row: start the next block, log time by
+ * hand, take hand-logged time back.
  *
- * Order matters here. Starting the timer is the primary action and sits at the
- * top, because minutes earned that way are real; logging by hand is the
- * secondary one underneath it. The sheet is the moment the choice gets made, so
- * it puts the honest path under the thumb rather than burying it.
+ * Starting a block is now the chips' own job, so the sheet is mostly the honest
+ * escape hatch for work the timer never saw - a block done on paper, a meeting
+ * that ran. It still leads with the timer, because minutes earned that way are
+ * real and the sheet is the moment that choice gets made.
  */
 
 import { useEffect } from 'react'
@@ -15,27 +15,32 @@ import { Clock, Minus, Timer, X } from 'lucide-react'
 import type { TaskProgress } from '../../domain/taskProgress'
 import { describeTaskProgress, formatMinutes } from '../../domain/taskProgress'
 import { TaskProgressBoxes } from './TaskProgressBoxes'
+import { useFocusBlocks } from './focusBlockContext'
 
 interface TaskProgressSheetProps {
+  taskId: string
   taskTitle: string
   progress: TaskProgress
   /** Log hand-tracked minutes against the task. */
   onLogManual: (minutes: number) => void
   /** Take back the last hand-tracked minutes. Earned time is never removable here. */
   onUndoManual: (minutes: number) => void
-  /** Point the deep work timer at this task. Omitted where no timer is in reach. */
-  onStartTimer?: () => void
+  /** Start the next block on the timer. Omitted where no timer is in reach. */
+  onStartBlock?: (minutes: number) => void
   onClose: () => void
 }
 
 export function TaskProgressSheet({
+  taskId,
   taskTitle,
   progress,
   onLogManual,
   onUndoManual,
-  onStartTimer,
+  onStartBlock,
   onClose,
 }: TaskProgressSheetProps) {
+  const { activeBlock } = useFocusBlocks()
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose()
@@ -44,14 +49,15 @@ export function TaskProgressSheet({
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [onClose])
 
-  // The next box to fill, and the last hand-logged one that can be taken back.
+  // The next block to fill, and the last hand-logged one that can be taken back.
   const nextSlot = progress.slots.find(
     (slot) => slot.timerMinutes + slot.manualMinutes < slot.capacityMinutes,
   )
   const logMinutes = nextSlot
     ? nextSlot.capacityMinutes - nextSlot.timerMinutes - nextSlot.manualMinutes
-    : 30
+    : progress.blockMinutes
   const undoSlot = [...progress.slots].reverse().find((slot) => slot.manualMinutes > 0)
+  const isTimerBusy = activeBlock != null
 
   return (
     <div
@@ -82,23 +88,32 @@ export function TaskProgressSheet({
         </div>
 
         <div className="mt-3 flex justify-center rounded-lg border border-share-outlineVariant/25 bg-share-surfaceContainerLow py-3">
-          <TaskProgressBoxes progress={progress} />
+          <TaskProgressBoxes progress={progress} taskId={taskId} />
         </div>
 
         <div className="mt-4 space-y-2">
-          {onStartTimer && (
+          {onStartBlock && nextSlot && (
             <button
               type="button"
+              disabled={isTimerBusy}
               onClick={() => {
-                onStartTimer()
+                onStartBlock(logMinutes)
                 onClose()
               }}
-              className="flex min-h-[44px] w-full items-center gap-3 rounded-lg border border-teal-500/50 bg-teal-500/10 px-3 py-2 text-left hover:bg-teal-500/20"
+              className={`flex min-h-[44px] w-full items-center gap-3 rounded-lg border px-3 py-2 text-left ${
+                isTimerBusy
+                  ? 'cursor-not-allowed border-share-outlineVariant/40 bg-share-surfaceContainer opacity-60'
+                  : 'border-teal-500/50 bg-teal-500/10 hover:bg-teal-500/20'
+              }`}
             >
-              <Timer className="h-4 w-4 shrink-0 text-teal-300" />
+              <Timer className={`h-4 w-4 shrink-0 ${isTimerBusy ? 'text-share-onSurfaceVariant' : 'text-teal-300'}`} />
               <span className="min-w-0">
-                <span className="block text-sm font-medium text-teal-200">Work on this with the timer</span>
-                <span className="block text-xs text-teal-400/70">Finished blocks fill in solid</span>
+                <span className={`block text-sm font-medium ${isTimerBusy ? 'text-share-onSurface' : 'text-teal-200'}`}>
+                  Start a {formatMinutes(logMinutes)} block
+                </span>
+                <span className={`block text-xs ${isTimerBusy ? 'text-share-onSurfaceVariant/70' : 'text-teal-400/70'}`}>
+                  {isTimerBusy ? 'A block is already running' : 'Finished blocks fill in solid'}
+                </span>
               </span>
             </button>
           )}

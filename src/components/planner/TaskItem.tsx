@@ -11,15 +11,9 @@ import type { DeepWorkSession, Task } from '../../domain/types'
 import { computeTaskProgress } from '../../domain/taskProgress'
 import { ArrowUp, ArrowDown, MoreVertical } from 'lucide-react'
 import { TaskProgressBoxes } from './TaskProgressBoxes'
+import { TaskDurationPicker } from './TaskDurationPicker'
 import { TimeAnchor } from './TimeAnchor'
-
-const DURATION_OPTIONS = [5, 10, 15, 20, 25, 30, 45, 60, 90, 120, 150, 180, 240, 300, 360, 420, 480]
-
-function formatDuration(minutes: number): string {
-  if (minutes < 60) return `${minutes}m`
-  const h = minutes / 60
-  return Number.isInteger(h) ? `${h}h` : `${Math.floor(h)}h${minutes % 60}m`
-}
+import { useFocusBlocks } from './focusBlockContext'
 
 interface TaskItemProps {
   task: Task
@@ -55,9 +49,9 @@ interface TaskItemProps {
   onMoveDown?: () => void
   /** The day's deep work sessions, used to fill this task's progress boxes. */
   deepWorkSessions?: DeepWorkSession[]
-  /** Add (or, with a negative delta, remove) hand-logged minutes. */
-  onAdjustManualMinutes?: (deltaMinutes: number) => void
-  /** Open the progress actions sheet (phones, where the boxes are untappable). */
+  /** Start a focus block on this task. Omitted where no timer is in reach. */
+  onStartBlock?: (minutes: number) => void
+  /** Open the progress actions sheet (hand-logging and undo). */
   onOpenProgressSheet?: () => void
 }
 
@@ -106,7 +100,7 @@ export function TaskItem({
   onMoveUp,
   onMoveDown,
   deepWorkSessions,
-  onAdjustManualMinutes,
+  onStartBlock,
   onOpenProgressSheet,
 }: TaskItemProps) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
@@ -160,9 +154,10 @@ export function TaskItem({
 
   // Done tasks keep their row - it is the record of what the work actually
   // cost, which is the only way the next estimate gets better.
+  const { blockMinutes } = useFocusBlocks()
   const progress = useMemo(
-    () => computeTaskProgress(task, deepWorkSessions ?? []),
-    [task, deepWorkSessions],
+    () => computeTaskProgress(task, deepWorkSessions ?? [], blockMinutes),
+    [task, deepWorkSessions, blockMinutes],
   )
   const showContextMenu = Boolean(
     onUpdateTask ?? onAddTaskAbove ?? onAddTaskBelow ?? onAddSubtask ?? onMoveToNotDoing ?? onAbandon ?? onDelete ?? onMoveToAnotherParent,
@@ -406,32 +401,19 @@ export function TaskItem({
               isEditing={isEditingTime}
               onEditingChange={setIsEditingTime}
             />
-            <select
-              value={task.durationMinutes ?? ''}
-              onChange={(e) => {
-                const v = e.target.value === '' ? undefined : Number(e.target.value)
-                onUpdateTask?.({ durationMinutes: v })
-              }}
-              className="w-[4.75rem] rounded border border-share-outlineVariant/40 bg-share-surfaceContainer px-1 py-1 text-xs tabular-nums text-share-onSurface"
-              aria-label="Task duration"
-              title="Duration (optional)"
-            >
-              <option value="">Duration</option>
-              {task.durationMinutes != null && !DURATION_OPTIONS.includes(task.durationMinutes) && (
-                <option value={task.durationMinutes}>{formatDuration(task.durationMinutes)}</option>
-              )}
-              {DURATION_OPTIONS.map((m) => (
-                <option key={m} value={m}>{formatDuration(m)}</option>
-              ))}
-            </select>
+            <TaskDurationPicker
+              value={task.durationMinutes}
+              onChange={(minutes) => onUpdateTask?.({ durationMinutes: minutes })}
+              className="w-[7.5rem]"
+            />
           </span>
         )}
         {progress && (
           <TaskProgressBoxes
             progress={progress}
-            onLogManual={onAdjustManualMinutes ? (minutes) => onAdjustManualMinutes(minutes) : undefined}
-            onUndoManual={onAdjustManualMinutes ? (minutes) => onAdjustManualMinutes(-minutes) : undefined}
-            onRequestActions={onOpenProgressSheet}
+            taskId={task.id}
+            onStartBlock={onStartBlock}
+            onOpenActions={onOpenProgressSheet}
           />
         )}
       </div>

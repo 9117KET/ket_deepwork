@@ -209,6 +209,15 @@ export interface AppState {
   depthPhilosophy?: 'rhythmic' | 'journalistic' | 'bimodal';
   /** Weekly deep work goal in hours (default 20). Used by the scoreboard. */
   deepWorkGoalHoursPerWeek?: number;
+  /**
+   * Length of one focus block in minutes (default 45). One block is one run of
+   * the timer and one box on a task's progress row, so this is the unit the
+   * planner counts in. Stored durations stay in minutes, so changing it
+   * re-buckets existing work rather than rewriting it.
+   */
+  focusBlockMinutes?: number;
+  /** Rest that follows a block (default: ~20% of it). */
+  focusBreakMinutes?: number;
   // ── The ONE Thing (Gary Keller) ──────────────────────────────────────────────
   /** Fixed life direction statement — the "North Star" that guides every decision. */
   northStar?: string;

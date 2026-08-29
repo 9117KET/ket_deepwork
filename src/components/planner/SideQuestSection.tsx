@@ -60,7 +60,7 @@ interface SideQuestSectionProps {
   onMoveToNotDoing?: (taskId: string) => void
   onAbandonTask?: (taskId: string) => void
   deepWorkSessions?: DeepWorkSession[]
-  onAdjustManualMinutes?: (taskId: string, deltaMinutes: number) => void
+  onStartBlock?: (taskId: string, minutes: number) => void
   onOpenProgressSheet?: (taskId: string) => void
 }
 

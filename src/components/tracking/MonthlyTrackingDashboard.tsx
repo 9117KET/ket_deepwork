@@ -26,6 +26,13 @@ import {
 import { getOrCreateDay } from '../../storage/localStorageState'
 import { computeSectionCompletion, computeDayCompletion, computePerHabitStreaks, computeDailyDeepWorkMinutes, computeWeeklyDeepWorkHours, computeMonthlyDeepWorkHours, moodByDeepWork, moodByHabits } from '../../domain/stats'
 import { weekForDay } from '../../domain/dateUtils'
+import {
+  FOCUS_BLOCK_PRESETS,
+  MAX_FOCUS_BLOCK_MINUTES,
+  MIN_FOCUS_BLOCK_MINUTES,
+  normalizeFocusBlockMinutes,
+  suggestedBreakMinutes,
+} from '../../domain/focusBlocks'
 
 const MOOD_OPTIONS = ['🙂', '😐', '🙁', '😊', '😢', '😤', '😴', '🔥'] as const
 
@@ -38,6 +45,8 @@ interface MonthlyTrackingDashboardProps {
     monthTitles?: Record<string, string>
     depthPhilosophy?: AppState['depthPhilosophy']
     deepWorkGoalHoursPerWeek?: number
+    focusBlockMinutes?: number
+    focusBreakMinutes?: number
     goalCascade?: GoalCascade
     monthlyReviews?: Record<string, MonthlyReview>
     weeklyReviews?: Record<string, WeeklyReview>
@@ -71,6 +80,11 @@ export function MonthlyTrackingDashboard({
   const [moodPickerDay, setMoodPickerDay] = useState<string | null>(null)
   const [editingGoal, setEditingGoal] = useState(false)
   const [goalInput, setGoalInput] = useState('')
+  // The focus block length, and the custom field's own draft of it.
+  const blockMinutes = normalizeFocusBlockMinutes(state.focusBlockMinutes)
+  const breakMinutes = state.focusBreakMinutes ?? suggestedBreakMinutes(blockMinutes)
+  const isCustomBlock = !FOCUS_BLOCK_PRESETS.some((preset) => preset.minutes === blockMinutes)
+  const [blockInput, setBlockInput] = useState(String(blockMinutes))
   const [editingReviewDay, setEditingReviewDay] = useState(false)
   const reviewRef = useRef<HTMLDivElement>(null)
   const weeklyReviewRef = useRef<HTMLDivElement>(null)
@@ -300,6 +314,66 @@ export function MonthlyTrackingDashboard({
                   </div>
                 )
               })}
+            </div>
+            <div className="mt-3 border-t border-share-outlineVariant/30 pt-2">
+              <div className="mb-1 flex items-baseline justify-between gap-2">
+                <span className="text-[10px] font-medium uppercase tracking-wide text-share-onSurfaceVariant/50">Focus Block</span>
+                <span className="text-[10px] text-share-onSurfaceVariant/50">
+                  {blockMinutes}m on · {breakMinutes}m off
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {FOCUS_BLOCK_PRESETS.map((preset) => (
+                  <button
+                    key={preset.minutes}
+                    type="button"
+                    title={`${preset.name} - ${preset.blurb}`}
+                    onClick={() => onUpdateSettings({
+                      focusBlockMinutes: preset.minutes,
+                      focusBreakMinutes: preset.breakMinutes,
+                    })}
+                    className={`min-h-[32px] rounded border px-2 py-0.5 text-xs transition-colors ${
+                      blockMinutes === preset.minutes
+                        ? 'border-teal-500 bg-teal-500/20 text-teal-300'
+                        : 'border-share-outlineVariant/40 bg-share-surfaceContainerHigh text-share-onSurfaceVariant hover:border-share-outlineVariant/60 hover:text-share-onBg'
+                    }`}
+                  >
+                    {preset.minutes}m
+                    <span className="ml-1 text-[10px] opacity-70">{preset.name}</span>
+                  </button>
+                ))}
+                <input
+                  type="number"
+                  min={MIN_FOCUS_BLOCK_MINUTES}
+                  max={MAX_FOCUS_BLOCK_MINUTES}
+                  placeholder="min"
+                  value={isCustomBlock ? blockInput : ''}
+                  onChange={(e) => setBlockInput(e.target.value)}
+                  onBlur={() => {
+                    if (blockInput.trim() === '') return
+                    const next = normalizeFocusBlockMinutes(Number(blockInput))
+                    setBlockInput(String(next))
+                    if (next !== blockMinutes) {
+                      onUpdateSettings({
+                        focusBlockMinutes: next,
+                        focusBreakMinutes: suggestedBreakMinutes(next),
+                      })
+                    }
+                  }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                  aria-label="Custom focus block length in minutes"
+                  title="Custom block length"
+                  className={`min-h-[32px] w-14 rounded border bg-share-surfaceContainerHigh px-2 py-0.5 text-xs tabular-nums focus:outline-none ${
+                    isCustomBlock
+                      ? 'border-teal-500 text-teal-300'
+                      : 'border-share-outlineVariant/40 text-share-onSurfaceVariant'
+                  }`}
+                />
+              </div>
+              <p className="mt-1 text-[10px] leading-snug text-share-onSurfaceVariant/50">
+                One block is one run of the timer and one box on a task. Changing it
+                re-buckets work already logged; nothing is lost.
+              </p>
             </div>
             <div className="mt-3 border-t border-share-outlineVariant/30 pt-2">
               <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-share-onSurfaceVariant/50">Depth Philosophy</div>
