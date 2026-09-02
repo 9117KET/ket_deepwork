@@ -195,32 +195,35 @@ test.describe('Planner — task lifecycle', () => {
     }
   })
 
+  // The day stepper is a segmented control: chevrons labelled "Previous day" /
+  // "Next day" either side of "Today". Assert the heading actually moves rather
+  // than only that nothing crashed.
+  const dayHeading = (page: Page) => page.locator('[data-tour="date-nav"] h2').first()
+
   test('date navigation: Previous and Next buttons work', async ({ page }) => {
-    // Click Previous
-    const prev = page.getByRole('button', { name: 'Previous', exact: true }).first()
-    await prev.click()
-    // Date label should change — just check no crash
-    // Use .first() because AppChrome renders children in both desktop+mobile containers
-    await expect(page.locator('[data-tour="date-nav"]').first()).toBeVisible()
+    const heading = dayHeading(page)
+    const today = await heading.textContent()
+
+    await page.getByRole('button', { name: 'Previous day', exact: true }).first().click()
+    await expect(heading).not.toHaveText(today ?? '')
     await expect(page.locator('body')).not.toContainText('Something went wrong')
 
-    // Click Next (back to today area)
-    const next = page.getByRole('button', { name: 'Next', exact: true }).first()
-    await next.click()
-    await expect(page.locator('[data-tour="date-nav"]').first()).toBeVisible()
+    await page.getByRole('button', { name: 'Next day', exact: true }).first().click()
+    await expect(heading).toHaveText(today ?? '')
   })
 
   test('Today button returns to current date', async ({ page }) => {
-    // Navigate away first
-    await page.getByRole('button', { name: 'Previous', exact: true }).first().click()
-    await page.getByRole('button', { name: 'Previous', exact: true }).first().click()
+    const heading = dayHeading(page)
+    const today = await heading.textContent()
 
-    // Click Today
-    const todayBtn = page.getByRole('button', { name: 'Today', exact: true }).first()
-    if (await todayBtn.isVisible({ timeout: 2_000 }).catch(() => false)) {
-      await todayBtn.click()
-      await expect(page.locator('body')).not.toContainText('Something went wrong')
-    }
+    const prev = page.getByRole('button', { name: 'Previous day', exact: true }).first()
+    await prev.click()
+    await prev.click()
+    await expect(heading).not.toHaveText(today ?? '')
+
+    await page.getByRole('button', { name: 'Today', exact: true }).first().click()
+    await expect(heading).toHaveText(today ?? '')
+    await expect(page.locator('body')).not.toContainText('Something went wrong')
   })
 
   test('mobile tab bar switches between plan / timer / habits views', async ({ page }) => {
