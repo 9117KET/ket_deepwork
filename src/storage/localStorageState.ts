@@ -1,9 +1,9 @@
 // @refresh reset
 
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useQuery, useMutation, useConvexAuth } from "convex/react"
 import type { AppState, DayState, AbandonedTask, BlockDurations, NotDoingItem, SideQuestDef } from "../domain/types"
-import { todayIso, deriveActiveDaysFromDays } from "../domain/dateUtils"
+import { todayIso, addDays, deriveActiveDaysFromDays } from "../domain/dateUtils"
 import { api } from "../../convex/_generated/api"
 
 // TEMP sync-debug instrumentation. Enable in the browser console with:
@@ -27,6 +27,31 @@ const PENDING_SETTINGS_KEY = "deepblock_pending_settings_v1"
 const SYNCED_TASK_IDS_KEY = "deepblock_synced_task_ids_v1"
 const LAST_MODIFIED_KEY = "deepblock_last_modified_v1"
 const SCHEMA_VERSION = 1
+
+/**
+ * How much history the live subscription covers.
+ *
+ * A Convex query re-runs when anything in its read set changes, so subscribing
+ * to the whole history meant every task tick re-read every day the account had
+ * ever held. Splitting at this boundary keeps an ordinary edit's cost flat
+ * instead of growing with the history behind it - see `plannerDays.getRecent`.
+ *
+ * A fortnight is chosen so the window comfortably covers the days anyone
+ * actually edits (today, yesterday, tomorrow's plan, last week's review) while
+ * staying an order of magnitude smaller than a year of use.
+ */
+const HOT_WINDOW_DAYS = 14
+
+/**
+ * Days per `upsertMany` call.
+ *
+ * The original first-sign-in migration sent every day in one mutation and
+ * overran the I/O quota mid-upload, which is how the server ended up with a
+ * partial history in the first place. Capping the payload means a large
+ * backlog - a restore, or the reconcile below - drains over several ticks
+ * instead of arriving as one spike.
+ */
+export const MAX_DAYS_PER_SYNC = 25
 
 interface PersistedStateV1 {
   version: number
@@ -245,14 +270,19 @@ export function isRemoteDayStale(
  * day is stamped with `updatedAt` (its last local edit time) so the server can
  * reject a write that races in behind a fresher one.
  */
-function buildDaysSyncPayload(
+export function buildDaysSyncPayload(
   state: AppState,
   lastModified: Map<string, number>,
   includeDates: Set<string>,
+  limit: number = MAX_DAYS_PER_SYNC,
 ) {
   return Object.values({ ...state.days })
     .filter((day): day is DayState => Boolean(day))
     .filter((day) => includeDates.has(day.date))
+    // Newest first: if a backlog drains over several ticks, the days the user
+    // is most likely to be looking at on another device land first.
+    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
+    .slice(0, limit)
     .map((day) => ({
       date: day.date,
       tasks: day.tasks ?? [],
@@ -421,6 +451,31 @@ function writeSyncedTaskIds(map: Map<string, Set<string>>) {
   } catch { /* storage unavailable */ }
 }
 
+/**
+ * A day carrying nothing worth a server row. The planner creates a day object
+ * as soon as one is viewed, so without this the reconcile would upload a row
+ * for every date the user ever clicked past.
+ */
+export function isEmptyDay(day: DayState): boolean {
+  if ((day.tasks ?? []).length > 0) return false
+  if ((day.deepWorkSessions ?? []).length > 0) return false
+  if ((day.notDoingItems ?? []).length > 0) return false
+  if ((day.abandonedTasks ?? []).length > 0) return false
+  if (day.habitCompletions && Object.values(day.habitCompletions).some(Boolean)) return false
+  if (day.sideQuestCompletions && Object.values(day.sideQuestCompletions).some(Boolean)) return false
+  return (
+    day.sleepHours == null &&
+    day.mood == null &&
+    !day.bedTime &&
+    !day.wakeTime &&
+    !day.sleepTarget &&
+    !day.dayNote &&
+    !day.focusHijacker &&
+    !day.shutdownCompletedAt &&
+    !day.blockDurations
+  )
+}
+
 // ─── usePersistentState ───────────────────────────────────────────────────────
 
 export function usePersistentState(): [AppState, (updater: (prev: AppState) => AppState) => void, boolean] {
@@ -457,9 +512,32 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
   // merge below tell new local tasks apart from remotely-deleted ones
   const syncedTaskIds = useRef<Map<string, Set<string>>>(readSyncedTaskIds())
 
-  // Convex reactive queries - undefined while loading, null/array when ready
-  const remoteDays = useQuery(api.plannerDays.getAll, isAuthenticated ? {} : "skip")
+  // The hot/cold boundary. Derived from the calendar day rather than stored, so
+  // it moves with midnight; both halves read the same value so no day can fall
+  // between them or land in both.
+  const hotSince = useMemo(() => addDays(todayIso(), -HOT_WINDOW_DAYS), [])
+
+  // Convex reactive queries - undefined while loading, null/array when ready.
+  // Two subscriptions rather than one: an edit to today invalidates only the
+  // recent window, leaving the archive's cached result untouched.
+  const recentDays = useQuery(
+    api.plannerDays.getRecent,
+    isAuthenticated ? { since: hotSince } : "skip",
+  )
+  const archiveDays = useQuery(
+    api.plannerDays.getArchive,
+    isAuthenticated ? { before: hotSince } : "skip",
+  )
   const remoteSettings = useQuery(api.userSettings.get, isAuthenticated ? {} : "skip")
+
+  // Undefined until BOTH halves have arrived, so nothing downstream ever sees a
+  // partial history and mistakes a not-yet-loaded day for a missing one - which
+  // the reconcile below would otherwise read as "the server lost this".
+  const remoteDays = useMemo(() => {
+    if (recentDays === undefined || archiveDays === undefined) return undefined
+    if (recentDays === null && archiveDays === null) return null
+    return [...(archiveDays ?? []), ...(recentDays ?? [])]
+  }, [recentDays, archiveDays])
 
   // Convex mutations
   const upsertManyDays = useMutation(api.plannerDays.upsertMany)
@@ -468,7 +546,6 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
   // Mark ready once the initial data arrives from Convex
   useEffect(() => {
     if (!isAuthenticated) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setReadyToSync(false)
       return
     }
@@ -571,6 +648,78 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
     })
   }, [remoteDays, remoteSettings, isAuthenticated, authLoading])
 
+  /**
+   * Send the queued days. One implementation for all three callers - the
+   * debounce, the backlog drain, and the tab-hide flush - which previously
+   * carried three copies of this bookkeeping between them.
+   *
+   * Returns whether anything is still queued afterwards, since the payload is
+   * capped and a large backlog needs more than one pass.
+   */
+  const flushDays = useCallback(async (): Promise<boolean> => {
+    const genSnapshot = snapshotPendingGenerations(pendingDates.current, dirtyGenerations.current)
+    const payload = buildDaysSyncPayload(stateRef.current, lastModified.current, pendingDates.current)
+    if (payload.length === 0) return false
+    syncDebug("sync: upserting", payload.length, "days; snapshot gens:", [...genSnapshot.entries()])
+    try {
+      await upsertManyDays({ days: payload })
+    } catch (err) {
+      // Pending flags are deliberately left alone: an unsent day must stay
+      // queued, or a transient failure becomes permanent data loss on every
+      // other device. This is what carried the backlog through the months the
+      // server was rejecting writes.
+      console.error("[sync] days sync failed:", err)
+      return false
+    }
+    const now = Date.now()
+    const sent = new Set(payload.map((day) => day.date))
+    for (const [date, gen] of genSnapshot) {
+      if (!sent.has(date)) continue
+      const liveGen = dirtyGenerations.current.get(date) ?? 0
+      if (liveGen === gen) {
+        dirtyGenerations.current.delete(date)
+        echoSuppressUntil.current.set(date, now + ECHO_SUPPRESS_MS)
+        pendingDates.current.delete(date)
+        syncDebug("sync: CLEARED dirty/pending", date, "gen=", gen, "-> echo-suppress 3s")
+      } else {
+        syncDebug("sync: KEPT dirty (edited mid-flight)", date, "snapshot gen=", gen, "live gen=", liveGen)
+      }
+    }
+    writePendingDates(pendingDates.current)
+    return pendingDates.current.size > 0
+  }, [upsertManyDays])
+
+  /**
+   * Drain a backlog larger than one capped batch. Without this a restore or a
+   * reconcile would send 25 days and then sit until the user happened to edit
+   * something else.
+   */
+  const drainRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const isDrainingRef = useRef(false)
+  const scheduleDrain = useCallback(() => {
+    if (drainRef.current || isDrainingRef.current) return
+    drainRef.current = setTimeout(() => {
+      drainRef.current = null
+      isDrainingRef.current = true
+      void (async () => {
+        try {
+          // Paced rather than tight: the point of the cap is to spread a large
+          // backlog out, and hammering upsertMany back to back would just
+          // rebuild the spike it exists to prevent. The bound is a safety net -
+          // `flushDays` returns false on error, so a failing server stops the
+          // loop rather than being retried forever.
+          for (let pass = 0; pass < 200; pass += 1) {
+            const more = await flushDays()
+            if (!more) break
+            await new Promise((resolve) => setTimeout(resolve, 1200))
+          }
+        } finally {
+          isDrainingRef.current = false
+        }
+      })()
+    }, 1200)
+  }, [flushDays])
+
   // Debounced sync of planner days to Convex
   useEffect(() => {
     if (!isAuthenticated || !readyToSync) return
@@ -579,25 +728,9 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
     if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current)
     syncTimeoutRef.current = setTimeout(() => {
       syncTimeoutRef.current = null
-      const genSnapshot = snapshotPendingGenerations(pendingDates.current, dirtyGenerations.current)
-      const payload = buildDaysSyncPayload(stateRef.current, lastModified.current, pendingDates.current)
-      if (payload.length === 0) return
-      syncDebug("sync: upserting", payload.length, "days; snapshot gens:", [...genSnapshot.entries()])
-      void upsertManyDays({ days: payload }).then(() => {
-        const now = Date.now()
-        for (const [date, gen] of genSnapshot) {
-          const liveGen = dirtyGenerations.current.get(date) ?? 0
-          if (liveGen === gen) {
-            dirtyGenerations.current.delete(date)
-            echoSuppressUntil.current.set(date, now + ECHO_SUPPRESS_MS)
-            pendingDates.current.delete(date)
-            syncDebug("sync: CLEARED dirty/pending", date, "gen=", gen, "-> echo-suppress 3s")
-          } else {
-            syncDebug("sync: KEPT dirty (edited mid-flight)", date, "snapshot gen=", gen, "live gen=", liveGen)
-          }
-        }
-        writePendingDates(pendingDates.current)
-      }).catch((err: unknown) => console.error("[sync] days sync failed:", err))
+      void flushDays().then((more) => {
+        if (more) scheduleDrain()
+      })
     }, 800)
 
     return () => {
@@ -606,7 +739,59 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
         syncTimeoutRef.current = null
       }
     }
-  }, [state, isAuthenticated, readyToSync, upsertManyDays])
+  }, [state, isAuthenticated, readyToSync, flushDays, scheduleDrain])
+
+  useEffect(() => () => {
+    if (drainRef.current) clearTimeout(drainRef.current)
+  }, [])
+
+  /**
+   * Queue any day this device holds that the server has never received.
+   *
+   * The write path only ever uploads days marked dirty by a local edit, which
+   * is what keeps it cheap - but it means a day whose pending flag was lost
+   * (storage cleared, a sync that failed on a since-fixed validator, a day
+   * created before the flag existed) is stranded on this device forever. It
+   * looks fine here and simply does not exist on any other device, which is the
+   * worst shape a sync bug can take: silent, and invisible from the machine
+   * that still has the data.
+   *
+   * Days are never deleted server-side, so "local has it, remote does not" is
+   * unambiguous - there is no deletion this could be resurrecting. Runs once a
+   * session, after both halves of the history have arrived, and only for days
+   * that actually hold something. The capped payload drains the result over as
+   * many ticks as it takes.
+   */
+  const hasReconciledRef = useRef(false)
+  useEffect(() => {
+    if (!isAuthenticated || !readyToSync) return
+    if (remoteDays === undefined) return
+    if (hasReconciledRef.current) return
+    hasReconciledRef.current = true
+
+    const remoteDates = new Set((remoteDays ?? []).map((doc) => doc.date as string))
+    const stranded: string[] = []
+    for (const [date, day] of Object.entries(stateRef.current.days ?? {})) {
+      if (!day || remoteDates.has(date)) continue
+      if (isEmptyDay(day)) continue
+      stranded.push(date)
+    }
+    if (stranded.length === 0) return
+
+    console.warn(
+      `[sync] ${stranded.length} day(s) exist only on this device and were never uploaded - queueing:`,
+      stranded.join(", "),
+    )
+    for (const date of stranded) {
+      pendingDates.current.add(date)
+      // Stamp an edit time if the day has none, so the server's staleness guard
+      // accepts it rather than silently dropping it as older than nothing.
+      if (!lastModified.current.has(date)) lastModified.current.set(date, Date.now())
+    }
+    writePendingDates(pendingDates.current)
+    writeLastModified(lastModified.current)
+    scheduleDrain()
+  }, [isAuthenticated, readyToSync, remoteDays, scheduleDrain])
 
   // Debounced sync of user settings to Convex
   useEffect(() => {
@@ -675,21 +860,7 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
       if (syncTimeoutRef.current) {
         clearTimeout(syncTimeoutRef.current)
         syncTimeoutRef.current = null
-        const genSnapshot = snapshotPendingGenerations(pendingDates.current, dirtyGenerations.current)
-        const payload = buildDaysSyncPayload(stateRef.current, lastModified.current, pendingDates.current)
-        if (payload.length > 0) {
-          void upsertManyDays({ days: payload }).then(() => {
-            const now = Date.now()
-            for (const [date, gen] of genSnapshot) {
-              if ((dirtyGenerations.current.get(date) ?? 0) === gen) {
-                dirtyGenerations.current.delete(date)
-                echoSuppressUntil.current.set(date, now + ECHO_SUPPRESS_MS)
-                pendingDates.current.delete(date)
-              }
-            }
-            writePendingDates(pendingDates.current)
-          }).catch((err: unknown) => console.error("[sync] days flush failed:", err))
-        }
+        void flushDays()
       }
       if (settingsSyncTimeoutRef.current) {
         clearTimeout(settingsSyncTimeoutRef.current)
@@ -718,7 +889,7 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
       document.removeEventListener("visibilitychange", handleVisibilityChange)
       window.removeEventListener("beforeunload", handleBeforeUnload)
     }
-  }, [isAuthenticated, upsertManyDays, upsertSettings])
+  }, [isAuthenticated, upsertSettings, flushDays])
 
   const update = (updater: (prev: AppState) => AppState) => {
     setState((prev) => {

@@ -5,6 +5,7 @@ import {
   describeTaskProgress,
   formatMinutes,
   minTrackableMinutes,
+  parseClockRangeMinutes,
   MIN_TRACKABLE_MINUTES,
 } from './taskProgress'
 import { DEFAULT_FOCUS_BLOCK_MINUTES } from './focusBlocks'
@@ -312,5 +313,22 @@ describe('describeTaskProgress', () => {
   it('omits the breakdown when nothing is logged', () => {
     const progress = computeTaskProgress(task({ durationMinutes: 60 }), [])!
     expect(describeTaskProgress(progress)).toBe('0m of 1h logged')
+  })
+})
+
+describe('parseClockRangeMinutes', () => {
+  it('measures a stretch inside one day', () => {
+    expect(parseClockRangeMinutes('07:00', '09:15')).toBe(135)
+  })
+
+  it('reads an end before the start as running past midnight', () => {
+    expect(parseClockRangeMinutes('23:30', '00:45')).toBe(75)
+  })
+
+  it('rejects a pair that says nothing usable', () => {
+    expect(parseClockRangeMinutes('', '09:00')).toBeNull()
+    expect(parseClockRangeMinutes('7am', '09:00')).toBeNull()
+    expect(parseClockRangeMinutes('25:00', '09:00')).toBeNull()
+    expect(parseClockRangeMinutes('09:00', '09:00')).toBeNull()
   })
 })

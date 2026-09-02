@@ -53,7 +53,7 @@ export function PlannerModals({
     handleDaySetupSave,
     applyDurationScopeToday,
     applyDurationScopeAllDays,
-    setDaySetupSkippedFor,
+    skipDaySetupFor,
     setDaySetupOpen,
   } = blockEditor;
 
@@ -70,7 +70,7 @@ export function PlannerModals({
           prevWakeTime={prevDayState.wakeTime}
           prevSleepTarget={prevDayState.sleepTarget}
           onSave={handleDaySetupSave}
-          onSkip={() => { setDaySetupSkippedFor(selectedDay); setDaySetupOpen(false); }}
+          onSkip={() => { skipDaySetupFor(selectedDay); setDaySetupOpen(false); }}
         />
       )}
 

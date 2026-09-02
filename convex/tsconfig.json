@@ -21,5 +21,10 @@
     "noEmit": true
   },
   "include": ["./**/*"],
-  "exclude": ["./_generated"]
+  /* Test files run under Vitest (`npm run test:convex`, vitest.convex.config.ts),
+   * not inside the deployment. They use Vite-only globals such as
+   * `import.meta.glob`, which this config has no types for - and because
+   * `convex deploy` runs this typecheck as a gate, leaving them in here fails
+   * every deploy on a file the deployment never even ships. */
+  "exclude": ["./_generated", "./**/*.test.ts"]
 }

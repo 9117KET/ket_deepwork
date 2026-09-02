@@ -630,6 +630,47 @@ export function useTaskHandlers(
   }, [selectedDay, updateAppState]);
 
   /**
+   * Record a block that ran to completion while the app was closed, against the
+   * day it was started on rather than whichever day is on screen now.
+   *
+   * These are earned minutes, so they land in `deepWorkSessions` alongside
+   * blocks watched from start to finish - the clock measured the same interval
+   * either way, and the user has confirmed they worked it. The real start and
+   * finish instants come from the stored block, so the session records when the
+   * work happened rather than when it was claimed.
+   */
+  const handleRecordAwaySession = useCallback(
+    (block: {
+      dayIso: string;
+      taskId?: string;
+      label: string;
+      minutes: number;
+      startedAt: string;
+      finishedAt: string;
+    }) => {
+      updateAppState((prev) => {
+        const day = getOrCreateDay(prev, block.dayIso);
+        const session: DeepWorkSession = {
+          id: `dw-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          label: block.label,
+          durationMinutes: block.minutes,
+          ...(block.taskId ? { taskId: block.taskId } : {}),
+          startedAt: block.startedAt,
+          finishedAt: block.finishedAt,
+        };
+        return {
+          ...prev,
+          days: {
+            ...prev.days,
+            [block.dayIso]: { ...day, deepWorkSessions: [...day.deepWorkSessions, session] },
+          },
+        };
+      });
+    },
+    [updateAppState],
+  );
+
+  /**
    * Add or remove hand-logged minutes on a task. Kept separate from the timer
    * path on purpose: these minutes are self-reported, are the only ones the user
    * can take back, and never touch deepWorkSessions, so the weekly deep work
@@ -976,6 +1017,7 @@ export function useTaskHandlers(
     handleToggleSideQuestCompletion,
     handleSaveSideQuestDefs,
     handleSessionComplete,
+    handleRecordAwaySession,
     handleAdjustManualMinutes,
     handleMoveToNotDoing,
     handleAbandonTask,
