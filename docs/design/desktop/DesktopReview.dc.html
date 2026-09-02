@@ -1,0 +1,220 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Epilogue:wght@700;800;900&family=Manrope:wght@400;500;600;700;800&display=swap">
+  <style>
+    body { margin: 0; background: #111316; font-family: 'Manrope', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+    * { box-sizing: border-box; }
+    a { color: #00daf3; } a:hover { color: #00b6cb; }
+    .nav { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 11px; font-size: 14px; font-weight: 500; color: #bcc9ce; }
+    .nav-on { background: rgba(0,218,243,0.10); color: #00daf3; font-weight: 700; }
+    .card { padding: 20px; border-radius: 16px; background: #1a1c1f; }
+    .lbl { font-size: 10px; font-weight: 800; letter-spacing: 0.09em; color: #bcc9ce; }
+    .big { font-family: 'Epilogue', system-ui, sans-serif; font-weight: 800; font-size: 32px; letter-spacing: -0.02em; line-height: 1; }
+    .link { display: flex; align-items: center; gap: 12px; padding: 13px 0; border-bottom: 1px solid #23262a; }
+  </style>
+</helmet>
+<div style="width: 1440px; height: 900px; background: #111316; color: #e2e2e6; overflow: hidden; display: flex;">
+
+  <div style="width: 240px; flex-shrink: 0; background: #161a1d; border-right: 1px solid #23262a; display: flex; flex-direction: column; padding: 20px 12px;">
+    <div style="display: flex; align-items: center; gap: 10px; padding: 0 8px 22px 8px;">
+      <div style="width: 26px; height: 26px; border-radius: 8px; background: rgba(0,218,243,0.15); display: flex; align-items: center; justify-content: center;">
+        <span style="width: 9px; height: 9px; border-radius: 50%; background: #00daf3;"></span>
+      </div>
+      <span style="font-family: 'Epilogue', system-ui, sans-serif; font-weight: 900; font-size: 17px; letter-spacing: -0.01em;">Deepblock</span>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 2px;">
+      <div class="nav">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#bcc9ce" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5L12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>
+        <span>Home</span>
+      </div>
+      <div class="nav nav-on">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#00daf3" stroke-width="2"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3" fill="#00daf3" stroke="none"/></svg>
+        <span>Planner</span>
+      </div>
+      <div class="nav">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#bcc9ce" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.8 19.2L16 11l3.5-3.5a2.1 2.1 0 0 0-3-3L13 8 4.8 6.2a.5.5 0 0 0-.5.8l3.2 3.9-2.2 2.2-1.9-.4a.5.5 0 0 0-.5.8L5 16l1.5 2.1a.5.5 0 0 0 .8-.1l-.4-1.9 2.2-2.2 3.9 3.2a.5.5 0 0 0 .8-.5z"/></svg>
+        <span>Travel</span>
+      </div>
+      <div class="nav">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#bcc9ce" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M4 10h16M5 10V7l7-4 7 4v3M7 10v11M12 10v11M17 10v11"/></svg>
+        <span>Finance</span>
+      </div>
+    </div>
+    <div style="flex-grow: 1;"></div>
+    <div style="display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 12px; background: #1e2023;">
+      <div style="width: 28px; height: 28px; border-radius: 50%; background: #00daf3; color: #00363d; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800;">K</div>
+      <div style="flex: 1; font-size: 13px; font-weight: 600;">Account</div>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7d8a8f" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+    </div>
+  </div>
+
+  <div style="flex: 1; display: flex; flex-direction: column; padding: 30px 36px; min-width: 0;">
+
+    <div style="display: flex; align-items: center; justify-content: space-between;">
+      <div style="display: flex; align-items: center; gap: 16px;">
+        <div style="font-family: 'Epilogue', system-ui, sans-serif; font-weight: 800; font-size: 27px; letter-spacing: -0.015em;">Review</div>
+        <div style="display: flex; gap: 3px; padding: 3px; border-radius: 11px; background: #1a1c1f; border: 1px solid #3d494d;">
+          <span style="padding: 6px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; color: #bcc9ce;">Today</span>
+          <span style="padding: 6px 14px; border-radius: 8px; font-size: 13px; font-weight: 700; background: #00daf3; color: #00363d;">Review</span>
+        </div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 4px; height: 40px; padding: 0 4px; border-radius: 11px; background: #1a1c1f; border: 1px solid #3d494d;">
+        <div style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#bcc9ce" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></div>
+        <span style="font-size: 13px; font-weight: 700; padding: 0 8px;">September 2026</span>
+        <div style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#bcc9ce" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></div>
+      </div>
+    </div>
+
+    <div style="display: flex; gap: 28px; margin-top: 24px; flex-grow: 1; min-height: 0;">
+
+      <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 14px;">
+
+        <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px;">
+          <div class="card">
+            <div class="lbl">DEEP WORK THIS WEEK</div>
+            <div style="display: flex; align-items: baseline; gap: 7px; margin-top: 10px;">
+              <span class="big">12.5</span><span style="font-size: 13px; color: #bcc9ce;">/ 20h</span>
+            </div>
+            <div style="height: 4px; margin-top: 14px; border-radius: 2px; background: #23262a;">
+              <div style="height: 4px; width: 62%; border-radius: 2px; background: #00daf3;"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="lbl">BLOCK COMPLETION</div>
+            <div style="display: flex; align-items: baseline; gap: 7px; margin-top: 10px;">
+              <span class="big">68</span><span style="font-size: 13px; color: #bcc9ce;">% this month</span>
+            </div>
+            <div style="height: 4px; margin-top: 14px; border-radius: 2px; background: #23262a;">
+              <div style="height: 4px; width: 68%; border-radius: 2px; background: #00daf3;"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="lbl">HABIT CONSISTENCY</div>
+            <div style="display: flex; align-items: baseline; gap: 7px; margin-top: 10px;">
+              <span class="big">74</span><span style="font-size: 13px; color: #bcc9ce;">% of checks</span>
+            </div>
+            <div style="height: 4px; margin-top: 14px; border-radius: 2px; background: #23262a;">
+              <div style="height: 4px; width: 74%; border-radius: 2px; background: #00daf3;"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="flex-grow: 1;">
+          <div style="display: flex; align-items: baseline; justify-content: space-between;">
+            <div class="lbl">BLOCK COMPLETION BY DAY</div>
+            <div style="display: flex; align-items: center; gap: 14px; font-size: 11px; color: #7d8a8f;">
+              <span style="display: flex; align-items: center; gap: 5px;"><span style="width: 9px; height: 9px; border-radius: 2px; background: #00daf3;"></span>full</span>
+              <span style="display: flex; align-items: center; gap: 5px;"><span style="width: 9px; height: 9px; border-radius: 2px; background: #0b6b78;"></span>partial</span>
+              <span style="display: flex; align-items: center; gap: 5px;"><span style="width: 9px; height: 9px; border-radius: 2px; background: #23262a;"></span>missed</span>
+            </div>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 3px; margin-top: 16px;">
+            <span style="width: 78px; flex-shrink: 0;"></span>
+            <sc-for list="{{days}}" as="d" hint-placeholder-count="31">
+              <span style="flex: 1; text-align: center; font-size: 9px; color: #7d8a8f; font-variant-numeric: tabular-nums;">{{d}}</span>
+            </sc-for>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 4px; margin-top: 8px;">
+            <sc-for list="{{rows}}" as="row" hint-placeholder-count="8">
+              <div style="display: flex; align-items: center; gap: 3px;">
+                <span style="width: 78px; flex-shrink: 0; font-size: 11.5px; color: #bcc9ce;">{{row.label}}</span>
+                <sc-for list="{{row.cells}}" as="c" hint-placeholder-count="31">
+                  <span style="flex: 1; height: 21px; border-radius: 3px; background: {{c.bg}};"></span>
+                </sc-for>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+
+      <div style="width: 320px; flex-shrink: 0; display: flex; flex-direction: column;">
+        <div class="card" style="border-left: 2px solid #00daf3;">
+          <div class="lbl">THIS CHAPTER IS CALLED</div>
+          <div style="margin-top: 9px; font-family: 'Epilogue', system-ui, sans-serif; font-weight: 700; font-size: 16px;">The Foundation</div>
+        </div>
+
+        <div style="margin-top: 20px;">
+          <div class="link">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#bcc9ce" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+            <div style="flex: 1;">
+              <div style="font-size: 13.5px; font-weight: 600;">Weekly review</div>
+              <div style="font-size: 11px; color: #00daf3; margin-top: 2px;">Due Friday</div>
+            </div>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3d494d" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+          </div>
+          <div class="link">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#bcc9ce" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+            <div style="flex: 1;">
+              <div style="font-size: 13.5px; font-weight: 600;">Monthly review</div>
+              <div style="font-size: 11px; color: #7d8a8f; margin-top: 2px;">In 28 days</div>
+            </div>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3d494d" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+          </div>
+          <div class="link">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#bcc9ce" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5a2 2 0 0 1 2-2h13v18H6a2 2 0 0 1-2-2z"/><path d="M9 3v18"/></svg>
+            <div style="flex: 1;">
+              <div style="font-size: 13.5px; font-weight: 600;">Day journal</div>
+              <div style="font-size: 11px; color: #7d8a8f; margin-top: 2px;">Written today</div>
+            </div>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3d494d" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+          </div>
+          <div class="link">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#bcc9ce" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.4 6.3 6.6.3-5.2 4.1 1.8 6.3-5.6-3.7-5.6 3.7 1.8-6.3L3 9.6l6.6-.3z"/></svg>
+            <div style="flex: 1;">
+              <div style="font-size: 13.5px; font-weight: 600;">Goals &amp; North Star</div>
+              <div style="font-size: 11px; color: #7d8a8f; margin-top: 2px;">Life &rarr; 5yr &rarr; 1yr &rarr; 6mo</div>
+            </div>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3d494d" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+          </div>
+          <div class="link" style="border-bottom: none;">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#bcc9ce" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+            <div style="flex: 1;">
+              <div style="font-size: 13.5px; font-weight: 600;">Habit month grid</div>
+              <div style="font-size: 11px; color: #7d8a8f; margin-top: 2px;">9 habits &middot; 74% this month</div>
+            </div>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3d494d" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+          </div>
+        </div>
+
+        <div style="flex-grow: 1;"></div>
+
+        <div style="padding: 16px 18px; border-radius: 13px; background: #16181b; font-size: 12px; line-height: 1.55; color: #bcc9ce;">
+          Month-scale views live here and only here. The planner no longer renders this dashboard underneath the day.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script data-dc-script data-props='{}'>
+class Component extends DCLogic {
+  renderVals() {
+    const full = '#00daf3', partial = '#0b6b78', missed = '#23262a', future = '#191b1e';
+    // September, viewed on the 2nd: two days of real data, the rest not yet lived.
+    const pattern = [
+      [full, partial], [partial, full], [full, full], [full, partial],
+      [partial, missed], [full, full], [missed, partial], [full, full],
+    ];
+    const labels = ['Day', 'Top 3', 'Morning', 'High', 'Medium', 'Low', 'Night', 'Mood'];
+    const rows = labels.map((label, r) => ({
+      label,
+      cells: Array.from({ length: 31 }, (_, i) => ({
+        bg: i < 2 ? pattern[r][i] : future,
+      })),
+    }));
+    const days = Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0'));
+    return { rows, days };
+  }
+}
+</script>
+</body>
+</html>

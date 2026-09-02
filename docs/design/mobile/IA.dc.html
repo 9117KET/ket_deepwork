@@ -1,0 +1,79 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Epilogue:wght@700;800;900&family=Manrope:wght@400;500;600;700;800&display=swap">
+  <style>
+    body { margin: 0; background: #111316; font-family: 'Manrope', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+    * { box-sizing: border-box; }
+    a { color: #00daf3; } a:hover { color: #00b6cb; }
+    .row { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid #1e2023; font-size: 12.5px; }
+    .dest { font-weight: 700; color: #00daf3; width: 96px; flex-shrink: 0; }
+  </style>
+</helmet>
+<div style="width: 900px; height: 900px; background: #111316; color: #e2e2e6; padding: 44px 48px; display: flex; flex-direction: column;">
+
+  <div style="font-family: 'Epilogue', system-ui, sans-serif; font-weight: 900; font-size: 34px; letter-spacing: -0.02em;">Nothing is removed. It gets an address.</div>
+  <div style="margin-top: 8px; font-size: 14px; color: #bcc9ce;">Four destinations that hold genuinely different content, instead of one page with a tab bar over it.</div>
+
+  <div style="display: grid; grid-template-columns: 300px 1fr; gap: 40px; margin-top: 34px; flex-grow: 1;">
+
+    <div>
+      <div style="font-size: 11px; font-weight: 800; letter-spacing: 0.08em; color: #7d8a8f;">TODAY</div>
+      <div style="margin-top: 12px; padding: 20px; border-radius: 14px; background: #1a1c1f; border: 1px solid #3d494d;">
+        <div style="font-size: 13px; line-height: 1.55; color: #e2e2e6;">One block, one task, one action. The day continues below it, collapsed to a line per section.</div>
+        <div style="margin-top: 14px; font-size: 11px; color: #7d8a8f;">Target: fits one screen without scrolling.</div>
+      </div>
+
+      <div style="font-size: 11px; font-weight: 800; letter-spacing: 0.08em; color: #7d8a8f; margin-top: 26px;">FOCUS</div>
+      <div style="margin-top: 12px; padding: 20px; border-radius: 14px; background: #1a1c1f; border: 1px solid #3d494d;">
+        <div style="font-size: 13px; line-height: 1.55; color: #e2e2e6;">The countdown and nothing else. The one screen in a deep-work app that has earned its emptiness.</div>
+      </div>
+
+      <div style="font-size: 11px; font-weight: 800; letter-spacing: 0.08em; color: #7d8a8f; margin-top: 26px;">HABITS</div>
+      <div style="margin-top: 12px; padding: 20px; border-radius: 14px; background: #1a1c1f; border: 1px solid #3d494d;">
+        <div style="font-size: 13px; line-height: 1.55; color: #e2e2e6;">Identity, today&rsquo;s checks, seven days of history. The month grid is one tap away, not underneath.</div>
+      </div>
+
+      <div style="font-size: 11px; font-weight: 800; letter-spacing: 0.08em; color: #7d8a8f; margin-top: 26px;">REVIEW</div>
+      <div style="margin-top: 12px; padding: 20px; border-radius: 14px; background: #1a1c1f; border: 1px solid #3d494d;">
+        <div style="font-size: 13px; line-height: 1.55; color: #e2e2e6;">Everything month-scale, in the one place you go looking for it deliberately.</div>
+      </div>
+    </div>
+
+    <div>
+      <div style="font-size: 11px; font-weight: 800; letter-spacing: 0.08em; color: #7d8a8f;">WHERE EVERY EXISTING FEATURE LANDS</div>
+      <div style="margin-top: 10px;">
+        <div class="row"><span class="dest">Today</span><span>Date navigation, streak, day progress</span></div>
+        <div class="row"><span class="dest">Today</span><span>Top Three priorities &mdash; folded into <em style="color:#bcc9ce;">Now</em> and <em style="color:#bcc9ce;">Then</em>, not a separate panel</span></div>
+        <div class="row"><span class="dest">Today</span><span>All six task sections &mdash; current one open, the rest one line each</span></div>
+        <div class="row"><span class="dest">Today</span><span>Focus-block progress boxes, duration pickers, time anchors</span></div>
+        <div class="row"><span class="dest">Today</span><span>Sleep window, shutdown ritual, plan-tomorrow</span></div>
+        <div class="row"><span class="dest">Today</span><span>Side quests &mdash; appear when unlocked, not while locked</span></div>
+        <div class="row"><span class="dest">Focus</span><span>Deep work timer, block length, task attribution</span></div>
+        <div class="row"><span class="dest">Focus</span><span>Away-block claim, manual logging</span></div>
+        <div class="row"><span class="dest">Habits</span><span>Identity statement, habit checklist, per-habit streaks</span></div>
+        <div class="row"><span class="dest">Habits</span><span>Never-miss-twice warning</span></div>
+        <div class="row"><span class="dest">Review</span><span>Deep work week scoreboard, weekly goal</span></div>
+        <div class="row"><span class="dest">Review</span><span>Block completion &amp; habit month grids &mdash; behind an explicit tap</span></div>
+        <div class="row"><span class="dest">Review</span><span>Day journal, weekly review, monthly review</span></div>
+        <div class="row"><span class="dest">Review</span><span>Goal cascade, North Star, One Thing, depth philosophy</span></div>
+        <div class="row" style="border-bottom: none;"><span class="dest">Removed</span><span style="color: #ffb77d;">The Ctrl/Cmd-click tip &mdash; it describes a gesture phones do not have</span></div>
+      </div>
+
+      <div style="margin-top: 26px; padding: 20px 22px; border-radius: 14px; background: #16181b; border-left: 2px solid #00daf3;">
+        <div style="font-size: 13px; line-height: 1.6; color: #e2e2e6;">
+          <strong>The one rule that does the work:</strong> a screen renders only what its own destination owns. Today stops painting the month grid; Focus stops painting the task list. That single change removes about 2,500px from every tab.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

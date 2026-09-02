@@ -1,0 +1,38 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "title": "Desktop — Today", "x": 0, "y": 0, "w": 1440, "h": 900 },
+    { "file": "DesktopReview.dc.html", "title": "Desktop — Review", "x": 1560, "y": 0, "w": 1440, "h": 900 },
+    { "file": "DesktopFocus.dc.html", "title": "Desktop — Focus mode", "x": 3120, "y": 0, "w": 1440, "h": 900 }
+  ],
+  "annotations": [
+    {
+      "id": "desktop-rule",
+      "x": 0,
+      "y": -230,
+      "w": 1440,
+      "text": "Desktop is not the mobile IA stretched. Width is real space, so the four phone destinations collapse into two views plus a rail: Focus and Habits become rail cards on Today, because there is room for them beside the day rather than instead of it.\n\nWhat does NOT come back is the tracking dashboard living under the planner. Month-scale views get their own Review view on both sizes - that is the one structural rule shared across breakpoints, and it is what removes ~2,500px from every mobile tab.\n\nThe 240px sidebar is kept as-is. It already works."
+    },
+    {
+      "id": "today-space",
+      "x": 0,
+      "y": 960,
+      "w": 1440,
+      "text": "The empty lower left is a fixture artifact, not the design: this day has two tasks. With a real day the open section fills that column, and the collapsed sections below it stay one line each."
+    },
+    {
+      "id": "review-note",
+      "x": 1560,
+      "y": 960,
+      "w": 1440,
+      "text": "The 31-column month grid stays - at 1440px it is the right tool, and this is the view it belongs to. On a phone the same data becomes a 7-day strip with the full grid one tap away."
+    },
+    {
+      "id": "focus-note",
+      "x": 3120,
+      "y": 960,
+      "w": 1440,
+      "text": "Focus mode is the one place desktop goes further than mobile: starting a block hides the sidebar and the day entirely. On a phone that is just a screen; on a 1440px monitor, hiding the other 1,200px of interface is the whole point."
+    }
+  ],
+  "launch": { "view": "canvas" }
+}

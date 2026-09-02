@@ -1,0 +1,45 @@
+{
+  "pages": [
+    { "id": "page-1", "name": "Diagnosis" },
+    { "id": "page-2", "name": "Mobile screens" }
+  ],
+  "artboards": [
+    { "file": "Diagnosis.dc.html", "page": "page-1", "x": 0, "y": 0, "w": 900, "h": 900 },
+    { "file": "IA.dc.html", "page": "page-1", "x": 1000, "y": 0, "w": 900, "h": 900 },
+
+    { "file": "Main.dc.html", "page": "page-2", "title": "Today", "x": 0, "y": 0, "w": 390, "h": 844 },
+    { "file": "Focus.dc.html", "page": "page-2", "x": 470, "y": 0, "w": 390, "h": 844 },
+    { "file": "Habits.dc.html", "page": "page-2", "x": 940, "y": 0, "w": 390, "h": 844 },
+    { "file": "Review.dc.html", "page": "page-2", "x": 1410, "y": 0, "w": 390, "h": 844 },
+
+    { "file": "TimelineDay.dc.html", "page": "page-2", "title": "Alternate — Timeline day", "x": 0, "y": 1010, "w": 390, "h": 844 },
+    { "file": "OneThing.dc.html", "page": "page-2", "title": "Alternate — One thing", "x": 470, "y": 1010, "w": 390, "h": 844 }
+  ],
+  "annotations": [
+    {
+      "id": "measured",
+      "page": "page-1",
+      "x": 0,
+      "y": -150,
+      "w": 900,
+      "text": "Measured on the running app, not estimated: Playwright at 390x844 with touch emulation, guest planner, two tasks seeded. With seven tasks the Plan tab reached 3,525px."
+    },
+    {
+      "id": "leading",
+      "page": "page-2",
+      "x": 0,
+      "y": -170,
+      "w": 860,
+      "text": "Today / Focus / Habits / Review is the leading direction, built out across the four screens in the top row.\n\nEach one is sized to exactly 390x844 - if it fits the artboard, it fits the phone with no scrolling.\n\nThe desktop screens live in their own canvas."
+    },
+    {
+      "id": "alternates",
+      "page": "page-2",
+      "x": 0,
+      "y": 1930,
+      "w": 860,
+      "text": "Two alternates for the Today screen, same IA underneath.\n\nTimeline day: the whole day's shape at a glance, current block expanded in place. Better for schedule-driven days; costs calm, since everything stays visible.\n\nOne thing: a single task fills the screen, swipe up for the day. Maximum focus; slower to triage, and you lose the day's shape."
+    }
+  ],
+  "launch": { "view": "canvas", "page": "page-2" }
+}

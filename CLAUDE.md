@@ -17,6 +17,14 @@ e2e (`npm run test:e2e`). CI runs `lint` then `build` on push/PR to `main`.
 On Windows the `build` script (`tsc -b && vite build`) fails under PowerShell 5,
 which rejects `&&`. Run `npx tsc -b` and `npx vite build` separately there.
 
+## Design
+
+`docs/design/` holds the mobile and desktop redesign source (one `.dc.html` per
+artboard, plus `canvas.json` and PNG previews) and the measured diagnosis that
+motivated it. Read `docs/design/README.md` before changing planner layout — it
+records which screen owns which feature, and why the mobile tabs currently
+render ~2,500px of identical content.
+
 ## Deployment
 
 See `docs/DEPLOYMENT.md` for the Convex dev/prod deployment names, the Vercel
