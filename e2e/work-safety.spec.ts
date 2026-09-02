@@ -35,6 +35,8 @@ interface SeedSession {
 
 interface SeedOptions {
   tasks?: SeedTask[]
+  /** Tasks on yesterday, so "fill from yesterday" has something to offer. */
+  previousDayTasks?: SeedTask[]
   sessions?: SeedSession[]
   /** A block mirrored to localStorage as if it were mid-run. */
   activeBlock?: { taskId?: string; totalMinutes: number; minutesLeft: number; label?: string }
@@ -57,12 +59,29 @@ async function seed(page: Page, opts: SeedOptions = {}) {
       sessionStorage.setItem('review_reminder_dismissed_weekly', '1')
       sessionStorage.setItem(`shutdown_reminder_shown_${iso}`, '1')
 
+      const prev = new Date(d.getTime() - 86_400_000)
+      const prevIso = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}-${String(prev.getDate()).padStart(2, '0')}`
+
       localStorage.setItem(
         stateKey as string,
         JSON.stringify({
           version: 1,
           state: {
             days: {
+              ...(o.previousDayTasks
+                ? {
+                    [prevIso]: {
+                      date: prevIso,
+                      tasks: o.previousDayTasks.map((t) => ({
+                        ...t,
+                        date: prevIso,
+                        isDone: t.isDone ?? false,
+                      })),
+                      deepWorkSessions: [],
+                      habitCompletions: {},
+                    },
+                  }
+                : {}),
               [iso]: {
                 date: iso,
                 tasks: (o.tasks ?? []).map((t) => ({ ...t, date: iso, isDone: t.isDone ?? false })),
@@ -315,4 +334,128 @@ test('deleting a task with only timed work does not raise a false alarm', async 
   const day = (await readState(page)).days[todayIso()]
   expect(day.tasks).toHaveLength(0)
   expect(day.deepWorkSessions).toHaveLength(1)
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Undo
+// ─────────────────────────────────────────────────────────────────────────────
+
+test('a deleted task comes back with Undo', async ({ page }) => {
+  await seed(page, {
+    tasks: [
+      { id: 't1', title: 'Study German', sectionId: 'highPriority', durationMinutes: 90 },
+      { id: 't2', title: 'Write the doc', sectionId: 'highPriority' },
+    ],
+  })
+  await openPlanner(page)
+
+  await page.getByLabel('Drag to reorder; right-click for menu').first().click({ button: 'right' })
+  await page.getByRole('menuitem', { name: /^Delete/i }).click()
+  await page.waitForTimeout(500)
+
+  // Gone, and the offer names what went.
+  expect((await readState(page)).days[todayIso()].tasks).toHaveLength(1)
+  const toast = page.getByRole('status')
+  await expect(toast).toContainText('Study German')
+
+  await toast.getByRole('button', { name: 'Undo' }).click()
+  await page.waitForTimeout(500)
+
+  const tasks = (await readState(page)).days[todayIso()].tasks
+  expect(tasks).toHaveLength(2)
+  expect(tasks.find((t: SeedTask) => t.id === 't1')?.title).toBe('Study German')
+})
+
+test('undo restores hand-logged minutes, not just the row', async ({ page }) => {
+  await seed(page, {
+    tasks: [
+      {
+        id: 't1',
+        title: 'Study German',
+        sectionId: 'highPriority',
+        durationMinutes: 90,
+        manualLoggedMinutes: 50,
+      },
+    ],
+  })
+  await openPlanner(page)
+
+  page.on('dialog', (d) => void d.accept()) // yes, delete it
+
+  await page.getByLabel('Drag to reorder; right-click for menu').first().click({ button: 'right' })
+  await page.getByRole('menuitem', { name: /^Delete/i }).click()
+  await page.waitForTimeout(500)
+
+  await page.getByRole('status').getByRole('button', { name: 'Undo' }).click()
+  await page.waitForTimeout(500)
+
+  const restored = (await readState(page)).days[todayIso()].tasks.find((t: SeedTask) => t.id === 't1')
+  expect(restored, 'the task is back').toBeDefined()
+  expect(restored.manualLoggedMinutes, 'and so are the minutes on it').toBe(50)
+})
+
+test('undo goes away once something else changes, rather than reverting it', async ({ page }) => {
+  // The whole point of the staleness guard: undo must never destroy work done
+  // after the mistake it is offering to fix.
+  await seed(page, {
+    tasks: [
+      { id: 't1', title: 'Study German', sectionId: 'highPriority' },
+      { id: 't2', title: 'Write the doc', sectionId: 'highPriority' },
+    ],
+  })
+  await openPlanner(page)
+
+  await page.getByLabel('Drag to reorder; right-click for menu').first().click({ button: 'right' })
+  await page.getByRole('menuitem', { name: /^Delete/i }).click()
+  await page.waitForTimeout(400)
+  await expect(page.getByRole('status')).toBeVisible()
+
+  // Now do something else: tick the surviving task.
+  await page.locator('input[type="checkbox"]').first().check()
+  await page.waitForTimeout(500)
+
+  const undoBtn = page.getByRole('status').getByRole('button', { name: 'Undo' })
+  if (await undoBtn.isVisible({ timeout: 1_000 }).catch(() => false)) {
+    await undoBtn.click()
+    await page.waitForTimeout(500)
+  }
+
+  // Either way, the tick survives - undo may not roll it back.
+  const day = (await readState(page)).days[todayIso()]
+  const ticked = day.tasks.find((t: SeedTask) => t.id === 't2')
+  expect(ticked?.isDone, 'work done after the delete must survive').toBe(true)
+})
+
+test('undo puts back a whole copied day in one go', async ({ page }) => {
+  await seed(page, {
+    // The fill row only offers itself when the day has no ordinary tasks yet,
+    // so today holds a MUST (which is never copied) and nothing else.
+    tasks: [{ id: 't1', title: 'Today MUST', sectionId: 'mustDo' }],
+    previousDayTasks: [
+      { id: 'p1', title: 'Yesterday one', sectionId: 'highPriority' },
+      { id: 'p2', title: 'Yesterday two', sectionId: 'mediumPriority' },
+      { id: 'p3', title: 'Yesterday three', sectionId: 'lowPriority' },
+    ],
+  })
+  await openPlanner(page)
+
+  const before = (await readState(page)).days[todayIso()].tasks.length
+  expect(before).toBe(1)
+
+  const copyBtn = page.getByRole('button', { name: /Fill from|Copy from|Yesterday/i }).first()
+  await expect(copyBtn).toBeVisible()
+  await copyBtn.click()
+  await page.waitForTimeout(600)
+
+  // Several rows arrived at once - the biggest single edit the planner makes.
+  const afterCopy = (await readState(page)).days[todayIso()].tasks.length
+  expect(afterCopy).toBeGreaterThan(before)
+
+  await page.getByRole('status').getByRole('button', { name: 'Undo' }).click()
+  await page.waitForTimeout(600)
+
+  expect(
+    (await readState(page)).days[todayIso()].tasks,
+    'one Undo takes the whole copied day back out',
+  ).toHaveLength(before)
 })

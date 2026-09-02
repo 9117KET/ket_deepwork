@@ -39,6 +39,7 @@ Three separate defects in one sequence, all now closed.
 | 6 | Bulk-delete selected tasks | Same, silently, across many tasks at once | Same detachment, plus the confirmation in #7 |
 | 7 | Delete a task carrying hand-logged minutes | Destroyed with no prompt — no other record exists | Confirms, naming the amount. Timed-only work does **not** prompt (see #5 — it survives) |
 | 8 | A session's start time | Synthesised as `now − duration`, so a paused or restored block recorded a fictional interval | The real start instant is carried through and stored |
+| 9 | **Any destructive planner action** | Final, immediately | One step of **Undo**, offered for 12s — covers task delete, bulk delete, *copy from day*, and habit / side-quest definition edits |
 
 ## Open
 
@@ -46,13 +47,12 @@ Identified and reproducible, not yet fixed. Roughly in value order.
 
 | # | Scenario | Cost |
 |---|---|---|
-| 9 | **No undo, anywhere** | Every delete is final. The single highest-value remaining gap, and the one that prompted this work |
-| 10 | Deleting a habit definition | `habitCompletions` for that habit are orphaned across every past day; its streak history disappears from the grid |
-| 11 | Deleting a side quest definition | Same shape as #10 |
-| 12 | Finance deletes — accounts, debts, transactions, ETF holdings, savings goals, journal entries, net-worth snapshots | **No confirmation on any of them.** Deleting a net-worth snapshot destroys a point in a series that cannot be reconstructed |
-| 13 | *Copy from day* | No undo, and it can silently add duplicates that differ only in case or whitespace |
-| 14 | Closing the tab mid-block | The block survives (it is mirrored to `localStorage`), but nothing warns you, and past `AWAY_BLOCK_MAX_AGE_MS` (12h) the claim is dropped unasked |
-| 15 | Editing a task's duration below what is already logged | The progress row shows overrun in amber but nothing confirms the change |
+| 10 | Finance deletes — accounts, debts, transactions, ETF holdings, savings goals, journal entries, net-worth snapshots | **No confirmation and no undo on any of them.** Undo covers the planner only. Deleting a net-worth snapshot destroys a point in a series that cannot be reconstructed |
+| 11 | Deleting a habit or side-quest definition | Undo catches the mistake within 12s, but the underlying orphaning is unchanged: past `habitCompletions` keep a key nothing renders |
+| 12 | *Copy from day* duplicates | Undo takes the whole copy back out, but the copy itself still adds near-duplicates differing only in case or whitespace |
+| 13 | Closing the tab mid-block | The block survives (mirrored to `localStorage`), but nothing warns you, and past `AWAY_BLOCK_MAX_AGE_MS` (12h) the claim is dropped unasked |
+| 14 | Editing a task's duration below what is already logged | The progress row shows overrun in amber but nothing confirms the change |
+| 15 | Undo is one step, planner-only, and 12 seconds | Deliberate (see `useUndoableActions`), but a mistake noticed a minute later is still final |
 
 Two guards already existed and are fine: deleting a trip, and disconnecting
 Google Calendar.
@@ -60,9 +60,26 @@ Google Calendar.
 ## Testing these
 
 ```bash
-npx vitest run src/domain/workSafety.test.ts     # the rules
-npx playwright test e2e/work-safety.spec.ts      # the behaviour
+npx vitest run src/domain/workSafety.test.ts         # the ledger rules
+npx vitest run src/hooks/useUndoableActions.test.ts  # the undo staleness rule
+npx playwright test e2e/work-safety.spec.ts          # the behaviour
 ```
 
 The e2e suite seeds `deepblock_active_block_v1` directly to put a block
 mid-run without waiting out a real countdown — see `seed()` in that file.
+
+## How undo stays safe
+
+`useUndoableActions` holds one snapshot of the state before the last
+destructive action. Restoring a whole snapshot would happily revert work done
+*after* the mistake — the exact failure this is meant to prevent — so every
+mutation bumps a counter and the offer is void the moment the counter moves
+past the one it was recorded against.
+
+That is why the hook owns the planner's update gateway rather than sitting
+beside it: **a change it cannot see is a change its snapshot could destroy.**
+Any new mutation path must go through `undoable.update`.
+
+The snapshot itself is nearly free: the planner updates state immutably, so
+the previous `AppState` already exists and is about to be dropped — keeping it
+costs a pointer, not a copy of the history.

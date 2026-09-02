@@ -36,6 +36,8 @@ import {
 } from "../../domain/sectionTimeBlocks";
 import { computeTaskProgress, formatMinutes, minTrackableMinutes } from "../../domain/taskProgress";
 import { describeWorkLoss, summarizeTaskWork, taskWithDescendantIds } from '../../domain/workSafety';
+import { useUndoableActions } from '../../hooks/useUndoableActions';
+import { UndoToast } from './UndoToast';
 import { normalizeFocusBlockMinutes, suggestedBreakMinutes } from "../../domain/focusBlocks";
 import { useTaskHandlers } from "../../hooks/useTaskHandlers";
 import { useDayBlockEditor } from "../../hooks/useDayBlockEditor";
@@ -149,7 +151,13 @@ export function DayPlanner({
   const [ownState, updateOwnState, isHydrating] = usePersistentState();
   // Use external shared state when provided; fall back to owner's state.
   const appState = externalState ?? ownState;
-  const updateAppState = (shareMode && onExternalUpdate) ? onExternalUpdate : updateOwnState;
+  const baseUpdateAppState = (shareMode && onExternalUpdate) ? onExternalUpdate : updateOwnState;
+  /**
+   * Every mutation goes through here. The undo gateway has to see all of them:
+   * a change it cannot see is a change its snapshot could destroy.
+   */
+  const undoable = useUndoableActions(appState, baseUpdateAppState);
+  const updateAppState = undoable.update;
   const [internalSelectedDay, setInternalSelectedDay] = useState<string>(todayIso);
   const isSelectedDayControlled = selectedDayProp !== undefined;
   const selectedDay = isSelectedDayControlled ? selectedDayProp : internalSelectedDay;
@@ -559,15 +567,34 @@ Delete anyway?`);
   const handleDeleteTaskGuarded = useCallback((taskId: string) => {
     const ids = taskWithDescendantIds(dayState.tasks, taskId);
     if (!confirmDeleteTasks(ids)) return;
-    handleDeleteTask(taskId);
-  }, [dayState.tasks, confirmDeleteTasks, handleDeleteTask]);
+    const title = dayState.tasks.find((t) => t.id === taskId)?.title ?? 'task';
+    undoable.run(`Deleted “${title}”`, () => handleDeleteTask(taskId));
+  }, [dayState.tasks, confirmDeleteTasks, handleDeleteTask, undoable]);
 
   const handleDeleteSelectedGuarded = useCallback(() => {
     const ids = [...selectedTaskIds].flatMap((id) => taskWithDescendantIds(dayState.tasks, id));
     if (ids.length === 0) return;
     if (!confirmDeleteTasks(ids)) return;
-    handleDeleteSelected();
-  }, [selectedTaskIds, dayState.tasks, confirmDeleteTasks, handleDeleteSelected]);
+    const count = selectedTaskIds.size;
+    undoable.run(
+      `Deleted ${count} task${count === 1 ? '' : 's'}`,
+      () => handleDeleteSelected(),
+    );
+  }, [selectedTaskIds, dayState.tasks, confirmDeleteTasks, handleDeleteSelected, undoable]);
+
+  /** Copying a day can add a dozen rows at once — easily the biggest single edit. */
+  const handleCopyFromDayUndoable = useCallback((sourceDate: string, label: string) => {
+    undoable.run(`Copied ${label.toLowerCase()}`, () => handleCopyFromDay(sourceDate));
+  }, [handleCopyFromDay, undoable]);
+
+  /** Removing a habit or quest definition takes its history off every past day. */
+  const handleSaveHabitsUndoable = useCallback((defs: Parameters<typeof handleUpdateHabitDefinitions>[0]) => {
+    undoable.run('Updated habits', () => handleUpdateHabitDefinitions(defs));
+  }, [handleUpdateHabitDefinitions, undoable]);
+
+  const handleSaveSideQuestsUndoable = useCallback((defs: Parameters<typeof handleSaveSideQuestDefs>[0]) => {
+    undoable.run('Updated side quests', () => handleSaveSideQuestDefs(defs));
+  }, [handleSaveSideQuestDefs, undoable]);
 
   /**
    * Start a block against a task from its progress row. Refuses while another
@@ -986,7 +1013,7 @@ Delete anyway?`);
                 <button
                   key={sourceDate}
                   type="button"
-                  onClick={() => handleCopyFromDay(sourceDate)}
+                  onClick={() => handleCopyFromDayUndoable(sourceDate, label)}
                   className="rounded-md border border-share-outlineVariant/40 bg-share-surfaceContainer px-2 py-1.5 text-share-onSurface hover:border-share-primary/60 hover:text-share-primary"
                   title={title}
                 >
@@ -1646,13 +1673,17 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
         editSideQuestOpen={editSideQuestOpen}
         onCloseHabits={() => setEditHabitsOpen(false)}
         onCloseSideQuests={() => setEditSideQuestOpen(false)}
-        onSaveHabits={handleUpdateHabitDefinitions}
-        onSaveSideQuests={handleSaveSideQuestDefs}
+        onSaveHabits={handleSaveHabitsUndoable}
+        onSaveSideQuests={handleSaveSideQuestsUndoable}
       />
 
       {/* Mobile bottom tab bar — owner only, not shown in shared views */}
       {!shareMode && !shareShellLayout && (
         <MobileTabBar activeTab={mobileTab} onTabChange={setMobileTab} />
+      )}
+
+      {!shareMode && (
+        <UndoToast entry={undoable.entry} onUndo={undoable.undo} onDismiss={undoable.dismiss} />
       )}
     </div>
     </FocusBlockContext.Provider>
