@@ -74,7 +74,7 @@ export function SharedPlannerShell({
       : "Shared planner: view only";
 
   return (
-    <div className="min-h-screen bg-share-bg font-shareSans text-share-onBg selection:bg-share-primary/30 pb-28 md:pb-24">
+    <div className="min-h-dvh bg-share-bg px-safe pb-28 font-shareSans text-share-onBg selection:bg-share-primary/30 md:pb-24">
       <div className="fixed top-0 z-[60] flex w-full flex-wrap items-center justify-center gap-x-3 gap-y-2 border-b border-share-primary/20 bg-share-primary/10 px-4 py-2 backdrop-blur-md">
         <MaterialIcon name="info" />
         <p className="max-w-[min(100%,42rem)] text-center text-sm font-medium text-share-primary">

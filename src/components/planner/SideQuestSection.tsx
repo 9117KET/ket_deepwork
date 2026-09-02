@@ -205,7 +205,7 @@ export function SideQuestSection({
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onManageDefs() }}
-            className="flex items-center gap-1 rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-2 py-0.5 text-[10px] text-share-onSurfaceVariant/60 hover:border-violet-500/60 hover:text-share-onSurface transition-colors"
+            className="touch-target-coarse flex items-center justify-center gap-1 rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-2 py-0.5 text-[10px] text-share-onSurfaceVariant/60 transition-colors hover:border-violet-500/60 hover:text-share-onSurface"
           >
             <Settings className="h-3 w-3" /> Manage quests
           </button>

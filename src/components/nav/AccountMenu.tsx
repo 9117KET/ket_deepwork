@@ -82,7 +82,7 @@ export function AccountMenu({
         ref={buttonRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 rounded-full border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-2 py-1 hover:border-share-primary/50"
+        className="touch-target-coarse flex items-center justify-center gap-2 rounded-full border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-2 py-1 hover:border-share-primary/50"
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={menuId}

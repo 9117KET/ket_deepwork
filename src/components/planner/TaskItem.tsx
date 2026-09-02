@@ -312,7 +312,7 @@ export function TaskItem({
             ref={menuBtnRef}
             type="button"
             onClick={handleMenuButtonClick}
-            className={`shrink-0 rounded p-0.5 text-share-onSurfaceVariant/50 hover:bg-share-surfaceContainerHigh hover:text-share-onSurfaceVariant ${isReorderable ? 'sm:hidden' : 'sm:opacity-0 sm:group-hover:opacity-100'}`}
+            className={`touch-target-coarse flex shrink-0 items-center justify-center rounded p-0.5 text-share-onSurfaceVariant/50 hover:bg-share-surfaceContainerHigh hover:text-share-onSurfaceVariant ${isReorderable ? 'sm:hidden' : 'sm:opacity-0 sm:group-hover:opacity-100'}`}
             aria-label="Task options"
           >
             <MoreVertical className="h-4 w-4" />
@@ -336,7 +336,11 @@ export function TaskItem({
             ><ArrowDown className="h-3 w-3" /></button>
           </span>
         )}
-        <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
+        {/* basis + a hard min-width give the title a floor to stand on. With
+            `flex-1` alone it shrank to nothing on phones while the duration
+            picker held its place on the same line, breaking titles a character
+            at a time ("Revie / w pull / reque / sts"). Now the row wraps. */}
+        <label className="flex min-w-[9rem] flex-1 basis-40 cursor-pointer items-center gap-2">
           <input
             type="checkbox"
             checked={task.isDone}

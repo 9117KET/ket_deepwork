@@ -216,7 +216,7 @@ export function MustDoPinnedHeader({
             <span
               role="button"
               onClick={e => { e.stopPropagation(); setShowAdd(true) }}
-              className="rounded px-1.5 py-0.5 text-[10px] text-share-onSurfaceVariant/60 hover:bg-share-surfaceContainerHigh hover:text-share-onSurface"
+              className="touch-target-coarse inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[10px] text-share-onSurfaceVariant/60 hover:bg-share-surfaceContainerHigh hover:text-share-onSurface"
             >
               + Add
             </span>

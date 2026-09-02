@@ -1,4 +1,4 @@
-import { Flame, Timer, Zap, Calendar, Scale, Moon } from 'lucide-react'
+import { Flame, Timer, Zap, Calendar, Scale, Moon, ChevronLeft, ChevronRight } from 'lucide-react'
 
 interface DayHeaderProps {
   dateLabel: string
@@ -8,7 +8,6 @@ interface DayHeaderProps {
   streak?: number
   bestStreak?: number
   daysMissed?: number
-  totalDays?: number
   onPrevDay: () => void
   onNextDay: () => void
   onToday: () => void
@@ -26,7 +25,6 @@ export function DayHeader({
   streak,
   bestStreak,
   daysMissed,
-  totalDays,
   onPrevDay,
   onNextDay,
   onToday,
@@ -48,19 +46,16 @@ export function DayHeader({
         })()
       : null
 
-  // Quiet, dot-separated secondary stats — folds the redundant badges
-  // (best streak, missed days, days-since-1st-use) into one low-weight line.
+  // Quiet, dot-separated secondary stats. Only facts that can prompt an action
+  // survive here: a best streak worth chasing, and days actually missed. The
+  // always-true counters ("0 days missed", "N days since 1st use") were pure
+  // decoration — they never changed a decision and crowded out the date.
   const secondaryStats: string[] = []
   if (bestStreak != null && bestStreak > 0 && streak != null && streak > 0 && bestStreak > streak) {
-    secondaryStats.push(`best ${bestStreak} days`)
+    secondaryStats.push(`best ${bestStreak}`)
   }
   if (daysMissed != null && daysMissed > 0) {
     secondaryStats.push(`${daysMissed} day${daysMissed !== 1 ? 's' : ''} missed`)
-  } else if (daysMissed != null && daysMissed === 0 && totalDays != null && totalDays > 0) {
-    secondaryStats.push('0 days missed')
-  }
-  if (totalDays != null && totalDays > 0) {
-    secondaryStats.push(`${totalDays} day${totalDays !== 1 ? 's' : ''} since 1st use`)
   }
   const depthLabel = depthPhilosophy
     ? depthPhilosophy === 'rhythmic'
@@ -70,105 +65,118 @@ export function DayHeader({
         : 'Bimodal'
     : null
 
+  const DepthIcon =
+    depthPhilosophy === 'rhythmic' ? Zap : depthPhilosophy === 'journalistic' ? Calendar : Scale
+  const atBest = bestStreak != null && bestStreak > 0 && streak != null && streak >= bestStreak
+  const hasMeta =
+    (streak != null && streak > 0) || deepWorkLabel || depthLabel || secondaryStats.length > 0
+
+  const navButton =
+    'touch-target flex items-center justify-center rounded-md text-share-onSurface transition-colors hover:bg-share-surfaceContainerHigh hover:text-share-primary'
+
   return (
-    <div className="mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-center sm:justify-between">
-      <div>
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <p className="text-xs uppercase tracking-wide text-share-primary/70">Today&apos;s plan</p>
-          {/* Prominent: streak + deep work today */}
-          {streak != null && streak > 0 && (
-            <span className="flex items-center gap-1 rounded border border-amber-500/50 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-200">
-              <Flame className="h-3 w-3" />
-              {streak} day streak
-              {bestStreak != null && bestStreak > 0 && streak >= bestStreak ? ' (best)' : ''}
-            </span>
-          )}
-          {deepWorkLabel && (
-            <span className="flex items-center gap-1 rounded border border-teal-500/50 bg-teal-500/10 px-2 py-0.5 text-xs font-medium text-teal-300">
-              <Timer className="h-3 w-3" />
-              {deepWorkLabel} deep today
-            </span>
-          )}
-          {depthLabel && (
-            <span className="flex items-center gap-1 text-[10px] font-medium text-violet-300/80">
-              {depthPhilosophy === 'rhythmic' ? (
-                <Zap className="h-3 w-3" />
-              ) : depthPhilosophy === 'journalistic' ? (
-                <Calendar className="h-3 w-3" />
-              ) : (
-                <Scale className="h-3 w-3" />
-              )}
-              {depthLabel}
-            </span>
-          )}
-        </div>
-        {/* Quiet secondary line — same info, lower visual weight */}
-        {secondaryStats.length > 0 && (
-          <p
-            className="mt-1 text-[11px] text-share-onSurfaceVariant/70"
-            title="Streak history and accountability stats"
-          >
-            {secondaryStats.join(' · ')}
-          </p>
+    <div className="mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-start sm:justify-between">
+      <div className="min-w-0">
+        {/* The date is the heading. The old "TODAY'S PLAN" eyebrow above it
+            restated what the page already is, and pushed the real title down. */}
+        <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">{dateLabel}</h2>
+
+        {/* One metadata line at one visual weight. These were three separately
+            bordered and filled chips in three hues (amber / teal / violet),
+            which read as three competing alerts rather than a status line.
+            Colour now survives only on the icons, as an accent rather than a
+            container. */}
+        {hasMeta && (
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-share-onSurfaceVariant">
+            {streak != null && streak > 0 && (
+              <span className="flex items-center gap-1" title="Consecutive active days">
+                <Flame className="h-3.5 w-3.5 shrink-0 text-amber-400" />
+                <span className="font-medium text-share-onBg">{streak}</span>
+                day streak{atBest ? ' · best' : ''}
+              </span>
+            )}
+            {deepWorkLabel && (
+              <span className="flex items-center gap-1" title="Deep work logged today">
+                <Timer className="h-3.5 w-3.5 shrink-0 text-teal-400" />
+                <span className="font-medium text-share-onBg">{deepWorkLabel}</span>
+                deep
+              </span>
+            )}
+            {depthLabel && (
+              <span className="flex items-center gap-1" title="Depth philosophy">
+                <DepthIcon className="h-3.5 w-3.5 shrink-0 text-violet-400/80" />
+                {depthLabel}
+              </span>
+            )}
+            {secondaryStats.length > 0 && (
+              <span className="text-share-onSurfaceVariant/60">{secondaryStats.join(' · ')}</span>
+            )}
+          </div>
         )}
-        <h2 className="text-xl sm:text-2xl font-semibold tracking-tight">{dateLabel}</h2>
+
         {totalTaskCount > 0 ? (
-          <div className="mt-2 max-w-md">
-            <div className="flex items-center justify-between text-[11px] text-share-onSurfaceVariant">
+          <div className="mt-2.5 max-w-md">
+            <div className="mb-1 flex items-center justify-between text-[11px] text-share-onSurfaceVariant">
               <span>
-                Today: <span className="font-medium text-share-onBg">{percentage.toFixed(1)}%</span>
+                <span className="font-medium text-share-onBg">
+                  {completedTaskCount}/{totalTaskCount}
+                </span>{' '}
+                tasks
               </span>
-              <span>
-                {completedTaskCount}/{totalTaskCount} tasks
-              </span>
+              {/* Whole percent: the old 42.9% implied a precision that a task
+                  count of seven does not have. */}
+              <span className="tabular-nums">{Math.round(percentage)}%</span>
             </div>
-            <div className="mt-1 h-1.5 w-full rounded-full bg-share-outlineVariant/30">
+            <div className="h-1 w-full rounded-full bg-share-outlineVariant/30">
               <div
-                className="h-1.5 rounded-full bg-share-primary transition-[width] duration-300"
+                className="h-1 rounded-full bg-share-primary transition-[width] duration-300"
                 style={{ width: `${percentage}%` }}
               />
             </div>
           </div>
         ) : null}
       </div>
-      <div className="flex items-center gap-2">
-        {onShutdown && (
-          shutdownCompleted ? (
-            <span className="flex items-center gap-1 rounded-md border border-emerald-600/50 bg-emerald-500/10 px-2.5 py-1.5 text-xs text-emerald-300">
-              <Moon className="h-3.5 w-3.5" /> Day closed
+
+      <div className="flex shrink-0 items-center gap-2">
+        {onShutdown &&
+          (shutdownCompleted ? (
+            <span className="touch-target flex items-center gap-1.5 rounded-lg border border-emerald-600/40 bg-emerald-500/10 px-2.5 text-xs text-emerald-300">
+              <Moon className="h-3.5 w-3.5 shrink-0" />
+              <span className="hidden sm:inline">Day closed</span>
             </span>
           ) : (
             <button
               type="button"
               onClick={onShutdown}
               title="Run the shutdown ritual — close the day intentionally"
-              className="flex items-center gap-1 rounded-md border border-share-outlineVariant/40 bg-share-surfaceContainer px-2.5 py-1.5 text-xs text-share-onSurfaceVariant hover:border-violet-500/60 hover:text-violet-300 transition-colors"
+              aria-label="Close day"
+              className="touch-target flex items-center gap-1.5 rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainer px-2.5 text-xs text-share-onSurfaceVariant transition-colors hover:border-violet-500/60 hover:text-violet-300"
             >
-              <Moon className="h-3.5 w-3.5" /> Close day
+              <Moon className="h-3.5 w-3.5 shrink-0" />
+              {/* Label folds away on the narrowest phones so the day nav still
+                  fits on one row at 280px. */}
+              <span className="hidden sm:inline">Close day</span>
             </button>
-          )
-        )}
-        <button
-          type="button"
-          onClick={onPrevDay}
-          className="rounded-md border border-share-outlineVariant/40 bg-share-surfaceContainer px-3 py-1.5 text-sm text-share-onSurface hover:border-share-primary/60 hover:text-share-primary transition-colors"
-        >
-          Previous
-        </button>
-        <button
-          type="button"
-          onClick={onToday}
-          className="rounded-md border border-share-primary/60 bg-share-primary/10 px-3 py-1.5 text-sm text-share-primary hover:bg-share-primary/20 transition-colors"
-        >
-          Today
-        </button>
-        <button
-          type="button"
-          onClick={onNextDay}
-          className="rounded-md border border-share-outlineVariant/40 bg-share-surfaceContainer px-3 py-1.5 text-sm text-share-onSurface hover:border-share-primary/60 hover:text-share-primary transition-colors"
-        >
-          Next
-        </button>
+          ))}
+
+        {/* Segmented control: one border around the group instead of three
+            separate outlined buttons, and chevrons instead of the words
+            "Previous" / "Next", which cost width without adding meaning. */}
+        <div className="flex items-center gap-0.5 rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainer p-0.5">
+          <button type="button" onClick={onPrevDay} aria-label="Previous day" className={navButton}>
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={onToday}
+            className="touch-target rounded-md px-3 text-sm font-medium text-share-primary transition-colors hover:bg-share-primary/15"
+          >
+            Today
+          </button>
+          <button type="button" onClick={onNextDay} aria-label="Next day" className={navButton}>
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
       </div>
     </div>
   )

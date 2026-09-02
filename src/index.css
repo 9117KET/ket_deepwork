@@ -12,7 +12,9 @@
   }
 
   #root {
-    @apply min-h-screen;
+    /* dvh tracks the mobile URL bar as it collapses; vh is the older fallback. */
+    min-height: 100vh;
+    min-height: 100dvh;
   }
 
   .material-symbols-outlined {
@@ -31,6 +33,55 @@
       rgba(0, 218, 243, 0) 70%
     );
     filter: blur(80px);
+  }
+}
+
+@layer utilities {
+  /*
+   * Safe-area insets. These resolve to 0px on every device without a notch or
+   * gesture bar, so they are safe to apply unconditionally. They only do
+   * anything because index.html sets `viewport-fit=cover` — without that meta
+   * the browser letterboxes the page and every inset reports 0.
+   */
+
+  /* Bottom-fixed chrome (tab bars). Keeps the existing visual padding on
+     ordinary screens and grows only to clear a home indicator. */
+  .pb-safe-nav {
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+  }
+
+  /* Reserve the inset as bottom margin/scroll padding for page content that
+     ends above a fixed bar. */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Landscape notches eat into the left/right edges. */
+  .px-safe {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+
+  /* Full-bleed fixed elements that must not slide under a landscape notch. */
+  .inset-x-safe {
+    left: env(safe-area-inset-left);
+    right: env(safe-area-inset-right);
+  }
+
+  /* Minimum comfortable touch target (WCAG 2.5.8 / Apple HIG = 44px).
+     Applied to controls that are otherwise visually small. */
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Same, but only on devices that actually use touch as the primary input, so
+     dense pointer-driven desktop toolbars keep their compact sizing. */
+  @media (pointer: coarse) {
+    .touch-target-coarse {
+      min-height: 44px;
+      min-width: 44px;
+    }
   }
 }
 

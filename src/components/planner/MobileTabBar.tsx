@@ -20,11 +20,11 @@ export function MobileTabBar({ activeTab, onTabChange }: MobileTabBarProps) {
     // md and lg the AppChrome sidebar (fixed, 240px) is already showing, so the
     // bar starts after it instead of spanning the full width and covering the
     // sidebar's account menu.
-    <div className="fixed bottom-0 left-0 right-0 md:left-[240px] z-[60] border-t border-share-outlineVariant/30 bg-share-bg/95 backdrop-blur-sm lg:hidden">
+    <div className="fixed bottom-0 left-0 right-0 z-[60] border-t border-share-outlineVariant/30 bg-share-bg/95 pb-safe-nav backdrop-blur-sm md:left-[240px] lg:hidden">
       <div className="flex">
         <Link
           to="/"
-          className="flex flex-1 items-center justify-center py-3 text-xs font-medium text-share-onSurfaceVariant/60 transition-colors hover:text-share-onSurface"
+          className="touch-target flex flex-1 items-center justify-center py-3 text-xs font-medium text-share-onSurfaceVariant/60 transition-colors hover:text-share-onSurface short:py-2"
           aria-label="Home"
         >
           <span className="material-symbols-outlined text-[1.1rem]">home</span>
@@ -34,7 +34,7 @@ export function MobileTabBar({ activeTab, onTabChange }: MobileTabBarProps) {
             key={tab.id}
             type="button"
             onClick={() => onTabChange(tab.id)}
-            className={`flex flex-1 items-center justify-center py-3 text-xs font-medium transition-colors ${
+            className={`touch-target flex flex-1 items-center justify-center py-3 text-xs font-medium transition-colors short:py-2 ${
               activeTab === tab.id
                 ? '-mt-px border-t-2 border-sky-500 text-sky-400'
                 : 'text-share-onSurfaceVariant/60 hover:text-share-onSurface'

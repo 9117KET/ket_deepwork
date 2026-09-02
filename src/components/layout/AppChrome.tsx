@@ -56,7 +56,7 @@ export function AppChrome({
   // Marketing / landing pages: no sidebar, simple full-width layout.
   if (hideSidebar) {
     return (
-      <div className="flex flex-col min-h-screen bg-share-bg font-shareSans text-share-onBg selection:bg-share-primary/30">
+      <div className="flex min-h-dvh flex-col bg-share-bg px-safe font-shareSans text-share-onBg selection:bg-share-primary/30">
         {topBanner}
         <main className="flex-1">{children}</main>
         {showMobileNav && (
@@ -73,7 +73,7 @@ export function AppChrome({
   }
 
   return (
-    <div className="min-h-screen bg-share-bg font-shareSans text-share-onBg selection:bg-share-primary/30 md:h-screen md:overflow-hidden">
+    <div className="min-h-dvh bg-share-bg px-safe font-shareSans text-share-onBg selection:bg-share-primary/30 md:h-dvh md:overflow-hidden">
       {/* Fixed sidebar — AppSidebar already has `hidden md:flex` so it is CSS-hidden on mobile */}
       <AppSidebar
         active={mobileActive}
@@ -84,7 +84,7 @@ export function AppChrome({
       />
 
       {/* Main area — offset by sidebar width on desktop; full-width on mobile */}
-      <div className="flex flex-col md:ml-[240px] md:h-screen md:overflow-hidden">
+      <div className="flex flex-col md:ml-[240px] md:h-dvh md:overflow-hidden">
         {/* Mobile-only header: app name + account menu / help icon */}
         {trailing && (
           <div className="flex items-center justify-between px-4 py-2.5 border-b border-share-outlineVariant/20 flex-shrink-0 md:hidden">
@@ -94,7 +94,7 @@ export function AppChrome({
                 <button
                   type="button"
                   onClick={onHelpClick}
-                  className="rounded-xl p-2 text-share-onSurfaceVariant hover:bg-share-surfaceContainerHigh transition-colors"
+                  className="touch-target flex items-center justify-center rounded-xl text-share-onSurfaceVariant transition-colors hover:bg-share-surfaceContainerHigh"
                   aria-label="Help"
                 >
                   <span className="material-symbols-outlined text-[1.25rem]">help</span>

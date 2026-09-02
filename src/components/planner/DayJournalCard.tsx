@@ -52,7 +52,7 @@ export function DayJournalCard({
     <div className="mt-3 rounded border border-share-outlineVariant/30 bg-share-surfaceContainerLow p-3">
       <button
         type="button"
-        className="flex w-full items-center gap-2 text-left"
+        className="touch-target-coarse flex w-full items-center gap-2 text-left"
         onClick={() => setCollapsed(c => !c)}
         aria-expanded={!collapsed}
       >

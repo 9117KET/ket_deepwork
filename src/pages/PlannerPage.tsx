@@ -70,7 +70,7 @@ export function PlannerPage() {
   if (!showPlanner) {
     return (
       <AppChrome mobileActive="planner" showMobileNav={false}>
-        <div className="flex min-h-[calc(100vh-8rem)] items-center justify-center px-4">
+        <div className="flex min-h-[calc(100dvh-8rem)] items-center justify-center px-4">
           <LoginForm onContinueAsGuest={() => startTransition(() => setGuest(true))} />
         </div>
       </AppChrome>

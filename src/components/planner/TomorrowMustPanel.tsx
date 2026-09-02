@@ -82,7 +82,7 @@ export function TomorrowMustPanel({ tomorrowDate, tasks, sourceMustCount = 0, on
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className="flex w-full items-center justify-between gap-2 text-left"
+        className="touch-target-coarse flex w-full items-center justify-between gap-2 text-left"
       >
         <div className="flex items-center gap-2">
           <Moon className="h-4 w-4 shrink-0 text-indigo-400" />

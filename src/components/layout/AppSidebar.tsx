@@ -35,7 +35,7 @@ const NAV_ITEMS: NavItem[] = [
 
 function navItemClass(isActive: boolean) {
   return [
-    "flex items-center gap-3 px-3 py-2.5 w-full text-sm rounded-xl transition-colors",
+    "flex w-full touch-target-coarse items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors",
     isActive
       ? "bg-share-primary/10 text-share-primary font-semibold"
       : "text-share-onSurfaceVariant hover:bg-share-surfaceContainerHigh hover:text-share-onSurface",
@@ -61,7 +61,7 @@ export function AppSidebar({
     : NAV_ITEMS;
 
   return (
-    <aside className="hidden md:flex w-[240px] shrink-0 flex-col h-screen fixed left-0 top-0 z-40 bg-[#161a1d] border-r border-share-outlineVariant/25">
+    <aside className="fixed left-0 top-0 z-40 hidden h-dvh w-[240px] shrink-0 flex-col border-r border-share-outlineVariant/25 bg-[#161a1d] md:flex">
       {/* Brand */}
       <div className="flex items-center gap-2.5 px-5 py-5 border-b border-share-outlineVariant/15">
         <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-share-primary/15">
@@ -93,7 +93,7 @@ export function AppSidebar({
           <button
             type="button"
             onClick={onHelpClick}
-            className="flex items-center gap-3 px-3 py-2.5 w-full text-sm rounded-xl text-share-onSurfaceVariant hover:bg-share-surfaceContainerHigh hover:text-share-onSurface transition-colors"
+            className="flex w-full touch-target-coarse items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-share-onSurfaceVariant transition-colors hover:bg-share-surfaceContainerHigh hover:text-share-onSurface"
           >
             <MaterialIcon name="help" className="shrink-0 text-[1.2rem]" />
             <span>Help & tips</span>
