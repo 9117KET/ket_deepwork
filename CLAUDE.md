@@ -63,15 +63,19 @@ Task
   id, title, isDone, sectionId, date
   parentId?      ← subtask; completing parent auto-completes children
   scheduledAt?   ← "HH:MM"; opt-in anchor for externally fixed times only
-  durationMinutes?    ← the planned cost; drives the 30-min progress boxes
+  durationMinutes?    ← the planned cost; drives the focus-block progress row
   manualLoggedMinutes?  ← hand-logged progress (timer minutes live on the session)
   isShallow?     ← marks logistical / non-deep work (Cal Newport)
 
 DeepWorkSession
   id, label, durationMinutes, startedAt, finishedAt?
   taskId?        ← task the block was worked against (earned progress)
-  ← recorded automatically when the sidebar timer completes
+  ← recorded when a countdown completes, or when an away block is claimed
 ```
+
+The running block is mirrored into `localStorage` under
+`deepblock_active_block_v1` (`src/storage/activeBlock.ts`) so it outlives the
+tab — see feature 8 below.
 
 `sectionId` is one of: `mustDo | morningRoutine | highPriority | mediumPriority | lowPriority | nightRoutine`
 
@@ -127,9 +131,9 @@ Streaks require at least one task created **and** at least one task completed on
 
 ### Deep Work framework (Cal Newport)
 
-Seven features built around the *Deep Work* philosophy:
+Nine features built around the *Deep Work* philosophy:
 
-1. **Session recording** — `DeepWorkTimer` in the sidebar calls `onSessionComplete(label, minutes, taskId?)` when the countdown ends. A "Working on" selector attributes the block to one of the day's trackable tasks; the selection locks while a session is running or paused. `DayPlanner.handleSessionComplete` appends a `DeepWorkSession` to `DayState.deepWorkSessions`, which is persisted via the normal Supabase sync path (`planner_days.deep_work_sessions` JSONB column).
+1. **Session recording** — `DeepWorkTimer` (first card in the sidebar) calls `onSessionComplete(label, minutes, taskId?)` when the countdown ends. A "Working on" selector attributes the block to one of the day's trackable tasks; the selection locks while a session is running or paused. `DayPlanner.handleSessionComplete` appends a `DeepWorkSession` to `DayState.deepWorkSessions`, which is persisted via the normal Supabase sync path (`planner_days.deep_work_sessions` JSONB column).
 
 2. **Daily total badge** — `DayHeader` receives `deepWorkMinutesToday` (computed by `computeDailyDeepWorkMinutes` in `stats.ts`) and renders a teal pill when > 0.
 
@@ -137,7 +141,7 @@ Seven features built around the *Deep Work* philosophy:
 
 4. **Weekly scoreboard** — `MonthlyTrackingDashboard` shows a "Deep Work This Week" card: progress bar (hours done vs. editable goal), per-day bar chart. Stats computed by `computeWeeklyDeepWorkHours` in `stats.ts`.
 
-5. **Depth philosophy** — Three chips (Rhythmic / Journalistic / Bimodal) in the tracking dashboard set `AppState.depthPhilosophy`. When set to `rhythmic`, a teal banner above the *High Priority* section shows the current deep block time window.
+5. **Depth philosophy** — Three chips (Rhythmic / Journalistic / Bimodal) in the tracking dashboard set `AppState.depthPhilosophy`. The *block length* is no longer set there — the dashboard shows a readout and the control lives under the timer's preset chips (feature 9). When set to `rhythmic`, a teal banner above the *High Priority* section shows the current deep block time window.
 
 6. **Task progress boxes** — a task with `durationMinutes >= 30` renders a row of
    30-minute boxes (`TaskProgressBoxes`), collapsing to a segmented bar past six.
@@ -158,6 +162,32 @@ Seven features built around the *Deep Work* philosophy:
    Everything keyed on `scheduledAt` — `useTimeAwareness` nudges,
    `TaskConflictModal`, calendar push in `convex/calendar.ts` — is unchanged and
    now fires only on anchored tasks.
+
+8. **Work done away from the screen** — the countdown is mirrored to
+   `localStorage` (`src/storage/activeBlock.ts`) on every state change, keyed on
+   the absolute instant it lands on. On mount `restoreTimer()` in
+   `useDeepWorkTimer` resolves it three ways: still in flight → resumes live;
+   paused → comes back paused; ran out while the app was closed → surfaces as
+   `pendingAwayBlock`, rendered by `AwayBlockClaim` at the top of the planner.
+   Claiming it calls `handleRecordAwaySession`, which writes a real
+   `DeepWorkSession` (earned, solid) against the day the block *started* on,
+   with its true start/finish instants. Discarding clears the record. Claims
+   older than `AWAY_BLOCK_MAX_AGE_MS` (12h) are dropped unasked.
+
+   For work no timer ever saw, `ManualLogPanel` in `TaskProgressSheet` logs a
+   whole stretch at once — a block stepper, or a clock range parsed by
+   `parseClockRangeMinutes` in `taskProgress.ts`. All of it still writes
+   `manualLoggedMinutes` and fills faded. Completing a trackable task with an
+   unlogged remainder raises a one-tap offer to log it by hand (12s, then it
+   expires); the row is never filled automatically. `computeWeeklySelfReportedHours`
+   shows the hand-logged total beside the weekly scoreboard, explicitly *not
+   counted* toward it.
+
+9. **Block length is set from the timer** — the preset chips pick this run's
+   length; the line under them (`BlockLengthLine`) shows `Your block: Xm on · Ym
+   off` and offers "Make Nm my block" whenever the picked length differs from
+   the configured one, calling `handleSetBlockLength` in `DayPlanner`. The
+   tracking dashboard keeps a readout only.
 
 Both `depthPhilosophy` and `deepWorkGoalHoursPerWeek` are global settings synced via `user_settings` JSONB — no migration required. `manualLoggedMinutes` and `taskId` are additive optional fields on existing JSON payloads — no migration either.
 

@@ -117,8 +117,24 @@ export function useDayBlockEditor(
 
   // Modal state: auto-open when today has no wake time; "Edit schedule" forces it open.
   const [daySetupOpen, setDaySetupOpen] = useState(false);
-  // Track which day the user explicitly skipped so we don't re-prompt automatically.
-  const [daySetupSkippedFor, setDaySetupSkippedFor] = useState<string | null>(null);
+  /**
+   * The day the user explicitly skipped, remembered for the session rather than
+   * for the render.
+   *
+   * As plain component state this reset on every reload, so "Skip for today"
+   * bought you nothing: refresh the planner and the modal was in the way again,
+   * with no way past it short of filling in a wake time. Session-scoped is the
+   * right lifetime - the skip should not follow you into tomorrow, and it
+   * should survive a refresh today.
+   */
+  const [daySetupSkippedFor, setDaySetupSkippedFor] = useState<string | null>(
+    () => readSkippedDaySetup(),
+  );
+
+  const skipDaySetupFor = useCallback((iso: string) => {
+    setDaySetupSkippedFor(iso);
+    writeSkippedDaySetup(iso);
+  }, []);
 
   const showDaySetupModal =
     !shareMode &&
@@ -304,7 +320,7 @@ export function useDayBlockEditor(
     daySetupOpen,
     setDaySetupOpen,
     daySetupSkippedFor,
-    setDaySetupSkippedFor,
+    skipDaySetupFor,
     showDaySetupModal,
     sleepWarnPending,
     setSleepWarnPending,
@@ -317,4 +333,22 @@ export function useDayBlockEditor(
     applyDurationScopeAllDays,
     handleBlockDurationChange,
   };
+}
+
+const DAY_SETUP_SKIP_KEY = 'deepblock_day_setup_skipped';
+
+function readSkippedDaySetup(): string | null {
+  try {
+    return sessionStorage.getItem(DAY_SETUP_SKIP_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writeSkippedDaySetup(iso: string): void {
+  try {
+    sessionStorage.setItem(DAY_SETUP_SKIP_KEY, iso);
+  } catch {
+    // sessionStorage unavailable (private mode) - the skip lasts this render only
+  }
 }

@@ -13,6 +13,12 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { normalizeFocusBlockMinutes } from '../../domain/focusBlocks'
+import {
+  AWAY_BLOCK_MAX_AGE_MS,
+  clearActiveBlock,
+  readActiveBlock,
+  writeActiveBlock,
+} from '../../storage/activeBlock'
 
 /** A task this session can be attributed to. */
 export interface TimerTaskOption {
@@ -42,6 +48,24 @@ export interface StartBlockRequest {
 /** Why a start request was turned down, so the caller can say so. */
 export type StartBlockResult = 'started' | 'busy'
 
+/**
+ * A block that ran to completion while the app was closed - started before you
+ * left, landed while you were out.
+ *
+ * These minutes are earned rather than self-reported: a wall clock measured an
+ * interval you committed to in advance, which is exactly what the timer does
+ * when you sit and watch it. They are still confirmed rather than recorded
+ * silently, because only you know whether you actually did the thing.
+ */
+export interface AwayBlock {
+  dayIso: string
+  taskId?: string
+  label: string
+  minutes: number
+  startedAt: string
+  finishedAt: string
+}
+
 interface UseDeepWorkTimerOptions {
   onSessionComplete?: (label: string, durationMinutes: number, taskId?: string) => void
   taskOptions?: TimerTaskOption[]
@@ -51,6 +75,10 @@ interface UseDeepWorkTimerOptions {
   blockMinutes?: number
   /** Called when a block starts from somewhere other than the timer itself. */
   onBlockStarted?: () => void
+  /** The day a block started now belongs to. */
+  dayIso?: string
+  /** Record a block that ran out while the app was closed, once confirmed. */
+  onAwayBlockConfirmed?: (block: AwayBlock) => void
 }
 
 export interface DeepWorkTimerController {
@@ -67,6 +95,12 @@ export interface DeepWorkTimerController {
   isAttributionLocked: boolean
   blockMinutes: number
   activeBlock: ActiveBlock | null
+  /** A block that finished while the app was closed, waiting to be claimed. */
+  pendingAwayBlock: AwayBlock | null
+  /** Record the pending away block as earned time. */
+  confirmAwayBlock: () => void
+  /** Throw the pending away block away - you did not do the work. */
+  discardAwayBlock: () => void
   selectTask: (taskId: string) => void
   setPreset: (minutes: number) => void
   setCustom: (raw: string) => void
@@ -108,20 +142,39 @@ export function useDeepWorkTimer({
   onSelectTask,
   blockMinutes: blockMinutesInput,
   onBlockStarted,
+  dayIso,
+  onAwayBlockConfirmed,
 }: UseDeepWorkTimerOptions): DeepWorkTimerController {
   const blockMinutes = normalizeFocusBlockMinutes(blockMinutesInput)
-  const [label, setLabel] = useState('Deep work block')
+  /**
+   * Whatever was running when the page last went away, read once at mount.
+   *
+   * Read into the initial state rather than applied by an effect: the restored
+   * countdown is not a change to react to, it is what the timer already was.
+   * Reaching for it here means the first render is already correct - no frame
+   * showing an idle 45:00 over a block that is halfway through.
+   */
+  const [restored] = useState(restoreTimer)
+
+  const [label, setLabel] = useState(restored.label ?? 'Deep work block')
   /**
    * The length the user picked for this block, or null to follow the configured
    * block length. Derived rather than synced, so changing the setting moves an
    * untouched timer without an effect writing state back into render.
    */
-  const [pickedMinutes, setPickedMinutes] = useState<number | null>(null)
+  const [pickedMinutes, setPickedMinutes] = useState<number | null>(restored.minutes ?? null)
   const durationMinutes = pickedMinutes ?? blockMinutes
   const [customInput, setCustomInput] = useState('')
-  const [status, setStatus] = useState<TimerStatus>('idle')
-  const [targetTime, setTargetTime] = useState<number | null>(null)
-  const [remainingMs, setRemainingMs] = useState<number>(0)
+  const [status, setStatus] = useState<TimerStatus>(restored.status)
+  const [targetTime, setTargetTime] = useState<number | null>(restored.targetTime)
+  const [remainingMs, setRemainingMs] = useState<number>(restored.remainingMs)
+  const [pendingAwayBlock, setPendingAwayBlock] = useState<AwayBlock | null>(restored.awayBlock)
+  /**
+   * When the running block began. Kept in a ref rather than state because
+   * nothing renders it - it exists so a session records the interval it
+   * actually covered, including one restored after the tab was gone.
+   */
+  const startedAtRef = useRef<string | null>(restored.startedAt)
 
   const options = useMemo(() => taskOptions ?? [], [taskOptions])
   // A task deleted mid-session leaves a dangling id behind; fall back to an
@@ -133,6 +186,18 @@ export function useDeepWorkTimer({
   const isAttributionLocked = status === 'running' || status === 'paused'
 
   const onSessionCompleteRef = useLatest(onSessionComplete)
+
+  /**
+   * Tell the planner which task the restored block belongs to. This is the one
+   * part of picking a block back up that cannot be an initial value: the
+   * selection lives in the parent, and it has to be told.
+   */
+  const hasAnnouncedRestoreRef = useRef(false)
+  useEffect(() => {
+    if (hasAnnouncedRestoreRef.current) return
+    hasAnnouncedRestoreRef.current = true
+    if (restored.taskId) onSelectTask?.(restored.taskId)
+  }, [restored.taskId, onSelectTask])
 
   useEffect(() => {
     if (status !== 'running' || targetTime == null) {
@@ -193,6 +258,7 @@ export function useDeepWorkTimer({
   }, [])
 
   const start = useCallback(() => {
+    startedAtRef.current = new Date().toISOString()
     setTargetTime(Date.now() + durationMinutes * 60 * 1000)
     setStatus('running')
   }, [durationMinutes])
@@ -210,6 +276,7 @@ export function useDeepWorkTimer({
   }, [status, remainingMs])
 
   const reset = useCallback(() => {
+    startedAtRef.current = null
     setStatus('idle')
     setTargetTime(null)
     setRemainingMs(0)
@@ -225,6 +292,7 @@ export function useDeepWorkTimer({
     if (status === 'running' || status === 'paused') return 'busy'
 
     const minutesToRun = Math.max(1, Math.round(request.minutes))
+    startedAtRef.current = new Date().toISOString()
     onSelectTask?.(request.taskId)
     if (request.label) setLabel(request.label)
     setPickedMinutes(minutesToRun)
@@ -266,6 +334,71 @@ export function useDeepWorkTimer({
     return null
   }, [status, targetTime, selectedTask?.id, durationMinutes, pausedRemainingMs])
 
+  /**
+   * Mirror the countdown into storage so it outlives the tab.
+   *
+   * Only the identity of the block and the instant it lands on are written -
+   * never a decrementing figure - so this fires on state changes rather than
+   * once a second. While paused the frozen remainder is the only thing worth
+   * keeping, and `pausedRemainingMs` is zero unless we are actually paused, so
+   * a running countdown does not drag this effect along with it.
+   */
+  useEffect(() => {
+    if (status === 'running' && targetTime != null) {
+      writeActiveBlock({
+        dayIso: dayIso ?? new Date().toISOString().slice(0, 10),
+        taskId: selectedTask?.id,
+        label,
+        totalMinutes: durationMinutes,
+        startedAt: startedAtRef.current ?? new Date().toISOString(),
+        status: 'running',
+        endsAt: targetTime,
+        remainingMs: 0,
+      })
+      return
+    }
+    if (status === 'paused') {
+      writeActiveBlock({
+        dayIso: dayIso ?? new Date().toISOString().slice(0, 10),
+        taskId: selectedTask?.id,
+        label,
+        totalMinutes: durationMinutes,
+        startedAt: startedAtRef.current ?? new Date().toISOString(),
+        status: 'paused',
+        endsAt: null,
+        remainingMs: pausedRemainingMs,
+      })
+      return
+    }
+    // Idle or finished: nothing left to restore. An unanswered away claim is
+    // the exception - its record is what keeps the prompt alive across a
+    // reload, so it is only cleared once the claim is resolved.
+    if (!pendingAwayBlock) clearActiveBlock()
+  }, [
+    status,
+    targetTime,
+    pausedRemainingMs,
+    label,
+    durationMinutes,
+    selectedTask?.id,
+    dayIso,
+    pendingAwayBlock,
+  ])
+
+  const confirmAwayBlock = useCallback(() => {
+    // Read the claim rather than resolving it inside the updater: StrictMode
+    // runs updaters twice, and this one records a session.
+    if (!pendingAwayBlock) return
+    onAwayBlockConfirmed?.(pendingAwayBlock)
+    setPendingAwayBlock(null)
+    clearActiveBlock()
+  }, [pendingAwayBlock, onAwayBlockConfirmed])
+
+  const discardAwayBlock = useCallback(() => {
+    setPendingAwayBlock(null)
+    clearActiveBlock()
+  }, [])
+
   return {
     label,
     setLabel,
@@ -280,6 +413,9 @@ export function useDeepWorkTimer({
     isAttributionLocked,
     blockMinutes,
     activeBlock,
+    pendingAwayBlock,
+    confirmAwayBlock,
+    discardAwayBlock,
     selectTask,
     setPreset,
     setCustom,
@@ -298,4 +434,88 @@ function useLatest<T>(value: T) {
     ref.current = value
   })
   return ref
+}
+
+/** The shape of a timer picked back up from storage. */
+interface RestoredTimer {
+  status: TimerStatus
+  targetTime: number | null
+  remainingMs: number
+  label?: string
+  minutes?: number
+  taskId?: string
+  startedAt: string | null
+  awayBlock: AwayBlock | null
+}
+
+const IDLE_TIMER: RestoredTimer = {
+  status: 'idle',
+  targetTime: null,
+  remainingMs: 0,
+  startedAt: null,
+  awayBlock: null,
+}
+
+/**
+ * Turn the stored block into the state the timer should mount with.
+ *
+ * Three outcomes. A block still in flight comes back live against its original
+ * landing instant, so walking away mid-block and coming back is seamless. A
+ * paused one comes back paused: it was frozen at an unknown moment and measures
+ * nothing until you resume it. One that ran out while the app was closed comes
+ * back as a claim rather than a session - the clock is evidence the interval
+ * passed, not that you spent it working, and only you know which.
+ */
+function restoreTimer(): RestoredTimer {
+  const stored = readActiveBlock()
+  if (!stored) return IDLE_TIMER
+
+  const shape = {
+    label: stored.label,
+    minutes: stored.totalMinutes,
+    taskId: stored.taskId,
+    startedAt: stored.startedAt,
+  }
+
+  if (stored.status === 'running' && stored.endsAt != null && stored.endsAt > Date.now()) {
+    return {
+      ...shape,
+      status: 'running',
+      targetTime: stored.endsAt,
+      remainingMs: Math.max(0, stored.endsAt - Date.now()),
+      awayBlock: null,
+    }
+  }
+
+  if (stored.status === 'paused') {
+    return {
+      ...shape,
+      status: 'paused',
+      targetTime: null,
+      remainingMs: stored.remainingMs,
+      awayBlock: null,
+    }
+  }
+
+  const finishedAt = stored.endsAt ?? Date.now()
+  if (Date.now() - finishedAt > AWAY_BLOCK_MAX_AGE_MS) {
+    // Too long ago for "did you work it?" to have an honest answer - you were
+    // asleep, or the tab sat open for two days.
+    clearActiveBlock()
+    return IDLE_TIMER
+  }
+
+  return {
+    ...IDLE_TIMER,
+    // The stored record deliberately survives until the claim is answered, so a
+    // reload cannot throw away an hour of work by losing the prompt.
+    awayBlock: {
+      dayIso: stored.dayIso,
+      taskId: stored.taskId,
+      label: stored.label,
+      minutes: stored.totalMinutes,
+      startedAt: stored.startedAt,
+      finishedAt: new Date(finishedAt).toISOString(),
+    },
+  }
 }

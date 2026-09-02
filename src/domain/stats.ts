@@ -203,6 +203,37 @@ export function computeWeeklyDeepWorkHours(
 }
 
 /**
+ * Returns hand-logged minutes for a day: time the user reported working on a
+ * task without a timer having measured it.
+ *
+ * Deliberately a separate figure from `computeDailyDeepWorkMinutes` rather than
+ * folded into it. Self-reported hours are not evidence of anything and must
+ * never inflate a deep work total. But leaving them out of every readout meant
+ * an hour honestly logged by hand vanished without explanation, which taught
+ * exactly the wrong lesson - that the way to make the scoreboard move is to
+ * stop logging honestly. Shown beside the earned figure, never added to it.
+ */
+export function computeDailySelfReportedMinutes(day: DayState | undefined): number {
+  if (!day) return 0
+  return day.tasks.reduce((sum, task) => {
+    const minutes = Math.floor(task.manualLoggedMinutes ?? 0)
+    return Number.isFinite(minutes) && minutes > 0 ? sum + minutes : sum
+  }, 0)
+}
+
+/** Hand-logged hours across a week (array of 7 ISO dates). */
+export function computeWeeklySelfReportedHours(
+  days: Record<string, DayState | undefined>,
+  weekDays: string[],
+): number {
+  const totalMinutes = weekDays.reduce(
+    (sum, iso) => sum + computeDailySelfReportedMinutes(days[iso]),
+    0,
+  )
+  return totalMinutes / 60
+}
+
+/**
  * Returns deep work hours accumulated across all days that belong to the given
  * month. monthIso must be in "YYYY-MM" format.
  */

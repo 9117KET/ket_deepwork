@@ -196,3 +196,31 @@ export function formatMinutes(minutes: number): string {
   const rest = minutes % 60
   return rest === 0 ? `${hours}h` : `${hours}h${rest}`
 }
+
+/**
+ * Minutes between two "HH:MM" clock times, or null when the pair says nothing
+ * usable.
+ *
+ * Used for hand-logging a stretch of work by the times it actually ran between,
+ * which is how anyone remembers time spent away from the desk. An end before
+ * the start is read as a stretch that ran past midnight - a late block
+ * genuinely does - rather than rejected as backwards.
+ */
+export function parseClockRangeMinutes(from: string, to: string): number | null {
+  const start = parseClock(from)
+  const end = parseClock(to)
+  if (start == null || end == null) return null
+  // Identical times are a half-finished entry, not a 24-hour stretch.
+  if (start === end) return null
+  return end > start ? end - start : end + 24 * 60 - start
+}
+
+/** "HH:MM" as minutes past midnight, or null when it is not a clock time. */
+function parseClock(value: string): number | null {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(value.trim())
+  if (!match) return null
+  const hours = Number(match[1])
+  const mins = Number(match[2])
+  if (hours > 23 || mins > 59) return null
+  return hours * 60 + mins
+}

@@ -34,7 +34,7 @@ import {
   computeSleepWindow,
   formatTimeOfDay,
 } from "../../domain/sectionTimeBlocks";
-import { computeTaskProgress, minTrackableMinutes } from "../../domain/taskProgress";
+import { computeTaskProgress, formatMinutes, minTrackableMinutes } from "../../domain/taskProgress";
 import { normalizeFocusBlockMinutes, suggestedBreakMinutes } from "../../domain/focusBlocks";
 import { useTaskHandlers } from "../../hooks/useTaskHandlers";
 import { useDayBlockEditor } from "../../hooks/useDayBlockEditor";
@@ -72,6 +72,7 @@ import { getDailyQuestSelection } from "../../domain/sideQuestAlgorithm";
 import { MobileTabBar, type MobileTab } from "./MobileTabBar";
 import { ActiveTripBanner } from "./ActiveTripBanner";
 import { DaySummaryCard } from "./DaySummaryCard";
+import { AwayBlockClaim } from "./AwayBlockClaim";
 import { useActiveTripStatus } from "../../hooks/useActiveTripStatus";
 import { ErrorBoundary } from "../ErrorBoundary";
 import { useDayContext } from "../../hooks/useDayContext";
@@ -237,7 +238,7 @@ export function DayPlanner({
     handleDragEnd,
     handleDrop,
     handleAddTask,
-    handleToggleTask,
+    handleToggleTask: handleToggleTaskBase,
     handleDeleteTask,
     handleAddTaskAbove,
     handleAddTaskBelow,
@@ -250,6 +251,7 @@ export function DayPlanner({
     handleToggleSideQuestCompletion,
     handleSaveSideQuestDefs,
     handleSessionComplete,
+    handleRecordAwaySession,
     handleAdjustManualMinutes,
     handleMoveToNotDoing,
     handleAbandonTask,
@@ -488,6 +490,10 @@ export function DayPlanner({
 
   /** Why a chip could not start a block, shown briefly. */
   const [blockNotice, setBlockNotice] = useState<string | null>(null);
+  /** A just-completed task whose progress row is short, offered for logging. */
+  const [completionClaim, setCompletionClaim] = useState<
+    { taskId: string; title: string; minutes: number } | null
+  >(null);
 
   /** The unit the whole planner counts in: one block, one run of the timer. */
   const blockMinutes = normalizeFocusBlockMinutes(appState.focusBlockMinutes);
@@ -527,6 +533,8 @@ export function DayPlanner({
     selectedTaskId: timerTaskId,
     onSelectTask: setTimerTaskId,
     blockMinutes,
+    dayIso: selectedDay,
+    onAwayBlockConfirmed: handleRecordAwaySession,
   });
 
   /**
@@ -548,6 +556,45 @@ export function DayPlanner({
     const id = window.setTimeout(() => setBlockNotice(null), 4000);
     return () => window.clearTimeout(id);
   }, [blockNotice]);
+
+  /**
+   * Completing a task is the last moment anyone remembers how long it took, so
+   * it is the moment to ask - a task ticked off with an empty progress row is
+   * work that happened and left no trace.
+   *
+   * Asked, never assumed. Filling the row automatically on completion would
+   * make it a record of what was planned rather than what was done, and within
+   * a week the distinction the row exists to draw would be worthless. So the
+   * offer is one tap, it lands faded like anything else self-reported, and
+   * ignoring it costs nothing.
+   */
+  const handleToggleTask = useCallback((taskId: string) => {
+    const task = dayState.tasks.find((t) => t.id === taskId);
+    handleToggleTaskBase(taskId);
+    if (!task || task.isDone || shareMode) return;
+    const progress = computeTaskProgress(task, dayState.deepWorkSessions, blockMinutes);
+    if (!progress) return;
+    const unlogged = progress.goalMinutes - progress.totalMinutes;
+    if (unlogged <= 0) return;
+    setCompletionClaim({ taskId, title: task.title, minutes: unlogged });
+  }, [dayState.tasks, dayState.deepWorkSessions, blockMinutes, handleToggleTaskBase, shareMode]);
+
+  // The offer expires on its own: an unanswered prompt is an answer of "no",
+  // and a prompt that waits forever turns into a nag.
+  useEffect(() => {
+    if (!completionClaim) return;
+    const id = window.setTimeout(() => setCompletionClaim(null), 12000);
+    return () => window.clearTimeout(id);
+  }, [completionClaim]);
+
+  /**
+   * Adopt a length as the configured focus block. The break moves with it
+   * unless it has already been set by hand elsewhere - a 90-minute block with a
+   * 5-minute break is not a setting anyone chose.
+   */
+  const handleSetBlockLength = useCallback((minutes: number, breakLength: number) => {
+    handleTrackingUpdateSettings({ focusBlockMinutes: minutes, focusBreakMinutes: breakLength });
+  }, [handleTrackingUpdateSettings]);
 
   const focusBlockValue = useMemo(() => ({
     blockMinutes,
@@ -700,12 +747,57 @@ export function DayPlanner({
   return (
     <FocusBlockContext.Provider value={focusBlockValue}>
     <div className="space-y-4 sm:space-y-6">
+      {/* A block that ran out while the app was closed, waiting to be claimed.
+          Above everything else: it is about work already done, and answering it
+          is one tap. */}
+      {timer.pendingAwayBlock && (
+        <AwayBlockClaim
+          block={timer.pendingAwayBlock}
+          taskTitle={
+            appState.days[timer.pendingAwayBlock.dayIso]?.tasks.find(
+              (t) => t.id === timer.pendingAwayBlock?.taskId,
+            )?.title
+          }
+          onConfirm={timer.confirmAwayBlock}
+          onDiscard={timer.discardAwayBlock}
+        />
+      )}
       {blockNotice && (
         <div
           role="status"
           className="fixed inset-x-3 bottom-20 z-[70] mx-auto max-w-sm rounded-lg border border-amber-500/40 bg-share-surfaceContainerHigh px-3 py-2 text-center text-xs text-amber-200 shadow-lg lg:bottom-6"
         >
           {blockNotice}
+        </div>
+      )}
+      {completionClaim && (
+        <div
+          role="status"
+          className="fixed inset-x-3 bottom-20 z-[70] mx-auto max-w-sm rounded-lg border border-share-outlineVariant/50 bg-share-surfaceContainerHigh px-3 py-2.5 shadow-lg lg:bottom-6"
+        >
+          <p className="text-xs text-share-onSurface">
+            <span className="font-medium">{completionClaim.title}</span> done with{" "}
+            {formatMinutes(completionClaim.minutes)} unlogged.
+          </p>
+          <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                handleAdjustManualMinutes(completionClaim.taskId, completionClaim.minutes);
+                setCompletionClaim(null);
+              }}
+              className="min-h-[32px] flex-1 rounded-md border border-share-outlineVariant/60 bg-share-surfaceContainer px-2 py-1 text-xs text-share-onSurface hover:border-share-primary/60 hover:text-share-primary"
+            >
+              Log {formatMinutes(completionClaim.minutes)} by hand
+            </button>
+            <button
+              type="button"
+              onClick={() => setCompletionClaim(null)}
+              className="min-h-[32px] rounded-md px-2 py-1 text-xs text-share-onSurfaceVariant hover:text-share-onSurface"
+            >
+              No
+            </button>
+          </div>
         </div>
       )}
       <div
@@ -1238,20 +1330,25 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
             />
 
             <div className="hidden lg:block space-y-3 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto lg:pr-1" data-tour="sidebar">
+              {/* Deep work timer first: it is the only card in this column you
+                  reach for while working rather than while planning, and it now
+                  carries the block-length setting too. */}
+              {!shareMode && (
+                <SidebarCard cardId="deepWorkTimer" title="Deep work timer">
+                  <div className="space-y-3">
+                    <DeepWorkTimer
+                      timer={timer}
+                      breakMinutes={breakMinutes}
+                      onSetBlockLength={handleSetBlockLength}
+                    />
+                    <MotivationCard />
+                  </div>
+                </SidebarCard>
+              )}
               {/* Cross-section day snapshot */}
               {!shareMode && (
                 <SidebarCard cardId="daySummary" title="Day snapshot">
                   <DaySummaryCard ctx={dayCtx} />
-                </SidebarCard>
-              )}
-              {/* Deep work timer: most-used active tool. Motivation lives here too
-                  (a nudge while you work) rather than as its own card. */}
-              {!shareMode && (
-                <SidebarCard cardId="deepWorkTimer" title="Deep work timer">
-                  <div className="space-y-3">
-                    <DeepWorkTimer timer={timer} />
-                    <MotivationCard />
-                  </div>
                 </SidebarCard>
               )}
               {!shareMode && (
@@ -1332,7 +1429,11 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
         <>
           {mobileTab === 'timer' && (
             <div className="mt-3 lg:hidden">
-              <DeepWorkTimer timer={timer} />
+              <DeepWorkTimer
+                timer={timer}
+                breakMinutes={breakMinutes}
+                onSetBlockLength={handleSetBlockLength}
+              />
             </div>
           )}
           {mobileTab === 'habits' && (

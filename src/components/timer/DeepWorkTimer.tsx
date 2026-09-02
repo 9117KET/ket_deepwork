@@ -9,20 +9,35 @@
  * ladder of minutes, and the configured block is marked, because that length is
  * what a task's progress row is drawn in. Running something else is allowed -
  * it just fills part of a block instead of one exactly.
+ *
+ * Which length is *yours* is set from here too, on the line under the presets.
+ * It used to live at the bottom of the monthly tracking dashboard, a screen
+ * away from the only control it affects. Deciding your block length is
+ * something you do while looking at the timer and thinking "45 is too short" -
+ * so the decision belongs next to the chips that just proved it, and the chip
+ * you are already reaching for is the one that sets it.
  */
 
 import type { FormEvent } from 'react'
 import { CheckCircle } from 'lucide-react'
-import { FOCUS_BLOCK_PRESETS } from '../../domain/focusBlocks'
+import { FOCUS_BLOCK_PRESETS, suggestedBreakMinutes } from '../../domain/focusBlocks'
 import type { DeepWorkTimerController } from './useDeepWorkTimer'
 
 export type { TimerTaskOption } from './useDeepWorkTimer'
 
 interface DeepWorkTimerProps {
   timer: DeepWorkTimerController
+  /** The rest that goes with the configured block, shown alongside it. */
+  breakMinutes?: number
+  /**
+   * Adopt a length as the configured block. Omitted in share mode and anywhere
+   * else the setting is not the viewer's to change, which hides the control
+   * rather than showing a dead one.
+   */
+  onSetBlockLength?: (minutes: number, breakMinutes: number) => void
 }
 
-export function DeepWorkTimer({ timer }: DeepWorkTimerProps) {
+export function DeepWorkTimer({ timer, breakMinutes, onSetBlockLength }: DeepWorkTimerProps) {
   const {
     label,
     setLabel,
@@ -158,6 +173,14 @@ export function DeepWorkTimer({ timer }: DeepWorkTimerProps) {
           />
         </div>
 
+        <BlockLengthLine
+          durationMinutes={durationMinutes}
+          blockMinutes={blockMinutes}
+          breakMinutes={breakMinutes ?? suggestedBreakMinutes(blockMinutes)}
+          disabled={isRunning}
+          onSetBlockLength={onSetBlockLength}
+        />
+
         {status === 'finished' ? (
           <div className="rounded-md border border-teal-500/40 bg-teal-500/10 px-3 py-2.5">
             <div className="flex items-center gap-2 text-teal-300">
@@ -228,5 +251,59 @@ export function DeepWorkTimer({ timer }: DeepWorkTimerProps) {
         </div>
       </form>
     </section>
+  )
+}
+
+/**
+ * What your block is, and the one-tap way to change it to whatever you just
+ * picked.
+ *
+ * The offer only appears when the two disagree, because that is the only
+ * moment the question is live - you have reached for 60m twice in a row and
+ * the planner is still drawing your tasks in 45s. The warning is not
+ * decoration: the block length is the unit every progress row is drawn in, so
+ * changing it re-buckets work already logged. Nothing is lost, but the shape of
+ * every row changes, and that is worth saying before the tap rather than after.
+ */
+function BlockLengthLine({
+  durationMinutes,
+  blockMinutes,
+  breakMinutes,
+  disabled,
+  onSetBlockLength,
+}: {
+  durationMinutes: number
+  blockMinutes: number
+  breakMinutes: number
+  disabled: boolean
+  onSetBlockLength?: (minutes: number, breakMinutes: number) => void
+}) {
+  const differs = durationMinutes !== blockMinutes
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-share-onSurfaceVariant/70">
+      <span className="flex items-center gap-1">
+        <span
+          aria-hidden
+          className="h-1.5 w-1.5 shrink-0 rounded-full bg-teal-400"
+        />
+        Your block: {blockMinutes}m on · {breakMinutes}m off
+      </span>
+      {onSetBlockLength && differs && (
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => onSetBlockLength(durationMinutes, suggestedBreakMinutes(durationMinutes))}
+          title="Draw every task's progress row in blocks of this length. Work already logged re-buckets; nothing is lost."
+          className={`rounded-full border border-share-outlineVariant/40 px-2 py-0.5 transition-colors ${
+            disabled
+              ? 'cursor-not-allowed opacity-50'
+              : 'hover:border-teal-500/60 hover:text-teal-300'
+          }`}
+        >
+          Make {durationMinutes}m my block
+        </button>
+      )}
+    </div>
   )
 }
