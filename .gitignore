@@ -33,3 +33,6 @@ dist-ssr
 # Playwright e2e artifacts
 test-results
 playwright-report
+
+# Claude Code agent worktrees (local scratch, not project files)
+.claude/worktrees/
