@@ -17,6 +17,17 @@ e2e (`npm run test:e2e`). CI runs `lint` then `build` on push/PR to `main`.
 On Windows the `build` script (`tsc -b && vite build`) fails under PowerShell 5,
 which rejects `&&`. Run `npx tsc -b` and `npx vite build` separately there.
 
+## Data safety
+
+`docs/data-safety.md` is the register of actions that can destroy recorded work,
+which guards exist, and which gaps are still open. Read it before touching a
+delete path, the deep work timer, or anything that writes `deepWorkSessions`.
+
+The one rule underneath it: **worked minutes are sacred**. A task can be
+retyped; ninety minutes you actually sat and worked cannot be recovered once the
+record is gone. Rules live in `src/domain/workSafety.ts` with unit tests
+alongside; behaviour is pinned by `e2e/work-safety.spec.ts`.
+
 ## Design
 
 `docs/design/` holds the mobile and desktop redesign source (one `.dc.html` per
