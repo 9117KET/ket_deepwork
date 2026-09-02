@@ -816,7 +816,6 @@ export function DayPlanner({
           streak={accountabilityStats.streak}
           bestStreak={accountabilityStats.bestStreak}
           daysMissed={shareMode ? undefined : accountabilityStats.daysMissed}
-          totalDays={shareMode ? undefined : accountabilityStats.totalDays}
           onPrevDay={() => setSelectedDay((current) => addDays(current, -1))}
           onNextDay={() => setSelectedDay((current) => addDays(current, 1))}
           onToday={() => setSelectedDay(todayIso())}
@@ -1288,7 +1287,7 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
                   <button
                     type="button"
                     onClick={() => setDaySetupOpen(true)}
-                    className="rounded border border-share-outlineVariant/40 bg-share-surfaceContainer px-2 py-1 text-xs text-share-onSurface hover:border-share-primary/50 hover:text-share-primary"
+                    className="touch-target-coarse rounded border border-share-outlineVariant/40 bg-share-surfaceContainer px-2 py-1 text-xs text-share-onSurface hover:border-share-primary/50 hover:text-share-primary"
                   >
                     Edit schedule
                   </button>
@@ -1329,7 +1328,7 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
               aria-hidden="true"
             />
 
-            <div className="hidden lg:block space-y-3 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto lg:pr-1" data-tour="sidebar">
+            <div className="hidden lg:block space-y-3 lg:sticky lg:top-4 lg:max-h-[calc(100dvh-2rem)] lg:overflow-y-auto lg:pr-1" data-tour="sidebar">
               {/* Deep work timer first: it is the only card in this column you
                   reach for while working rather than while planning, and it now
                   carries the block-length setting too. */}
@@ -1457,7 +1456,7 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
             </div>
           )}
           {/* Spacer so content doesn't hide behind the fixed MobileTabBar */}
-          <div className="h-12 lg:hidden" />
+          <div className="h-16 pb-safe lg:hidden" />
         </>
       )}
 

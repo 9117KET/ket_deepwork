@@ -278,7 +278,7 @@ export function SectionColumn({
           <button
             type="button"
             onClick={() => { setCollapsed((c) => { persistCollapsed(!c); return !c }); setPendingCollapse(null) }}
-            className="mt-0.5 shrink-0 text-share-onSurfaceVariant hover:text-share-onSurface"
+            className="touch-target-coarse -ml-2 mt-0.5 flex shrink-0 items-center justify-center text-share-onSurfaceVariant hover:text-share-onSurface sm:ml-0"
             aria-label={collapsed ? 'Expand section' : 'Collapse section'}
           >
             {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}

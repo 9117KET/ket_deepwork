@@ -111,7 +111,7 @@ export function GoalCascadeSection({ goalCascade, onUpdate }: GoalCascadeSection
     <div className="mb-3 rounded border border-violet-900/40 bg-share-surfaceContainerLow p-3">
       <button
         type="button"
-        className="flex w-full items-center justify-between gap-2"
+        className="touch-target-coarse flex w-full items-center justify-between gap-2"
         onClick={() => setCollapsed((c) => !c)}
         aria-expanded={!collapsed}
       >

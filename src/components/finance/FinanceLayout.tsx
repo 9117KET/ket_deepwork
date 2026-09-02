@@ -56,7 +56,7 @@ export function FinanceLayout({ activeTab, onTabChange, children }: FinanceLayou
               type="button"
               onClick={() => onTabChange(tab.id)}
               className={[
-                'flex items-center justify-center gap-1.5 px-2 py-2.5 text-xs font-medium transition-colors border-b-2 -mb-px',
+                '-mb-px flex touch-target-coarse items-center justify-center gap-1.5 border-b-2 px-2 py-2.5 text-xs font-medium transition-colors',
                 isActive
                   ? 'border-share-primary text-share-primary'
                   : 'border-transparent text-share-onSurfaceVariant hover:text-share-onBg hover:border-share-outlineVariant',
@@ -100,7 +100,7 @@ export function SubTabBar<T extends string>({
           type="button"
           onClick={() => onChange(sub.id)}
           className={[
-            'flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-medium transition-colors',
+            'flex flex-1 touch-target-coarse items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-medium transition-colors',
             active === sub.id
               ? 'bg-share-surfaceContainerHigh text-share-onBg'
               : 'text-share-onSurfaceVariant hover:text-share-onBg',

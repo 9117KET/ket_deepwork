@@ -337,3 +337,166 @@ test.describe('desktop keeps the full-width copy', () => {
     expect(all, 'desktop copy lost the sidebar wording').toMatch(/\bthe sidebar\b|Sidebar:/i)
   })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Device-compatibility foundations
+//
+// The checks above prove the app fits one iPhone-class viewport. These prove it
+// survives the rest of the spread: the narrowest screens still shipping, a
+// phone turned sideways, notched devices, and fingers instead of a cursor.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Widths that actually break layouts, smallest first:
+ *  - 280px  Galaxy Fold cover screen / very old Android
+ *  - 320px  iPhone SE (1st gen), the classic floor
+ *  - 360px  the most common Android width in the world
+ *  - 844x390 a phone held sideways: wide, but only ~390px tall
+ */
+const DEVICE_MATRIX = [
+  { name: 'Fold cover', width: 280, height: 653 },
+  { name: 'iPhone SE', width: 320, height: 568 },
+  { name: 'Android', width: 360, height: 740 },
+  { name: 'landscape phone', width: 844, height: 390 },
+] as const
+
+for (const device of DEVICE_MATRIX) {
+  for (const route of ['/planner', '/finance'] as const) {
+    test(`${route} fits a ${device.name} (${device.width}x${device.height})`, async ({ page }) => {
+      await page.setViewportSize({ width: device.width, height: device.height })
+      await injectGuestState(page)
+      await page.goto(route)
+      await settle(page)
+
+      const scrollW = await page.evaluate(() => document.documentElement.scrollWidth)
+      const offenders = await overflowingElements(page, device.width)
+      expect(
+        scrollW,
+        `${route} scrolls sideways on a ${device.name} (${scrollW} > ${device.width}).\n` +
+          `Offenders:\n${JSON.stringify(offenders, null, 2)}`,
+      ).toBeLessThanOrEqual(device.width + 1)
+    })
+  }
+}
+
+/**
+ * Controls that are too small to hit reliably with a thumb (WCAG 2.5.8 /
+ * Apple HIG both land on 44px).
+ *
+ * Two exceptions are deliberate and are skipped here, because both are carved
+ * out by WCAG 2.5.8 itself:
+ *  - "inline": a button sitting inside a sentence (the editable "20h" weekly
+ *    goal, the "Friday" review day). Padding these to 44px would tear the
+ *    prose apart.
+ *  - the 31-column month grid, which cannot give every cell 44px on a phone
+ *    (that is 1364px of row) and instead lives in a horizontal scroller. Its
+ *    cells were still lifted from 24px to 32px on touch.
+ */
+async function undersizedTouchTargets(page: Page) {
+  return page.evaluate(() => {
+    const MIN = 44
+    const out: { label: string; size: string; html: string }[] = []
+    const selector = 'button, a, [role=button], input[type=checkbox], select'
+    for (const el of Array.from(document.querySelectorAll(selector))) {
+      const box = el.getBoundingClientRect()
+      if (box.width === 0 || box.height === 0) continue
+      if (getComputedStyle(el).visibility === 'hidden') continue
+      if (box.height >= MIN && box.width >= MIN) continue
+
+      // Exception: inside a deliberate horizontal scroller (the month grid).
+      let parent: Element | null = el.parentElement
+      let inScroller = false
+      while (parent && parent !== document.body) {
+        const overflowX = getComputedStyle(parent).overflowX
+        if (overflowX === 'auto' || overflowX === 'scroll') { inScroller = true; break }
+        parent = parent.parentElement
+      }
+      if (inScroller) continue
+
+      // Exception: inline in prose — the parent holds its own text around it.
+      const siblingText = Array.from(el.parentElement?.childNodes ?? []).some(
+        (n) => n.nodeType === Node.TEXT_NODE && (n.textContent ?? '').trim().length > 0,
+      )
+      if (siblingText) continue
+
+      out.push({
+        label:
+          (el as HTMLElement).innerText?.trim().split('\n')[0] ||
+          el.getAttribute('aria-label') ||
+          el.tagName,
+        size: `${Math.round(box.width)}x${Math.round(box.height)}`,
+        html: el.outerHTML.slice(0, 140),
+      })
+    }
+    return out
+  })
+}
+
+for (const route of ['/planner', '/finance'] as const) {
+  test(`${route} controls are thumb-sized on touch devices`, async ({ page }) => {
+    await injectGuestState(page)
+    await page.goto(route)
+    await settle(page)
+
+    const tiny = await undersizedTouchTargets(page)
+    expect(
+      tiny,
+      `${route} has ${tiny.length} control(s) under 44x44 on a touch device:\n` +
+        JSON.stringify(tiny.slice(0, 12), null, 2),
+    ).toEqual([])
+  })
+}
+
+test('the page opts into the display cutout and pads for it', async ({ page }) => {
+  // Without `viewport-fit=cover` the browser letterboxes the page and every
+  // env(safe-area-inset-*) resolves to 0, silently disabling all of the
+  // padding below. The meta tag and the rules are a pair; assert both.
+  await injectGuestState(page)
+  await page.goto('/planner')
+  await settle(page)
+
+  const viewportMeta = await page.getAttribute('meta[name="viewport"]', 'content')
+  expect(viewportMeta, 'viewport meta must opt into the display cutout').toContain(
+    'viewport-fit=cover',
+  )
+
+  const usesSafeArea = await page.evaluate(() =>
+    Array.from(document.styleSheets).some((sheet) => {
+      try {
+        return Array.from(sheet.cssRules).some((rule) =>
+          rule.cssText.includes('safe-area-inset'),
+        )
+      } catch {
+        return false // cross-origin sheet (fonts)
+      }
+    }),
+  )
+  expect(usesSafeArea, 'no stylesheet references safe-area-inset').toBe(true)
+})
+
+test('a landscape phone still shows content, not just chrome', async ({ page }) => {
+  // 390px of height minus a header and a fixed tab bar leaves very little; the
+  // tab bar trims its padding and drops its labels via the `short:` breakpoint.
+  await page.setViewportSize({ width: 844, height: 390 })
+  await injectGuestState(page)
+  await page.goto('/planner')
+  await settle(page)
+
+  const chrome = await page.evaluate(() => {
+    let fixedHeight = 0
+    for (const el of Array.from(document.querySelectorAll('nav, div, header, footer'))) {
+      const cs = getComputedStyle(el)
+      if (cs.position !== 'fixed') continue
+      const r = el.getBoundingClientRect()
+      if (r.height === 0 || r.height > 200) continue
+      // Only bars pinned to the top or bottom edge.
+      if (r.top <= 1 || r.bottom >= window.innerHeight - 1) fixedHeight += r.height
+    }
+    return { fixedHeight, vh: window.innerHeight }
+  })
+
+  expect(
+    chrome.fixedHeight,
+    `fixed chrome eats ${Math.round(chrome.fixedHeight)}px of a ${chrome.vh}px-tall screen`,
+  ).toBeLessThan(chrome.vh * 0.3)
+})

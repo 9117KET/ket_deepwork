@@ -113,6 +113,35 @@ tab — see feature 8 below.
 
 `sectionId` is one of: `mustDo | morningRoutine | highPriority | mediumPriority | lowPriority | nightRoutine`
 
+### Responsive foundations
+
+Mobile-first, and "mobile" means the whole spread — 280px Fold cover screens up
+to 1920px, phones held sideways, and notched devices. Four rules, each with a
+gate in `e2e/mobile-responsive.spec.ts`:
+
+1. **`viewport-fit=cover` and safe-area insets are a pair.** `index.html` opts
+   into the display cutout; without that meta every `env(safe-area-inset-*)`
+   silently resolves to 0 and the padding below does nothing. Bottom-fixed
+   chrome uses `.pb-safe-nav` (`max(0.5rem, inset)`) so it keeps its ordinary
+   padding on flat screens and only grows to clear a home indicator. Fixed
+   elements cannot inherit the shell's `px-safe`, so `AppMobileNav` sets its own
+   left/right insets inline for landscape notches.
+2. **`dvh`, never `vh`.** `100vh` on a phone includes the URL bar that is about
+   to collapse, so the bottom of a `h-screen` layout is cut off. `#root` sets
+   `100vh` then `100dvh` (older browsers keep the first).
+3. **44px touch targets** (WCAG 2.5.8 / Apple HIG). Use `.touch-target` when a
+   control should always be thumb-sized, and `.touch-target-coarse` — gated on
+   `(pointer: coarse)` — for dense rows that should stay compact under a mouse.
+   Two exceptions are deliberate and skipped by the gate: buttons inline in a
+   sentence, and the 31-column month grid (44px cells would be a 1364px row, so
+   it lives in a horizontal scroller and its cells lift 24px → 32px on touch).
+4. **Landscape phones are short, not narrow.** The `short:` breakpoint
+   (`max-height: 500px`) trims vertical chrome; `touch:` targets coarse pointers.
+   Fixed chrome must stay under 30% of a 390px-tall screen.
+
+Utilities live in `src/index.css` under `@layer utilities`; breakpoints in
+`tailwind.config.js`.
+
 ### Routing (`src/App.tsx` + `src/main.tsx`)
 
 `main.tsx` wraps the app in `<BrowserRouter>` + `<AuthProvider>`. `App.tsx` handles:

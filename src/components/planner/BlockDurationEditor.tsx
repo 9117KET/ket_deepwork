@@ -92,7 +92,7 @@ export function BlockDurationEditor({
     <div ref={containerRef} className="relative">
       <button
         onClick={() => { setDraft(currentDuration); setOpen((v) => !v) }}
-        className="flex items-center gap-1 text-xs text-share-onSurfaceVariant/60 hover:text-share-primary"
+        className="touch-target-coarse flex items-center justify-center gap-1 text-xs text-share-onSurfaceVariant/60 hover:text-share-primary"
         title="Adjust block duration"
       >
         <MaterialIcon name="edit" className="text-sm" />

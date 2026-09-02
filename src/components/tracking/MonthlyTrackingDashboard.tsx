@@ -198,7 +198,7 @@ export function MonthlyTrackingDashboard({
           <button
             type="button"
             onClick={() => setSelectedMonthId(previousMonthId(selectedMonthId))}
-            className="rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-2 py-1 text-xs text-share-onSurface hover:border-sky-600 hover:text-sky-300"
+            className="touch-target-coarse rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-2 py-1 text-xs text-share-onSurface hover:border-sky-600 hover:text-sky-300"
             aria-label="Previous month"
           >
             ←
@@ -209,7 +209,7 @@ export function MonthlyTrackingDashboard({
           <button
             type="button"
             onClick={() => setSelectedMonthId(nextMonthId(selectedMonthId))}
-            className="rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-2 py-1 text-xs text-share-onSurface hover:border-sky-600 hover:text-sky-300"
+            className="touch-target-coarse rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-2 py-1 text-xs text-share-onSurface hover:border-sky-600 hover:text-sky-300"
             aria-label="Next month"
           >
             →
@@ -340,7 +340,7 @@ export function MonthlyTrackingDashboard({
                     key={p}
                     type="button"
                     onClick={() => onUpdateSettings({ depthPhilosophy: state.depthPhilosophy === p ? undefined : p })}
-                    className={`rounded border px-2 py-0.5 text-xs capitalize transition-colors ${
+                    className={`touch-target-coarse rounded border px-2 py-0.5 text-xs capitalize transition-colors ${
                       state.depthPhilosophy === p
                         ? 'border-teal-500 bg-teal-500/20 text-teal-300'
                         : 'border-share-outlineVariant/40 bg-share-surfaceContainerHigh text-share-onSurfaceVariant hover:border-share-outlineVariant/60 hover:text-share-onBg'
@@ -362,7 +362,7 @@ export function MonthlyTrackingDashboard({
                     setEditingReviewDay(false)
                   }}
                   onBlur={() => setEditingReviewDay(false)}
-                  className="rounded border border-sky-600 bg-share-surfaceContainerHigh px-2 py-0.5 text-xs text-share-onBg focus:outline-none"
+                  className="touch-target-coarse rounded border border-sky-600 bg-share-surfaceContainerHigh px-2 py-0.5 text-xs text-share-onBg focus:outline-none"
                 >
                   {([1,2,3,4,5,6,7] as const).map(d => (
                     <option key={d} value={d}>{weekdayName(d)}</option>
@@ -372,7 +372,7 @@ export function MonthlyTrackingDashboard({
                 <button
                   type="button"
                   onClick={() => setEditingReviewDay(true)}
-                  className="rounded px-1 text-xs text-sky-400 underline decoration-dotted hover:text-sky-300"
+                  className="touch-target-coarse rounded px-1 text-left text-xs text-sky-400 underline decoration-dotted hover:text-sky-300"
                   title="Click to change weekly review day"
                 >
                   {weekdayName(state.weeklyReviewDay ?? 5)}
@@ -821,7 +821,7 @@ function BlockCompletionGrid({
                 const isOpen = moodPickerDay === isoDate
                 return (
                   <td key={isoDate} className={`${dayBodyCell} align-top bg-share-surfaceContainerHigh`}>
-                    <div className="relative flex h-6 w-full items-center justify-center">
+                    <div className="relative flex h-6 w-full items-center justify-center touch:h-8">
                       <button
                         type="button"
                         onClick={() =>

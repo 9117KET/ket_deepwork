@@ -3,6 +3,16 @@ export default {
   content: ['./index.html', './src/**/*.{ts,tsx,js,jsx}'],
   theme: {
     extend: {
+      screens: {
+        /**
+         * Landscape phones: wide enough to look like a tablet but only ~390px
+         * tall, so vertical chrome (headers, fixed tab bars) has to shrink.
+         * `raw` keeps this a pure height query, independent of the width scale.
+         */
+        short: { raw: '(max-height: 500px)' },
+        /** Devices whose primary input is a finger, not a cursor. */
+        touch: { raw: '(pointer: coarse)' },
+      },
       colors: {
         background: '#050509',
         surface: '#111827',

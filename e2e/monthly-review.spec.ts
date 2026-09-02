@@ -9,7 +9,7 @@
  * remains valid even when the user has customised their review questions.
  *
  * Real date is 2026-05-30 (within the last 3 days of May) so the banner shows
- * without any clock mocking. Date-navigation tests use the Previous/Next buttons.
+ * without any clock mocking. Date-navigation tests use the day stepper's chevrons.
  */
 
 import { test, expect, type Page } from '@playwright/test'
@@ -270,8 +270,8 @@ test.describe('Monthly Review — end of month (May 30)', () => {
   // ── 9. Navigating to May 28 hides the banner ─────────────────────────────
 
   test('banner disappears when navigating to May 28 (below threshold)', async ({ page }) => {
-    await page.getByRole('button', { name: 'Previous', exact: true }).first().click()
-    await page.getByRole('button', { name: 'Previous', exact: true }).first().click()
+    await page.getByRole('button', { name: 'Previous day', exact: true }).first().click()
+    await page.getByRole('button', { name: 'Previous day', exact: true }).first().click()
 
     await expect(page.getByText(/Monthly review:/).first()).not.toBeVisible({ timeout: 4_000 })
     await expect(page.getByRole('button', { name: 'Open ↓' }).first()).not.toBeVisible()
@@ -280,7 +280,7 @@ test.describe('Monthly Review — end of month (May 30)', () => {
   // ── 10. May 31 shows "last day!" ─────────────────────────────────────────
 
   test('banner shows "last day!" on May 31', async ({ page }) => {
-    await page.getByRole('button', { name: 'Next', exact: true }).first().click()
+    await page.getByRole('button', { name: 'Next day', exact: true }).first().click()
     await expect(page.getByText('Monthly review: last day!')).toBeVisible()
   })
 })
@@ -298,14 +298,14 @@ test.describe('Monthly Review — mid-month navigation', () => {
 
   test('banner is hidden after navigating back 15 days (May 15)', async ({ page }) => {
     for (let i = 0; i < 15; i++) {
-      await page.getByRole('button', { name: 'Previous', exact: true }).first().click()
+      await page.getByRole('button', { name: 'Previous day', exact: true }).first().click()
     }
     await expect(page.getByText(/Monthly review:/).first()).not.toBeVisible({ timeout: 4_000 })
   })
 
   test('review card in tracking dashboard is still accessible mid-month', async ({ page }) => {
     for (let i = 0; i < 15; i++) {
-      await page.getByRole('button', { name: 'Previous', exact: true }).first().click()
+      await page.getByRole('button', { name: 'Previous day', exact: true }).first().click()
     }
     await scrollToReviewCard(page)
     // Card header is always in the DOM; may be collapsed but header is visible

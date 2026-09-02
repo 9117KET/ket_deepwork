@@ -91,7 +91,7 @@ export function WaterfallDashboard({
         <select
           value={monthKey}
           onChange={(e) => onMonthChange(e.target.value)}
-          className="rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerLow px-3 py-1.5 text-xs text-share-onBg focus:border-share-primary focus:outline-none"
+          className="touch-target-coarse rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerLow px-3 py-1.5 text-xs text-share-onBg focus:border-share-primary focus:outline-none"
         >
           {availableMonths.map((m) => (
             <option key={m} value={m}>{formatMonthKey(m)}</option>
@@ -356,7 +356,7 @@ function IncomeSourcesEditor({
         <button
           type="button"
           onClick={() => setAdding(true)}
-          className="flex items-center gap-1.5 text-xs text-share-onSurfaceVariant hover:text-share-primary transition-colors"
+          className="touch-target-coarse flex items-center gap-1.5 text-xs text-share-onSurfaceVariant transition-colors hover:text-share-primary"
         >
           <MaterialIcon name="add_circle" className="text-[1rem]" />
           Add income line
@@ -518,7 +518,7 @@ function CriticalExpensesEditor({
         <button
           type="button"
           onClick={() => setAdding(true)}
-          className="flex items-center gap-1.5 text-xs text-share-onSurfaceVariant hover:text-share-primary transition-colors"
+          className="touch-target-coarse flex items-center gap-1.5 text-xs text-share-onSurfaceVariant transition-colors hover:text-share-primary"
         >
           <MaterialIcon name="add_circle" className="text-[1rem]" />
           Add critical expense
