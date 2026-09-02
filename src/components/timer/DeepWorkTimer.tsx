@@ -18,7 +18,7 @@
  * you are already reaching for is the one that sets it.
  */
 
-import type { FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { CheckCircle } from 'lucide-react'
 import { FOCUS_BLOCK_PRESETS, suggestedBreakMinutes } from '../../domain/focusBlocks'
 import type { DeepWorkTimerController } from './useDeepWorkTimer'
@@ -58,7 +58,14 @@ export function DeepWorkTimer({ timer, breakMinutes, onSetBlockLength }: DeepWor
     pause,
     resume,
     reset,
+    elapsedMinutes,
+    hasBankableWork,
+    stopAndBank,
   } = timer
+
+  // Armed only while a stop would actually cost something, so an untouched
+  // block still resets in one click.
+  const [confirmStop, setConfirmStop] = useState(false)
 
   const isRunning = status === 'running'
   const isIdleOrFinished = status === 'idle' || status === 'finished'
@@ -242,13 +249,57 @@ export function DeepWorkTimer({ timer, breakMinutes, onSetBlockLength }: DeepWor
           {!isIdleOrFinished ? (
             <button
               type="button"
-              onClick={reset}
+              onClick={() => (hasBankableWork ? setConfirmStop(true) : reset())}
               className="min-h-[44px] rounded-md border border-share-outlineVariant/40 bg-share-surfaceContainer px-4 py-1.5 text-sm text-share-onSurfaceVariant hover:border-share-primary/60 hover:text-share-primary"
             >
-              Reset
+              Stop
             </button>
           ) : null}
         </div>
+
+        {/*
+          Stopping a block that has run for a while used to bin the elapsed
+          minutes with no warning and no record — which made "a block is already
+          running" a choice between losing your place and losing your work.
+          Keeping them is the default because they were really worked.
+        */}
+        {confirmStop && !isIdleOrFinished ? (
+          <div className="mt-3 rounded-md border border-amber-500/40 bg-amber-500/10 p-3">
+            <p className="text-sm text-share-onBg">
+              This block has run for{' '}
+              <span className="font-semibold text-amber-200">{formatBlockMinutes(elapsedMinutes)}</span>.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  stopAndBank()
+                  setConfirmStop(false)
+                }}
+                className="min-h-[44px] rounded-md border border-share-primary/60 bg-share-primary/15 px-3 py-1.5 text-sm font-semibold text-share-primary hover:bg-share-primary/25"
+              >
+                Keep {formatBlockMinutes(elapsedMinutes)} and stop
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  reset()
+                  setConfirmStop(false)
+                }}
+                className="min-h-[44px] rounded-md border border-share-outlineVariant/40 bg-share-surfaceContainer px-3 py-1.5 text-sm text-share-onSurfaceVariant hover:border-red-500/60 hover:text-red-300"
+              >
+                Discard
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmStop(false)}
+                className="min-h-[44px] rounded-md px-3 py-1.5 text-sm text-share-onSurfaceVariant hover:text-share-onBg"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : null}
       </form>
     </section>
   )
@@ -306,4 +357,13 @@ function BlockLengthLine({
       )}
     </div>
   )
+}
+
+/** "1h 05m" / "45m" for a block length or an elapsed stretch. */
+function formatBlockMinutes(total: number): string {
+  const h = Math.floor(total / 60)
+  const m = total % 60
+  if (h > 0 && m > 0) return `${h}h ${m}m`
+  if (h > 0) return `${h}h`
+  return `${m}m`
 }

@@ -35,6 +35,7 @@ import {
   formatTimeOfDay,
 } from "../../domain/sectionTimeBlocks";
 import { computeTaskProgress, formatMinutes, minTrackableMinutes } from "../../domain/taskProgress";
+import { describeWorkLoss, summarizeTaskWork, taskWithDescendantIds } from '../../domain/workSafety';
 import { normalizeFocusBlockMinutes, suggestedBreakMinutes } from "../../domain/focusBlocks";
 import { useTaskHandlers } from "../../hooks/useTaskHandlers";
 import { useDayBlockEditor } from "../../hooks/useDayBlockEditor";
@@ -538,6 +539,37 @@ export function DayPlanner({
   });
 
   /**
+   * Delete a task, stopping first if it would destroy work that cannot be
+   * recovered.
+   *
+   * Timed sessions survive a deletion on their own (they are detached, not
+   * dropped), so they alone are not worth interrupting anyone over. Minutes
+   * logged by hand live on the task itself and have no other record anywhere -
+   * those are what this asks about.
+   */
+  const confirmDeleteTasks = useCallback((taskIds: string[]): boolean => {
+    const summary = summarizeTaskWork(dayState, taskIds);
+    if (!summary.hasIrrecoverableWork) return true;
+    const detail = describeWorkLoss(summary, taskIds.length);
+    return window.confirm(`${detail}
+
+Delete anyway?`);
+  }, [dayState]);
+
+  const handleDeleteTaskGuarded = useCallback((taskId: string) => {
+    const ids = taskWithDescendantIds(dayState.tasks, taskId);
+    if (!confirmDeleteTasks(ids)) return;
+    handleDeleteTask(taskId);
+  }, [dayState.tasks, confirmDeleteTasks, handleDeleteTask]);
+
+  const handleDeleteSelectedGuarded = useCallback(() => {
+    const ids = [...selectedTaskIds].flatMap((id) => taskWithDescendantIds(dayState.tasks, id));
+    if (ids.length === 0) return;
+    if (!confirmDeleteTasks(ids)) return;
+    handleDeleteSelected();
+  }, [selectedTaskIds, dayState.tasks, confirmDeleteTasks, handleDeleteSelected]);
+
+  /**
    * Start a block against a task from its progress row. Refuses while another
    * block is under way rather than retargeting it - those minutes are already
    * being earned by something else.
@@ -546,7 +578,13 @@ export function DayPlanner({
     const task = dayState.tasks.find((t) => t.id === taskId);
     const result = timer.startBlock({ taskId, minutes, label: task?.title });
     if (result === 'busy') {
-      setBlockNotice('A block is already running - finish or reset it first.');
+      // Name the way out. The old copy said "reset it", which was the one
+      // action that destroyed the minutes already earned.
+      setBlockNotice(
+        timer.hasBankableWork
+          ? `A block is already running. Stop it from the timer to keep its ${timer.elapsedMinutes}m first.`
+          : 'A block is already running. Stop it from the timer first.',
+      );
     }
     return result;
   }, [dayState.tasks, timer]);
@@ -829,7 +867,7 @@ export function DayPlanner({
             tasks={tasksBySection['mustDo'] ?? []}
             onToggle={handleToggleTask}
             onAdd={(title) => handleAddTask('mustDo', title)}
-            onDelete={handleDeleteTask}
+            onDelete={handleDeleteTaskGuarded}
             onUpdate={(id, patch) => handleUpdateTask(id, patch)}
             deepWorkSessions={dayState.deepWorkSessions}
             onStartBlock={handleStartBlock}
@@ -1021,7 +1059,7 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
             )}
             <button
               type="button"
-              onClick={handleDeleteSelected}
+              onClick={handleDeleteSelectedGuarded}
               className="rounded border border-red-600/60 bg-red-500/20 px-2 py-1 text-red-300 hover:bg-red-500/30"
             >
               Delete selected
@@ -1132,7 +1170,7 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
               }
               onAddSubtask={shareMode === 'view' ? () => undefined : handleAddSubtask}
               onToggleTask={shareMode === 'view' ? () => undefined : (taskId) => handleToggleTask(taskId)}
-              onDeleteTask={shareMode === 'view' ? () => undefined : (taskId) => handleDeleteTask(taskId)}
+              onDeleteTask={shareMode === 'view' ? () => undefined : handleDeleteTaskGuarded}
               onUpdateTask={shareMode === 'view' ? () => undefined : handleUpdateTask}
               deepWorkSessions={dayState.deepWorkSessions}
               onStartBlock={shareMode === 'view' ? undefined : handleStartBlock}
@@ -1205,7 +1243,7 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
                   onAddTaskBelow={(afterTaskId) => handleAddTaskBelow('sideQuest', afterTaskId)}
                   onAddSubtask={handleAddSubtask}
                   onToggleTask={handleToggleTask}
-                  onDeleteTask={handleDeleteTask}
+                  onDeleteTask={handleDeleteTaskGuarded}
                   onUpdateTask={handleUpdateTask}
                   deepWorkSessions={dayState.deepWorkSessions}
                   onStartBlock={handleStartBlock}

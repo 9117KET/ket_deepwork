@@ -13,6 +13,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { normalizeFocusBlockMinutes } from '../../domain/focusBlocks'
+import { MIN_BANKABLE_MINUTES, bankableMinutes } from '../../domain/workSafety'
 import {
   AWAY_BLOCK_MAX_AGE_MS,
   clearActiveBlock,
@@ -67,7 +68,17 @@ export interface AwayBlock {
 }
 
 interface UseDeepWorkTimerOptions {
-  onSessionComplete?: (label: string, durationMinutes: number, taskId?: string) => void
+  /**
+   * `startedAt` is the instant the block began. It is passed because the day a
+   * block belongs to is the day it STARTED, and the planner cannot infer that
+   * once the user has paged to another date mid-block.
+   */
+  onSessionComplete?: (
+    label: string,
+    durationMinutes: number,
+    taskId?: string,
+    startedAt?: string,
+  ) => void
   taskOptions?: TimerTaskOption[]
   selectedTaskId?: string
   onSelectTask?: (taskId: string | undefined) => void
@@ -108,6 +119,12 @@ export interface DeepWorkTimerController {
   pause: () => void
   resume: () => void
   reset: () => void
+  /** Whole minutes this block has already earned if stopped right now. */
+  elapsedMinutes: number
+  /** True when stopping would throw away work worth keeping. */
+  hasBankableWork: boolean
+  /** Stop early, recording what was actually worked. Returns the minutes kept. */
+  stopAndBank: () => number
   /** Start a block for a task from outside the timer (a progress chip). */
   startBlock: (request: StartBlockRequest) => StartBlockResult
 }
@@ -213,7 +230,12 @@ export function useDeepWorkTimer({
         setStatus('finished')
         setTargetTime(null)
         playCompletionChime()
-        onSessionCompleteRef.current?.(label, durationMinutes, selectedTask?.id)
+        onSessionCompleteRef.current?.(
+          label,
+          durationMinutes,
+          selectedTask?.id,
+          startedAtRef.current ?? undefined,
+        )
       }
     }
 
@@ -245,20 +267,28 @@ export function useDeepWorkTimer({
   }, [isAttributionLocked, onSelectTask, options])
 
   const setPreset = useCallback((minutesPreset: number) => {
-    if (status === 'running') return
+    // Paused counts as under way — the elapsed part was measured against the
+    // old length, so re-pointing it mid-block would misreport the session.
+    if (status === 'running' || status === 'paused') return
     setPickedMinutes(minutesPreset)
     setCustomInput('')
   }, [status])
 
   const setCustom = useCallback((raw: string) => {
+    if (status === 'running' || status === 'paused') return
     const digits = raw.replace(/\D/g, '').slice(0, 3)
     setCustomInput(digits)
     const parsed = parseInt(digits, 10)
     if (!isNaN(parsed) && parsed >= 1) setPickedMinutes(parsed)
-  }, [])
+  }, [status])
 
   const start = useCallback(() => {
     startedAtRef.current = new Date().toISOString()
+    // Pin the length for this run. While `pickedMinutes` is null the duration
+    // follows the configured block length, so changing that setting mid-block
+    // used to move the finish line under a running countdown and record the
+    // session for a number of minutes that were never worked.
+    setPickedMinutes(durationMinutes)
     setTargetTime(Date.now() + durationMinutes * 60 * 1000)
     setStatus('running')
   }, [durationMinutes])
@@ -284,6 +314,39 @@ export function useDeepWorkTimer({
     setPickedMinutes(null)
     setCustomInput('')
   }, [])
+
+  /**
+   * What this block is worth if it stops now. Read from the countdown rather
+   * than the wall clock, so a block paused over lunch is not credited with the
+   * lunch.
+   */
+  const elapsedMinutes =
+    status === 'running' || status === 'paused'
+      ? bankableMinutes(durationMinutes, remainingMs)
+      : 0
+  const hasBankableWork = elapsedMinutes >= MIN_BANKABLE_MINUTES
+
+  /**
+   * Stop a block early and keep the part that was actually worked.
+   *
+   * Reset used to be the only way out of a running block, and it threw the
+   * elapsed minutes away silently — which made "a block is already running"
+   * a choice between losing your place and losing your work. Recording the
+   * real interval is the honest option, so it is the one on offer.
+   */
+  const stopAndBank = useCallback((): number => {
+    const minutes = bankableMinutes(durationMinutes, remainingMs)
+    if (minutes >= MIN_BANKABLE_MINUTES) {
+      onSessionCompleteRef.current?.(
+        label,
+        minutes,
+        selectedTask?.id,
+        startedAtRef.current ?? undefined,
+      )
+    }
+    reset()
+    return minutes
+  }, [durationMinutes, remainingMs, label, selectedTask?.id, reset, onSessionCompleteRef])
 
   const startBlock = useCallback((request: StartBlockRequest): StartBlockResult => {
     // A block under way is never interrupted from a task row - the running
@@ -423,6 +486,9 @@ export function useDeepWorkTimer({
     pause,
     resume,
     reset,
+    elapsedMinutes,
+    hasBankableWork,
+    stopAndBank,
     startBlock,
   }
 }

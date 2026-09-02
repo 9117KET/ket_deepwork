@@ -26,6 +26,7 @@ import {
   cloneTasksForDay,
   pickMustsToCopyForward,
 } from "../domain/taskUtils";
+import { blockDayIso, detachSessionsFromTasks } from "../domain/workSafety";
 import { getOrCreateDay } from "../storage/localStorageState";
 
 /** Max MUSTs per day — mirrors MAX_MUSTS in TomorrowMustPanel. */
@@ -71,7 +72,15 @@ export function useTaskHandlers(
         ...prev,
         days: {
           ...prev.days,
-          [selectedDay]: { ...existingDay, tasks: nextTasks },
+          [selectedDay]: {
+            ...existingDay,
+            tasks: nextTasks,
+            deepWorkSessions: detachSessionsFromTasks(
+              existingDay.deepWorkSessions,
+              existingDay.tasks,
+              [...toRemove],
+            ),
+          },
         },
       };
     });
@@ -218,7 +227,18 @@ export function useTaskHandlers(
       const nextTasks = existingDay.tasks.filter((t) => !toRemove.has(t.id));
       const nextDays = {
         ...prev.days,
-        [selectedDay]: { ...existingDay, tasks: nextTasks },
+        [selectedDay]: {
+          ...existingDay,
+          tasks: nextTasks,
+          // Minutes that were really worked survive the task they were worked
+          // on. The session keeps counting toward the weekly total and carries
+          // the old title in its label instead of a dangling id.
+          deepWorkSessions: detachSessionsFromTasks(
+            existingDay.deepWorkSessions,
+            existingDay.tasks,
+            [...toRemove],
+          ),
+        },
       };
       return {
         ...prev,
@@ -608,22 +628,32 @@ export function useTaskHandlers(
    * was pointed at a task, `taskId` attributes the minutes to it - that is what
    * fills the task's progress boxes as earned rather than self-reported work.
    */
-  const handleSessionComplete = useCallback((label: string, durationMinutes: number, taskId?: string) => {
+  const handleSessionComplete = useCallback((
+    label: string,
+    durationMinutes: number,
+    taskId?: string,
+    startedAt?: string,
+  ) => {
     updateAppState((prev) => {
-      const day = getOrCreateDay(prev, selectedDay);
+      // The block belongs to the day it STARTED on, not the day on screen when
+      // it lands. Starting a block and paging back to yesterday to check
+      // something used to write the whole session onto yesterday.
+      const targetDay = blockDayIso(startedAt, selectedDay);
+      const day = getOrCreateDay(prev, targetDay);
+      const startedIso = startedAt ?? new Date(Date.now() - durationMinutes * 60_000).toISOString();
       const session: DeepWorkSession = {
         id: `dw-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         label,
         durationMinutes,
         ...(taskId ? { taskId } : {}),
-        startedAt: new Date(Date.now() - durationMinutes * 60_000).toISOString(),
+        startedAt: startedIso,
         finishedAt: new Date().toISOString(),
       };
       return {
         ...prev,
         days: {
           ...prev.days,
-          [selectedDay]: { ...day, deepWorkSessions: [...day.deepWorkSessions, session] },
+          [targetDay]: { ...day, deepWorkSessions: [...day.deepWorkSessions, session] },
         },
       };
     });
