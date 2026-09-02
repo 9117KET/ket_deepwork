@@ -69,11 +69,61 @@ _Last updated: 2026-06-11_
    ```
    If done, update `SITE_URL` on Convex prod to the new domain.
 
-4. **Data migration note** — first sign-in on the new prod starts with an empty
-   server account; the device's localStorage (`deepblock_state_v1`) uploads
-   everything on first sync. Sign in first from the device holding the most
-   complete data. Old server-side data, if needed, can be exported from
-   `dapper-crab-847` / `knowing-gopher-377` via the Convex dashboard.
+4. ~~**Data migration note**~~ — corrected 2026-09-02. There is **no** blanket
+   "uploads everything on first sync": the write path only sends days marked
+   dirty by a local edit (that is what keeps read/write I/O bounded). Two things
+   cover the rest:
+   - the **reconcile** on hydration queues any day this device holds that the
+     server has never received, draining in capped batches;
+   - **`/restore`** re-uploads this device's entire localStorage in paced
+     batches, for a deliberate bulk migration.
+
+   Still sign in first from the device holding the most complete data. Old
+   server-side data can be exported from `dapper-crab-847` /
+   `knowing-gopher-377` via the Convex dashboard.
+
+## ⚠ Deploys are gated on a TypeScript check
+
+`convex deploy` and `convex dev` typecheck everything matched by
+`convex/tsconfig.json` **before** pushing, and a failure aborts the deploy.
+
+This bit hard once. `convex/calendar.test.ts` uses `import.meta.glob` (a Vite
+global that the Convex tsconfig has no types for), so every deploy failed on a
+file the deployment does not even ship. Test files are now excluded from that
+config. If a deploy ever stops with *"TypeScript typecheck via `tsc` failed"*,
+check whether the offending file actually belongs in the deployment before
+reaching for `--typecheck=disable`.
+
+## Sync outage, 2026-06-15 → 2026-09-02 (resolved)
+
+**Symptom:** nothing synced to any device for ~2.5 months. Convex prod held 110
+planner days ending 2026-06-16 and never grew.
+
+**Cause:** commit `63bd753` (2026-06-15) added `updatedAt` to the day payload and
+to the `plannerDays` validator. The client shipped via Vercel; the **backend was
+never deployed**, so every write was rejected:
+
+```
+ArgumentValidationError: Object contains extra field `updatedAt`
+  that is not in the validator.  Path: .days[0]
+```
+
+Prod's newest row is dated one day after that commit. `focusBlockMinutes` /
+`focusBreakMinutes` on `userSettings.upsert` were stale the same way. The
+deploy had been blocked by the typecheck gate above.
+
+**Not** the June I/O quota incident, which was a separate (and by then already
+fixed) problem — though the read amplification behind it was still live and
+would have re-blown the quota once writes resumed. See the sync section in
+`CLAUDE.md` for the hot/cold split that fixes it.
+
+**Lesson:** a client-side change to a Convex payload is a **two-sided** deploy.
+Vercel ships the client on push to `main`; the backend only moves when someone
+runs `npx convex deploy`. Verify both agree:
+
+```bash
+npx convex function-spec --prod | grep -A2 upsertMany   # does the validator have the new field?
+```
 
 ## Verify what the live site points at
 

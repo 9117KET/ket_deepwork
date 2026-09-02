@@ -44,6 +44,40 @@ In the Convex dashboard (Project Settings -> Environment Variables) set:
 - **Signed-in users**: same localStorage is used as a cache, synced to Convex via `src/storage/`
 - `src/storage/localStorageState.ts` is the single write gateway - it handles both localStorage and Convex upserts
 
+### Cross-device sync (`usePersistentState`)
+
+localStorage is the source of truth; Convex is how devices agree. Four rules
+carry the whole design, and each exists because of a specific failure:
+
+1. **Reads are split hot/cold.** `plannerDays.getRecent` (last `HOT_WINDOW_DAYS`
+   = 14) and `getArchive` (everything older) are two subscriptions over the
+   `by_user_date` index. A Convex query re-runs when its read set changes, so
+   the old single `getAll` re-read the *entire* history on every task tick —
+   ~610 KB × every edit, growing forever, which is how the free-tier I/O budget
+   was blown in June 2026. Editing today now invalidates only the recent window.
+   `getAll` still exists for `/restore`; do not point live sync back at it.
+2. **Writes are only dirty days, capped.** `update()` marks edited dates
+   pending; `buildDaysSyncPayload` sends at most `MAX_DAYS_PER_SYNC` = 25 of
+   them, newest first, and a backlog drains over paced passes. The original
+   one-shot migration sent everything in one mutation and overran the quota
+   mid-upload.
+3. **A failed write never clears its pending flag.** This is what preserved
+   2.5 months of edits through the 2026-06→09 outage.
+4. **Hydration reconciles.** Any day held locally that the server has never
+   received is queued for upload (skipping empty days via `isEmptyDay`). Without
+   this, a day whose pending flag was lost is stranded on one machine forever,
+   looking healthy there and not existing anywhere else — the worst shape a sync
+   bug takes. Days are never deleted server-side, so "local has it, remote does
+   not" is unambiguous.
+
+Conflicts are last-write-wins on a client-stamped `updatedAt`, guarded on both
+sides (`isStaleWrite` on the server, `isRemoteDayStale` on the client).
+
+**Any change to a sync payload is a two-sided deploy** — the client ships via
+Vercel on push to `main`, the backend only when someone runs `npx convex
+deploy`. Shipping one without the other silently breaks all sync; see
+`docs/DEPLOYMENT.md`.
+
 ### Core state shape (`src/domain/types.ts`)
 
 ```
