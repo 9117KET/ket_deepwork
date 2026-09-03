@@ -39,15 +39,10 @@ export function PlannerPage() {
     if (error) console.error("[auth] Failed to sign out", error);
   };
 
-  const handleOpenDashboard = useCallback(() => {
-    const el = document.getElementById("progress-dashboard");
-    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, []);
-
-  const handleOpenTracking = useCallback(() => {
-    const el = document.getElementById("tracking-dashboard");
-    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, []);
+  // Both used to scroll to elements rendered under the day. Those live at
+  // /planner/review now, so these navigate instead of hunting for an id.
+  const handleOpenDashboard = useCallback(() => navigate("/planner/review"), [navigate]);
+  const handleOpenTracking = useCallback(() => navigate("/planner/review"), [navigate]);
 
   useEffect(() => {
     let mounted = true;

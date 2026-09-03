@@ -6,13 +6,13 @@
  */
 
 import type React from "react";
+import { useNavigate } from "react-router-dom";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useTransition, type SetStateAction } from "react";
 import {
   DEFAULT_HABIT_DEFINITIONS,
   FIXED_SECTIONS,
   type AppState,
   type BlockDurations,
-  type DayState,
   type HabitDefinition,
   type Task,
   type TaskSectionId,
@@ -54,7 +54,6 @@ import { computeDayCompletion, computePerHabitStreaks, getAtRiskHabitIds, comput
 import { DayHeader } from "./DayHeader";
 import { SectionColumn } from "./SectionColumn";
 import { WeeklyOverview } from "./WeeklyOverview";
-import { MonthlyTrackingDashboard } from "../tracking";
 import { DeepWorkTimer } from "../timer/DeepWorkTimer";
 import { useDeepWorkTimer, type TimerTaskOption } from "../timer/useDeepWorkTimer";
 import { FocusBlockContext } from "./focusBlockContext";
@@ -68,7 +67,6 @@ import { TomorrowMustPanel } from "./TomorrowMustPanel";
 import { MustDoPinnedHeader } from "./MustDoPinnedHeader";
 import { MonthlyReviewBanner } from "../goals/MonthlyReviewBanner";
 import { WeeklyReviewBanner } from "../goals/WeeklyReviewBanner";
-import { DayJournalCard } from "./DayJournalCard";
 import { ShutdownRitualModal } from "./ShutdownRitualModal";
 import { SideQuestSection } from "./SideQuestSection";
 import { getDailyQuestSelection } from "../../domain/sideQuestAlgorithm";
@@ -158,6 +156,7 @@ export function DayPlanner({
    */
   const undoable = useUndoableActions(appState, baseUpdateAppState);
   const updateAppState = undoable.update;
+  const navigate = useNavigate();
   const [internalSelectedDay, setInternalSelectedDay] = useState<string>(todayIso);
   const isSelectedDayControlled = selectedDayProp !== undefined;
   const selectedDay = isSelectedDayControlled ? selectedDayProp : internalSelectedDay;
@@ -256,7 +255,6 @@ export function DayPlanner({
     handleCopyFromDay,
     handleUpdateTask,
     handleUpdateMonthlyReview: _handleUpdateMonthlyReview,
-    handleUpdateWeeklyReview,
     handleToggleSideQuestCompletion,
     handleSaveSideQuestDefs,
     handleSessionComplete,
@@ -443,16 +441,6 @@ export function DayPlanner({
     [updateAppState],
   );
 
-  const handleTrackingUpdateDay = useCallback(
-    (isoDate: string, updatedDay: DayState) => {
-      updateAppState((prev) => {
-        const existing = getOrCreateDay(prev, isoDate);
-        return { ...prev, days: { ...prev.days, [isoDate]: { ...existing, ...updatedDay } } };
-      });
-    },
-    [updateAppState],
-  );
-
   const handleTrackingUpdateSettings = useCallback(
     (patch: {
       habitDefinitions?: HabitDefinition[];
@@ -489,8 +477,14 @@ export function DayPlanner({
   const [moveSubtaskId, setMoveSubtaskId] = useState<string | null>(null);
   const [bulkMoveOpen, setBulkMoveOpen] = useState(false);
   const [editSideQuestOpen, setEditSideQuestOpen] = useState(false);
-  const [reviewOpenTrigger, setReviewOpenTrigger] = useState(0);
-  const [weeklyReviewOpenTrigger, setWeeklyReviewOpenTrigger] = useState(0);
+  /**
+   * The review cards live at /planner/review now, so a banner navigates there
+   * and names which card to open rather than nudging a local trigger.
+   */
+  const openReview = useCallback(
+    (target: 'monthly' | 'weekly') => navigate(`/planner/review?open=${target}`),
+    [navigate],
+  );
   const [showShutdown, setShowShutdown] = useState(false);
   /** Task the deep work timer is currently pointed at, if any. */
   const [timerTaskId, setTimerTaskId] = useState<string | undefined>(undefined);
@@ -888,6 +882,7 @@ Delete anyway?`);
           depthPhilosophy={shareMode ? undefined : appState.depthPhilosophy}
           shutdownCompleted={shareMode ? undefined : shutdownAlreadyDone}
           onShutdown={shareMode ? undefined : () => setShowShutdown(true)}
+          onOpenReview={shareMode ? undefined : () => navigate('/planner/review')}
         />
         {!shareMode && (
           <MustDoPinnedHeader
@@ -919,7 +914,7 @@ Delete anyway?`);
                 <MonthlyReviewBanner
                   selectedDay={selectedDay}
                   review={appState.monthlyReviews?.[toMonthId(selectedDay)]}
-                  onOpen={() => setReviewOpenTrigger((t) => t + 1)}
+                  onOpen={() => openReview('monthly')}
                 />
               )
             }
@@ -929,7 +924,7 @@ Delete anyway?`);
                   selectedDay={selectedDay}
                   review={appState.weeklyReviews?.[selectedDay]}
                   reviewWeekday={appState.weeklyReviewDay ?? 5}
-                  onOpen={() => setWeeklyReviewOpenTrigger((t) => t + 1)}
+                  onOpen={() => openReview('weekly')}
                 />
               )
             }
@@ -950,7 +945,7 @@ Delete anyway?`);
               {showMonthly && (
                 <button
                   type="button"
-                  onClick={() => setReviewOpenTrigger((t) => t + 1)}
+                  onClick={() => openReview('monthly')}
                   className={`rounded border px-2 py-0.5 font-medium transition-colors ${
                     monthlyDone
                       ? 'border-emerald-700/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
@@ -964,7 +959,7 @@ Delete anyway?`);
               {showWeekly && (
                 <button
                   type="button"
-                  onClick={() => setWeeklyReviewOpenTrigger((t) => t + 1)}
+                  onClick={() => openReview('weekly')}
                   className={`rounded border px-2 py-0.5 font-medium transition-colors ${
                     weeklyDone
                       ? 'border-emerald-700/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
@@ -1525,30 +1520,12 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
         </>
       )}
 
-      {/* Day journal — always accessible for current day (Cal Newport time-block journal) */}
-      {!shareMode && (
-        <DayJournalCard
-          dayNote={dayState.dayNote}
-          focusHijacker={dayState.focusHijacker}
-          onSaveNote={handleSaveDayJournal}
-          onSaveHijacker={handleSaveFocusHijacker}
-        />
-      )}
-
-      {/* Monthly tracking: owner only (not shown on shared views) */}
-      {!shareMode && (
-        <div className="mt-6">
-          <MonthlyTrackingDashboard
-            state={appState}
-            referenceDay={selectedDay}
-            onUpdateDay={handleTrackingUpdateDay}
-            onUpdateSettings={handleTrackingUpdateSettings}
-            scrollToReview={reviewOpenTrigger}
-            weeklyReviewOpenTrigger={weeklyReviewOpenTrigger}
-            onUpdateWeeklyReview={handleUpdateWeeklyReview}
-          />
-        </div>
-      )}
+      {/*
+        The day journal and the monthly tracking dashboard used to render here,
+        under the day, on every screen and every mobile tab — ~2,500px that was
+        identical across all four tabs. They live at /planner/review now, which
+        is what makes the tab bar mean something. See docs/design/README.md.
+      */}
 
       {/* Shutdown ritual modal */}
       {!shareMode && showShutdown && (() => {

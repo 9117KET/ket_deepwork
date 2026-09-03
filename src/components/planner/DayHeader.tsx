@@ -15,6 +15,8 @@ interface DayHeaderProps {
   depthPhilosophy?: 'rhythmic' | 'journalistic' | 'bimodal'
   shutdownCompleted?: boolean
   onShutdown?: () => void
+  /** Go to the month-scale view. Omitted in shared views, which have no Review. */
+  onOpenReview?: () => void
 }
 
 export function DayHeader({
@@ -32,6 +34,7 @@ export function DayHeader({
   depthPhilosophy,
   shutdownCompleted,
   onShutdown,
+  onOpenReview,
 }: DayHeaderProps) {
   const percentage =
     totalTaskCount <= 0 ? 0 : Math.max(0, Math.min(100, Math.round(completionRatio * 1000) / 10))
@@ -138,6 +141,22 @@ export function DayHeader({
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
+        {/* Today / Review: the day and the month are different destinations now,
+            not one page with the dashboard buried under it. */}
+        {onOpenReview && (
+          <div className="flex items-center gap-0.5 rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainer p-0.5">
+            <span className="touch-target-coarse flex items-center rounded-md bg-share-primary/15 px-3 text-sm font-semibold text-share-primary">
+              Today
+            </span>
+            <button
+              type="button"
+              onClick={onOpenReview}
+              className="touch-target-coarse rounded-md px-3 text-sm text-share-onSurfaceVariant transition-colors hover:bg-share-surfaceContainerHigh hover:text-share-onBg"
+            >
+              Review
+            </button>
+          </div>
+        )}
         {onShutdown &&
           (shutdownCompleted ? (
             <span className="touch-target flex items-center gap-1.5 rounded-lg border border-emerald-600/40 bg-emerald-500/10 px-2.5 text-xs text-emerald-300">
