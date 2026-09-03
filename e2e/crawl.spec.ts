@@ -312,6 +312,15 @@ test.describe('Planner — section interactions', () => {
     })
     await openPlannerAsGuest(page)
     await dismissDaySetup(page)
+    // Sections default to collapsed unless their block is running, so a
+    // High Priority task seeded outside 9-5 is hidden until asked for.
+    const expand = page
+      .locator('section')
+      .filter({ has: page.getByRole('heading', { name: 'High Priority (Focus Tasks)' }) })
+      .first()
+      .getByRole('button', { name: 'Expand section' })
+    if (await expand.count()) await expand.click()
+    await page.waitForTimeout(200)
   })
 
   test('seeded task is visible in the planner', async ({ page }) => {
@@ -380,6 +389,12 @@ test.describe('Planner — Deep Work Timer', () => {
     if (await startBtn.isVisible({ timeout: 3_000 }).catch(() => false)) {
       await startBtn.click()
       await expect(page.locator('body')).not.toContainText('Something went wrong', { timeout: 3_000 })
+      // A running block takes the desktop screen (FocusMode). Esc leaves it,
+      // which is the documented way out and does not touch the block.
+      if (await page.getByTestId('focus-mode').isVisible({ timeout: 2_000 }).catch(() => false)) {
+        await page.keyboard.press('Escape')
+        await page.waitForTimeout(300)
+      }
       // Stop/cancel the timer if it started
       const stopBtn = page.getByRole('button', { name: /Stop|Cancel|Pause/i }).first()
       if (await stopBtn.isVisible({ timeout: 2_000 }).catch(() => false)) {

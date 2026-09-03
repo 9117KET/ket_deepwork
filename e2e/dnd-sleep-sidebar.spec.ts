@@ -92,6 +92,24 @@ async function mouseDrag(
   await page.waitForTimeout(400)
 }
 
+/**
+ * Open a section regardless of the clock.
+ *
+ * Sections default to collapsed unless their own time block is running, so a
+ * spec that seeds High Priority tasks and runs in the evening finds an empty
+ * section. Expanding explicitly makes these tests say what they mean and stops
+ * them depending on the hour they are run at.
+ */
+async function expandSection(page: Page, heading: string) {
+  const section = page
+    .locator('section')
+    .filter({ has: page.getByRole('heading', { name: heading }) })
+    .first()
+  const expand = section.getByRole('button', { name: 'Expand section' })
+  if (await expand.count()) await expand.click()
+  await page.waitForTimeout(200)
+}
+
 test('dragging a task by its body reorders it (no crash)', async ({ page }) => {
   const errors: string[] = []
   page.on('pageerror', (e) => errors.push(e.message))
@@ -104,6 +122,7 @@ test('dragging a task by its body reorders it (no crash)', async ({ page }) => {
   ])
   await openPlanner(page)
   await dismissModals(page)
+  await expandSection(page, 'High Priority (Focus Tasks)')
   await page.getByText('AAA', { exact: true }).waitFor({ timeout: 10_000 })
 
   expect(await readOrder(page)).toEqual(['AAA', 'BBB', 'CCC'])
@@ -120,6 +139,7 @@ test('clicking a task checkbox toggles it instead of starting a drag', async ({ 
   await seed(page, [{ id: 'A', title: 'AAA', sectionId: 'highPriority', isDone: false }])
   await openPlanner(page)
   await dismissModals(page)
+  await expandSection(page, 'High Priority (Focus Tasks)')
   const checkbox = page.getByRole('checkbox').first()
   await checkbox.waitFor({ timeout: 10_000 })
   await checkbox.click()

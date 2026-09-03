@@ -141,10 +141,17 @@ export function DayHeader({
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
-        {/* Today / Review: the day and the month are different destinations now,
-            not one page with the dashboard buried under it. */}
+        {/*
+          Today / Review: the day and the month are different destinations now,
+          not one page with the dashboard buried under it.
+
+          Desktop only. The phone's tab bar already carries Review, and the
+          mobile artboards have no such toggle in the header — squeezing one in
+          pushed the header to 378px on a 320px iPhone SE and scrolled the whole
+          planner sideways.
+        */}
         {onOpenReview && (
-          <div className="flex items-center gap-0.5 rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainer p-0.5">
+          <div className="hidden items-center gap-0.5 rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainer p-0.5 lg:flex">
             <span className="touch-target-coarse flex items-center rounded-md bg-share-primary/15 px-3 text-sm font-semibold text-share-primary">
               Today
             </span>

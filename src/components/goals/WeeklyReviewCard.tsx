@@ -92,7 +92,10 @@ export function WeeklyReviewCard({
   const showStats = weeklyHours !== undefined && goalHours !== undefined
 
   return (
-    <div className="mt-3 rounded border border-share-primary/20 bg-share-surfaceContainerLow p-3">
+    <div
+      data-testid="weekly-review-card"
+      className="mt-3 rounded border border-share-primary/20 bg-share-surfaceContainerLow p-3"
+    >
       <button
         type="button"
         className="touch-target-coarse flex w-full items-center justify-between gap-2"

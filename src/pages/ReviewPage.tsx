@@ -70,12 +70,21 @@ export function ReviewPage() {
 
   /**
    * A review banner on the planner links here with `?open=monthly|weekly` and
-   * expects that card expanded on arrival. The dashboard opens a card when its
-   * trigger prop changes, so a non-zero constant is enough for a fresh mount.
+   * expects that card expanded on arrival.
+   *
+   * The trigger has to *increment*, not merely be non-zero. `MonthlyReviewCard`
+   * seeds its own `prevForceOpen` from the first value it is handed and expands
+   * only when the prop climbs past it, so a constant 1 passed on mount reads as
+   * "already handled" and the card stays shut — which is exactly what the
+   * banner's Open button did until this was fixed.
+   *
+   * Hence the bump in an effect: the card mounts at 0, then goes to 1. The
+   * rAF defers it past the mount that `showDetail` may itself be causing on a
+   * phone, where the card does not exist until the detail is revealed.
    */
   const openTarget = searchParams.get("open");
-  const monthlyOpenTrigger = openTarget === "monthly" ? 1 : 0;
-  const weeklyOpenTrigger = openTarget === "weekly" ? 1 : 0;
+  const [monthlyOpenTrigger, setMonthlyOpenTrigger] = useState(0);
+  const [weeklyOpenTrigger, setWeeklyOpenTrigger] = useState(0);
 
   const userInitial = useMemo(() => {
     const firstChar = (user?.email ?? "").trim().charAt(0);
@@ -106,7 +115,11 @@ export function ReviewPage() {
    * just stopped being in the way.
    */
   const isDesktop = useIsDesktop();
-  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
+  // Arriving with ?open=… means the phone was sent here for a specific card,
+  // so the detail starts open rather than being opened by an effect afterwards.
+  const [mobileDetailOpen, setMobileDetailOpen] = useState(() =>
+    Boolean(searchParams.get("open")),
+  );
   /**
    * Not a CSS hide: on a phone this content is not mounted at all until asked
    * for. Two 31-column grids and five editors cost the same to build whether
@@ -121,6 +134,15 @@ export function ReviewPage() {
       document.getElementById(targetId)?.scrollIntoView({ behavior: "smooth", block: "start" }),
     );
   }, []);
+
+  useEffect(() => {
+    if (!openTarget || !showDetail) return;
+    const id = requestAnimationFrame(() => {
+      if (openTarget === "monthly") setMonthlyOpenTrigger((t) => t + 1);
+      else if (openTarget === "weekly") setWeeklyOpenTrigger((t) => t + 1);
+    });
+    return () => cancelAnimationFrame(id);
+  }, [openTarget, showDetail]);
 
   const weekMinutes = useMemo(
     () => weekDatesFor(referenceDay).map((iso) => computeDailyDeepWorkMinutes(appState.days[iso])),
@@ -256,7 +278,10 @@ export function ReviewPage() {
           each month-scale tool on the right. Below xl the rail drops under the
           content rather than squeezing it, since its links only ever scroll.
         */}
-        <div className="mt-6 lg:hidden">
+        {/* Not merely hidden on desktop: mounted only on a phone, so the page
+            never carries two copies of the same links. */}
+        {!isDesktop && (
+        <div className="mt-6">
           <MobileReviewPanel
             deepWorkHours={deepWorkHours}
             deepWorkGoalHours={appState.deepWorkGoalHoursPerWeek ?? 20}
@@ -271,6 +296,7 @@ export function ReviewPage() {
             monthlyWritten={Boolean(appState.monthlyReviews?.[monthId]?.completedAt)}
           />
         </div>
+        )}
 
         {showDetail && (
         <div className="mt-6 flex flex-col gap-7 xl:flex-row">

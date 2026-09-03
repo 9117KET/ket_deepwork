@@ -134,6 +134,27 @@ async function scrollToTrackingDashboard(page: Page) {
   })
 }
 
+/**
+ * The review cards live at /planner/review now, not under the day. Every suite
+ * here that touches a review card opens this route; the Close-day suite still
+ * uses `openPlanner`, because the shutdown ritual is part of the day.
+ */
+async function openReview(page: Page) {
+  await page.goto('/planner/review')
+  await page.waitForFunction(
+    () => {
+      if (document.body.innerText.toLowerCase().includes('monthly tracking')) return true
+      const guest = Array.from(document.querySelectorAll('button')).find(
+        (b) => b.textContent?.trim() === 'Continue as guest',
+      )
+      if (guest) (guest as HTMLButtonElement).click()
+      return false
+    },
+    { timeout: 40_000, polling: 400 },
+  )
+  await scrollToTrackingDashboard(page)
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Suite A — Default collapsed state
 // ─────────────────────────────────────────────────────────────────────────────
@@ -141,9 +162,7 @@ async function scrollToTrackingDashboard(page: Page) {
 test.describe('Review cards — default collapsed state', () => {
   test.beforeEach(async ({ page }) => {
     await prepareBase(page)
-    await openPlanner(page)
-    await dismissDaySetupIfPresent(page)
-    await scrollToTrackingDashboard(page)
+    await openReview(page)
   })
 
   test('WeeklyReviewCard header is present and starts collapsed', async ({ page }) => {
@@ -164,7 +183,7 @@ test.describe('Review cards — default collapsed state', () => {
     await header.first().click()
     await expect(header.first()).toHaveAttribute('aria-expanded', 'true')
     // At least one textarea visible after expanding
-    const weeklySection = page.locator('.mt-3.rounded.border.border-sky-900\\/40')
+    const weeklySection = page.getByTestId('weekly-review-card')
     await expect(weeklySection.locator('textarea').first()).toBeVisible({ timeout: 4_000 })
   })
 
@@ -172,7 +191,7 @@ test.describe('Review cards — default collapsed state', () => {
     const header = page.getByRole('button').filter({ hasText: 'Monthly Review' })
     await header.first().click()
     await expect(header.first()).toHaveAttribute('aria-expanded', 'true')
-    const monthlySection = page.locator('.mt-3.rounded.border.border-amber-900\\/40')
+    const monthlySection = page.getByTestId('monthly-review-card')
     await expect(monthlySection.locator('textarea').first()).toBeVisible({ timeout: 4_000 })
   })
 })
@@ -185,9 +204,7 @@ test.describe('Review cards — default collapsed state', () => {
 test.describe('Review cards — voice recording buttons', () => {
   test.beforeEach(async ({ page }) => {
     await prepareBase(page)
-    await openPlanner(page)
-    await dismissDaySetupIfPresent(page)
-    await scrollToTrackingDashboard(page)
+    await openReview(page)
   })
 
   test('WeeklyReviewCard shows voice button or gracefully omits it (no crash)', async ({ page }) => {
@@ -354,9 +371,7 @@ test.describe('AudioInput — microphone recording behaviour (mocked)', () => {
     })
 
     await prepareBase(page)
-    await openPlanner(page)
-    await dismissDaySetupIfPresent(page)
-    await scrollToTrackingDashboard(page)
+    await openReview(page)
   }
 
   test('Test A — recording does not stop prematurely before first speech (no 5 s cutoff)', async ({ page }) => {
@@ -408,7 +423,7 @@ test.describe('AudioInput — microphone recording behaviour (mocked)', () => {
     })
 
     // Wait for transcript to appear in the first textarea of the weekly review
-    const weeklySection = page.locator('.mt-3.rounded.border.border-sky-900\\/40')
+    const weeklySection = page.getByTestId('weekly-review-card')
     const firstTextarea = weeklySection.locator('textarea').first()
     await expect(firstTextarea).toHaveValue(/This is a test transcript/, { timeout: 4_000 })
   })
@@ -432,7 +447,7 @@ test.describe('AudioInput — microphone recording behaviour (mocked)', () => {
     })
 
     // Exact match — any duplicated fragment ("Today Today actually ...") fails
-    const weeklySection = page.locator('.mt-3.rounded.border.border-sky-900\\/40')
+    const weeklySection = page.getByTestId('weekly-review-card')
     const firstTextarea = weeklySection.locator('textarea').first()
     await expect(firstTextarea).toHaveValue('Today actually went pretty well', { timeout: 4_000 })
   })
@@ -576,7 +591,7 @@ test.describe('ReviewReminderModal — monthly review due (last 3 days of month)
 
     // Monthly review card should be expanded (textareas visible)
     await page.waitForTimeout(600) // allow scroll + expand
-    const monthlySection = page.locator('.mt-3.rounded.border.border-amber-900\\/40')
+    const monthlySection = page.getByTestId('monthly-review-card')
     await expect(monthlySection.locator('textarea').first()).toBeVisible({ timeout: 6_000 })
   })
 })
