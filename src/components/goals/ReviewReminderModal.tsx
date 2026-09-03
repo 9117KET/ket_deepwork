@@ -19,12 +19,17 @@ export function ReviewReminderModal({ type, onGoToReview, onDismiss }: ReviewRem
   const body = isWeekly
     ? "It's your weekly review day. Take 10 minutes to reflect on the week and set your focus for next week."
     : "The month is ending. Complete your monthly review to capture wins, gaps, and your ONE Thing for next month."
-  const accentBorder = isWeekly ? 'border-sky-700/50' : 'border-amber-700/50'
-  const accentBg = isWeekly ? 'bg-sky-500/10' : 'bg-amber-500/10'
-  const accentText = isWeekly ? 'text-sky-300' : 'text-amber-300'
-  const btnBorder = isWeekly
-    ? 'border-sky-700 bg-sky-500/10 hover:bg-sky-500/20 text-sky-300'
-    : 'border-amber-700 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300'
+  /*
+   * Both reminders are the same kind of thing — a review is due, go and do it —
+   * so both wear the one accent. They used to be sky and amber, which read as
+   * two different severities and spent amber, the warning colour, on a routine
+   * prompt. The title already says which review it is.
+   */
+  const accentBorder = 'border-share-primary/40'
+  const accentBg = 'bg-share-primary/10'
+  const accentText = 'text-share-primary'
+  const btnBorder =
+    'border-share-primary/50 bg-share-primary/10 hover:bg-share-primary/20 text-share-primary'
 
   return (
     <div

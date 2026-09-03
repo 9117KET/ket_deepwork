@@ -265,11 +265,17 @@ export function SectionColumn({
 
   return (
     <section
+      /*
+       * The running block wears the one accent, not amber. Amber means a
+       * warning here — over capacity, a missed habit — and a block being the
+       * one you are in is not a warning. Critical overload still outranks it:
+       * a list too long to execute is the more urgent thing to say.
+       */
       className={`rounded-lg border p-3 sm:p-4 ${
         isCriticalOverload
           ? 'border-red-500/50 bg-red-500/5'
           : isTimeBlockActive
-          ? 'border-amber-500/60 bg-amber-500/10'
+          ? 'border-share-primary/50 bg-share-primary/5'
           : 'border-share-outlineVariant/25 bg-share-surfaceContainerLow'
       }`}
     >

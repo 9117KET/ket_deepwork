@@ -11,6 +11,7 @@ import { HelpModal } from "../components/HelpModal";
 import { OnboardingTour } from "../components/OnboardingTour";
 import { getTourCompleted } from "../utils/tourStorage";
 import { useAuth } from "../contexts/AuthContext";
+import { isGuestSession, markGuestSession } from "../storage/guestSession";
 import { LoginForm } from "../components/auth/LoginForm";
 import { ShareModal } from "../components/sharing/ShareModal";
 import { AccountMenu } from "../components/nav/AccountMenu";
@@ -19,7 +20,21 @@ import { AppChrome } from "../components/layout/AppChrome";
 export function PlannerPage() {
   const { user, loading, signOut } = useAuth();
   const navigate = useNavigate();
-  const [guest, setGuest] = useState(false);
+  /**
+   * "Continue as guest" survives navigation within the session.
+   *
+   * It used to be plain component state, which was invisible while the planner
+   * was the only route a guest could reach. Now that Review is its own route
+   * and the phone's tab bar moves between the two, a guest tapping Today from
+   * Review unmounted this page and landed back on the sign-in form having
+   * already answered it. Session scope, not local: choosing to stay signed out
+   * is a choice about this visit, not a durable account setting.
+   */
+  const [guest, setGuest] = useState(isGuestSession);
+  const continueAsGuest = useCallback(() => {
+    markGuestSession();
+    setGuest(true);
+  }, []);
   const [, startTransition] = useTransition();
   const [helpOpen, setHelpOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
@@ -66,7 +81,7 @@ export function PlannerPage() {
     return (
       <AppChrome mobileActive="planner" showMobileNav={false}>
         <div className="flex min-h-[calc(100dvh-8rem)] items-center justify-center px-4">
-          <LoginForm onContinueAsGuest={() => startTransition(() => setGuest(true))} />
+          <LoginForm onContinueAsGuest={() => startTransition(continueAsGuest)} />
         </div>
       </AppChrome>
     );

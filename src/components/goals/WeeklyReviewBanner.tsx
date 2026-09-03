@@ -41,15 +41,15 @@ export function WeeklyReviewBanner({
       </button>
     </div>
   ) : (
-    <div className="mt-1 flex items-center gap-2 rounded border border-sky-600/50 bg-sky-500/10 px-3 py-2">
-      <ClipboardCheck className="h-4 w-4 shrink-0 text-sky-300" />
-      <span className="flex-1 text-xs font-medium text-sky-200">
+    <div className="mt-1 flex items-center gap-2 rounded border border-share-primary/40 bg-share-primary/10 px-3 py-2">
+      <ClipboardCheck className="h-4 w-4 shrink-0 text-share-primary" />
+      <span className="flex-1 text-xs font-medium text-share-primary">
         Weekly review day — take 10 minutes to close the week.
       </span>
       <button
         type="button"
         onClick={onOpen}
-        className="shrink-0 rounded border border-sky-600 bg-sky-500/20 px-2 py-0.5 text-[10px] font-medium text-sky-300 hover:bg-sky-500/30 transition-colors"
+        className="shrink-0 rounded border border-share-primary/50 bg-share-primary/20 px-2 py-0.5 text-[10px] font-medium text-share-primary transition-colors hover:bg-share-primary/30"
       >
         Open ↓
       </button>

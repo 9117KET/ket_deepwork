@@ -18,6 +18,13 @@ export interface TaskSection {
   id: TaskSectionId;
   title: string;
   description?: string;
+  /**
+   * Two-word name for places that label a section in passing rather than head
+   * it: the NOW card, the collapsed one-line section rows. The full `title`
+   * carries a parenthetical that reads as noise once the section is only being
+   * referred to. Falls back to `title` when unset.
+   */
+  shortTitle?: string;
 }
 
 export interface Task {
@@ -268,6 +275,7 @@ export const FIXED_SECTIONS: TaskSection[] = [
   {
     id: "mustDo",
     title: "Your top 3 for today",
+    shortTitle: "Top 3",
   },
   {
     id: "morningRoutine",
@@ -277,16 +285,19 @@ export const FIXED_SECTIONS: TaskSection[] = [
   {
     id: "highPriority",
     title: "High Priority (Focus Tasks)",
+    shortTitle: "High priority",
     description: "Deep focus work that moves the needle.",
   },
   {
     id: "mediumPriority",
     title: "Medium Priority (Supplementary Tasks)",
+    shortTitle: "Medium priority",
     description: "Important but not mission-critical tasks.",
   },
   {
     id: "lowPriority",
     title: "Low Priority (Optional)",
+    shortTitle: "Low priority",
     description: "Nice-to-have or optional tasks.",
   },
   {
