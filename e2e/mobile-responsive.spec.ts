@@ -150,17 +150,12 @@ test('planner content clears its fixed bottom bar when scrolled to the end', asy
   await page.waitForTimeout(500)
 
   const result = await page.evaluate(() => {
-    // The planner tab bar: fixed, sits on the bottom edge, holds the Timer tab.
-    let bar: DOMRect | null = null
-    for (const el of Array.from(document.querySelectorAll('div'))) {
-      const cs = getComputedStyle(el)
-      const r = el.getBoundingClientRect()
-      if (
-        cs.position === 'fixed' && r.height > 0 && r.height < 120 &&
-        r.bottom >= window.innerHeight - 2 && el.textContent?.includes('Timer')
-      ) { bar = r; break }
-    }
-    if (!bar) return null
+    // The planner tab bar. Found by test id rather than by the text of one of
+    // its tabs — the labels are Today / Focus / Habits / Review now, and a
+    // rename should not read as "the bar is missing".
+    const barEl = document.querySelector('[data-testid="mobile-tab-bar"]')
+    if (!barEl) return null
+    const bar: DOMRect = barEl.getBoundingClientRect()
 
     // Lowest piece of real, non-fixed text content on the page.
     let lowest = 0
@@ -205,15 +200,8 @@ test('planner tab bar does not overlap the desktop sidebar at tablet widths', as
 
   const geom = await page.evaluate(() => {
     const aside = document.querySelector('aside')
-    let bar: DOMRect | null = null
-    for (const el of Array.from(document.querySelectorAll('div'))) {
-      const cs = getComputedStyle(el)
-      const r = el.getBoundingClientRect()
-      if (cs.position === 'fixed' && r.height > 0 && r.bottom >= window.innerHeight - 2 && el.textContent?.includes('Timer')) {
-        bar = r
-        break
-      }
-    }
+    const barEl = document.querySelector('[data-testid="mobile-tab-bar"]')
+    const bar = barEl ? barEl.getBoundingClientRect() : null
     return { asideRight: aside ? aside.getBoundingClientRect().right : null, barLeft: bar ? bar.left : null }
   })
 

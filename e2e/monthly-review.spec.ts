@@ -120,11 +120,38 @@ async function dismissDaySetupIfPresent(page: Page) {
  * Scroll to the MonthlyReviewCard in the tracking dashboard.
  * Returns when the "Monthly Review" card header is visible.
  */
-async function scrollToReviewCard(page: Page) {
-  await page.evaluate(() => {
-    document.getElementById('tracking-dashboard')?.scrollIntoView({ behavior: 'instant' })
-  })
-  await expect(page.getByText('Monthly Review').first()).toBeVisible({ timeout: 6_000 })
+/**
+ * The review cards live at /planner/review now, not under the day. Clicking
+ * "Open ↓" on the planner navigates there, so this waits for the card to
+ * arrive rather than scrolling to it.
+ */
+async function waitForReviewCard(page: Page) {
+  await page.waitForURL(/\/planner\/review/, { timeout: 15_000 }).catch(() => {})
+  await expect(page.getByText('Monthly Review').first()).toBeVisible({ timeout: 15_000 })
+}
+
+/**
+ * Wait for the Review route to be usable. The planner's `[data-tour="date-nav"]`
+ * is not on this page, so a reload here needs its own signal.
+ */
+async function waitForReviewPage(page: Page) {
+  await page.waitForFunction(
+    () => {
+      if (document.body.innerText.toLowerCase().includes('monthly tracking')) return true
+      const guest = Array.from(document.querySelectorAll('button')).find(
+        (b) => b.textContent?.trim() === 'Continue as guest',
+      )
+      if (guest) (guest as HTMLButtonElement).click()
+      return false
+    },
+    { timeout: 40_000, polling: 400 },
+  )
+}
+
+/** Back to the day, where the review banners live. */
+async function returnToPlanner(page: Page) {
+  await page.goto('/planner')
+  await page.waitForSelector('[data-tour="date-nav"]', { timeout: 20_000 })
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -158,7 +185,7 @@ test.describe('Monthly Review — end of month (May 30)', () => {
 
     // The card should now be expanded: "Monthly Review" header visible and
     // at least one textarea present (one per question).
-    await scrollToReviewCard(page)
+    await waitForReviewCard(page)
     await expect(page.locator('textarea').first()).toBeVisible({ timeout: 8_000 })
   })
 
@@ -166,7 +193,7 @@ test.describe('Monthly Review — end of month (May 30)', () => {
 
   test('review card has at least 7 question textareas', async ({ page }) => {
     await page.getByRole('button', { name: 'Open ↓' }).first().click()
-    await scrollToReviewCard(page)
+    await waitForReviewCard(page)
 
     // Wait for textareas to appear then count them
     await expect(page.locator('textarea').first()).toBeVisible({ timeout: 8_000 })
@@ -178,15 +205,16 @@ test.describe('Monthly Review — end of month (May 30)', () => {
 
   test('typing an answer in the first textarea does not crash the page', async ({ page }) => {
     await page.getByRole('button', { name: 'Open ↓' }).first().click()
-    await scrollToReviewCard(page)
+    await waitForReviewCard(page)
 
     const first = page.locator('textarea').first()
     await first.scrollIntoViewIfNeeded()
     await first.fill('Test answer — deep work tracking.')
     await page.waitForTimeout(600) // wait for debounce
 
-    // Page must still be alive — check header still visible
-    await expect(page.getByText(/Monthly review:/).first()).toBeVisible()
+    // Page must still be alive. The banner that used to prove that lives on
+    // the day; this is the Review route, so check the card's own header.
+    await expect(page.getByText('Monthly Review').first()).toBeVisible()
     // Value should still be in the textarea
     await expect(first).toHaveValue('Test answer — deep work tracking.')
   })
@@ -195,7 +223,7 @@ test.describe('Monthly Review — end of month (May 30)', () => {
 
   test('Mark review complete collapses the card and shows ✓ done badge', async ({ page }) => {
     await page.getByRole('button', { name: 'Open ↓' }).first().click()
-    await scrollToReviewCard(page)
+    await waitForReviewCard(page)
 
     const completeBtn = page.getByRole('button', { name: 'Mark review complete' })
     await completeBtn.scrollIntoViewIfNeeded()
@@ -212,15 +240,15 @@ test.describe('Monthly Review — end of month (May 30)', () => {
 
   test('banner switches to emerald done state after completing the review', async ({ page }) => {
     await page.getByRole('button', { name: 'Open ↓' }).first().click()
-    await scrollToReviewCard(page)
+    await waitForReviewCard(page)
 
     const completeBtn = page.getByRole('button', { name: 'Mark review complete' })
     await completeBtn.scrollIntoViewIfNeeded()
     await completeBtn.click()
 
-    // Scroll back to top to see the banner
-    await page.evaluate(() => window.scrollTo(0, 0))
-    await expect(page.getByText('Monthly review done').first()).toBeVisible({ timeout: 6_000 })
+    // The banner lives on the day, not in Review.
+    await returnToPlanner(page)
+    await expect(page.getByText('Monthly review done').first()).toBeVisible({ timeout: 10_000 })
     await expect(page.getByRole('button', { name: 'Revisit ↓' }).first()).toBeVisible()
     // After completion the monthly "Open ↓" is replaced by "Revisit ↓" in the monthly banner
     const monthlyOpenBtns = page.locator('.bg-amber-500\\/10 button', { hasText: 'Open ↓' })
@@ -231,14 +259,15 @@ test.describe('Monthly Review — end of month (May 30)', () => {
 
   test('Revisit ↓ re-expands the collapsed card after completion', async ({ page }) => {
     await page.getByRole('button', { name: 'Open ↓' }).first().click()
-    await scrollToReviewCard(page)
+    await waitForReviewCard(page)
 
     const completeBtn = page.getByRole('button', { name: 'Mark review complete' })
     await completeBtn.scrollIntoViewIfNeeded()
     await completeBtn.click()
 
-    await page.evaluate(() => window.scrollTo(0, 0))
+    await returnToPlanner(page)
     await page.getByRole('button', { name: 'Revisit ↓' }).click()
+    await waitForReviewCard(page)
 
     // Card should expand again — textareas visible
     await expect(page.locator('textarea').first()).toBeVisible({ timeout: 6_000 })
@@ -248,14 +277,15 @@ test.describe('Monthly Review — end of month (May 30)', () => {
 
   test('Reopen button inside the card removes the done state', async ({ page }) => {
     await page.getByRole('button', { name: 'Open ↓' }).first().click()
-    await scrollToReviewCard(page)
+    await waitForReviewCard(page)
 
     const completeBtn = page.getByRole('button', { name: 'Mark review complete' })
     await completeBtn.scrollIntoViewIfNeeded()
     await completeBtn.click()
 
-    await page.evaluate(() => window.scrollTo(0, 0))
+    await returnToPlanner(page)
     await page.getByRole('button', { name: 'Revisit ↓' }).click()
+    await waitForReviewCard(page)
 
     // Use exact:true so we target the "Reopen" action button, not the full card header button
     const reopenBtn = page.getByRole('button', { name: 'Reopen', exact: true })
@@ -303,13 +333,15 @@ test.describe('Monthly Review — mid-month navigation', () => {
     await expect(page.getByText(/Monthly review:/).first()).not.toBeVisible({ timeout: 4_000 })
   })
 
-  test('review card in tracking dashboard is still accessible mid-month', async ({ page }) => {
+  test('review card is still reachable mid-month, from its own route', async ({ page }) => {
     for (let i = 0; i < 15; i++) {
       await page.getByRole('button', { name: 'Previous day', exact: true }).first().click()
     }
-    await scrollToReviewCard(page)
-    // Card header is always in the DOM; may be collapsed but header is visible
-    await expect(page.getByText('Monthly Review').first()).toBeVisible()
+    // The banner is gone mid-month, but Review is a destination you can always
+    // walk to. The card header is in the DOM whether or not it is expanded.
+    await page.goto('/planner/review')
+    await waitForReviewPage(page)
+    await expect(page.getByText('Monthly Review').first()).toBeVisible({ timeout: 15_000 })
   })
 })
 
@@ -375,7 +407,7 @@ test.describe('Monthly Review — persistence (guest mode)', () => {
     }
 
     await page.getByRole('button', { name: 'Open ↓' }).first().click()
-    await scrollToReviewCard(page)
+    await waitForReviewCard(page)
 
     const textareas = page.locator('textarea')
     await textareas.first().scrollIntoViewIfNeeded()
@@ -396,51 +428,32 @@ test.describe('Monthly Review — persistence (guest mode)', () => {
     })
     expect(saved).toBe('Persistence test answer.')
 
-    // Reload and verify answer still shows
+    // Reload. We are on /planner/review?open=monthly, so the card re-expands
+    // on its own — there is no banner here to click a second time.
     await page.reload()
-    await page.waitForFunction(
-      () => {
-        if (document.querySelector('[data-tour="date-nav"]')) return true
-        const btns = Array.from(document.querySelectorAll('button'))
-        const guest = btns.find(b => b.textContent?.trim() === 'Continue as guest')
-        if (guest) (guest as HTMLButtonElement).click()
-        return false
-      },
-      { timeout: 40_000, polling: 400 },
-    )
-    const skipBtn = page.getByRole('button', { name: 'Skip for today' })
-    if (await skipBtn.isVisible({ timeout: 2_000 }).catch(() => false)) await skipBtn.click()
+    await waitForReviewPage(page)
 
-    await page.getByRole('button', { name: 'Open ↓' }).first().click()
-    await scrollToReviewCard(page)
-
-    await expect(textareas.first()).toHaveValue('Persistence test answer.', { timeout: 6_000 })
+    await expect(textareas.first()).toHaveValue('Persistence test answer.', { timeout: 8_000 })
   })
 
   test('completed state survives a page reload', async ({ page }) => {
     await page.getByRole('button', { name: 'Open ↓' }).first().click()
-    await scrollToReviewCard(page)
+    await waitForReviewCard(page)
 
     const completeBtn = page.getByRole('button', { name: 'Mark review complete' })
     await completeBtn.scrollIntoViewIfNeeded()
     await completeBtn.click()
 
-    await page.evaluate(() => window.scrollTo(0, 0))
-    await expect(page.getByText('Monthly review done').first()).toBeVisible()
-
-    await page.reload()
-    await page.waitForFunction(
-      () => {
-        if (document.querySelector('[data-tour="date-nav"]')) return true
-        const btns = Array.from(document.querySelectorAll('button'))
-        const guest = btns.find(b => b.textContent?.trim() === 'Continue as guest')
-        if (guest) (guest as HTMLButtonElement).click()
-        return false
-      },
-      { timeout: 40_000, polling: 400 },
-    )
+    // The done banner lives on the day, not on the Review route.
+    await returnToPlanner(page)
     const skipBtn = page.getByRole('button', { name: 'Skip for today' })
     if (await skipBtn.isVisible({ timeout: 2_000 }).catch(() => false)) await skipBtn.click()
+    await expect(page.getByText('Monthly review done').first()).toBeVisible({ timeout: 8_000 })
+
+    await page.reload()
+    await page.waitForSelector('[data-tour="date-nav"]', { timeout: 20_000 })
+    const skipAgain = page.getByRole('button', { name: 'Skip for today' })
+    if (await skipAgain.isVisible({ timeout: 2_000 }).catch(() => false)) await skipAgain.click()
 
     await expect(page.getByText('Monthly review done').first()).toBeVisible({ timeout: 8_000 })
     await expect(page.getByRole('button', { name: 'Revisit ↓' })).toBeVisible()

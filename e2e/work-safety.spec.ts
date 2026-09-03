@@ -130,6 +130,27 @@ async function openPlanner(page: Page) {
   const skip = page.getByRole('button', { name: 'Skip for today' })
   if (await skip.isVisible({ timeout: 3_000 }).catch(() => false)) await skip.click()
   await page.waitForTimeout(600)
+
+  // A restored block takes the desktop screen (FocusMode). Esc leaves it and
+  // never touches the block — these tests act on the sidebar timer and the
+  // task rows underneath, so the cover has to come off first.
+  if (await page.getByTestId('focus-mode').isVisible({ timeout: 2_000 }).catch(() => false)) {
+    await page.keyboard.press('Escape')
+    await page.waitForTimeout(300)
+  }
+
+  // Sections default to collapsed unless their own block is running, so the
+  // seeded High Priority rows are hidden outside 9-5. Expanding explicitly
+  // keeps these tests independent of the hour they run at.
+  const expand = page
+    .locator('section')
+    .filter({ has: page.getByRole('heading', { name: 'High Priority (Focus Tasks)' }) })
+    .first()
+    .getByRole('button', { name: 'Expand section' })
+  if (await expand.count()) {
+    await expand.click()
+    await page.waitForTimeout(200)
+  }
 }
 
 /** The persisted planner state, as the app would reload it. */

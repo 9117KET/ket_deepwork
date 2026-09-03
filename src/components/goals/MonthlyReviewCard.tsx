@@ -92,7 +92,10 @@ export function MonthlyReviewCard({ monthKey, questions, review, onUpdate, force
   const monthlyGoal = goalHours !== undefined ? goalHours * 4 : undefined
 
   return (
-    <div className="mt-3 rounded border border-amber-900/40 bg-share-surfaceContainerLow p-3">
+    <div
+      data-testid="monthly-review-card"
+      className="mt-3 rounded border border-share-outlineVariant/30 bg-share-surfaceContainerLow p-3"
+    >
       <button
         type="button"
         className="touch-target-coarse flex w-full items-center justify-between gap-2"

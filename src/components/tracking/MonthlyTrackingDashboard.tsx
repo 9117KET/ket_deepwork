@@ -47,6 +47,14 @@ interface MonthlyTrackingDashboardProps {
     weeklyReviewDay?: AppState['weeklyReviewDay']
     weeklyReviewQuestions?: AppState['weeklyReviewQuestions']
   }) => void
+  /**
+   * Month to show, when the page owns the stepper. The Review screen puts it
+   * in the page header, beside the title, so it reads as the scope of the
+   * whole screen rather than of one card inside it. Left unset, the dashboard
+   * keeps its own month and renders its own stepper as before.
+   */
+  monthId?: string
+  onMonthChange?: (monthId: string) => void
   /** Increment to scroll to and expand the monthly review card. */
   scrollToReview?: number
   /** Increment to scroll to and expand the weekly review card. */
@@ -66,11 +74,19 @@ export function MonthlyTrackingDashboard({
   referenceDay,
   onUpdateDay,
   onUpdateSettings,
+  monthId,
+  onMonthChange,
   scrollToReview,
   weeklyReviewOpenTrigger,
   onUpdateWeeklyReview,
 }: MonthlyTrackingDashboardProps) {
-  const [selectedMonthId, setSelectedMonthId] = useState(() => toMonthId(referenceDay))
+  const [internalMonthId, setInternalMonthId] = useState(() => toMonthId(referenceDay))
+  const isMonthControlled = monthId !== undefined
+  const selectedMonthId = isMonthControlled ? monthId : internalMonthId
+  const setSelectedMonthId = useCallback(
+    (next: string) => (isMonthControlled ? onMonthChange?.(next) : setInternalMonthId(next)),
+    [isMonthControlled, onMonthChange],
+  )
   const [moodPickerDay, setMoodPickerDay] = useState<string | null>(null)
   const [editingGoal, setEditingGoal] = useState(false)
   const [goalInput, setGoalInput] = useState('')
@@ -194,11 +210,13 @@ export function MonthlyTrackingDashboard({
           </h3>
           <p className="text-xs text-share-onSurfaceVariant">Block completion and mood by day.</p>
         </div>
-        <div className="flex items-center gap-2">
+        {/* Hidden when the page owns the stepper, so the month is not steerable
+            from two places at once. */}
+        <div className={`flex items-center gap-2${isMonthControlled ? ' hidden' : ''}`}>
           <button
             type="button"
             onClick={() => setSelectedMonthId(previousMonthId(selectedMonthId))}
-            className="touch-target-coarse rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-2 py-1 text-xs text-share-onSurface hover:border-sky-600 hover:text-sky-300"
+            className="touch-target-coarse rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-2 py-1 text-xs text-share-onSurface hover:border-share-primary/60 hover:text-share-primary"
             aria-label="Previous month"
           >
             ←
@@ -209,7 +227,7 @@ export function MonthlyTrackingDashboard({
           <button
             type="button"
             onClick={() => setSelectedMonthId(nextMonthId(selectedMonthId))}
-            className="touch-target-coarse rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-2 py-1 text-xs text-share-onSurface hover:border-sky-600 hover:text-sky-300"
+            className="touch-target-coarse rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-2 py-1 text-xs text-share-onSurface hover:border-share-primary/60 hover:text-share-primary"
             aria-label="Next month"
           >
             →
@@ -217,10 +235,12 @@ export function MonthlyTrackingDashboard({
         </div>
       </header>
 
+      <div id="review-goals">
       <GoalCascadeSection
         goalCascade={state.goalCascade}
         onUpdate={handleUpdateCascade}
       />
+      </div>
 
       <div className="mb-3">
         <label className="block text-xs text-share-onSurfaceVariant mb-1">This chapter is called:</label>
@@ -229,7 +249,7 @@ export function MonthlyTrackingDashboard({
           value={chapterTitle}
           onChange={(e) => handleSetChapterTitle(e.target.value)}
           placeholder="e.g. The Foundation"
-          className="w-full rounded border border-share-outlineVariant/40 bg-share-surfaceContainerLow px-2 py-1.5 text-sm text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-sky-600 focus:outline-none"
+          className="w-full rounded border border-share-outlineVariant/40 bg-share-surfaceContainerLow px-2 py-1.5 text-sm text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-share-primary/60 focus:outline-none"
         />
       </div>
 
@@ -283,7 +303,7 @@ export function MonthlyTrackingDashboard({
             </div>
             <div className="mb-2 h-2 w-full overflow-hidden rounded-full bg-share-outlineVariant/25">
               <div
-                className="h-full rounded-full bg-sky-500 transition-[width] duration-300"
+                className="h-full rounded-full bg-share-primary transition-[width] duration-300"
                 style={{ width: `${progressPct}%` }}
               />
             </div>
@@ -362,7 +382,7 @@ export function MonthlyTrackingDashboard({
                     setEditingReviewDay(false)
                   }}
                   onBlur={() => setEditingReviewDay(false)}
-                  className="touch-target-coarse rounded border border-sky-600 bg-share-surfaceContainerHigh px-2 py-0.5 text-xs text-share-onBg focus:outline-none"
+                  className="touch-target-coarse rounded border border-share-primary/60 bg-share-surfaceContainerHigh px-2 py-0.5 text-xs text-share-onBg focus:outline-none"
                 >
                   {([1,2,3,4,5,6,7] as const).map(d => (
                     <option key={d} value={d}>{weekdayName(d)}</option>
@@ -372,7 +392,7 @@ export function MonthlyTrackingDashboard({
                 <button
                   type="button"
                   onClick={() => setEditingReviewDay(true)}
-                  className="touch-target-coarse rounded px-1 text-left text-xs text-sky-400 underline decoration-dotted hover:text-sky-300"
+                  className="touch-target-coarse rounded px-1 text-left text-xs text-share-primary underline decoration-dotted hover:text-share-primary/80"
                   title="Click to change weekly review day"
                 >
                   {weekdayName(state.weeklyReviewDay ?? 5)}
@@ -382,6 +402,7 @@ export function MonthlyTrackingDashboard({
           </div>
         )
       })()}
+      <div id="review-block-grid" />
       <BlockCompletionGrid
         state={state}
         monthDays={monthDays}
@@ -409,7 +430,7 @@ export function MonthlyTrackingDashboard({
             {moodHabitInsight.highAvg != null && moodHabitInsight.lowAvg != null && (
               <p className="text-xs text-share-onSurfaceVariant">
                 Your mood averages{' '}
-                <span className="font-semibold text-sky-300">{moodHabitInsight.highAvg}/5</span> when
+                <span className="font-semibold text-share-primary">{moodHabitInsight.highAvg}/5</span> when
                 you complete 60%+ of habits vs.{' '}
                 <span className="font-semibold text-share-onSurface">{moodHabitInsight.lowAvg}/5</span>{' '}
                 on lower-completion days.
@@ -423,7 +444,7 @@ export function MonthlyTrackingDashboard({
         </div>
       )}
 
-      <div ref={reviewRef}>
+      <div ref={reviewRef} id="review-monthly">
         <MonthlyReviewCard
           monthKey={selectedMonthId}
           questions={state.monthlyReviewQuestions ?? []}
@@ -437,7 +458,7 @@ export function MonthlyTrackingDashboard({
 
       {/* Weekly review card */}
       {onUpdateWeeklyReview && (
-        <div ref={weeklyReviewRef}>
+        <div ref={weeklyReviewRef} id="review-weekly">
           <WeeklyReviewCard
             dateKey={referenceDay}
             questions={state.weeklyReviewQuestions ?? []}
@@ -471,6 +492,7 @@ export function MonthlyTrackingDashboard({
       )}
 
       <HabitGridBoundary>
+        <div id="review-habit-grid" />
         <HabitTrackingGrid
           state={state}
           monthDays={monthDays}
@@ -508,24 +530,32 @@ function computeDayMode(total: number, completed: number): DayMode | null {
 }
 
 /**
- * Returns the Tailwind bg class for a block cell based on completion ratio.
- * No tasks   → transparent (show dot only)
- * 0% done    → red tint
- * 1–99%      → amber tint
- * 100% done  → sky/green tint
+ * The Tailwind bg class for a block cell.
+ *
+ * Three states in one accent, per rule 4 of the redesign: full is the accent,
+ * partial is the accent dimmed, missed is a neutral track. It used to be
+ * sky / amber / red — three separate hues, of which amber and red are spoken
+ * for elsewhere as warnings. A block you planned and did not finish on the 3rd
+ * of last month is history, not an alarm, and colouring it like an alarm made
+ * a month of ordinary days look like a wall of failures.
+ *
+ * No tasks   → transparent (a dot only: nothing was planned)
+ * 0% done    → neutral track
+ * 1-99%      → dimmed accent
+ * 100% done  → accent
  */
 function blockCellClass(total: number, completed: number): string {
   if (total === 0) return ''
-  if (completed === 0) return 'bg-red-500/20'
-  if (completed >= total) return 'bg-sky-500/25'
-  return 'bg-amber-500/20'
+  if (completed === 0) return 'bg-share-outlineVariant/25'
+  if (completed >= total) return 'bg-share-primary/80'
+  return 'bg-share-primary/30'
 }
 
 function blockCellContent(total: number, completed: number): React.ReactNode {
   if (total === 0) return <span className="text-share-onSurfaceVariant/40">·</span>
-  if (completed >= total) return <span className="text-sky-400 font-medium">✓</span>
+  if (completed >= total) return <span className="font-medium text-share-onPrimary">✓</span>
   return (
-    <span className="text-[9px] leading-none text-amber-300">
+    <span className="text-[9px] leading-none text-share-onBg">
       {completed}/{total}
     </span>
   )
@@ -582,7 +612,7 @@ function HabitTrackingGrid({
       <h4 className="text-xs font-medium text-share-onSurface mb-1">Habit tracking</h4>
       <p className="text-[10px] text-share-onSurfaceVariant/50 mb-2">
         Check off each habit daily. Streak = consecutive completed days.
-        <span className="ml-2 text-sky-400">✓ = done</span>
+        <span className="ml-2 text-share-primary">✓ = done</span>
       </p>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[600px] border-collapse text-xs table-fixed">
@@ -622,12 +652,12 @@ function HabitTrackingGrid({
                   return (
                     <td
                       key={isoDate}
-                      className={`${dayBodyCell} ${done ? 'bg-sky-500/20' : 'bg-share-surfaceContainerLow'}`}
+                      className={`${dayBodyCell} ${done ? 'bg-share-primary/25' : 'bg-share-surfaceContainerLow'}`}
                       title={done ? 'Completed' : 'Not completed'}
                     >
                       <div className="flex h-6 w-full items-center justify-center">
                         {done ? (
-                          <span className="text-sky-400 font-medium">✓</span>
+                          <span className="font-medium text-share-primary">✓</span>
                         ) : (
                           <span className="text-share-onSurfaceVariant/40">·</span>
                         )}
@@ -637,7 +667,7 @@ function HabitTrackingGrid({
                 })}
                 <td className="border border-share-outlineVariant/30 bg-share-surfaceContainerHigh px-1 py-0.5 text-center">
                   {(streaks[habit.id] ?? 0) > 0 ? (
-                    <span className="text-xs text-orange-400">{streaks[habit.id]}</span>
+                    <span className="text-xs font-semibold text-share-primary">{streaks[habit.id]}</span>
                   ) : (
                     <span className="text-share-onSurfaceVariant/40">·</span>
                   )}
@@ -690,10 +720,18 @@ function BlockCompletionGrid({
       <h4 className="text-xs font-medium text-share-onSurface mb-1">Block completion rate</h4>
       <p className="text-[10px] text-share-onSurfaceVariant/50 mb-2">
         From your planner tasks. Rate per block (not individual tasks) so it stays accurate as tasks change.
-        <span className="ml-2 text-sky-400">✓ = 100%</span>
-        <span className="ml-1 text-amber-300">n/m = partial</span>
-        <span className="ml-1 text-red-400/70">0%</span>
       </p>
+      <div className="mb-2 flex items-center gap-3.5 text-[10px] text-share-onSurfaceVariant/70">
+        <span className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-sm bg-share-primary/80" />full
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-sm bg-share-primary/30" />partial
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-sm bg-share-outlineVariant/25" />missed
+        </span>
+      </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[600px] border-collapse text-xs table-fixed">
           <colgroup>
@@ -733,7 +771,7 @@ function BlockCompletionGrid({
                       {total === 0 ? (
                         <span className="text-share-onSurfaceVariant/40">·</span>
                       ) : pct >= 100 ? (
-                        <span className="text-sky-400 font-medium">✓</span>
+                        <span className="font-medium text-share-primary">✓</span>
                       ) : (
                         <span className="text-[9px] leading-none text-amber-300">{Math.round(pct)}%</span>
                       )}

@@ -148,5 +148,58 @@ it updates in place rather than creating a second one. The seeded output is
 
 ## Status
 
-These are **static mockups**, not a prototype: no working controls, no state.
-Nothing in `src/` has been changed to match them.
+The artboards are **static mockups** — no working controls, no state. They stay
+the reference; the list below is how much of them the app has actually grown.
+
+| Rule | State | Where |
+|---|---|---|
+| 1. A screen renders only what it owns | **done** | the dashboard and journal left `DayPlanner` |
+| 2. Month-scale views live in Review | **done** | `src/pages/ReviewPage.tsx` at `/planner/review` |
+| 3. Sections earn their space | **done** | `SectionColumn` defaults to collapsed unless its block is running |
+| 4. One accent | **done** | see the note below |
+| 5. Desktop is not mobile stretched | **done** | rail leads with Focus / Habits / One Thing; Focus mode covers the day |
+
+| Artboard | State | Where |
+|---|---|---|
+| desktop `Main` | **done** | `NowCard.tsx` + `nowFocus.ts`, collapsed sections, reordered rail |
+| desktop `DesktopReview` | **done** | `ReviewPage` layout, `ReviewStatTiles.tsx`, `ReviewRail.tsx`, `reviewStats.ts` |
+| desktop `DesktopFocus` | **done** | `src/components/timer/FocusMode.tsx` |
+| mobile `Main` | **done** | the same NOW card; the Today tab is the day alone |
+| mobile `Focus` | **done** | `src/components/timer/MobileFocusPanel.tsx` |
+| mobile `Habits` | **done** | `src/components/habits/MobileHabitsPanel.tsx` + `habitWeek.ts` |
+| mobile `Review` | **done** | `src/components/tracking/MobileReviewPanel.tsx` |
+| `Diagnosis`, `IA` | reference boards, nothing to build | — |
+| `TimelineDay`, `OneThing` | alternates, not chosen | — |
+
+**Gated by `e2e/mobile-redesign.spec.ts`.** Two of its ten tests are the
+diagnosis kept as a regression gate: no tab may render the monthly dashboard,
+and the Today tab must stay under 2,200px. They fail first if a month-scale
+card is put back onto the day. Measured now, with four tasks seeded: the Today
+tab scrolls well under that, against 3,273px with two tasks before.
+
+**The tab bar changed shape.** `MobileTab` is `today | focus | habits`; Stats
+is gone and Review is a route, so the bar links to `/planner/review` rather
+than toggling a panel. Review carries the same bar, and hands the chosen tab
+back through `?tab=`.
+
+**The phone does not mount what it does not show.** `useIsDesktop` gates the
+month-scale content on Review, so a phone builds neither 31-column grid until
+"Open the month grid" is tapped. `lg:hidden` would have hidden it while still
+building every node.
+
+**On rule 4.** The sky, violet and orange accents are gone from the Review
+screen and the day: the running block, the grids, the goal cascade, the review
+cards and the review reminders all wear `share.primary`. Amber and red survive
+only where they mean act-now (over capacity, critical overload, discarding
+worked minutes). One deliberate exception: emerald still marks *completed* —
+shutdown done, a review written. "Finished" and "urgent" sharing one colour
+would be worse than the rule it satisfies, and no artboard shows a done badge.
+
+**Deviation from `DesktopReview`.** The artboard puts the block-completion grid
+alone in the left column with everything else behind rail links. The build
+keeps the full dashboard scrolling under the stat tiles and makes the rail a
+table of contents into it, so nothing that used to be reachable stopped being
+reachable. Same shape at the top, more under it.
+
+Measured after the above, at 390x844 with eight tasks seeded: the Plan tab
+scrolls 1,786px, against 3,273px with two tasks before.

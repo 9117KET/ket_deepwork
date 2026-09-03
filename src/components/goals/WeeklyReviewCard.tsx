@@ -92,7 +92,10 @@ export function WeeklyReviewCard({
   const showStats = weeklyHours !== undefined && goalHours !== undefined
 
   return (
-    <div className="mt-3 rounded border border-sky-900/40 bg-share-surfaceContainerLow p-3">
+    <div
+      data-testid="weekly-review-card"
+      className="mt-3 rounded border border-share-primary/20 bg-share-surfaceContainerLow p-3"
+    >
       <button
         type="button"
         className="touch-target-coarse flex w-full items-center justify-between gap-2"
@@ -101,7 +104,7 @@ export function WeeklyReviewCard({
       >
         <div className="flex items-center gap-1.5">
           <span className="text-[10px] text-share-onSurfaceVariant/50">{collapsed ? '▸' : '▾'}</span>
-          <span className="text-xs font-semibold text-sky-300">Weekly Review</span>
+          <span className="text-xs font-semibold text-share-primary">Weekly Review</span>
           {isComplete && (
             <span className="rounded-full bg-emerald-500/20 px-1.5 py-0.5 text-[9px] font-medium text-emerald-300">
               ✓ done
@@ -112,7 +115,7 @@ export function WeeklyReviewCard({
           <button
             type="button"
             onClick={e => { e.stopPropagation(); handleMarkComplete() }}
-            className="rounded border border-sky-700 bg-sky-500/10 px-2 py-0.5 text-[10px] text-sky-300 hover:bg-sky-500/20 transition-colors"
+            className="rounded border border-share-primary/50 bg-share-primary/10 px-2 py-0.5 text-[10px] text-share-primary transition-colors hover:bg-share-primary/20"
           >
             Mark complete
           </button>
@@ -156,7 +159,7 @@ export function WeeklyReviewCard({
             <button
               type="button"
               onClick={handleMarkComplete}
-              className="mt-1 w-full rounded border border-sky-700 bg-sky-500/10 py-1.5 text-xs font-medium text-sky-300 hover:bg-sky-500/20 transition-colors"
+              className="mt-1 w-full rounded border border-share-primary/50 bg-share-primary/10 py-1.5 text-xs font-medium text-share-primary transition-colors hover:bg-share-primary/20"
             >
               Mark weekly review complete
             </button>

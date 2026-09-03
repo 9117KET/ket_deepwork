@@ -6,13 +6,13 @@
  */
 
 import type React from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useTransition, type SetStateAction } from "react";
 import {
   DEFAULT_HABIT_DEFINITIONS,
   FIXED_SECTIONS,
   type AppState,
   type BlockDurations,
-  type DayState,
   type HabitDefinition,
   type Task,
   type TaskSectionId,
@@ -50,12 +50,16 @@ import {
   usePersistentState,
   getOrCreateDay,
 } from "../../storage/localStorageState";
+import { selectNowFocus } from "../../domain/nowFocus";
 import { computeDayCompletion, computePerHabitStreaks, getAtRiskHabitIds, computeDailyDeepWorkMinutes } from "../../domain/stats";
 import { DayHeader } from "./DayHeader";
+import { NowCard } from "./NowCard";
 import { SectionColumn } from "./SectionColumn";
 import { WeeklyOverview } from "./WeeklyOverview";
-import { MonthlyTrackingDashboard } from "../tracking";
 import { DeepWorkTimer } from "../timer/DeepWorkTimer";
+import { MobileFocusPanel } from "../timer/MobileFocusPanel";
+import { MobileHabitsPanel } from "../habits/MobileHabitsPanel";
+import { FocusMode } from "../timer/FocusMode";
 import { useDeepWorkTimer, type TimerTaskOption } from "../timer/useDeepWorkTimer";
 import { FocusBlockContext } from "./focusBlockContext";
 import { MotivationCard } from "../timer/MotivationCard";
@@ -68,7 +72,6 @@ import { TomorrowMustPanel } from "./TomorrowMustPanel";
 import { MustDoPinnedHeader } from "./MustDoPinnedHeader";
 import { MonthlyReviewBanner } from "../goals/MonthlyReviewBanner";
 import { WeeklyReviewBanner } from "../goals/WeeklyReviewBanner";
-import { DayJournalCard } from "./DayJournalCard";
 import { ShutdownRitualModal } from "./ShutdownRitualModal";
 import { SideQuestSection } from "./SideQuestSection";
 import { getDailyQuestSelection } from "../../domain/sideQuestAlgorithm";
@@ -158,6 +161,7 @@ export function DayPlanner({
    */
   const undoable = useUndoableActions(appState, baseUpdateAppState);
   const updateAppState = undoable.update;
+  const navigate = useNavigate();
   const [internalSelectedDay, setInternalSelectedDay] = useState<string>(todayIso);
   const isSelectedDayControlled = selectedDayProp !== undefined;
   const selectedDay = isSelectedDayControlled ? selectedDayProp : internalSelectedDay;
@@ -182,7 +186,16 @@ export function DayPlanner({
     [isSelectedDayControlled, selectedDayProp, onSelectedDayChange],
   );
   const [splitRatio, setSplitRatio] = useState(0.68); // fraction of width for task column
-  const [mobileTab, setMobileTab] = useState<MobileTab>('plan');
+  /**
+   * Review is a separate route, so its copy of the tab bar hands the chosen tab
+   * back through the URL. Without this, tapping Habits from Review landed on
+   * the planner showing Today.
+   */
+  const [searchParams] = useSearchParams();
+  const [mobileTab, setMobileTab] = useState<MobileTab>(() => {
+    const requested = searchParams.get('tab');
+    return requested === 'focus' || requested === 'habits' ? requested : 'today';
+  });
   const gridRef = useRef<HTMLDivElement | null>(null);
   const dragStateRef = useRef<{
     startX: number;
@@ -256,7 +269,6 @@ export function DayPlanner({
     handleCopyFromDay,
     handleUpdateTask,
     handleUpdateMonthlyReview: _handleUpdateMonthlyReview,
-    handleUpdateWeeklyReview,
     handleToggleSideQuestCompletion,
     handleSaveSideQuestDefs,
     handleSessionComplete,
@@ -443,16 +455,6 @@ export function DayPlanner({
     [updateAppState],
   );
 
-  const handleTrackingUpdateDay = useCallback(
-    (isoDate: string, updatedDay: DayState) => {
-      updateAppState((prev) => {
-        const existing = getOrCreateDay(prev, isoDate);
-        return { ...prev, days: { ...prev.days, [isoDate]: { ...existing, ...updatedDay } } };
-      });
-    },
-    [updateAppState],
-  );
-
   const handleTrackingUpdateSettings = useCallback(
     (patch: {
       habitDefinitions?: HabitDefinition[];
@@ -489,8 +491,14 @@ export function DayPlanner({
   const [moveSubtaskId, setMoveSubtaskId] = useState<string | null>(null);
   const [bulkMoveOpen, setBulkMoveOpen] = useState(false);
   const [editSideQuestOpen, setEditSideQuestOpen] = useState(false);
-  const [reviewOpenTrigger, setReviewOpenTrigger] = useState(0);
-  const [weeklyReviewOpenTrigger, setWeeklyReviewOpenTrigger] = useState(0);
+  /**
+   * The review cards live at /planner/review now, so a banner navigates there
+   * and names which card to open rather than nudging a local trigger.
+   */
+  const openReview = useCallback(
+    (target: 'monthly' | 'weekly') => navigate(`/planner/review?open=${target}`),
+    [navigate],
+  );
   const [showShutdown, setShowShutdown] = useState(false);
   /** Task the deep work timer is currently pointed at, if any. */
   const [timerTaskId, setTimerTaskId] = useState<string | undefined>(undefined);
@@ -601,6 +609,46 @@ Delete anyway?`);
    * block is under way rather than retargeting it - those minutes are already
    * being earned by something else.
    */
+  /**
+   * Desktop Focus: a running block covers the day. Dismissing is remembered
+   * for as long as that block lasts, so a screen you pushed away stays away
+   * instead of reappearing a second later; the next block starts clean.
+   */
+  const [focusDismissed, setFocusDismissed] = useState(false);
+  const timerRunning = timer.status === 'running' || timer.status === 'paused';
+  useEffect(() => {
+    if (!timerRunning) setFocusDismissed(false);
+  }, [timerRunning]);
+  const showFocusMode = !shareMode && timerRunning && !focusDismissed;
+
+  const focusTaskProgress = useMemo(() => {
+    const taskId = timer.selectedTask?.id;
+    if (!taskId) return null;
+    const task = dayState.tasks.find((t) => t.id === taskId);
+    if (!task) return null;
+    return computeTaskProgress(task, dayState.deepWorkSessions ?? [], blockMinutes);
+  }, [timer.selectedTask, dayState.tasks, dayState.deepWorkSessions, blockMinutes]);
+
+  /** Blocks already banked today, so the running one can be numbered. */
+  const completedBlocksToday = (dayState.deepWorkSessions ?? []).filter(
+    (session) => !session.cancelledAt,
+  ).length;
+
+  /**
+   * What the clock says you should be on. Only for today: on any other day
+   * there is no "now" to point at, and a card that guessed would be lying.
+   * Shared views get no card either — a read-only planner has no timer to start.
+   */
+  const nowFocus = useMemo(() => {
+    if (shareMode || selectedDay !== todayIso()) return null;
+    return selectNowFocus(dayState.tasks, activeSectionIds);
+  }, [shareMode, selectedDay, dayState.tasks, activeSectionIds]);
+
+  const nowProgress = useMemo(() => {
+    if (!nowFocus || nowFocus.kind !== 'task') return null;
+    return computeTaskProgress(nowFocus.task, dayState.deepWorkSessions ?? [], blockMinutes);
+  }, [nowFocus, dayState.deepWorkSessions, blockMinutes]);
+
   const handleStartBlock = useCallback((taskId: string, minutes: number) => {
     const task = dayState.tasks.find((t) => t.id === taskId);
     const result = timer.startBlock({ taskId, minutes, label: task?.title });
@@ -888,6 +936,7 @@ Delete anyway?`);
           depthPhilosophy={shareMode ? undefined : appState.depthPhilosophy}
           shutdownCompleted={shareMode ? undefined : shutdownAlreadyDone}
           onShutdown={shareMode ? undefined : () => setShowShutdown(true)}
+          onOpenReview={shareMode ? undefined : () => navigate('/planner/review')}
         />
         {!shareMode && (
           <MustDoPinnedHeader
@@ -919,7 +968,7 @@ Delete anyway?`);
                 <MonthlyReviewBanner
                   selectedDay={selectedDay}
                   review={appState.monthlyReviews?.[toMonthId(selectedDay)]}
-                  onOpen={() => setReviewOpenTrigger((t) => t + 1)}
+                  onOpen={() => openReview('monthly')}
                 />
               )
             }
@@ -929,7 +978,7 @@ Delete anyway?`);
                   selectedDay={selectedDay}
                   review={appState.weeklyReviews?.[selectedDay]}
                   reviewWeekday={appState.weeklyReviewDay ?? 5}
-                  onOpen={() => setWeeklyReviewOpenTrigger((t) => t + 1)}
+                  onOpen={() => openReview('weekly')}
                 />
               )
             }
@@ -950,7 +999,7 @@ Delete anyway?`);
               {showMonthly && (
                 <button
                   type="button"
-                  onClick={() => setReviewOpenTrigger((t) => t + 1)}
+                  onClick={() => openReview('monthly')}
                   className={`rounded border px-2 py-0.5 font-medium transition-colors ${
                     monthlyDone
                       ? 'border-emerald-700/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
@@ -964,7 +1013,7 @@ Delete anyway?`);
               {showWeekly && (
                 <button
                   type="button"
-                  onClick={() => setWeeklyReviewOpenTrigger((t) => t + 1)}
+                  onClick={() => openReview('weekly')}
                   className={`rounded border px-2 py-0.5 font-medium transition-colors ${
                     weeklyDone
                       ? 'border-emerald-700/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
@@ -1122,7 +1171,7 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
               }
         }
       >
-        <div className={`space-y-3${!shareShellLayout && mobileTab !== 'plan' ? ' hidden lg:block' : ''}`} data-tour="tasks-section">
+        <div className={`space-y-3${!shareShellLayout && mobileTab !== 'today' ? ' hidden lg:block' : ''}`} data-tour="tasks-section">
          <ErrorBoundary
            resetKeys={[selectedDay]}
            fallback={(reset) => (
@@ -1139,6 +1188,18 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
              </div>
            )}
          >
+          {/* The day opens by naming the one thing, not by listing six sections. */}
+          {nowFocus && (
+            <NowCard
+              focus={nowFocus}
+              timeframeLabel={timeframeLabelsBySection[nowFocus.sectionId]}
+              progress={nowProgress}
+              blockMinutes={blockMinutes}
+              onToggleTask={handleToggleTask}
+              onStartBlock={handleStartBlock}
+              onOpenActions={setProgressSheetTaskId}
+            />
+          )}
           {!shareMode && (() => {
             const shallowMinutesUsed = (appState.days[selectedDay]?.tasks ?? [])
               .filter((t) => t.isShallow && t.isDone && t.durationMinutes)
@@ -1154,19 +1215,23 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
             )
           })()}
           {FIXED_SECTIONS.filter(s => s.id !== 'mustDo' && s.id !== 'sideQuest').map((section) => {
+            // The clock only speaks about today. Yesterday has no active block,
+            // so it must not auto-expand one or claim a section is running.
             const isActive = !shareMode && selectedDay === todayIso() && activeSectionIds.includes(section.id)
             const isDeepBlock = !shareMode && section.id === 'highPriority' && appState.depthPhilosophy === 'rhythmic'
             const timeLabel = timeframeLabelsBySection[section.id]
             return (
             <Fragment key={section.id}>
-              {(isDeepBlock || isActive) && (
-                <div className={`flex items-center gap-2 rounded border px-3 py-1.5 text-xs text-teal-300 ${isDeepBlock ? 'border-teal-700 bg-teal-900/30' : 'border-teal-700/60 bg-teal-900/20'}`}>
-                  {isActive && <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-teal-400" />}
-                  <span className={isDeepBlock ? '' : 'font-medium'}>
-                    {isDeepBlock
-                      ? `Deep Block${timeLabel ? ` · ${timeLabel}` : ''} · protect this time`
-                      : `Active${timeLabel ? ` · ${timeLabel}` : ''}`
-                    }
+              {/*
+                * Only the rhythmic deep-block banner survives. The plain
+                * "Active · 7:40 PM - 11:40 PM" strip said exactly what the NOW
+                * card now says one card above it, in the same accent — two
+                * claims on the same attention, which is what rule 4 is for.
+                */}
+              {isDeepBlock && (
+                <div className="flex items-center gap-2 rounded border border-teal-700 bg-teal-900/30 px-3 py-1.5 text-xs text-teal-300">
+                  <span>
+                    {`Deep Block${timeLabel ? ` · ${timeLabel}` : ''} · protect this time`}
                   </span>
                 </div>
               )}
@@ -1174,12 +1239,14 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
               key={section.id}
               section={section}
               tasks={tasksBySection[section.id]}
-              defaultCollapsed={
-                section.id === 'morningRoutine' ||
-                section.id === 'mediumPriority' ||
-                section.id === 'lowPriority'
-              }
-              isTimeBlockActive={activeSectionIds.includes(section.id)}
+              /*
+               * Rule 3 of the redesign: the block you are in is open, the other
+               * five are one line each. This is only the default — an explicit
+               * expand or collapse is remembered per section and still wins, so
+               * the day does not fight someone who opened a section on purpose.
+               */
+              defaultCollapsed={!isActive}
+              isTimeBlockActive={isActive}
               timeframeLabel={timeframeLabelsBySection[section.id]}
               timeframeNote={section.id === 'highPriority' ? highPriorityTop3Note : null}
               draggedTask={shareMode ? null : draggedTask}
@@ -1394,9 +1461,11 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
             />
 
             <div className="hidden lg:block space-y-3 lg:sticky lg:top-4 lg:max-h-[calc(100dvh-2rem)] lg:overflow-y-auto lg:pr-1" data-tour="sidebar">
-              {/* Deep work timer first: it is the only card in this column you
-                  reach for while working rather than while planning, and it now
-                  carries the block-length setting too. */}
+              {/* The rail is Focus, Habits, One Thing — the three cards you
+                  reach for while working rather than while planning, and on a
+                  phone the three that are separate destinations. Width is the
+                  only reason they can sit beside the day instead of instead of
+                  it. Everything glanceable is collapsed below them. */}
               {!shareMode && (
                 <SidebarCard cardId="deepWorkTimer" title="Deep work timer">
                   <div className="space-y-3">
@@ -1407,12 +1476,6 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
                     />
                     <MotivationCard />
                   </div>
-                </SidebarCard>
-              )}
-              {/* Cross-section day snapshot */}
-              {!shareMode && (
-                <SidebarCard cardId="daySummary" title="Day snapshot">
-                  <DaySummaryCard ctx={dayCtx} />
                 </SidebarCard>
               )}
               {!shareMode && (
@@ -1455,6 +1518,11 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
               )}
               {/* Glanceable / occasional cards — collapsed by default to keep the
                   sidebar short; expand state is remembered per card. */}
+              {!shareMode && (
+                <SidebarCard cardId="daySummary" title="Day snapshot" defaultCollapsed>
+                  <DaySummaryCard ctx={dayCtx} />
+                </SidebarCard>
+              )}
               <SidebarCard cardId="weeklyOverview" title="Weekly overview" defaultCollapsed>
                 <WeeklyOverview
                   state={appState as AppState}
@@ -1491,63 +1559,60 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
       {/* Mobile tab panels — rendered outside the grid so they don't affect desktop layout */}
       {!shareMode && !shareShellLayout && (
         <>
-          {mobileTab === 'timer' && (
-            <div className="mt-3 lg:hidden">
-              <DeepWorkTimer
-                timer={timer}
-                breakMinutes={breakMinutes}
-                onSetBlockLength={handleSetBlockLength}
-              />
-            </div>
+          {mobileTab === 'focus' && (
+            <MobileFocusPanel
+              timer={timer}
+              breakMinutes={breakMinutes}
+              onSetBlockLength={handleSetBlockLength}
+              completedBlocksToday={completedBlocksToday}
+            />
           )}
           {mobileTab === 'habits' && (
-            <div className="mt-3 lg:hidden">
-              <HabitChecklist
-                habits={habits}
-                completions={dayState.habitCompletions ?? {}}
-                streaks={habitStreaks}
-                atRiskHabitIds={atRiskHabitIds}
-                identityStatement={appState.identityStatement ?? ''}
-                onToggle={handleToggleHabit}
-                onSetIdentity={handleSetIdentity}
-                travelingToday={travelingToday}
-                onEditHabits={() => setEditHabitsOpen(true)}
-              />
-            </div>
+            <MobileHabitsPanel
+              habits={habits}
+              days={appState.days}
+              selectedDay={selectedDay}
+              completions={dayState.habitCompletions ?? {}}
+              streaks={habitStreaks}
+              atRiskHabitIds={atRiskHabitIds}
+              identityStatement={appState.identityStatement ?? ''}
+              onToggle={handleToggleHabit}
+              onSetIdentity={handleSetIdentity}
+              travelingToday={travelingToday}
+              onEditHabits={() => setEditHabitsOpen(true)}
+            />
           )}
-          {mobileTab === 'stats' && (
-            <div className="mt-3 lg:hidden">
-              <WeeklyOverview state={appState as AppState} referenceDay={selectedDay} />
-            </div>
-          )}
+          {/*
+            The Stats tab is gone. It rendered the weekly overview above the
+            same dashboard every other tab rendered, which is precisely the
+            duplication the redesign removes; month-scale views live at
+            /planner/review, and the tab bar links there directly.
+          */}
           {/* Spacer so content doesn't hide behind the fixed MobileTabBar */}
           <div className="h-16 pb-safe lg:hidden" />
         </>
       )}
 
-      {/* Day journal — always accessible for current day (Cal Newport time-block journal) */}
-      {!shareMode && (
-        <DayJournalCard
-          dayNote={dayState.dayNote}
-          focusHijacker={dayState.focusHijacker}
-          onSaveNote={handleSaveDayJournal}
-          onSaveHijacker={handleSaveFocusHijacker}
-        />
-      )}
+      {/*
+        The day journal and the monthly tracking dashboard used to render here,
+        under the day, on every screen and every mobile tab — ~2,500px that was
+        identical across all four tabs. They live at /planner/review now, which
+        is what makes the tab bar mean something. See docs/design/README.md.
+      */}
 
-      {/* Monthly tracking: owner only (not shown on shared views) */}
-      {!shareMode && (
-        <div className="mt-6">
-          <MonthlyTrackingDashboard
-            state={appState}
-            referenceDay={selectedDay}
-            onUpdateDay={handleTrackingUpdateDay}
-            onUpdateSettings={handleTrackingUpdateSettings}
-            scrollToReview={reviewOpenTrigger}
-            weeklyReviewOpenTrigger={weeklyReviewOpenTrigger}
-            onUpdateWeeklyReview={handleUpdateWeeklyReview}
-          />
-        </div>
+      {/*
+        Desktop Focus. Rendered last so it sits over the day, and only on lg —
+        a phone reaches Focus by tapping its tab, where there is no day to
+        cover in the first place.
+      */}
+      {showFocusMode && (
+        <FocusMode
+          timer={timer}
+          progress={focusTaskProgress}
+          completedBlocksToday={completedBlocksToday}
+          deepMinutesToday={deepWorkMinutesToday}
+          onLeave={() => setFocusDismissed(true)}
+        />
       )}
 
       {/* Shutdown ritual modal */}

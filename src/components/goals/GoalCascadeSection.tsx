@@ -17,10 +17,10 @@ interface GoalCascadeSectionProps {
 }
 
 const LEVELS: { key: keyof GoalCascade; label: string; sublabel: string; accent: string }[] = [
-  { key: 'life',        label: 'Life',      sublabel: 'The direction',       accent: 'text-violet-300 bg-violet-500/20' },
+  { key: 'life',        label: 'Life',      sublabel: 'The direction',       accent: 'text-share-primary bg-share-primary/20' },
   { key: 'fiveYear',    label: '5 Years',   sublabel: 'April 2031',          accent: 'text-indigo-300 bg-indigo-500/20' },
   { key: 'oneYear',     label: '1 Year',    sublabel: 'April 2027',          accent: 'text-blue-300 bg-blue-500/20' },
-  { key: 'sixMonths',   label: '6 Months',  sublabel: 'October 2026',        accent: 'text-sky-300 bg-sky-500/20' },
+  { key: 'sixMonths',   label: '6 Months',  sublabel: 'October 2026',        accent: 'text-share-primary bg-share-primary/15' },
   { key: 'threeMonths', label: '3 Months',  sublabel: 'July 2026',           accent: 'text-teal-300 bg-teal-500/20' },
 ]
 
@@ -76,7 +76,7 @@ function CascadeRow({ label, sublabel, accentClass, value, placeholder, onSave }
               onKeyDown={handleKeyDown}
               rows={2}
               placeholder={placeholder}
-              className="w-full resize-none rounded border border-violet-700 bg-share-surfaceContainerHighest px-2 py-1 text-xs leading-relaxed text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-violet-500 focus:outline-none"
+              className="w-full resize-none rounded border border-share-primary/50 bg-share-surfaceContainerHighest px-2 py-1 text-xs leading-relaxed text-share-onBg placeholder:text-share-onSurfaceVariant/40 focus:border-share-primary focus:outline-none"
             />
             <p className="text-[9px] text-share-onSurfaceVariant/40">Ctrl+Enter · Esc</p>
           </div>
@@ -108,7 +108,7 @@ export function GoalCascadeSection({ goalCascade, onUpdate }: GoalCascadeSection
   }
 
   return (
-    <div className="mb-3 rounded border border-violet-900/40 bg-share-surfaceContainerLow p-3">
+    <div className="mb-3 rounded border border-share-primary/20 bg-share-surfaceContainerLow p-3">
       <button
         type="button"
         className="touch-target-coarse flex w-full items-center justify-between gap-2"
@@ -117,7 +117,7 @@ export function GoalCascadeSection({ goalCascade, onUpdate }: GoalCascadeSection
       >
         <div className="flex items-center gap-1.5">
           <span className="text-[10px] text-share-onSurfaceVariant/50">{collapsed ? '▸' : '▾'}</span>
-          <span className="text-xs font-semibold text-violet-300">Goal Cascade</span>
+          <span className="text-xs font-semibold text-share-primary">Goal Cascade</span>
           <span className="text-[10px] text-share-onSurfaceVariant/50">Life → 5yr → 1yr → 6mo → 3mo</span>
         </div>
       </button>
