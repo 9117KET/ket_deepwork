@@ -12,6 +12,7 @@
  */
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { playChime } from '../../audio/chimes'
 import { normalizeFocusBlockMinutes } from '../../domain/focusBlocks'
 import { MIN_BANKABLE_MINUTES, bankableMinutes } from '../../domain/workSafety'
 import {
@@ -129,29 +130,6 @@ export interface DeepWorkTimerController {
   startBlock: (request: StartBlockRequest) => StartBlockResult
 }
 
-function playCompletionChime() {
-  try {
-    const ctx = new AudioContext()
-    const notes = [523.25, 659.25, 783.99] // C5, E5, G5 - major arpeggio
-    notes.forEach((freq, i) => {
-      const osc = ctx.createOscillator()
-      const gain = ctx.createGain()
-      osc.connect(gain)
-      gain.connect(ctx.destination)
-      osc.frequency.value = freq
-      osc.type = 'sine'
-      const t = ctx.currentTime + i * 0.18
-      gain.gain.setValueAtTime(0, t)
-      gain.gain.linearRampToValueAtTime(0.25, t + 0.02)
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.6)
-      osc.start(t)
-      osc.stop(t + 0.6)
-    })
-  } catch (_err) {
-    // AudioContext unavailable - silent fail
-  }
-}
-
 export function useDeepWorkTimer({
   onSessionComplete,
   taskOptions,
@@ -229,7 +207,7 @@ export function useDeepWorkTimer({
       if (msLeft === 0) {
         setStatus('finished')
         setTargetTime(null)
-        playCompletionChime()
+        playChime('blockComplete')
         onSessionCompleteRef.current?.(
           label,
           durationMinutes,

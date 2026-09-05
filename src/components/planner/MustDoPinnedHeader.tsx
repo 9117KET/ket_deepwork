@@ -13,7 +13,7 @@
 import { useState } from 'react'
 import type { DeepWorkSession, Task } from '../../domain/types'
 import { computeTaskProgress } from '../../domain/taskProgress'
-import { CheckCircle2, ChevronUp, ChevronDown, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, CheckCircle2, ChevronUp, ChevronDown, GripVertical, X } from 'lucide-react'
 import { TaskProgressBoxes } from './TaskProgressBoxes'
 import { TaskDurationPicker } from './TaskDurationPicker'
 import { TimeAnchor } from './TimeAnchor'
@@ -31,6 +31,16 @@ interface MustDoPinnedHeaderProps {
   onAdd: (title: string) => void
   onDelete: (taskId: string) => void
   onUpdate: (taskId: string, patch: { scheduledAt?: string; durationMinutes?: number; title?: string }) => void
+  /** Reorder: the three are ranked, so first really means first. */
+  onDragStart?: (taskId: string) => void
+  onDragEnd?: () => void
+  /** Drop the dragged MUST at this index among the three. */
+  onDropAt?: (insertIndex: number) => void
+  /** Touch fallback for the drag handle (drag events never fire on a phone). */
+  onMoveUp?: (taskId: string) => void
+  onMoveDown?: (taskId: string) => void
+  /** Id of the MUST currently being dragged, if any. */
+  draggedTaskId?: string | null
 }
 
 const MAX = 3
@@ -44,8 +54,61 @@ export function MustDoPinnedHeader({
   deepWorkSessions,
   onStartBlock,
   onOpenProgressSheet,
+  onDragStart,
+  onDragEnd,
+  onDropAt,
+  onMoveUp,
+  onMoveDown,
+  draggedTaskId,
 }: MustDoPinnedHeaderProps) {
   const { blockMinutes } = useFocusBlocks()
+
+  const canReorder = typeof onDragStart === 'function' && typeof onDropAt === 'function'
+
+  /** Start a drag, unless the gesture began on a control that owns the pointer. */
+  const handleRowDragStart = (taskId: string) => (e: React.DragEvent) => {
+    const target = e.target as HTMLElement | null
+    if (target?.closest('input, select, textarea, button, a')) {
+      e.preventDefault()
+      return
+    }
+    try {
+      if (e.dataTransfer) {
+        e.dataTransfer.effectAllowed = 'move'
+        e.dataTransfer.setData('text/plain', '')
+      }
+    } catch {
+      // dataTransfer is null or throws in some browsers; the drag still works.
+    }
+    onDragStart?.(taskId)
+  }
+
+  /** Half-height hit test: above the midpoint inserts before this row, below after. */
+  const handleRowDragOver = (idx: number) => (e: React.DragEvent) => {
+    if (!canReorder) return
+    e.preventDefault()
+    try {
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+    } catch {
+      // ignore
+    }
+    const rect = e.currentTarget.getBoundingClientRect()
+    setDropIndex(e.clientY < rect.top + rect.height / 2 ? idx : idx + 1)
+  }
+
+  const handleRowDrop = (e: React.DragEvent) => {
+    if (!canReorder) return
+    e.preventDefault()
+    e.stopPropagation()
+    if (dropIndex !== null) onDropAt?.(dropIndex)
+    setDropIndex(null)
+    onDragEnd?.()
+  }
+
+  const handleRowDragEnd = () => {
+    setDropIndex(null)
+    onDragEnd?.()
+  }
 
   /** The progress row for a MUST, or null when it is too short to track. */
   const renderProgress = (task: Task) => {
@@ -74,6 +137,8 @@ export function MustDoPinnedHeader({
   // Triggered in handleAdd (not useEffect) to satisfy react-hooks/set-state-in-effect.
   const [listCollapsed, setListCollapsed] = useState(() => rootTasks.length >= MAX)
   const [editingId, setEditingId] = useState<string | null>(null)
+  /** Insert index the drop indicator is currently sitting on. */
+  const [dropIndex, setDropIndex] = useState<number | null>(null)
   const [editingTitle, setEditingTitle] = useState('')
 
   const commitTitleEdit = (taskId: string) => {
@@ -226,9 +291,50 @@ export function MustDoPinnedHeader({
       </button>
 
       {/* Task rows — hidden when collapsed */}
-      {!listCollapsed && <div className="space-y-1">
+      {!listCollapsed && <div
+        className="space-y-1"
+        onDragLeave={canReorder ? () => setDropIndex(null) : undefined}
+      >
         {rootTasks.map((task, idx) => (
-          <div key={task.id} className="flex flex-wrap items-center gap-x-2 gap-y-1 group">
+          <div
+            key={task.id}
+            draggable={canReorder ? true : undefined}
+            onDragStart={canReorder ? handleRowDragStart(task.id) : undefined}
+            onDragOver={canReorder ? handleRowDragOver(idx) : undefined}
+            onDrop={canReorder ? handleRowDrop : undefined}
+            onDragEnd={canReorder ? handleRowDragEnd : undefined}
+            className={`flex flex-wrap items-center gap-x-2 gap-y-1 group ${
+              canReorder ? 'cursor-grab active:cursor-grabbing' : ''
+            } ${draggedTaskId === task.id ? 'opacity-50' : ''} ${
+              dropIndex === idx ? 'border-t border-sky-400' : dropIndex === idx + 1 ? 'border-b border-sky-400' : 'border-y border-transparent'
+            }`}
+          >
+            {canReorder && (
+              <span
+                aria-hidden="true"
+                className="hidden shrink-0 touch-none text-share-onSurfaceVariant/40 sm:block"
+              >
+                <GripVertical className="h-3.5 w-3.5" />
+              </span>
+            )}
+            {(onMoveUp || onMoveDown) && (
+              <span className="flex shrink-0 items-center sm:hidden">
+                <button
+                  type="button"
+                  onClick={() => onMoveUp?.(task.id)}
+                  disabled={idx === 0}
+                  className="rounded p-0.5 text-share-onSurfaceVariant/50 hover:bg-share-surfaceContainerHigh hover:text-share-onSurfaceVariant disabled:opacity-25"
+                  aria-label={`Move "${task.title}" up`}
+                ><ArrowUp className="h-3 w-3" /></button>
+                <button
+                  type="button"
+                  onClick={() => onMoveDown?.(task.id)}
+                  disabled={idx === rootTasks.length - 1}
+                  className="rounded p-0.5 text-share-onSurfaceVariant/50 hover:bg-share-surfaceContainerHigh hover:text-share-onSurfaceVariant disabled:opacity-25"
+                  aria-label={`Move "${task.title}" down`}
+                ><ArrowDown className="h-3 w-3" /></button>
+              </span>
+            )}
             <span className="w-4 shrink-0 text-center text-[10px] font-bold text-share-onSurfaceVariant/50">
               {idx + 1}
             </span>

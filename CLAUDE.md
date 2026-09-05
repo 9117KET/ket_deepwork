@@ -132,6 +132,33 @@ tab — see feature 8 below.
 
 `sectionId` is one of: `mustDo | morningRoutine | highPriority | mediumPriority | lowPriority | nightRoutine`
 
+### The day's schedule (`src/domain/sectionTimeBlocks.ts`)
+
+Blocks are **demand-first**: each work block sizes to the minutes its tasks
+actually need, so an ordinary day's last block ends in the afternoon.
+
+Morning and night are the exception — they are **reservations**, not demand.
+They hold `AppState.routineMinutes` (default 45m / 30m, `0` allowed and meaning
+"I don't have one") even with no tasks in them, because habits live in the
+sidebar checklist and those blocks read as empty on a day you fully did them.
+The lengths are stated in Day Setup and stored globally, never re-derived: they
+used to be `10% of the awake window, capped at 90m`, which meant a later bedtime
+silently lengthened your morning routine and reserved three hours a day nobody
+had agreed to.
+
+The night is **not** derived from that. Sleep is anchored on the bedtime the
+user set (`DayState.sleepTarget`), and `computeSleepWindow` only moves it later
+when the plan overruns. Deriving bedtime from the block end instead made every
+light day claim a 12h night, clamped to a 10h ceiling — a number matching
+neither the schedule nor anything else on screen. Finishing early buys
+`freeMinutes` of open evening; overrunning costs `lostMinutes` of sleep.
+`SLEEP_WINDDOWN_BUFFER_MINUTES` is advisory (the gap that should exist before
+bed), never part of the anchor.
+
+`sleepMinutesFromTarget` / `sleepTargetFromMinutes` are the only place bedtime
+and night length convert into each other — they run backwards from wake across
+midnight, and the sign is easy to get wrong.
+
 ### Responsive foundations
 
 Mobile-first, and "mobile" means the whole spread — 280px Fold cover screens up
@@ -270,6 +297,22 @@ Nine features built around the *Deep Work* philosophy:
    off` and offers "Make Nm my block" whenever the picked length differs from
    the configured one, calling `handleSetBlockLength` in `DayPlanner`. The
    tracking dashboard keeps a readout only.
+
+10. **Completion is offered, never taken** — a block that fills a task's row
+    raises a one-tap "Mark done?" (`doneOffer` in `DayPlanner`, the twin of the
+    12s `completionClaim`). It is not ticked automatically: the estimate is what
+    the work was expected to cost, not a definition of finished, and a box that
+    ticks itself removes the act being rewarded. Dopamine tracks reward
+    *prediction error*, so a tick you saw coming is not a reward at all.
+
+    The four sounds live in `src/audio/chimes.ts` — one shared AudioContext
+    (a fresh one per chime leaks, and browsers cap them, so the sound silently
+    dies mid-session) and one ascending motif at four sizes: tick < block <
+    task row filled < Top Three cleared. Rising and consonant reads as success;
+    falling reads as an error. Only the tick is detuned, and only its *timbre* —
+    randomising whether a reward fires is the slot-machine mechanic and has no
+    place in a tool someone depends on. Muting is per-device (localStorage,
+    deliberately outside the synced `AppState`).
 
 Both `depthPhilosophy` and `deepWorkGoalHoursPerWeek` are global settings synced via `user_settings` JSONB — no migration required. `manualLoggedMinutes` and `taskId` are additive optional fields on existing JSON payloads — no migration either.
 

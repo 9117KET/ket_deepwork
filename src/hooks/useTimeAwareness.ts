@@ -24,6 +24,9 @@ export function useTimeAwareness(
   appState: AppState,
   timeOffsetMinutes: number,
   computedBlocks: DayBlocks | undefined,
+  /** Bedtime (minutes since midnight) from the day's sleep window, when set.
+   *  Without it, an early-finishing plan would read as "asleep" all afternoon. */
+  sleepStartMin?: number,
 ) {
   const [tick, setTick] = useState(0);
   useEffect(() => {
@@ -77,14 +80,14 @@ export function useTimeAwareness(
     void tick;
     const now = new Date();
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
-    return getActiveSectionIds(currentMinutes, timeOffsetMinutes, computedBlocks);
-  }, [tick, timeOffsetMinutes, computedBlocks]);
+    return getActiveSectionIds(currentMinutes, timeOffsetMinutes, computedBlocks, sleepStartMin);
+  }, [tick, timeOffsetMinutes, computedBlocks, sleepStartMin]);
 
   const isSleepTimeNow = useMemo(() => {
     void tick;
     const now = new Date();
-    return isSleepTime(now.getHours() * 60 + now.getMinutes(), timeOffsetMinutes, computedBlocks);
-  }, [tick, timeOffsetMinutes, computedBlocks]);
+    return isSleepTime(now.getHours() * 60 + now.getMinutes(), timeOffsetMinutes, computedBlocks, sleepStartMin);
+  }, [tick, timeOffsetMinutes, computedBlocks, sleepStartMin]);
 
   const timeframeLabelsBySection: Record<TaskSectionId, string | null> = useMemo(() => {
     const labels: Record<TaskSectionId, string | null> = {

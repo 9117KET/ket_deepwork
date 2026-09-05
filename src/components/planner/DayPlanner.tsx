@@ -30,8 +30,9 @@ import {
   BLOCK_MIN_MINUTES,
   BLOCK_ORDER,
   SLEEP_MIN_MINUTES,
+  SLEEP_WINDDOWN_BUFFER_MINUTES,
+  sleepMinutesFromTarget,
   SLEEP_WARN_MINUTES,
-  computeSleepWindow,
   formatTimeOfDay,
 } from "../../domain/sectionTimeBlocks";
 import { computeTaskProgress, formatMinutes, minTrackableMinutes } from "../../domain/taskProgress";
@@ -70,6 +71,7 @@ import { WeeklyProjectCard } from "./WeeklyProjectCard";
 import { SidebarCard } from "./SidebarCard";
 import { TomorrowMustPanel } from "./TomorrowMustPanel";
 import { MustDoPinnedHeader } from "./MustDoPinnedHeader";
+import { playChime } from "../../audio/chimes";
 import { MonthlyReviewBanner } from "../goals/MonthlyReviewBanner";
 import { WeeklyReviewBanner } from "../goals/WeeklyReviewBanner";
 import { ShutdownRitualModal } from "./ShutdownRitualModal";
@@ -292,11 +294,12 @@ export function DayPlanner({
   const blockEditor = useDayBlockEditor(
     dayState,
     appState.blockDurationRatios,
+    appState.routineMinutes,
     selectedDay,
     updateAppState,
     shareMode,
   );
-  const { effectiveBlockDurations, computedBlocks, mustDoMinutes, plannedBySection, isManualOverride, setDaySetupOpen, handleBlockDurationChange } = blockEditor;
+  const { effectiveBlockDurations, computedBlocks, sleepWindow, mustDoMinutes, plannedBySection, isManualOverride, setDaySetupOpen, handleBlockDurationChange } = blockEditor;
 
   // Per-section allocated window minutes, derived from the actual rendered blocks
   // (single source of truth for the capacity-vs-plan chips on each section).
@@ -322,7 +325,7 @@ export function DayPlanner({
   }, [mustDoMinutes, isManualOverride, shareMode]);
 
   const { taskIdsDueNow, activeSectionIds, isSleepTimeNow, timeframeLabelsBySection } =
-    useTimeAwareness(appState, timeOffsetMinutes, computedBlocks);
+    useTimeAwareness(appState, timeOffsetMinutes, computedBlocks, sleepWindow?.startMin);
 
   // --- Handlers that stay in DayPlanner (simple, few lines each) ---
   const habits = appState.habitDefinitions ?? DEFAULT_HABIT_DEFINITIONS;
@@ -511,6 +514,8 @@ export function DayPlanner({
   const [completionClaim, setCompletionClaim] = useState<
     { taskId: string; title: string; minutes: number } | null
   >(null);
+  /** A task whose last block just filled, offered for ticking off. */
+  const [doneOffer, setDoneOffer] = useState<{ taskId: string; title: string } | null>(null);
 
   /** The unit the whole planner counts in: one block, one run of the timer. */
   const blockMinutes = normalizeFocusBlockMinutes(appState.focusBlockMinutes);
@@ -542,10 +547,38 @@ export function DayPlanner({
     [progressSheetTask, dayState.deepWorkSessions, blockMinutes],
   );
 
+  /**
+   * Record the block, then — if it was the one that filled the task's row —
+   * offer to tick the task off.
+   *
+   * Offered, not done. The estimate is what the work was expected to cost, not
+   * a definition of finished, so a full row means "this is probably done",
+   * which is a question. Ticking it automatically would also take the tick away
+   * from you: the reward is the act, and a box that ticks itself the instant
+   * the row fills is a reward you saw coming, which is no reward at all.
+   */
+  const handleSessionCompleteWithOffer = useCallback((
+    label: string,
+    durationMinutes: number,
+    taskId?: string,
+    startedAt?: string,
+  ) => {
+    handleSessionComplete(label, durationMinutes, taskId, startedAt);
+    if (!taskId || shareMode) return;
+    const task = dayState.tasks.find((t) => t.id === taskId);
+    if (!task || task.isDone) return;
+    const before = computeTaskProgress(task, dayState.deepWorkSessions, blockMinutes);
+    // Already full before this block: the row was finished a while ago and the
+    // offer was answered (or ignored) then. Asking again is nagging.
+    if (!before || before.isComplete) return;
+    if (before.totalMinutes + durationMinutes < before.goalMinutes) return;
+    setDoneOffer({ taskId, title: task.title });
+  }, [handleSessionComplete, dayState.tasks, dayState.deepWorkSessions, blockMinutes, shareMode]);
+
   // One countdown for the whole planner. The sidebar and the mobile tab are two
   // views of it, and a task's progress chip is a third way to start it.
   const timer = useDeepWorkTimer({
-    onSessionComplete: handleSessionComplete,
+    onSessionComplete: handleSessionCompleteWithOffer,
     taskOptions: timerTaskOptions,
     selectedTaskId: timerTaskId,
     onSelectTask: setTimerTaskId,
@@ -684,8 +717,25 @@ Delete anyway?`);
   const handleToggleTask = useCallback((taskId: string) => {
     const task = dayState.tasks.find((t) => t.id === taskId);
     handleToggleTaskBase(taskId);
-    if (!task || task.isDone || shareMode) return;
+    setDoneOffer((current) => (current?.taskId === taskId ? null : current));
+    // Un-ticking is silent: taking a tick back is a correction, not an
+    // achievement, and a reward sound for it would be a lie.
+    if (!task || task.isDone) return;
+
     const progress = computeTaskProgress(task, dayState.deepWorkSessions, blockMinutes);
+
+    // Three sizes of the same motif. The rarest event wins, so clearing the
+    // Top Three is never drowned out by the tick that cleared it.
+    const musts = dayState.tasks.filter((t) => t.sectionId === 'mustDo' && !t.parentId);
+    const clearedTopThree =
+      task.sectionId === 'mustDo' &&
+      musts.length > 0 &&
+      musts.every((t) => t.id === taskId || t.isDone);
+    playChime(
+      clearedTopThree ? 'dayComplete' : progress?.isComplete ? 'taskComplete' : 'taskTicked',
+    );
+
+    if (shareMode) return;
     if (!progress) return;
     const unlogged = progress.goalMinutes - progress.totalMinutes;
     if (unlogged <= 0) return;
@@ -699,6 +749,13 @@ Delete anyway?`);
     const id = window.setTimeout(() => setCompletionClaim(null), 12000);
     return () => window.clearTimeout(id);
   }, [completionClaim]);
+
+  // Same 12 seconds, same reasoning: an unanswered offer is an answer of "no".
+  useEffect(() => {
+    if (!doneOffer) return;
+    const id = window.setTimeout(() => setDoneOffer(null), 12000);
+    return () => window.clearTimeout(id);
+  }, [doneOffer]);
 
   /**
    * Adopt a length as the configured focus block. The break moves with it
@@ -883,6 +940,36 @@ Delete anyway?`);
           {blockNotice}
         </div>
       )}
+      {doneOffer && (
+        <div
+          role="status"
+          className="fixed inset-x-3 bottom-20 z-[70] mx-auto max-w-sm rounded-lg border border-emerald-500/40 bg-share-surfaceContainerHigh px-3 py-2.5 shadow-lg lg:bottom-6"
+        >
+          <p className="text-xs text-share-onSurface">
+            <span className="font-medium">{doneOffer.title}</span> has all its blocks in. Mark it done?
+          </p>
+          <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                const id = doneOffer.taskId;
+                setDoneOffer(null);
+                handleToggleTask(id);
+              }}
+              className="min-h-[32px] flex-1 rounded-md border border-emerald-500/50 bg-share-surfaceContainer px-2 py-1 text-xs text-emerald-400 hover:border-emerald-400 hover:bg-emerald-500/10"
+            >
+              Mark done
+            </button>
+            <button
+              type="button"
+              onClick={() => setDoneOffer(null)}
+              className="min-h-[32px] rounded-md px-2 py-1 text-xs text-share-onSurfaceVariant hover:text-share-onSurface"
+            >
+              Not yet
+            </button>
+          </div>
+        </div>
+      )}
       {completionClaim && (
         <div
           role="status"
@@ -948,6 +1035,12 @@ Delete anyway?`);
             deepWorkSessions={dayState.deepWorkSessions}
             onStartBlock={handleStartBlock}
             onOpenProgressSheet={setProgressSheetTaskId}
+            onDragStart={(taskId) => handleDragStart('mustDo', taskId)}
+            onDragEnd={handleDragEnd}
+            onDropAt={(insertIndex) => handleDrop('mustDo', insertIndex)}
+            onMoveUp={(taskId) => handleReorderTask(taskId, 'mustDo', 'up')}
+            onMoveDown={(taskId) => handleReorderTask(taskId, 'mustDo', 'down')}
+            draggedTaskId={draggedTask?.sectionId === 'mustDo' ? draggedTask.taskId : null}
           />
         )}
         {/* Monthly/Weekly review + goal: collapse into one thin "needs attention"
@@ -1291,13 +1384,10 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
                 const isLast = idx === BLOCK_ORDER.length - 1;
                 const nextId = isLast ? null : BLOCK_ORDER[idx + 1];
                 const nextSection = nextId ? FIXED_SECTIONS.find((s) => s.id === nextId) : null;
-                const currentSleepMins = (() => {
-                  const [wh, wm] = (dayState.wakeTime ?? "07:00").split(":").map(Number);
-                  const [sh, sm] = (dayState.sleepTarget ?? "23:00").split(":").map(Number);
-                  const wake = (wh ?? 0) * 60 + (wm ?? 0);
-                  const sleep = (sh ?? 0) * 60 + (sm ?? 0);
-                  return wake > sleep ? wake - sleep : wake + 1440 - sleep;
-                })();
+                const currentSleepMins = sleepMinutesFromTarget(
+                  dayState.wakeTime ?? "07:00",
+                  dayState.sleepTarget ?? "23:00",
+                );
                 return (
                   <BlockDurationEditor
                     currentDuration={effectiveBlockDurations[sId]}
@@ -1380,13 +1470,13 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
                   Sleep
                 </h3>
                 {(() => {
-                  // Sleep starts a short wind-down after the day's last block ends
-                  // (demand-first): an early finish becomes a longer night rather
-                  // than idle time before a fixed bedtime.
+                  // The night is anchored on the bedtime the user set. Finishing
+                  // the plan early buys open evening, not sleep — only a plan that
+                  // overruns the target pushes bedtime later and costs sleep.
                   const wake = dayState.wakeTime ?? '07:00';
                   const [wh, wm] = wake.split(':').map(Number);
                   const wakeMin = (wh ?? 0) * 60 + (wm ?? 0);
-                  const win = computeSleepWindow(computedBlocks);
+                  const win = sleepWindow;
                   const startMin = win
                     ? win.startMin
                     : (() => {
@@ -1394,17 +1484,33 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
                         return (bh ?? 0) * 60 + (bm ?? 0);
                       })();
                   const durationMin = win ? win.durationMin : ((wakeMin - startMin + 1440) % 1440);
-                  const h = Math.floor(durationMin / 60);
-                  const m = durationMin % 60;
-                  const dur = m > 0 ? `${h}h ${m}m` : `${h}h`;
+                  const fmtDur = (mins: number) => {
+                    const h = Math.floor(mins / 60);
+                    const m = mins % 60;
+                    if (h === 0) return `${m}m`;
+                    return m > 0 ? `${h}h ${m}m` : `${h}h`;
+                  };
+                  const dur = fmtDur(durationMin);
                   const tooLittle = durationMin < SLEEP_MIN_MINUTES;
                   const underTarget = !tooLittle && durationMin < SLEEP_WARN_MINUTES;
                   return (
                     <>
                       <p className="text-xs text-share-onSurfaceVariant tabular-nums">
                         {formatTimeOfDay(startMin)} → {formatTimeOfDay(wakeMin)} · {dur}
-                        {win && !win.capped ? <span className="ml-1 text-share-onSurfaceVariant/50">(after 20m wind-down)</span> : null}
                       </p>
+                      {win && win.overran ? (
+                        <p className="mt-0.5 text-xs text-amber-400">
+                          The plan runs {fmtDur(win.lostMinutes)} past your bedtime — that comes out of sleep.
+                        </p>
+                      ) : win && win.freeMinutes < SLEEP_WINDDOWN_BUFFER_MINUTES ? (
+                        <p className="mt-0.5 text-xs text-amber-400">
+                          The plan ends right at bedtime — no wind-down.
+                        </p>
+                      ) : win ? (
+                        <p className="mt-0.5 text-xs text-share-onSurfaceVariant/60">
+                          {fmtDur(win.freeMinutes)} open before bed.
+                        </p>
+                      ) : null}
                       {tooLittle ? (
                         <p className="mt-0.5 text-xs text-red-400">Below the 5h floor — you'll need to catch up.</p>
                       ) : underTarget ? (
@@ -1424,11 +1530,7 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
                     Edit schedule
                   </button>
                   {effectiveBlockDurations && dayState.wakeTime && dayState.sleepTarget && (() => {
-                    const [wh, wm] = (dayState.wakeTime ?? "07:00").split(":").map(Number);
-                    const [sh, sm] = (dayState.sleepTarget ?? "23:00").split(":").map(Number);
-                    const wake = (wh ?? 0) * 60 + (wm ?? 0);
-                    const sleep = (sh ?? 0) * 60 + (sm ?? 0);
-                    const sleepMins = wake > sleep ? wake - sleep : wake + 1440 - sleep;
+                    const sleepMins = sleepMinutesFromTarget(dayState.wakeTime, dayState.sleepTarget);
                     return (
                       <BlockDurationEditor
                         currentDuration={sleepMins}
@@ -1732,6 +1834,7 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
         dayState={dayState}
         prevDayState={prevDayState}
         blockEditor={blockEditor}
+        routineMinutes={appState.routineMinutes}
         habits={habits}
         sideQuestDefs={appState.sideQuestDefs ?? []}
         editHabitsOpen={editHabitsOpen}

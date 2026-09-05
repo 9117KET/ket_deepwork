@@ -8,6 +8,7 @@
  */
 
 import { useState } from "react";
+import { DEFAULT_ROUTINE_MINUTES, type RoutineMinutes } from "../../domain/types";
 
 interface DaySetupModalProps {
   /** ISO date being set up (e.g. "2026-04-01"), used for display only. */
@@ -19,9 +20,23 @@ interface DaySetupModalProps {
   prevBedTime?: string | null;
   prevWakeTime?: string | null;
   prevSleepTarget?: string | null;
-  onSave: (wakeTime: string, sleepTarget: string, bedTime: string) => void;
+  /** Current routine lengths (global, not per-day). */
+  initialRoutineMinutes?: RoutineMinutes | null;
+  onSave: (
+    wakeTime: string,
+    sleepTarget: string,
+    bedTime: string,
+    routine: RoutineMinutes,
+  ) => void;
   onSkip: () => void;
 }
+
+/**
+ * Routine lengths offered. Zero is on the list on purpose: "I don't have a
+ * morning routine" is a real answer, and without it the block would keep
+ * reserving time the user never asked for.
+ */
+const ROUTINE_CHOICES = [0, 15, 30, 45, 60, 90] as const;
 
 function formatDateLabel(isoDay: string): string {
   const [year, month, day] = isoDay.split("-").map(Number);
@@ -120,6 +135,7 @@ export function DaySetupModal({
   prevBedTime,
   prevWakeTime,
   prevSleepTarget,
+  initialRoutineMinutes,
   onSave,
   onSkip,
 }: DaySetupModalProps) {
@@ -132,6 +148,9 @@ export function DaySetupModal({
     ? inferDurationHours(sleepMinutes(initialSleepTarget, initialWakeTime))
     : inferDurationHours(initActualMins);
   const [targetDurationHours, setTargetDurationHours] = useState(initTargetHours);
+  const [routine, setRoutine] = useState<RoutineMinutes>(
+    initialRoutineMinutes ?? DEFAULT_ROUTINE_MINUTES,
+  );
 
   const actualSleepMins = sleepMinutes(bedTime, wakeTime);
   const actualSleepLabel = formatDuration(actualSleepMins);
@@ -159,7 +178,7 @@ export function DaySetupModal({
 
         {hasPrev && (
           <button
-            onClick={() => onSave(prevWakeTime!, prevSleepTarget!, prevBedTime!)}
+            onClick={() => onSave(prevWakeTime!, prevSleepTarget!, prevBedTime!, routine)}
             className="mb-4 w-full rounded border border-share-outlineVariant/40 px-4 py-2 text-left text-sm text-share-onSurface hover:border-share-primary/60 hover:text-share-primary"
           >
             <span className="font-medium">Same as yesterday</span>
@@ -225,11 +244,60 @@ export function DaySetupModal({
               {" "}({24 - targetDurationHours}h awake)
             </p>
           </div>
+
+          {/* Routines are reserved out of the awake window before any task is
+              planned, so this is the one number that decides how much day the
+              planner thinks you have. Asked once — it is stored globally. */}
+          <div className="border-t border-share-outlineVariant/25 pt-4">
+            <p className="mb-2 text-sm font-medium text-share-onBg">
+              Your routines{" "}
+              <span className="font-normal text-share-onSurfaceVariant/60">(saved for every day)</span>
+            </p>
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <label htmlFor="day-setup-morning" className="mb-1 block text-xs text-share-onSurfaceVariant">
+                  Morning
+                </label>
+                <select
+                  id="day-setup-morning"
+                  value={routine.morningRoutine}
+                  onChange={(e) => setRoutine((r) => ({ ...r, morningRoutine: Number(e.target.value) }))}
+                  className="w-full rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-2 py-2 text-sm text-share-onBg focus:border-share-primary focus:outline-none"
+                >
+                  {ROUTINE_CHOICES.map((m) => (
+                    <option key={m} value={m}>{m === 0 ? "None" : `${m} min`}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex-1">
+                <label htmlFor="day-setup-night" className="mb-1 block text-xs text-share-onSurfaceVariant">
+                  Wind-down
+                </label>
+                <select
+                  id="day-setup-night"
+                  value={routine.nightRoutine}
+                  onChange={(e) => setRoutine((r) => ({ ...r, nightRoutine: Number(e.target.value) }))}
+                  className="w-full rounded border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-2 py-2 text-sm text-share-onBg focus:border-share-primary focus:outline-none"
+                >
+                  {ROUTINE_CHOICES.map((m) => (
+                    <option key={m} value={m}>{m === 0 ? "None" : `${m} min`}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <p className="mt-1.5 text-xs text-share-onSurfaceVariant/60">
+              Reserved before anything is planned, leaving{" "}
+              <span className="font-mono text-share-onSurface">
+                {formatDuration(Math.max(0, (24 - targetDurationHours) * 60 - routine.morningRoutine - routine.nightRoutine))}
+              </span>{" "}
+              for work.
+            </p>
+          </div>
         </div>
 
         <div className="mt-5 flex gap-3">
           <button
-            onClick={() => onSave(wakeTime, calculatedSleepTarget, bedTime)}
+            onClick={() => onSave(wakeTime, calculatedSleepTarget, bedTime, routine)}
             className="flex-1 rounded bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500"
           >
             Save

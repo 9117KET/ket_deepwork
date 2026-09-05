@@ -6,10 +6,14 @@ import {
   computeAwakeMinutes,
   computeBlocksFromDurations,
   computeBlocksFromWakeSleep,
+  computeSleepWindow,
+  sleepMinutesFromTarget,
+  sleepTargetFromMinutes,
   isSleepTime,
   getActiveSectionIds,
   getSectionTimeframeLabel,
   NONEMPTY_BLOCK_MIN_MINUTES,
+  type DayBlocks,
 } from './sectionTimeBlocks'
 import type { BlockDurations, Task, TaskSectionId } from './types'
 
@@ -204,14 +208,52 @@ describe('computeBlocksFromWakeSleep with a tiny awake window', () => {
   })
 
   it('keeps the normal split for a regular day', () => {
-    // Awake 07:00→23:00 = 960: morning/night 90 each, focus 780.
+    // Awake 07:00→23:00 = 960: routines 45 + 30 by default, focus 885.
     const blocks = computeBlocksFromWakeSleep('07:00', '23:00')
     const dur = (i: number) => (blocks[i]!.end - blocks[i]!.start + 1440) % 1440
-    expect(dur(0)).toBe(90)  // morning (10% capped at 90)
-    expect(dur(1)).toBe(351) // high: floor(780 * 0.45)
-    expect(dur(2)).toBe(273) // medium: floor(780 * 0.35)
-    expect(dur(3)).toBe(156) // low: remainder
-    expect(dur(4)).toBe(90)  // night
+    expect(dur(0)).toBe(45)  // morning (stated default)
+    expect(dur(1)).toBe(398) // high: floor(885 * 0.45)
+    expect(dur(2)).toBe(309) // medium: floor(885 * 0.35)
+    expect(dur(3)).toBe(178) // low: remainder
+    expect(dur(4)).toBe(30)  // night
+  })
+
+  it('reserves the routine lengths the user stated', () => {
+    const blocks = computeBlocksFromWakeSleep('07:00', '23:00', {
+      morningRoutine: 90, nightRoutine: 60,
+    })
+    const dur = (i: number) => (blocks[i]!.end - blocks[i]!.start + 1440) % 1440
+    expect(dur(0)).toBe(90)
+    expect(dur(4)).toBe(60)
+  })
+
+  it('lets a routine be nothing at all', () => {
+    const blocks = computeBlocksFromWakeSleep('07:00', '23:00', {
+      morningRoutine: 0, nightRoutine: 0,
+    })
+    const dur = (i: number) => (blocks[i]!.end - blocks[i]!.start + 1440) % 1440
+    expect(dur(0)).toBe(0)
+    expect(dur(4)).toBe(0)
+  })
+
+  it('does not let routines outlast the day itself', () => {
+    // Awake 07:00→09:00 = 120, but three hours of routines were stated.
+    const blocks = computeBlocksFromWakeSleep('07:00', '09:00', {
+      morningRoutine: 120, nightRoutine: 60,
+    })
+    const total = blocks.reduce(
+      (sum, b) => sum + ((b.end - b.start + 1440) % 1440),
+      0,
+    )
+    expect(total).toBeLessThanOrEqual(120)
+  })
+
+  it('no longer ties routine length to how long you are awake', () => {
+    // The old 10%-of-awake rule made a later bedtime mean a longer shower.
+    const early = computeBlocksFromWakeSleep('07:00', '21:00')
+    const late = computeBlocksFromWakeSleep('07:00', '23:59')
+    const morning = (b: DayBlocks) => (b[0]!.end - b[0]!.start + 1440) % 1440
+    expect(morning(early)).toBe(morning(late))
   })
 })
 
@@ -284,5 +326,91 @@ describe('block-relative time helpers', () => {
     expect(getActiveSectionIds(540, undefined, blocks)).toEqual(['highPriority']) // 09:00
     expect(getActiveSectionIds(450, undefined, blocks)).toEqual(['morningRoutine']) // 07:30
     expect(getActiveSectionIds(960, undefined, blocks)).toEqual([]) // sleep → none
+  })
+})
+
+// ── computeSleepWindow ───────────────────────────────────────────────────────
+
+describe('computeSleepWindow', () => {
+  // Wake 07:00, bedtime 23:00. FLOORS ends the day at 15:00 — the shape of an
+  // ordinary demand-first day, where the plan finishes long before bedtime.
+  const shortDay = computeBlocksFromDurations('07:00', FLOORS)
+
+  it('anchors the night on the bedtime the user set, not the end of the plan', () => {
+    const win = computeSleepWindow(shortDay, '07:00', '23:00')!
+    expect(win.startMin).toBe(23 * 60)
+    expect(win.endMin).toBe(7 * 60)
+    expect(win.durationMin).toBe(8 * 60)
+  })
+
+  it('reports the gap between the end of the plan and bedtime as open time', () => {
+    const win = computeSleepWindow(shortDay, '07:00', '23:00')!
+    // Day ends 15:00, bedtime 23:00 → 8h of open evening in between.
+    expect(win.freeMinutes).toBe(8 * 60)
+    expect(win.lostMinutes).toBe(0)
+    expect(win.overran).toBe(false)
+  })
+
+  it('pushes bedtime later — and charges it to sleep — when the plan overruns', () => {
+    const longDay = computeBlocksFromDurations('07:00', {
+      morningRoutine: 60, highPriority: 480, mediumPriority: 240, lowPriority: 180, nightRoutine: 60,
+    })
+    // 07:00 + 1020 min of blocks → the day ends at midnight, an hour past target.
+    const win = computeSleepWindow(longDay, '07:00', '23:00')!
+    expect(win.startMin).toBe(0)
+    expect(win.durationMin).toBe(7 * 60)
+    expect(win.overran).toBe(true)
+    expect(win.lostMinutes).toBe(60)
+    expect(win.freeMinutes).toBe(0)
+  })
+
+  it('never claims more than the schedule allows, whatever the plan', () => {
+    const win = computeSleepWindow(shortDay, '07:00', '01:00')!
+    expect(win.durationMin).toBe(6 * 60)
+  })
+
+  it('falls back to the block-derived start when there is no bedtime', () => {
+    const win = computeSleepWindow(shortDay, '07:00', null)!
+    expect(win.startMin).toBe(15 * 60)
+  })
+
+  it('does not let the wind-down buffer alone count as an overrun', () => {
+    // A plan that lands exactly on the target bedtime is tight, not over.
+    const exactDay = computeBlocksFromDurations('07:00', {
+      morningRoutine: 90, highPriority: 480, mediumPriority: 180, lowPriority: 120, nightRoutine: 90,
+    })
+    const win = computeSleepWindow(exactDay, '07:00', '23:00')!
+    expect(win.startMin).toBe(23 * 60)
+    expect(win.durationMin).toBe(8 * 60)
+    expect(win.overran).toBe(false)
+    expect(win.freeMinutes).toBe(0) // under the buffer → flagged as no wind-down
+  })
+
+  it('keeps an early-finishing afternoon out of the sleep window', () => {
+    const win = computeSleepWindow(shortDay, '07:00', '23:00')!
+    // 16:00 used to read as "asleep" because the last block ended at 15:00.
+    expect(isSleepTime(960, undefined, shortDay, win.startMin)).toBe(false)
+    expect(isSleepTime(23 * 60 + 30, undefined, shortDay, win.startMin)).toBe(true)
+  })
+})
+
+// ── bedtime ↔ night length ───────────────────────────────────────────────────
+
+describe('sleepMinutesFromTarget / sleepTargetFromMinutes', () => {
+  it('measures the night backwards from wake, across midnight', () => {
+    expect(sleepMinutesFromTarget('07:00', '23:00')).toBe(8 * 60)
+    expect(sleepMinutesFromTarget('06:30', '22:45')).toBe(7 * 60 + 45)
+    expect(sleepMinutesFromTarget('07:00', '01:00')).toBe(6 * 60)
+  })
+
+  it('round-trips: a night length maps back to the bedtime that produced it', () => {
+    for (const [wake, target] of [['07:00', '23:00'], ['05:15', '21:30'], ['09:00', '02:00']]) {
+      expect(sleepTargetFromMinutes(wake!, sleepMinutesFromTarget(wake!, target!))).toBe(target)
+    }
+  })
+
+  it('does not push bedtime forward from wake (the old sign error)', () => {
+    // 8h of sleep before a 07:00 wake is a 23:00 bedtime, never 15:00.
+    expect(sleepTargetFromMinutes('07:00', 8 * 60)).toBe('23:00')
   })
 })

@@ -38,6 +38,7 @@ export default defineSchema({
     monthTitles: v.optional(v.record(v.string(), v.string())),
     activeDays: v.optional(v.array(v.string())),
     blockDurationRatios: v.optional(v.any()),
+    routineMinutes: v.optional(v.any()),
     notDoingList: v.optional(v.array(v.any())),
     identityStatement: v.optional(v.string()),
     depthPhilosophy: v.optional(v.string()),
