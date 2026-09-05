@@ -4,7 +4,7 @@
  * All modal overlays rendered by DayPlanner, extracted to keep DayPlanner lean.
  */
 
-import type { DayState, HabitDefinition, SideQuestDef } from "../../domain/types";
+import type { DayState, HabitDefinition, RoutineMinutes, SideQuestDef } from "../../domain/types";
 import type { useDayBlockEditor } from "../../hooks/useDayBlockEditor";
 import { getOrCreateDay } from "../../storage/localStorageState";
 import { DaySetupModal } from "./DaySetupModal";
@@ -18,6 +18,7 @@ interface PlannerModalsProps {
   dayState: DayState;
   prevDayState: DayState;
   blockEditor: ReturnType<typeof useDayBlockEditor>;
+  routineMinutes?: RoutineMinutes | null;
   habits: HabitDefinition[];
   sideQuestDefs: SideQuestDef[];
   editHabitsOpen: boolean;
@@ -33,6 +34,7 @@ export function PlannerModals({
   dayState,
   prevDayState,
   blockEditor,
+  routineMinutes,
   habits,
   sideQuestDefs,
   editHabitsOpen,
@@ -69,6 +71,7 @@ export function PlannerModals({
           prevBedTime={prevDayState.bedTime}
           prevWakeTime={prevDayState.wakeTime}
           prevSleepTarget={prevDayState.sleepTarget}
+          initialRoutineMinutes={routineMinutes}
           onSave={handleDaySetupSave}
           onSkip={() => { skipDaySetupFor(selectedDay); setDaySetupOpen(false); }}
         />

@@ -19,7 +19,8 @@
  */
 
 import { useState, type FormEvent } from 'react'
-import { CheckCircle } from 'lucide-react'
+import { CheckCircle, Volume2, VolumeX } from 'lucide-react'
+import { isSoundEnabled, playChime, setSoundEnabled } from '../../audio/chimes'
 import { FOCUS_BLOCK_PRESETS, suggestedBreakMinutes } from '../../domain/focusBlocks'
 import type { DeepWorkTimerController } from './useDeepWorkTimer'
 
@@ -355,7 +356,37 @@ function BlockLengthLine({
           Make {durationMinutes}m my block
         </button>
       )}
+      <SoundToggle />
     </div>
+  )
+}
+
+/**
+ * Mute for this device.
+ *
+ * Turning it on plays the sound it turns on, which is both the obvious preview
+ * and the only way iOS ever hears any of them: a browser unlocks audio on a
+ * user gesture, and this button is one.
+ */
+function SoundToggle() {
+  const [enabled, setEnabled] = useState(() => isSoundEnabled())
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        const next = !enabled
+        setSoundEnabled(next)
+        setEnabled(next)
+        if (next) playChime('taskTicked')
+      }}
+      title={enabled ? 'Sounds on — mute this device' : 'Sounds muted — turn them on'}
+      aria-label={enabled ? 'Mute sounds on this device' : 'Turn sounds on'}
+      aria-pressed={enabled}
+      className="touch-target-coarse ml-auto rounded-full border border-share-outlineVariant/40 p-1 transition-colors hover:border-teal-500/60 hover:text-teal-300"
+    >
+      {enabled ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
+    </button>
   )
 }
 

@@ -12,8 +12,20 @@
  *    When computed blocks are provided, they shadow the static BLOCKS array.
  */
 
-import type { Task, TaskSectionId, BlockDurations, BlockDurationRatios } from './types'
-import { DEFAULT_TASK_MINUTES_BY_SECTION } from './types'
+import type { Task, TaskSectionId, BlockDurations, BlockDurationRatios, RoutineMinutes } from './types'
+import { DEFAULT_ROUTINE_MINUTES, DEFAULT_TASK_MINUTES_BY_SECTION, MAX_ROUTINE_MINUTES } from './types'
+
+/** Clamp a stored routine length into something the timeline can draw. */
+function normalizeRoutineMinutes(routine?: RoutineMinutes | null): RoutineMinutes {
+  const clamp = (n: number | undefined, fallback: number) =>
+    typeof n === 'number' && Number.isFinite(n)
+      ? Math.max(0, Math.min(MAX_ROUTINE_MINUTES, Math.round(n)))
+      : fallback
+  return {
+    morningRoutine: clamp(routine?.morningRoutine, DEFAULT_ROUTINE_MINUTES.morningRoutine),
+    nightRoutine: clamp(routine?.nightRoutine, DEFAULT_ROUTINE_MINUTES.nightRoutine),
+  }
+}
 
 /** Minutes since midnight. Ranges are [start, end) (end exclusive). */
 const MINS = {
@@ -38,23 +50,33 @@ export type DayBlocks = { start: number; end: number; sectionIds: TaskSectionId[
  * Derive five dynamic time blocks from a wake time and sleep target.
  * Medium and Low priority are now separate blocks (2:1 time split).
  * Layout:
- *   morningRoutine: wakeTime → wakeTime + ~10% awake (capped 90 min)
+ *   morningRoutine: wakeTime → wakeTime + the stated morning routine
  *   highPriority:   next ~45% of the focus pool (morning/night subtracted)
  *   mediumPriority: next ~35% of the focus pool
  *   lowPriority:    remainder of the focus pool (~20%)
- *   nightRoutine:   last ~10% awake (capped 90 min) up to sleepTarget
+ *   nightRoutine:   the stated wind-down, up to sleepTarget
+ *
+ * The routines are stated, not derived. Sizing them as a share of the awake
+ * window meant a late bedtime lengthened your morning routine, which is not a
+ * model of anything.
  */
 export function computeBlocksFromWakeSleep(
   wakeTimeHHMM: string,
   sleepTargetHHMM: string,
+  routine?: RoutineMinutes | null,
 ): DayBlocks {
   const wakeMin = parseHHMM(wakeTimeHHMM)
   const rawSleep = parseHHMM(sleepTargetHHMM)
   const sleepMin = rawSleep <= wakeMin ? rawSleep + 1440 : rawSleep
   const awake = Math.min(sleepMin - wakeMin, 1439)
 
-  const morningDur = Math.max(30, Math.min(90, Math.floor(awake * 0.10)))
-  const nightDur   = Math.max(30, Math.min(90, Math.floor(awake * 0.10)))
+  // Routines come first out of the awake window, but never all of it — a day
+  // whose routines outlast the day itself would leave the focus pool negative.
+  const stated = normalizeRoutineMinutes(routine)
+  const routineTotal = stated.morningRoutine + stated.nightRoutine
+  const scale = routineTotal > awake && routineTotal > 0 ? awake / routineTotal : 1
+  const morningDur = Math.floor(stated.morningRoutine * scale)
+  const nightDur   = Math.floor(stated.nightRoutine * scale)
   const focusDur   = Math.max(0, awake - morningDur - nightDur)
   const highDur    = Math.floor(focusDur * 0.45)
   // Cap the medium/low floors by what the focus pool actually has left, so a
@@ -109,8 +131,9 @@ export function computeBlocksFromDurations(
 export function getDefaultBlockDurations(
   wakeTimeHHMM: string,
   sleepTargetHHMM: string,
+  routine?: RoutineMinutes | null,
 ): BlockDurations {
-  const blocks = computeBlocksFromWakeSleep(wakeTimeHHMM, sleepTargetHHMM)
+  const blocks = computeBlocksFromWakeSleep(wakeTimeHHMM, sleepTargetHHMM, routine)
   const dur = (b: { start: number; end: number }) =>
     b.end >= b.start ? b.end - b.start : b.end + 1440 - b.start
   return {
@@ -191,9 +214,10 @@ export function computeCapacityAwareBlocks(
   sleepTargetHHMM: string,
   planned: BlockDurations,
   floorsOverride?: BlockDurations,
+  routine?: RoutineMinutes | null,
 ): CapacityResult {
   const awake = computeAwakeMinutes(wakeTimeHHMM, sleepTargetHHMM)
-  const floors = floorsOverride ?? getDefaultBlockDurations(wakeTimeHHMM, sleepTargetHHMM)
+  const floors = floorsOverride ?? getDefaultBlockDurations(wakeTimeHHMM, sleepTargetHHMM, routine)
 
   // Morning & night are routines: keep a habit floor, expand to fit their tasks.
   const morning = Math.max(floors.morningRoutine, planned.morningRoutine)
@@ -307,15 +331,15 @@ export const NONEMPTY_BLOCK_MIN_MINUTES = 30
 
 export const SLEEP_WARN_MINUTES = 6 * 60   // 360 min -- warn below 6h (ideal is 6-8h)
 export const SLEEP_MIN_MINUTES  = 5 * 60   // 300 min -- hard floor (survivable, but detrimental)
-export const SLEEP_MAX_MINUTES  = 10 * 60  // 600 min -- catch-up ceiling: cap the night so a
-                                           //   lightly-planned day (blocks end early) doesn't
-                                           //   show an absurd 15h+ "sleep"; the early end is just
-                                           //   open evening time before this latest sleep start.
+export const SLEEP_MAX_MINUTES  = 12 * 60  // 720 min -- sanity ceiling on a hand-set bedtime; the
+                                           //   demand-first blocks no longer drive bedtime, so this
+                                           //   only guards an absurd wake/bedtime pair.
 
 /**
- * Wind-down buffer (minutes) between the end of the last block (Night routine)
- * and the start of sleep. Sleep begins where the day's work ends + this buffer,
- * rather than at a fixed clock bedtime — so finishing early means more rest.
+ * The gap (minutes) a day should leave between its last block and bed. It does
+ * not move bedtime — it is the threshold below which the night gets flagged as
+ * having no wind-down, so a plan that runs right up to the pillow is visible
+ * without being called an overrun.
  */
 export const SLEEP_WINDDOWN_BUFFER_MINUTES = 20
 
@@ -402,30 +426,85 @@ function parseHHMM(hhmm: string): number {
 }
 
 /**
- * Sleep window derived from the day's blocks: it starts a short wind-down buffer
- * after the last block ends and runs until wake (the first block's start). This
- * is the demand-first sleep model — the day's actual end drives bedtime, so an
- * early finish yields a longer night rather than idle time before a fixed bedtime.
+ * The night, anchored on the bedtime the user actually set.
+ *
+ * Earlier this was derived purely from the blocks: sleep started a wind-down
+ * after the last block ended. Demand-first sizing collapses blocks to the work
+ * actually planned, so on any ordinary day the last block ended early in the
+ * afternoon and the night came out as "12h", then got clamped to the 10h
+ * ceiling — a number that matched neither the schedule the user set nor
+ * anything else on screen.
+ *
+ * The bedtime is the anchor now. Finishing the plan early buys open evening
+ * (`freeMinutes`), not sleep. Only a plan that runs past the target pushes
+ * bedtime later, and that is exactly the case worth surfacing: `lostMinutes` is
+ * the sleep the overrun costs. `freeMinutes` under
+ * SLEEP_WINDDOWN_BUFFER_MINUTES means the day runs right up to the pillow.
+ *
+ * `wakeTimeHHMM`/`sleepTargetHHMM` are the day's schedule. Without a target the
+ * function falls back to the old block-derived start (still the only sensible
+ * answer when there is no bedtime to anchor on).
  */
 export function computeSleepWindow(
   blocks?: DayBlocks,
-): { startMin: number; endMin: number; durationMin: number; capped: boolean } | null {
+  wakeTimeHHMM?: string | null,
+  sleepTargetHHMM?: string | null,
+): {
+  startMin: number
+  endMin: number
+  durationMin: number
+  /** Open time between the end of the plan and bedtime — also the wind-down. */
+  freeMinutes: number
+  /** Sleep the plan costs by running past the target bedtime. */
+  lostMinutes: number
+  /** True when the plan pushed bedtime later than the target. */
+  overran: boolean
+} | null {
   if (!blocks || blocks.length === 0) return null
   const first = blocks[0]!
   const last = blocks[blocks.length - 1]!
-  const endMin = first.start
-  let startMin = wrapMinutes(last.end + SLEEP_WINDDOWN_BUFFER_MINUTES)
-  const raw = (endMin - startMin + 1440) % 1440
-  let durationMin = raw === 0 ? 1440 : raw
-  // Cap the night so a lightly-planned day (blocks collapse early) doesn't claim
-  // an absurd 15h+ sleep. The time before this latest start is just open evening.
-  let capped = false
-  if (durationMin > SLEEP_MAX_MINUTES) {
-    durationMin = SLEEP_MAX_MINUTES
-    startMin = wrapMinutes(endMin - SLEEP_MAX_MINUTES)
-    capped = true
+  const endMin = wakeTimeHHMM ? parseHHMM(wakeTimeHHMM) % 1440 : first.start
+
+  /** Minutes from wake forward, so nothing here has to reason about midnight. */
+  const sinceWake = (min: number) => ((min - endMin) % 1440 + 1440) % 1440
+
+  const endOffset = sinceWake(last.end)
+  const targetOffset = sleepTargetHHMM ? sinceWake(parseHHMM(sleepTargetHHMM)) : endOffset
+
+  const startOffset = Math.min(Math.max(endOffset, targetOffset), 1440 - SLEEP_MIN_MINUTES)
+  const startMin = wrapMinutes(endMin + startOffset)
+  const durationMin = 1440 - startOffset
+
+  return {
+    startMin,
+    endMin,
+    durationMin,
+    freeMinutes: Math.max(0, targetOffset - endOffset),
+    lostMinutes: Math.max(0, Math.min(endOffset, 1440 - SLEEP_MIN_MINUTES) - targetOffset),
+    overran: endOffset > targetOffset,
   }
-  return { startMin, endMin, durationMin, capped }
+}
+
+/**
+ * The night's length implied by a wake time and a target bedtime.
+ *
+ * Bedtime is the *start* of the night and wake is its end, so the night runs
+ * bedtime → wake across midnight. `sleepTargetFromMinutes` is the exact inverse:
+ * they were inlined in three places and one of them had the sign the wrong way
+ * round, which rewrote a 23:00 bedtime as 15:00 the moment a block change
+ * spilled into sleep.
+ */
+export function sleepMinutesFromTarget(wakeTimeHHMM: string, sleepTargetHHMM: string): number {
+  const wake = parseHHMM(wakeTimeHHMM) % 1440
+  const target = parseHHMM(sleepTargetHHMM) % 1440
+  return ((wake - target) % 1440 + 1440) % 1440
+}
+
+/** Target bedtime "HH:MM" that gives `sleepMinutes` of night before `wakeTimeHHMM`. */
+export function sleepTargetFromMinutes(wakeTimeHHMM: string, sleepMinutes: number): string {
+  const wake = parseHHMM(wakeTimeHHMM) % 1440
+  const target = wrapMinutes(wake - sleepMinutes)
+  return `${String(Math.floor(target / 60)).padStart(2, '0')}:${String(target % 60).padStart(2, '0')}`
 }
 
 export function formatTimeOfDay(minutes: number): string {
@@ -456,12 +535,15 @@ export function isSleepTime(
   currentMinutes: number,
   timeOffsetMinutes?: number,
   blocks?: DayBlocks,
+  sleepStartMin?: number,
 ): boolean {
   if (blocks && blocks.length > 0) {
     const first = blocks[0]!
     const last = blocks[blocks.length - 1]!
-    // Sleep window: last.end → first.start (may cross midnight)
-    const sleepStart = last.end
+    // Sleep window: bedtime → first.start (may cross midnight). Bedtime comes
+    // from computeSleepWindow when the day has one; falling back to the last
+    // block's end would call an early-finishing afternoon "sleep".
+    const sleepStart = sleepStartMin ?? last.end
     const wakeStart = first.start
     const adjusted = wrapMinutes(currentMinutes)
     if (sleepStart > wakeStart) {
@@ -487,9 +569,10 @@ export function getActiveSectionIds(
   currentMinutes: number,
   timeOffsetMinutes?: number,
   blocks?: DayBlocks,
+  sleepStartMin?: number,
 ): TaskSectionId[] {
   if (blocks && blocks.length > 0) {
-    if (isSleepTime(currentMinutes, timeOffsetMinutes, blocks)) return []
+    if (isSleepTime(currentMinutes, timeOffsetMinutes, blocks, sleepStartMin)) return []
     const adjusted = wrapMinutes(currentMinutes)
     for (const block of blocks) {
       if (block.start <= block.end) {
@@ -513,11 +596,15 @@ export function getActiveSectionIds(
 }
 
 /** Human-readable sleep window for UI, respecting computed blocks or global offset. */
-export function getSleepWindowLabel(timeOffsetMinutes?: number, blocks?: DayBlocks): string {
+export function getSleepWindowLabel(
+  timeOffsetMinutes?: number,
+  blocks?: DayBlocks,
+  sleepStartMin?: number,
+): string {
   if (blocks && blocks.length > 0) {
     const first = blocks[0]!
     const last = blocks[blocks.length - 1]!
-    return `${formatTimeOfDay(last.end)} - ${formatTimeOfDay(first.start)}`
+    return `${formatTimeOfDay(sleepStartMin ?? last.end)} - ${formatTimeOfDay(first.start)}`
   }
   const offset = clampOffsetMinutes(timeOffsetMinutes)
   const start = wrapMinutes(MINS.h23 + offset)

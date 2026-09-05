@@ -311,6 +311,7 @@ function buildSettingsSyncPayload(s: AppState) {
     monthTitles: s.monthTitles ?? {},
     activeDays: s.activeDays ?? [],
     blockDurationRatios: s.blockDurationRatios ?? null,
+    routineMinutes: s.routineMinutes ?? null,
     notDoingList: s.notDoingList ?? [],
     identityStatement: s.identityStatement ?? "",
     depthPhilosophy: s.depthPhilosophy,
@@ -620,6 +621,7 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
           habitDefinitions: settingsDoc.habitDefinitions ?? prev.habitDefinitions,
           monthTitles: (settingsDoc.monthTitles as Record<string, string> | undefined) ?? prev.monthTitles,
           blockDurationRatios: settingsDoc.blockDurationRatios ?? prev.blockDurationRatios,
+          routineMinutes: (settingsDoc.routineMinutes as AppState["routineMinutes"]) ?? prev.routineMinutes,
           notDoingList: settingsDoc.notDoingList ?? prev.notDoingList,
           identityStatement: settingsDoc.identityStatement ?? prev.identityStatement,
           depthPhilosophy: (settingsDoc.depthPhilosophy as AppState["depthPhilosophy"]) ?? prev.depthPhilosophy,
@@ -826,6 +828,7 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
     state.habitDefinitions,
     state.monthTitles,
     state.blockDurationRatios,
+    state.routineMinutes,
     state.notDoingList,
     state.identityStatement,
     state.depthPhilosophy,
@@ -917,6 +920,7 @@ export function usePersistentState(): [AppState, (updater: (prev: AppState) => A
         next.habitDefinitions !== prev.habitDefinitions ||
         next.monthTitles !== prev.monthTitles ||
         next.blockDurationRatios !== prev.blockDurationRatios ||
+        next.routineMinutes !== prev.routineMinutes ||
         next.notDoingList !== prev.notDoingList ||
         next.identityStatement !== prev.identityStatement ||
         next.depthPhilosophy !== prev.depthPhilosophy ||

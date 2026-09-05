@@ -13,6 +13,7 @@ import {
   type AppState,
   type BlockDurations,
   type DayState,
+  type RoutineMinutes,
   type Task,
   type TaskSectionId,
 } from "../domain/types";
@@ -25,8 +26,11 @@ import {
   computeBlocksFromDurations,
   computeCapacityAwareBlocks,
   computePlannedMinutesBySection,
+  computeSleepWindow,
   getDefaultBlockDurations,
   ratiosToBlockDurations,
+  sleepMinutesFromTarget,
+  sleepTargetFromMinutes,
   type CapacityResult,
 } from "../domain/sectionTimeBlocks";
 import { getOrCreateDay } from "../storage/localStorageState";
@@ -51,6 +55,7 @@ export interface DurationScopePending {
 export function useDayBlockEditor(
   dayState: DayState,
   blockDurationRatios: AppState['blockDurationRatios'],
+  routineMinutes: AppState['routineMinutes'],
   selectedDay: string,
   updateAppState: (updater: (prev: AppState) => AppState) => void,
   shareMode: 'view' | 'edit' | undefined,
@@ -69,14 +74,16 @@ export function useDayBlockEditor(
       const awake = computeAwakeMinutes(dayState.wakeTime, dayState.sleepTarget);
       return ratiosToBlockDurations(blockDurationRatios, awake);
     }
-    return getDefaultBlockDurations(dayState.wakeTime, dayState.sleepTarget);
-  }, [dayState.wakeTime, dayState.sleepTarget, blockDurationRatios]);
+    return getDefaultBlockDurations(dayState.wakeTime, dayState.sleepTarget, routineMinutes);
+  }, [dayState.wakeTime, dayState.sleepTarget, blockDurationRatios, routineMinutes]);
 
   // Capacity-aware, bedtime-anchored sizing (null when wake/sleep not set).
   const capacity = useMemo<CapacityResult | null>(() => {
     if (!dayState.wakeTime || !dayState.sleepTarget || !blockFloors) return null;
-    return computeCapacityAwareBlocks(dayState.wakeTime, dayState.sleepTarget, plannedBySection, blockFloors);
-  }, [dayState.wakeTime, dayState.sleepTarget, plannedBySection, blockFloors]);
+    return computeCapacityAwareBlocks(
+      dayState.wakeTime, dayState.sleepTarget, plannedBySection, blockFloors, routineMinutes,
+    );
+  }, [dayState.wakeTime, dayState.sleepTarget, plannedBySection, blockFloors, routineMinutes]);
 
   // Whether the user has manually pinned this day's block sizes.
   const isManualOverride = Boolean(dayState.blockDurations);
@@ -114,6 +121,13 @@ export function useDayBlockEditor(
         : effectiveBlockDurations;
     return computeBlocksFromDurations(dayState.wakeTime, timelineDurations);
   }, [dayState.wakeTime, dayState.sleepTarget, effectiveBlockDurations, isManualOverride, mustDoMinutes]);
+
+  // The night, anchored on the bedtime the user set: the plan finishing early
+  // buys open evening, not sleep. Only an overrun moves bedtime later.
+  const sleepWindow = useMemo(
+    () => computeSleepWindow(computedBlocks, dayState.wakeTime, dayState.sleepTarget),
+    [computedBlocks, dayState.wakeTime, dayState.sleepTarget],
+  );
 
   // Modal state: auto-open when today has no wake time; "Edit schedule" forces it open.
   const [daySetupOpen, setDaySetupOpen] = useState(false);
@@ -153,12 +167,15 @@ export function useDayBlockEditor(
   }, [updateAppState, selectedDay]);
 
   const handleDaySetupSave = useCallback(
-    (wakeTime: string, sleepTarget: string, bedTime: string) => {
+    (wakeTime: string, sleepTarget: string, bedTime: string, routine: RoutineMinutes) => {
       updateAppState((prev) => {
         const existing = getOrCreateDay(prev, selectedDay);
         // Clear manual block overrides so blocks recompute from new wake/sleep times.
+        // Routine lengths are a fact about the person, not the day, so they are
+        // stored once globally rather than re-answered every morning.
         return {
           ...prev,
+          routineMinutes: routine,
           days: { ...prev.days, [selectedDay]: { ...existing, bedTime, wakeTime, sleepTarget, blockDurations: null } },
         };
       });
@@ -222,13 +239,10 @@ export function useDayBlockEditor(
     (sectionId: keyof BlockDurations, newDurationMinutes: number) => {
       if (!effectiveBlockDurations || !dayState.wakeTime || !dayState.sleepTarget) return;
 
-      const currentSleepMins = (() => {
-        const [wh, wm] = (dayState.wakeTime ?? "07:00").split(":").map(Number);
-        const [sh, sm] = (dayState.sleepTarget ?? "23:00").split(":").map(Number);
-        const wake = (wh ?? 0) * 60 + (wm ?? 0);
-        const sleep = (sh ?? 0) * 60 + (sm ?? 0);
-        return wake > sleep ? wake - sleep : wake + 1440 - sleep;
-      })();
+      const currentSleepMins = sleepMinutesFromTarget(
+        dayState.wakeTime ?? "07:00",
+        dayState.sleepTarget ?? "23:00",
+      );
 
       const result = applyBlockDurationChange(
         effectiveBlockDurations,
@@ -240,11 +254,7 @@ export function useDayBlockEditor(
 
       // Compute new sleep target string if sleep minutes changed
       const newSleepTarget: string | null = result.sleepMinutes !== currentSleepMins
-        ? (() => {
-            const [wh, wm] = (dayState.wakeTime ?? "07:00").split(":").map(Number);
-            const totalMin = ((wh ?? 0) * 60 + (wm ?? 0) + result.sleepMinutes) % 1440;
-            return `${String(Math.floor(totalMin / 60)).padStart(2, "0")}:${String(totalMin % 60).padStart(2, "0")}`;
-          })()
+        ? sleepTargetFromMinutes(dayState.wakeTime ?? "07:00", result.sleepMinutes)
         : null;
 
       // Check for task conflicts in the changed block
@@ -312,6 +322,7 @@ export function useDayBlockEditor(
   return {
     effectiveBlockDurations,
     computedBlocks,
+    sleepWindow,
     mustDoMinutes,
     plannedBySection,
     capacity,

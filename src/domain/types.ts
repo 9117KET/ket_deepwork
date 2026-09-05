@@ -189,6 +189,29 @@ export interface WeeklyProjectAssignment {
   color?: 'sky' | 'amber' | 'emerald' | 'violet' | 'rose';
 }
 
+/** Minutes reserved for the morning and wind-down routines. */
+export interface RoutineMinutes {
+  morningRoutine: number;
+  nightRoutine: number;
+}
+
+/**
+ * Routine lengths before anyone says otherwise.
+ *
+ * These used to be derived as 10% of the awake window, capped at 90 minutes.
+ * That made a longer day silently mean a longer shower — and going to bed early
+ * mean a shorter one — while reserving three hours a day nobody had agreed to.
+ * Flat numbers are guesses too, but they are guesses that stay put and that the
+ * user can see and change.
+ */
+export const DEFAULT_ROUTINE_MINUTES: RoutineMinutes = {
+  morningRoutine: 45,
+  nightRoutine: 30,
+};
+
+/** Longest routine the setup modal offers; also the sanity clamp on stored values. */
+export const MAX_ROUTINE_MINUTES = 180;
+
 export interface AppState {
   days: Record<string, DayState | undefined>;
   /**
@@ -208,6 +231,17 @@ export interface AppState {
    * When set, days without `blockDurations` use this template scaled to that day's wake/sleep window.
    */
   blockDurationRatios?: BlockDurationRatios | null;
+  /**
+   * How long your routines actually take, in minutes. A stable fact about you,
+   * not a per-day decision, so it lives here rather than on the day.
+   *
+   * These are reservations: the morning and night blocks never shrink below
+   * them, because showering and winding down consume time whether or not a task
+   * row exists for them (habits live in the sidebar checklist, so those blocks
+   * read as empty on a day you fully did them). Zero is allowed and means "I
+   * don't have one" — that block then collapses when empty, like a work block.
+   */
+  routineMinutes?: RoutineMinutes | null;
   /** Global persistent not-doing commitments (Drucker: things you've decided to stop doing entirely). */
   notDoingList?: NotDoingItem[];
   /** "I am X" identity declaration (Atomic Habits). Displayed as a daily commitment alongside habits. */
