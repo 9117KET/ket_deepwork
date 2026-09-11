@@ -99,6 +99,16 @@ function formatDateLabel(isoDay: string): string {
   return formatter.format(date);
 }
 
+/**
+ * How many "how long did that take?" prompts one tick may raise.
+ *
+ * Ticking a parent completes its subtasks too, and each of those may be work
+ * worth recording - but a queue of prompts is a nag, and a nag is answered by
+ * reflex rather than by remembering. Three is the most that still reads as a
+ * question. The sheet logs the rest whenever the user wants.
+ */
+const MAX_COMPLETION_CLAIMS = 3;
+
 /** Short label for a date (e.g. "28 Feb") for copy-from buttons. */
 function formatDateShort(isoDay: string): string {
   const [year, month, day] = isoDay.split("-").map((part) => Number(part));
@@ -513,10 +523,18 @@ export function DayPlanner({
 
   /** Why a chip could not start a block, shown briefly. */
   const [blockNotice, setBlockNotice] = useState<string | null>(null);
-  /** A just-completed task whose progress row is short, offered for logging. */
-  const [completionClaim, setCompletionClaim] = useState<
-    { taskId: string; title: string; options: BlockAmountOption[] } | null
-  >(null);
+  /**
+   * Just-completed tasks whose progress rows are short, queued for logging.
+   *
+   * A queue rather than one, because ticking a parent ticks its subtasks with
+   * it, and a subtask with an estimate is work that happened just as much as
+   * its parent is. Asking about the parent alone was how that work went
+   * unrecorded without anyone deciding it should.
+   */
+  const [completionClaims, setCompletionClaims] = useState<
+    { taskId: string; title: string; options: BlockAmountOption[] }[]
+  >([]);
+  const completionClaim = completionClaims[0] ?? null;
   /** A task whose last block just filled, offered for ticking off. */
   const [doneOffer, setDoneOffer] = useState<{ taskId: string; title: string } | null>(null);
 
@@ -775,20 +793,46 @@ Delete anyway?`);
     );
 
     if (shareMode) return;
-    if (!progress) return;
+
+    // Everything this tick completed: the task, plus the subtasks it carried
+    // with it that were not already done.
+    const completed = [
+      task,
+      ...taskWithDescendantIds(dayState.tasks, taskId)
+        .filter((id) => id !== taskId)
+        .map((id) => dayState.tasks.find((t) => t.id === id))
+        .filter((t): t is Task => Boolean(t) && !t!.isDone),
+    ];
+
     // Only the blocks they set aside and never filled. Asking in blocks rather
     // than in one lump is what lets "I finished in two of the eight" be said at
     // all - the old single button could only claim the whole remainder.
-    const options = blockAmountOptions(progress);
-    if (options.length === 0) return;
-    setCompletionClaim({ taskId, title: task.title, options });
+    const claims = completed
+      .map((candidate) => {
+        const candidateProgress = computeTaskProgress(
+          candidate,
+          dayState.deepWorkSessions,
+          blockMinutes,
+        );
+        if (!candidateProgress) return null;
+        const options = blockAmountOptions(candidateProgress);
+        if (options.length === 0) return null;
+        return { taskId: candidate.id, title: candidate.title, options };
+      })
+      .filter((claim): claim is NonNullable<typeof claim> => claim != null)
+      // Capped: a parent with six trackable subtasks would otherwise become six
+      // prompts in a row, which is a nag, and a nag gets dismissed on reflex.
+      // The sheet still logs the rest, in the user's own time.
+      .slice(0, MAX_COMPLETION_CLAIMS);
+    if (claims.length === 0) return;
+    setCompletionClaims(claims);
   }, [dayState.tasks, dayState.deepWorkSessions, blockMinutes, handleToggleTaskBase, shareMode]);
 
   // The offer writes against whichever day is open, and touching its picker
   // holds it there indefinitely - so leaving the day takes the question with
   // it, rather than leaving a button that would silently log nothing.
   useEffect(() => {
-    setCompletionClaim(null);
+    setCompletionClaims([]);
     setDoneOffer(null);
   }, [selectedDay]);
 
@@ -1016,12 +1060,13 @@ Delete anyway?`);
         <CompletionClaimPrompt
           key={completionClaim.taskId}
           title={completionClaim.title}
+          queuedAfter={completionClaims.length - 1}
           options={completionClaim.options}
           onLog={(minutes) => {
             handleLogManualMinutes(completionClaim.taskId, minutes);
-            setCompletionClaim(null);
+            setCompletionClaims((queue) => queue.slice(1));
           }}
-          onDismiss={() => setCompletionClaim(null)}
+          onDismiss={() => setCompletionClaims((queue) => queue.slice(1))}
         />
       )}
       <div

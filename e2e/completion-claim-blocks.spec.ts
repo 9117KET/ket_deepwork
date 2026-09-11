@@ -41,8 +41,8 @@ async function dismissModals(page: Page) {
   }
 }
 
-function seed(page: Page) {
-  return page.addInitScript((minutes: number) => {
+function seed(page: Page, withSubtask = false) {
+  return page.addInitScript(([minutes, subtask]: [number, boolean]) => {
     window.localStorage.setItem('deepblock_tour_done', '1')
     if (!window.sessionStorage.getItem('_pw_claim_ready')) {
       window.sessionStorage.setItem('_pw_claim_ready', '1')
@@ -61,6 +61,19 @@ function seed(page: Page) {
                   isDone: false,
                   durationMinutes: minutes,
                 },
+                ...(subtask
+                  ? [
+                      {
+                        id: 'pw-claim-sub',
+                        title: 'Read the sources',
+                        sectionId: 'highPriority',
+                        date: today,
+                        isDone: false,
+                        parentId: 'pw-claim-1',
+                        durationMinutes: 90,
+                      },
+                    ]
+                  : []),
               ],
               habitCompletions: {},
               deepWorkSessions: [],
@@ -83,7 +96,7 @@ function seed(page: Page) {
       const localIso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
       window.sessionStorage.setItem(`shutdown_reminder_shown_${localIso}`, '1')
     }
-  }, BLOCK * BLOCKS)
+  }, [BLOCK * BLOCKS, withSubtask] as [number, boolean])
 }
 
 /** Sections start collapsed in the redesign; open the one holding the task. */
@@ -173,6 +186,34 @@ test.describe('Completing a task asks how many of its blocks were done', () => {
 
     const day = await readDay(page)
     expect(day.deepWorkSessions).toHaveLength(0)
+  })
+
+  test('asks about a subtask the parent carried with it', async ({ page }) => {
+    await seed(page, true)
+    await openPlanner(page)
+    await dismissModals(page)
+    await expandHighPriority(page)
+
+    // Ticking the parent ticks the subtask too - and the subtask's two blocks
+    // are work that happened just as much as the parent's.
+    await page.getByRole('checkbox', { name: /Write the dissertation chapter/i }).first().click()
+
+    const parentPrompt = page.getByRole('radiogroup', {
+      name: /How many blocks of Write the dissertation chapter/i,
+    })
+    await expect(parentPrompt).toBeVisible()
+    await expect(page.getByText('1 more subtask after this')).toBeVisible()
+    await page.getByRole('button', { name: 'None' }).click()
+
+    const subPrompt = page.getByRole('radiogroup', { name: /How many blocks of Read the sources/i })
+    await expect(subPrompt).toBeVisible()
+    await subPrompt.getByRole('radio', { name: '2', exact: true }).click()
+    await page.getByRole('button', { name: 'Log 1h30 by hand' }).click()
+
+    const day = await readDay(page)
+    const manual = day.deepWorkSessions.filter((s: { source?: string }) => s.source === 'manual')
+    expect(manual).toHaveLength(1)
+    expect(manual[0]).toMatchObject({ taskId: 'pw-claim-sub', durationMinutes: 90 })
   })
 
   test('declining logs nothing', async ({ page }) => {

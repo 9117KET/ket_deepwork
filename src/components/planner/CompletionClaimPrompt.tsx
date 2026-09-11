@@ -29,6 +29,8 @@ export const COMPLETION_CLAIM_TIMEOUT_MS = 12000
 
 interface CompletionClaimPromptProps {
   title: string
+  /** How many more of these are waiting behind this one. */
+  queuedAfter?: number
   /** The empty blocks, cumulative - see `blockAmountOptions`. */
   options: BlockAmountOption[]
   onLog: (minutes: number) => void
@@ -37,6 +39,7 @@ interface CompletionClaimPromptProps {
 
 export function CompletionClaimPrompt({
   title,
+  queuedAfter = 0,
   options,
   onLog,
   onDismiss,
@@ -72,6 +75,11 @@ export function CompletionClaimPrompt({
         <span className="font-medium">{title}</span> done with{' '}
         {total === 1 ? '1 block' : `${total} blocks`} unlogged. How many did you do?
       </p>
+      {queuedAfter > 0 && (
+        <p className="mt-0.5 text-[11px] text-share-onSurfaceVariant/70">
+          {queuedAfter === 1 ? '1 more subtask after this' : `${queuedAfter} more after this`}
+        </p>
+      )}
 
       <BlockAmountPicker
         className="mt-2"

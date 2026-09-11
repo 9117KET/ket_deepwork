@@ -306,7 +306,9 @@ Nine features built around the *Deep Work* philosophy:
    offered as destinations; realising a block belonged to something already
    ticked off is the common case. Completing a trackable task with an
    unlogged remainder raises `CompletionClaimPrompt` (12s, then it expires;
-   touching it holds it open, and leaving the day dismisses it). It asks in
+   touching it holds it open, and leaving the day dismisses it). One tick can
+   raise several: ticking a parent completes its subtasks, and each trackable
+   one is queued behind it, capped at `MAX_COMPLETION_CLAIMS` = 3. It asks in
    blocks, not minutes: `blockAmountOptions` in `taskProgress.ts` turns the
    still-empty blocks into cumulative choices, so eight blocks set aside and two
    actually worked can be said in one tap. It opens on all of them, so the old
