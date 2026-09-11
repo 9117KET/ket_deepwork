@@ -299,7 +299,12 @@ Nine features built around the *Deep Work* philosophy:
    `computeDailyDeepWorkMinutes` by `source`, which is the only thing standing
    between self-report and the earned total. Undo takes back the last *entry*
    whole (`listManualEntries`), since logging is one gesture and taking it back
-   has to be one too. Completing a trackable task with an
+   has to be one too. `SessionAttributionPanel` (folded away under the logging
+   controls) points a recorded block at a different task or at none, via
+   `reattributeSession` in `workSafety.ts` — the minutes, instants and earned
+   status are untouched, so only what the work was *for* changes. Done tasks are
+   offered as destinations; realising a block belonged to something already
+   ticked off is the common case. Completing a trackable task with an
    unlogged remainder raises `CompletionClaimPrompt` (12s, then it expires;
    touching it holds it open, and leaving the day dismisses it). It asks in
    blocks, not minutes: `blockAmountOptions` in `taskProgress.ts` turns the

@@ -278,6 +278,7 @@ export function DayPlanner({
     handleRecordAwaySession,
     handleLogManualMinutes,
     handleUndoManualMinutes,
+    handleReattributeSession,
     handleMoveToNotDoing,
     handleAbandonTask,
     handleAddToNotDoing,
@@ -556,6 +557,29 @@ export function DayPlanner({
         : [],
     [progressSheetTask, dayState.deepWorkSessions],
   );
+  /**
+   * Everything recorded against the task the sheet is open on, and where those
+   * minutes could go instead. Done tasks are included as destinations on
+   * purpose: noticing a block belonged to something already ticked off is the
+   * ordinary case, and leaving it out would make the fix impossible exactly
+   * when it is needed.
+   */
+  const progressSheetSessions = useMemo(
+    () =>
+      progressSheetTask
+        ? dayState.deepWorkSessions.filter(
+            (session) => session.taskId === progressSheetTask.id && !session.cancelledAt,
+          )
+        : [],
+    [progressSheetTask, dayState.deepWorkSessions],
+  );
+  const attributionTargets = useMemo(() => {
+    const floor = minTrackableMinutes(blockMinutes);
+    return dayState.tasks
+      .filter((t) => (t.durationMinutes ?? 0) >= floor)
+      .map((t) => ({ id: t.id, title: t.title, isDone: t.isDone }));
+  }, [dayState.tasks, blockMinutes]);
+
   // Recomputed from live state, so the sheet's boxes move as you log into them.
   const progressSheetProgress = useMemo(
     () => (progressSheetTask ? computeTaskProgress(progressSheetTask, dayState.deepWorkSessions, blockMinutes) : null),
@@ -1824,6 +1848,9 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
           dayIso={selectedDay}
           progress={progressSheetProgress}
           manualEntries={progressSheetManualEntries}
+          attributedSessions={progressSheetSessions}
+          attributionTargets={attributionTargets}
+          onReattribute={shareMode === 'view' ? undefined : handleReattributeSession}
           onLogManual={(minutes, interval) => handleLogManualMinutes(progressSheetTask.id, minutes, interval)}
           onUndoManual={(minutes) => handleUndoManualMinutes(progressSheetTask.id, minutes)}
           onStartBlock={shareMode === 'view' ? undefined : (minutes) => handleStartBlock(progressSheetTask.id, minutes)}

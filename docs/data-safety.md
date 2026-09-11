@@ -39,6 +39,7 @@ Three separate defects in one sequence, all now closed.
 | 6 | Bulk-delete selected tasks | Same, silently, across many tasks at once | Same detachment, plus the confirmation in #7 |
 | 7 | Delete a task carrying hand-logged minutes | Destroyed with no prompt — no other record existed | Hand-logged time is now a `DeepWorkSession` (`source: 'manual'`), so it is **detached, not dropped**, exactly like timed work. What still dies with the task is the legacy `Task.manualLoggedMinutes` total from before that change, and only that still raises the confirmation (`summarizeTaskWork.irrecoverableMinutes`) |
 | 8 | A session's start time | Synthesised as `now − duration`, so a paused or restored block recorded a fictional interval | The real start instant is carried through and stored |
+| 9a | Pick the wrong task in "Working on" and work a full block | The minutes were stuck on the wrong task for good; the only lever that touched a session's task was deleting the task, so the remedy for a mislabelled record was destroying the label | `reattributeSession` — the sheet's *Worked against the wrong task?* moves a block to any trackable task on the day (done ones included) or to none, changing nothing but the attribution |
 | 9 | **Any destructive planner action** | Final, immediately | One step of **Undo**, offered for 12s — covers task delete, bulk delete, *copy from day*, and habit / side-quest definition edits |
 
 ## Open

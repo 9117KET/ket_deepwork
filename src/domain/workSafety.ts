@@ -219,6 +219,46 @@ export function detachSessionsFromTasks(
   })
 }
 
+/**
+ * Point a session at a different task, or at none.
+ *
+ * The gap this closes: pick the wrong task in "Working on", run ninety minutes,
+ * and those minutes were stuck on the wrong row for good. Nothing in the app
+ * could move them, and the only lever that touched them at all was deleting the
+ * task - which is to say the only remedy for a mislabelled record was to
+ * destroy the label entirely.
+ *
+ * Re-attribution is not destruction, so it needs no confirmation and no undo of
+ * its own: the minutes, the instants and the duration are untouched, and only
+ * the answer to "what was this for" changes. That is also why this refuses to
+ * do anything else - a function that could quietly adjust `durationMinutes`
+ * while renaming would be a way to launder invented work into the ledger.
+ *
+ * A hand-logged entry takes the new task's title, since its label was only ever
+ * a copy of it. A timed block keeps the label the person gave the block.
+ */
+export function reattributeSession(
+  sessions: readonly DeepWorkSession[],
+  sessionId: string,
+  toTaskId: string | undefined,
+  tasks: readonly Task[],
+): DeepWorkSession[] {
+  return sessions.map((session) => {
+    if (session.id !== sessionId) return session
+    if (!toTaskId) {
+      const { taskId: _dropped, ...rest } = session
+      return rest
+    }
+    const target = tasks.find((task) => task.id === toTaskId)
+    if (!target) return session
+    return {
+      ...session,
+      taskId: toTaskId,
+      label: session.source === 'manual' ? target.title : session.label,
+    }
+  })
+}
+
 function formatMinutes(total: number): string {
   const h = Math.floor(total / 60)
   const m = total % 60

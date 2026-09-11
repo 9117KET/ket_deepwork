@@ -27,7 +27,9 @@ import {
   manualIntervalFromClockRange,
   parseClockRangeMinutes,
 } from '../../domain/taskProgress'
+import type { DeepWorkSession } from '../../domain/types'
 import { BlockAmountPicker } from './BlockAmountPicker'
+import { SessionAttributionPanel, type AttributionTarget } from './SessionAttributionPanel'
 import { TaskProgressBoxes } from './TaskProgressBoxes'
 import { useFocusBlocks } from './focusBlockContext'
 
@@ -43,6 +45,12 @@ interface TaskProgressSheetProps {
   manualEntries: ManualLogEntry[]
   /** Take back the last hand-tracked minutes. Earned time is never removable here. */
   onUndoManual: (minutes: number) => void
+  /** Everything recorded against this task, for fixing a wrong attribution. */
+  attributedSessions?: DeepWorkSession[]
+  /** Where those minutes could go instead. */
+  attributionTargets?: AttributionTarget[]
+  /** Point a recorded block at a different task, or at none. */
+  onReattribute?: (sessionId: string, toTaskId: string | undefined) => void
   /** Start the next block on the timer. Omitted where no timer is in reach. */
   onStartBlock?: (minutes: number) => void
   onClose: () => void
@@ -56,6 +64,9 @@ export function TaskProgressSheet({
   manualEntries,
   onLogManual,
   onUndoManual,
+  attributedSessions = [],
+  attributionTargets = [],
+  onReattribute,
   onStartBlock,
   onClose,
 }: TaskProgressSheetProps) {
@@ -142,6 +153,14 @@ export function TaskProgressSheet({
           )}
 
           <ManualLogPanel progress={progress} dayIso={dayIso} onLogManual={onLogManual} />
+
+          {onReattribute && (
+            <SessionAttributionPanel
+              sessions={attributedSessions}
+              targets={attributionTargets}
+              onReattribute={onReattribute}
+            />
+          )}
 
           {lastManual && (
             <button

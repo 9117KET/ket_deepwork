@@ -26,7 +26,7 @@ import {
   cloneTasksForDay,
   pickMustsToCopyForward,
 } from "../domain/taskUtils";
-import { blockDayIso, detachSessionsFromTasks } from "../domain/workSafety";
+import { blockDayIso, detachSessionsFromTasks, reattributeSession } from "../domain/workSafety";
 import { withdrawManualMinutes } from "../domain/taskProgress";
 import { getOrCreateDay } from "../storage/localStorageState";
 
@@ -782,6 +782,33 @@ export function useTaskHandlers(
     });
   }, [selectedDay, updateAppState]);
 
+  /**
+   * Point a recorded block at a different task, or at none.
+   *
+   * The one repair the ledger never had. Minutes earned against the wrong task
+   * - a "Working on" picked in a hurry - could not be moved, only deleted along
+   * with the task holding them. Nothing here changes how long anything was,
+   * when it happened or whether it was earned; only what it was for.
+   */
+  const handleReattributeSession = useCallback(
+    (sessionId: string, toTaskId: string | undefined) => {
+      updateAppState((prev) => {
+        const day = getOrCreateDay(prev, selectedDay);
+        const sessions = reattributeSession(
+          day.deepWorkSessions,
+          sessionId,
+          toTaskId,
+          day.tasks,
+        );
+        return {
+          ...prev,
+          days: { ...prev.days, [selectedDay]: { ...day, deepWorkSessions: sessions } },
+        };
+      });
+    },
+    [selectedDay, updateAppState],
+  );
+
   /** Move a task to the global not-doing list and remove it from the plan. */
   const handleMoveToNotDoing = useCallback((taskId: string) => {
     updateAppState((prev) => {
@@ -1111,6 +1138,7 @@ export function useTaskHandlers(
     handleRecordAwaySession,
     handleLogManualMinutes,
     handleUndoManualMinutes,
+    handleReattributeSession,
     handleMoveToNotDoing,
     handleAbandonTask,
     handleAddToNotDoing,
