@@ -34,7 +34,7 @@ export function MonthlyReviewBanner({ selectedDay, review, onOpen }: MonthlyRevi
       <button
         type="button"
         onClick={onOpen}
-        className="ml-auto text-[10px] text-share-onSurfaceVariant/60 hover:text-share-onBg transition-colors"
+        className="touch-target-coarse ml-auto inline-flex items-center justify-center rounded px-1 text-[10px] text-share-onSurfaceVariant/60 transition-colors hover:text-share-onBg"
       >
         Revisit ↓
       </button>
@@ -48,7 +48,7 @@ export function MonthlyReviewBanner({ selectedDay, review, onOpen }: MonthlyRevi
       <button
         type="button"
         onClick={onOpen}
-        className="shrink-0 rounded border border-amber-600 bg-amber-500/20 px-2 py-0.5 text-[10px] font-medium text-amber-300 hover:bg-amber-500/30 transition-colors"
+        className="touch-target-coarse inline-flex shrink-0 items-center justify-center rounded border border-amber-600 bg-amber-500/20 px-2 py-0.5 text-[10px] font-medium text-amber-300 transition-colors hover:bg-amber-500/30"
       >
         Open ↓
       </button>
