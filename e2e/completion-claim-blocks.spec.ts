@@ -151,6 +151,30 @@ test.describe('Completing a task asks how many of its blocks were done', () => {
     expect(manual[0].finishedAt).toBeUndefined()
   })
 
+  test('what is logged in one gesture comes back in one gesture', async ({ page }) => {
+    await seed(page)
+    await openPlanner(page)
+    await dismissModals(page)
+    await expandHighPriority(page)
+
+    // Log three blocks from the sheet, in one go.
+    await progressTotal(page).click()
+    const sheet = page.getByRole('dialog', { name: /Log time on/i })
+    await expect(sheet).toBeVisible()
+    await sheet.getByRole('radio', { name: '3', exact: true }).click()
+    await sheet.getByRole('button', { name: 'Log 2h15' }).click()
+    await expect(progressTotal(page)).toHaveText('2h15/6h')
+
+    // One tap takes the whole entry back, not one block of it.
+    const undo = sheet.getByRole('button', { name: /Undo 2h15 logged by hand/i })
+    await expect(undo).toBeVisible()
+    await undo.click()
+    await expect(progressTotal(page)).toHaveText('0m/6h')
+
+    const day = await readDay(page)
+    expect(day.deepWorkSessions).toHaveLength(0)
+  })
+
   test('declining logs nothing', async ({ page }) => {
     await seed(page)
     await openPlanner(page)

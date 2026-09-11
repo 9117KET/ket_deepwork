@@ -3,6 +3,7 @@ import {
   blockAmountOptions,
   computeManualMinutesForTask,
   computeTaskProgress,
+  listManualEntries,
   manualIntervalFromClockRange,
   withdrawManualMinutes,
   computeTimerMinutesForTask,
@@ -491,5 +492,52 @@ describe('manualIntervalFromClockRange', () => {
   it('invents nothing from a half-finished entry', () => {
     expect(manualIntervalFromClockRange('2026-08-26', '', '09:00')).toBeNull()
     expect(manualIntervalFromClockRange('not-a-day', '07:00', '09:00')).toBeNull()
+  })
+})
+
+describe('listManualEntries', () => {
+  it('lists what was logged, oldest first', () => {
+    const entries = listManualEntries('t1', [
+      manual({ id: 'm1', durationMinutes: 30 }),
+      session({ id: 'earned', durationMinutes: 45, taskId: 't1' }),
+      manual({ id: 'm2', durationMinutes: 90 }),
+    ])
+    expect(entries.map((e) => e.id)).toEqual(['m1', 'm2'])
+    expect(entries.at(-1)!.minutes).toBe(90)
+  })
+
+  it('puts the legacy total first, as the one lump it is', () => {
+    const entries = listManualEntries('t1', [manual({ id: 'm1', durationMinutes: 30 })], 20)
+    expect(entries.map((e) => [e.id, e.minutes, e.isLegacy])).toEqual([
+      ['legacy', 20, true],
+      ['m1', 30, false],
+    ])
+  })
+
+  it('carries an interval only when the entry actually has one', () => {
+    const [ranged, counted] = listManualEntries('t1', [
+      manual({ id: 'm1', durationMinutes: 60, finishedAt: '2026-08-26T10:00:00.000Z' }),
+      manual({ id: 'm2', durationMinutes: 60, finishedAt: undefined }),
+    ])
+    expect(ranged!.finishedAt).toBe('2026-08-26T10:00:00.000Z')
+    expect(counted!.finishedAt).toBeUndefined()
+    expect(counted!.loggedAt).toBeTruthy()
+  })
+
+  it('taking back the last entry takes back all of it at once', () => {
+    const sessions = [manual({ id: 'm1', durationMinutes: 30 }), manual({ id: 'm2', durationMinutes: 270 })]
+    const last = listManualEntries('t1', sessions).at(-1)!
+    const result = withdrawManualMinutes(sessions, 't1', last.minutes)
+    expect(result.sessions.map((s) => s.id)).toEqual(['m1'])
+    expect(result.legacyRemainder).toBe(0)
+  })
+
+  it('ignores cancelled entries and other tasks', () => {
+    expect(
+      listManualEntries('t1', [
+        manual({ id: 'm1', cancelledAt: '2026-08-26T19:00:00.000Z' }),
+        manual({ id: 'm2', taskId: 't2' }),
+      ]),
+    ).toEqual([])
   })
 })

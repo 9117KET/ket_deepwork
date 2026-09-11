@@ -373,3 +373,53 @@ export function withdrawManualMinutes(
 
   return { sessions: next, legacyRemainder: left }
 }
+
+/** One thing a person logged by hand, in the order they logged it. */
+export interface ManualLogEntry {
+  /** The session's id, or `legacy` for the pre-entry per-task total. */
+  id: string
+  minutes: number
+  /** When the claim was made, when that is known. */
+  loggedAt?: string
+  /** The real interval worked, when the person gave one. */
+  startedAt?: string
+  finishedAt?: string
+  /** True for the old per-task total, which is one lump with no history. */
+  isLegacy: boolean
+}
+
+/**
+ * Everything hand-logged against a task, oldest first.
+ *
+ * The legacy per-task total comes first and as a single entry, because that is
+ * exactly what it is: one number with no history behind it. Real entries follow
+ * in the order they were recorded, so "the last thing I logged" is the last of
+ * these - which is what an undo should take back, in one go, however many
+ * blocks it happened to cover.
+ */
+export function listManualEntries(
+  taskId: string,
+  sessions: readonly DeepWorkSession[],
+  legacyMinutes?: number,
+): ManualLogEntry[] {
+  const entries: ManualLogEntry[] = []
+  const legacy = Math.floor(legacyMinutes ?? 0)
+  if (Number.isFinite(legacy) && legacy > 0) {
+    entries.push({ id: 'legacy', minutes: legacy, isLegacy: true })
+  }
+  for (const session of sessions) {
+    if (session.taskId !== taskId) continue
+    if (session.cancelledAt || !isManualSession(session)) continue
+    const minutes = Math.floor(session.durationMinutes)
+    if (!Number.isFinite(minutes) || minutes <= 0) continue
+    entries.push({
+      id: session.id,
+      minutes,
+      loggedAt: session.loggedAt,
+      // Only a stretch with both ends knows the interval it covered.
+      ...(session.finishedAt ? { startedAt: session.startedAt, finishedAt: session.finishedAt } : {}),
+      isLegacy: false,
+    })
+  }
+  return entries
+}

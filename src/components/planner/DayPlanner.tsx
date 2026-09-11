@@ -35,7 +35,7 @@ import {
   SLEEP_WARN_MINUTES,
   formatTimeOfDay,
 } from "../../domain/sectionTimeBlocks";
-import { blockAmountOptions, computeTaskProgress, minTrackableMinutes, type BlockAmountOption } from "../../domain/taskProgress";
+import { blockAmountOptions, computeTaskProgress, listManualEntries, minTrackableMinutes, type BlockAmountOption } from "../../domain/taskProgress";
 import { describeWorkLoss, summarizeTaskWork, taskWithDescendantIds } from '../../domain/workSafety';
 import { useUndoableActions } from '../../hooks/useUndoableActions';
 import { UndoToast } from './UndoToast';
@@ -542,6 +542,19 @@ export function DayPlanner({
   const progressSheetTask = useMemo(
     () => dayState.tasks.find((t) => t.id === progressSheetTaskId) ?? null,
     [dayState.tasks, progressSheetTaskId],
+  );
+  // The hand-logged entries behind the faded fill, so the sheet can offer to
+  // take the last one back whole rather than a block at a time.
+  const progressSheetManualEntries = useMemo(
+    () =>
+      progressSheetTask
+        ? listManualEntries(
+            progressSheetTask.id,
+            dayState.deepWorkSessions,
+            progressSheetTask.manualLoggedMinutes,
+          )
+        : [],
+    [progressSheetTask, dayState.deepWorkSessions],
   );
   // Recomputed from live state, so the sheet's boxes move as you log into them.
   const progressSheetProgress = useMemo(
@@ -1810,6 +1823,7 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
           taskTitle={progressSheetTask.title}
           dayIso={selectedDay}
           progress={progressSheetProgress}
+          manualEntries={progressSheetManualEntries}
           onLogManual={(minutes, interval) => handleLogManualMinutes(progressSheetTask.id, minutes, interval)}
           onUndoManual={(minutes) => handleUndoManualMinutes(progressSheetTask.id, minutes)}
           onStartBlock={shareMode === 'view' ? undefined : (minutes) => handleStartBlock(progressSheetTask.id, minutes)}

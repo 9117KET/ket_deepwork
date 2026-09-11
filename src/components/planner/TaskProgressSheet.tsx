@@ -19,7 +19,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { Clock, Minus, Timer, X } from 'lucide-react'
-import type { TaskProgress } from '../../domain/taskProgress'
+import type { ManualLogEntry, TaskProgress } from '../../domain/taskProgress'
 import {
   blockAmountOptions,
   describeTaskProgress,
@@ -39,6 +39,8 @@ interface TaskProgressSheetProps {
   progress: TaskProgress
   /** Log hand-tracked minutes, with the real interval when one is known. */
   onLogManual: (minutes: number, interval?: { startedAt: string; finishedAt: string }) => void
+  /** What has been logged by hand against this task, oldest first. */
+  manualEntries: ManualLogEntry[]
   /** Take back the last hand-tracked minutes. Earned time is never removable here. */
   onUndoManual: (minutes: number) => void
   /** Start the next block on the timer. Omitted where no timer is in reach. */
@@ -51,6 +53,7 @@ export function TaskProgressSheet({
   taskTitle,
   dayIso,
   progress,
+  manualEntries,
   onLogManual,
   onUndoManual,
   onStartBlock,
@@ -73,7 +76,10 @@ export function TaskProgressSheet({
   const logMinutes = nextSlot
     ? nextSlot.capacityMinutes - nextSlot.timerMinutes - nextSlot.manualMinutes
     : progress.blockMinutes
-  const undoSlot = [...progress.slots].reverse().find((slot) => slot.manualMinutes > 0)
+  // Undo takes back the last thing logged, whole. Logging is one gesture, so
+  // taking it back has to be one gesture too: an entry covering six blocks that
+  // came off a block at a time would make the honest record the tedious one.
+  const lastManual = manualEntries.at(-1) ?? null
   const isTimerBusy = activeBlock != null
 
   return (
@@ -137,15 +143,20 @@ export function TaskProgressSheet({
 
           <ManualLogPanel progress={progress} dayIso={dayIso} onLogManual={onLogManual} />
 
-          {undoSlot && (
+          {lastManual && (
             <button
               type="button"
-              onClick={() => onUndoManual(undoSlot.manualMinutes)}
+              onClick={() => onUndoManual(lastManual.minutes)}
               className="flex min-h-[44px] w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-share-onSurfaceVariant hover:bg-share-surfaceContainerHighest"
             >
               <Minus className="h-4 w-4 shrink-0" />
-              <span className="text-sm">
-                Undo {formatMinutes(undoSlot.manualMinutes)} logged by hand
+              <span className="min-w-0">
+                <span className="block text-sm">
+                  Undo {formatMinutes(lastManual.minutes)} logged by hand
+                </span>
+                <span className="block text-xs text-share-onSurfaceVariant/70">
+                  {describeManualEntry(lastManual)}
+                </span>
               </span>
             </button>
           )}
@@ -153,6 +164,25 @@ export function TaskProgressSheet({
       </div>
     </div>
   )
+}
+
+/**
+ * When an entry was claimed, or the stretch it says it covers - whichever the
+ * record actually knows. Legacy totals know neither, and say so.
+ */
+function describeManualEntry(entry: ManualLogEntry): string {
+  if (entry.startedAt && entry.finishedAt) {
+    return `the stretch ${clock(entry.startedAt)} to ${clock(entry.finishedAt)}`
+  }
+  if (entry.loggedAt) return `logged at ${clock(entry.loggedAt)}`
+  return 'logged before entries were kept'
+}
+
+/** An ISO instant as the local wall clock, e.g. "18:20". */
+function clock(iso: string): string {
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return '--:--'
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
 }
 
 /**

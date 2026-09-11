@@ -297,7 +297,9 @@ Nine features built around the *Deep Work* philosophy:
    the real interval; a count of blocks stores only `loggedAt`, because an
    interval nobody knows is not invented. Manual entries are excluded from
    `computeDailyDeepWorkMinutes` by `source`, which is the only thing standing
-   between self-report and the earned total. Completing a trackable task with an
+   between self-report and the earned total. Undo takes back the last *entry*
+   whole (`listManualEntries`), since logging is one gesture and taking it back
+   has to be one too. Completing a trackable task with an
    unlogged remainder raises `CompletionClaimPrompt` (12s, then it expires;
    touching it holds it open, and leaving the day dismisses it). It asks in
    blocks, not minutes: `blockAmountOptions` in `taskProgress.ts` turns the
