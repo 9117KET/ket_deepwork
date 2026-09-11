@@ -3,6 +3,7 @@ import {
   computePerHabitStreaks,
   getAtRiskHabitIds,
   computeDailyDeepWorkMinutes,
+  computeDailySelfReportedMinutes,
   computeSectionCompletion,
   computeWeeklyDeepWorkHours,
 } from './stats'
@@ -72,6 +73,49 @@ describe('computeDailyDeepWorkMinutes', () => {
       deepWorkSessions: [session('s1', 60), session('s2', 30, { finished: false })],
     })
     expect(computeDailyDeepWorkMinutes(day)).toBe(60)
+  })
+})
+
+// A stretch someone logged by hand. It carries a finishedAt like any other
+// session, so only `source` keeps it out of the earned total.
+function manualSession(id: string, minutes: number): DeepWorkSession {
+  return { ...session(id, minutes), source: 'manual', loggedAt: '2026-05-12T18:00:00Z' }
+}
+
+describe('hand-logged entries and the deep work total', () => {
+  it('never counts hand-logged entries as deep work, finished or not', () => {
+    const day = makeDay({
+      deepWorkSessions: [session('s1', 60), manualSession('m1', 120)],
+    })
+    expect(computeDailyDeepWorkMinutes(day)).toBe(60)
+  })
+
+  it('counts them as self-reported instead', () => {
+    const day = makeDay({
+      deepWorkSessions: [session('s1', 60), manualSession('m1', 120)],
+    })
+    expect(computeDailySelfReportedMinutes(day)).toBe(120)
+  })
+
+  it('still counts the legacy per-task total, alongside entries', () => {
+    const day = makeDay({
+      tasks: [task('t1', { manualLoggedMinutes: 30 })],
+      deepWorkSessions: [manualSession('m1', 45)],
+    })
+    expect(computeDailySelfReportedMinutes(day)).toBe(75)
+    expect(computeDailyDeepWorkMinutes(day)).toBe(0)
+  })
+
+  it('ignores a cancelled hand-logged entry', () => {
+    const day = makeDay({
+      deepWorkSessions: [{ ...manualSession('m1', 45), cancelledAt: '2026-05-12T19:00:00Z' }],
+    })
+    expect(computeDailySelfReportedMinutes(day)).toBe(0)
+  })
+
+  it('counts hand-logged time that has lost its task', () => {
+    const day = makeDay({ deepWorkSessions: [{ ...manualSession('m1', 45), taskId: undefined }] })
+    expect(computeDailySelfReportedMinutes(day)).toBe(45)
   })
 })
 

@@ -37,7 +37,7 @@ Three separate defects in one sequence, all now closed.
 | 4 | Start a block while one is running | Dead end — the only exit named was the destructive one | Notice names the non-destructive route and reports what is at stake |
 | 5 | Delete a task you have already worked on | Sessions kept a dangling `taskId`; the work lost its label | Sessions are **detached, not dropped** — minutes keep counting and the old title folds into the label |
 | 6 | Bulk-delete selected tasks | Same, silently, across many tasks at once | Same detachment, plus the confirmation in #7 |
-| 7 | Delete a task carrying hand-logged minutes | Destroyed with no prompt — no other record exists | Confirms, naming the amount. Timed-only work does **not** prompt (see #5 — it survives) |
+| 7 | Delete a task carrying hand-logged minutes | Destroyed with no prompt — no other record existed | Hand-logged time is now a `DeepWorkSession` (`source: 'manual'`), so it is **detached, not dropped**, exactly like timed work. What still dies with the task is the legacy `Task.manualLoggedMinutes` total from before that change, and only that still raises the confirmation (`summarizeTaskWork.irrecoverableMinutes`) |
 | 8 | A session's start time | Synthesised as `now − duration`, so a paused or restored block recorded a fictional interval | The real start instant is carried through and stored |
 | 9 | **Any destructive planner action** | Final, immediately | One step of **Undo**, offered for 12s — covers task delete, bulk delete, *copy from day*, and habit / side-quest definition edits |
 

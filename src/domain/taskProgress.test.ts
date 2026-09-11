@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import {
   blockAmountOptions,
+  computeManualMinutesForTask,
   computeTaskProgress,
+  manualIntervalFromClockRange,
+  withdrawManualMinutes,
   computeTimerMinutesForTask,
   describeTaskProgress,
   formatMinutes,
@@ -396,5 +399,97 @@ describe('blockAmountOptions', () => {
     expect(blockAmountOptions(progress, 1)).toEqual([
       { blocks: 1, minutes: blockMinutes, isOverflow: true },
     ])
+  })
+})
+
+/** A stretch logged by hand, recorded as an entry rather than a bare total. */
+function manual(overrides: Partial<DeepWorkSession> = {}): DeepWorkSession {
+  return {
+    ...session({ taskId: 't1', ...overrides }),
+    source: 'manual',
+    loggedAt: '2026-08-26T18:00:00.000Z',
+  }
+}
+
+describe('hand-logged entries', () => {
+  it('fill the row without ever counting as earned', () => {
+    const progress = computeTaskProgress(
+      task({ durationMinutes: 120 }),
+      [session({ durationMinutes: 30, taskId: 't1' }), manual({ durationMinutes: 45 })],
+      60,
+    )!
+    expect(progress.timerMinutes).toBe(30)
+    expect(progress.manualMinutes).toBe(45)
+    expect(progress.totalMinutes).toBe(75)
+  })
+
+  it('add to the legacy per-task total rather than replacing it', () => {
+    expect(
+      computeManualMinutesForTask('t1', [manual({ durationMinutes: 45 })], 30),
+    ).toBe(75)
+  })
+
+  it('are ignored once cancelled', () => {
+    expect(
+      computeManualMinutesForTask('t1', [
+        manual({ durationMinutes: 45, cancelledAt: '2026-08-26T19:00:00.000Z' }),
+      ]),
+    ).toBe(0)
+  })
+
+  it('belong to their own task only', () => {
+    expect(computeManualMinutesForTask('t2', [manual({ durationMinutes: 45 })])).toBe(0)
+  })
+})
+
+describe('withdrawManualMinutes', () => {
+  it('takes the newest entry back first', () => {
+    const first = manual({ id: 'm1', durationMinutes: 30 })
+    const second = manual({ id: 'm2', durationMinutes: 45 })
+    const result = withdrawManualMinutes([first, second], 't1', 45)
+    expect(result.sessions.map((s) => s.id)).toEqual(['m1'])
+    expect(result.legacyRemainder).toBe(0)
+  })
+
+  it('keeps the rest of an entry only partly taken back, and stops claiming its interval', () => {
+    const entry = manual({ id: 'm1', durationMinutes: 60, finishedAt: '2026-08-26T10:00:00.000Z' })
+    const result = withdrawManualMinutes([entry], 't1', 20)
+    expect(result.sessions).toHaveLength(1)
+    expect(result.sessions[0]!.durationMinutes).toBe(40)
+    expect(result.sessions[0]!.finishedAt).toBeUndefined()
+  })
+
+  it('never touches earned minutes, and reports what the legacy total still owes', () => {
+    const earned = session({ id: 'dw-earned', durationMinutes: 90, taskId: 't1' })
+    const result = withdrawManualMinutes([earned, manual({ durationMinutes: 15 })], 't1', 45)
+    expect(result.sessions.map((s) => s.id)).toEqual(['dw-earned'])
+    expect(result.legacyRemainder).toBe(30)
+  })
+
+  it('leaves another task alone', () => {
+    const other = manual({ id: 'm-other', taskId: 't2', durationMinutes: 60 })
+    const result = withdrawManualMinutes([other], 't1', 60)
+    expect(result.sessions).toEqual([other])
+    expect(result.legacyRemainder).toBe(60)
+  })
+})
+
+describe('manualIntervalFromClockRange', () => {
+  it('places the stretch on the day the task belongs to', () => {
+    const interval = manualIntervalFromClockRange('2026-08-26', '07:00', '09:15')!
+    expect(new Date(interval.startedAt).getHours()).toBe(7)
+    expect(
+      (new Date(interval.finishedAt).getTime() - new Date(interval.startedAt).getTime()) / 60000,
+    ).toBe(135)
+  })
+
+  it('runs a late stretch into the next day rather than backwards', () => {
+    const interval = manualIntervalFromClockRange('2026-08-26', '23:30', '00:45')!
+    expect(new Date(interval.finishedAt).getDate()).toBe(27)
+  })
+
+  it('invents nothing from a half-finished entry', () => {
+    expect(manualIntervalFromClockRange('2026-08-26', '', '09:00')).toBeNull()
+    expect(manualIntervalFromClockRange('not-a-day', '07:00', '09:00')).toBeNull()
   })
 })

@@ -97,6 +97,17 @@ async function expandHighPriority(page: Page) {
   await expect(section.getByRole('checkbox').first()).toBeVisible()
 }
 
+/** The planner state as the app would reload it. */
+async function readDay(page: Page) {
+  return page.evaluate(() => {
+    const raw = localStorage.getItem('deepblock_state_v1')
+    if (!raw) return null
+    const state = JSON.parse(raw).state
+    const today = Object.keys(state.days)[0]!
+    return state.days[today]
+  })
+}
+
 /** The running total on the task's progress row, e.g. "1h30/6h". */
 function progressTotal(page: Page) {
   return page.getByRole('button', { name: /logged.*Log time by hand/i }).first()
@@ -127,6 +138,17 @@ test.describe('Completing a task asks how many of its blocks were done', () => {
     await page.getByRole('button', { name: 'Log 1h30 by hand' }).click()
 
     await expect(progressTotal(page)).toHaveText('1h30/6h')
+
+    // What got written matters as much as what got drawn: hand-logged time is
+    // an entry on the day, marked as self-reported, not a number on the task.
+    const day = await readDay(page)
+    expect(day.tasks[0].manualLoggedMinutes).toBeUndefined()
+    const manual = day.deepWorkSessions.filter((s: { source?: string }) => s.source === 'manual')
+    expect(manual).toHaveLength(1)
+    expect(manual[0]).toMatchObject({ durationMinutes: 90, taskId: 'pw-claim-1', source: 'manual' })
+    expect(manual[0].loggedAt).toBeTruthy()
+    // No interval was given, so none was invented.
+    expect(manual[0].finishedAt).toBeUndefined()
   })
 
   test('declining logs nothing', async ({ page }) => {

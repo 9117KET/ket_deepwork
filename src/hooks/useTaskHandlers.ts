@@ -27,6 +27,7 @@ import {
   pickMustsToCopyForward,
 } from "../domain/taskUtils";
 import { blockDayIso, detachSessionsFromTasks } from "../domain/workSafety";
+import { withdrawManualMinutes } from "../domain/taskProgress";
 import { getOrCreateDay } from "../storage/localStorageState";
 
 /** Max MUSTs per day — mirrors MAX_MUSTS in TomorrowMustPanel. */
@@ -701,22 +702,82 @@ export function useTaskHandlers(
   );
 
   /**
-   * Add or remove hand-logged minutes on a task. Kept separate from the timer
-   * path on purpose: these minutes are self-reported, are the only ones the user
-   * can take back, and never touch deepWorkSessions, so the weekly deep work
-   * scoreboard stays a record of time actually worked.
+   * Record a stretch of work the timer never saw.
+   *
+   * It lands in `deepWorkSessions` like any other block, marked
+   * `source: 'manual'` - which is what keeps it out of every earned total while
+   * still giving it the things a bare number on the task never had: a place in
+   * the day, an entry that can be taken back on its own, and survival when the
+   * task is deleted, since sessions are detached rather than dropped.
+   *
+   * `interval` is passed only when the person actually gave clock times. With
+   * none, the entry records when it was claimed and says nothing about when it
+   * was worked, because inventing a plausible interval is how a record stops
+   * meaning anything.
    */
-  const handleAdjustManualMinutes = useCallback((taskId: string, deltaMinutes: number) => {
+  const handleLogManualMinutes = useCallback(
+    (
+      taskId: string,
+      minutes: number,
+      interval?: { startedAt: string; finishedAt: string },
+    ) => {
+      const amount = Math.floor(minutes);
+      if (!Number.isFinite(amount) || amount <= 0) return;
+      updateAppState((prev) => {
+        const day = getOrCreateDay(prev, selectedDay);
+        const task = day.tasks.find((t) => t.id === taskId);
+        if (!task) return prev;
+        const loggedAt = new Date().toISOString();
+        const session: DeepWorkSession = {
+          id: `dw-manual-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          label: task.title,
+          durationMinutes: amount,
+          taskId,
+          source: 'manual',
+          loggedAt,
+          startedAt: interval?.startedAt ?? loggedAt,
+          ...(interval ? { finishedAt: interval.finishedAt } : {}),
+        };
+        return {
+          ...prev,
+          days: {
+            ...prev.days,
+            [selectedDay]: { ...day, deepWorkSessions: [...day.deepWorkSessions, session] },
+          },
+        };
+      });
+    },
+    [selectedDay, updateAppState],
+  );
+
+  /**
+   * Take hand-logged minutes back. Self-reported time is the only kind the user
+   * can remove - earned minutes are never touched here - and the newest entries
+   * go first. Anything left over comes off the legacy per-task total, which is
+   * where minutes logged before entries existed still live.
+   */
+  const handleUndoManualMinutes = useCallback((taskId: string, minutes: number) => {
     updateAppState((prev) => {
       const day = getOrCreateDay(prev, selectedDay);
-      const nextTasks = day.tasks.map((task) => {
-        if (task.id !== taskId) return task;
-        const next = Math.max(0, (task.manualLoggedMinutes ?? 0) + deltaMinutes);
-        return { ...task, manualLoggedMinutes: next === 0 ? undefined : next };
-      });
+      const { sessions, legacyRemainder } = withdrawManualMinutes(
+        day.deepWorkSessions,
+        taskId,
+        minutes,
+      );
+      const nextTasks =
+        legacyRemainder > 0
+          ? day.tasks.map((task) => {
+              if (task.id !== taskId) return task;
+              const next = Math.max(0, (task.manualLoggedMinutes ?? 0) - legacyRemainder);
+              return { ...task, manualLoggedMinutes: next === 0 ? undefined : next };
+            })
+          : day.tasks;
       return {
         ...prev,
-        days: { ...prev.days, [selectedDay]: { ...day, tasks: nextTasks } },
+        days: {
+          ...prev.days,
+          [selectedDay]: { ...day, tasks: nextTasks, deepWorkSessions: sessions },
+        },
       };
     });
   }, [selectedDay, updateAppState]);
@@ -1048,7 +1109,8 @@ export function useTaskHandlers(
     handleSaveSideQuestDefs,
     handleSessionComplete,
     handleRecordAwaySession,
-    handleAdjustManualMinutes,
+    handleLogManualMinutes,
+    handleUndoManualMinutes,
     handleMoveToNotDoing,
     handleAbandonTask,
     handleAddToNotDoing,

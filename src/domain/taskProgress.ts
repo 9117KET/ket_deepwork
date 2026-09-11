@@ -89,10 +89,45 @@ export function computeTimerMinutesForTask(taskId: string, sessions: DeepWorkSes
   for (const session of sessions) {
     if (session.taskId !== taskId) continue
     if (session.cancelledAt) continue
+    // Hand-logged entries live in the same list; they are not earned.
+    if (isManualSession(session)) continue
     const minutes = Math.floor(session.durationMinutes)
     if (!Number.isFinite(minutes) || minutes <= 0) continue
     total += minutes
   }
+  return total
+}
+
+/** A session someone wrote down rather than one a countdown measured. */
+export function isManualSession(session: DeepWorkSession): boolean {
+  return session.source === 'manual'
+}
+
+/**
+ * Sum the minutes claimed by hand against a task.
+ *
+ * Two places, one number. Entries logged since hand-logged time became a
+ * session live in `sessions` and carry when they were claimed; the bare total
+ * that used to sit on the task itself is still read so old days keep their
+ * rows. Nothing writes the legacy field any more, so the second term only ever
+ * shrinks.
+ */
+export function computeManualMinutesForTask(
+  taskId: string,
+  sessions: DeepWorkSession[],
+  legacyMinutes?: number,
+): number {
+  let total = 0
+  for (const session of sessions) {
+    if (session.taskId !== taskId) continue
+    if (session.cancelledAt) continue
+    if (!isManualSession(session)) continue
+    const minutes = Math.floor(session.durationMinutes)
+    if (!Number.isFinite(minutes) || minutes <= 0) continue
+    total += minutes
+  }
+  const legacy = Math.floor(legacyMinutes ?? 0)
+  if (Number.isFinite(legacy) && legacy > 0) total += legacy
   return total
 }
 
@@ -110,8 +145,7 @@ export function computeTaskProgress(
   if (!Number.isFinite(goalMinutes) || goalMinutes < minTrackableMinutes(blockMinutes)) return null
 
   const timerMinutes = computeTimerMinutesForTask(task.id, sessions)
-  const rawManual = Math.floor(task.manualLoggedMinutes ?? 0)
-  const manualMinutes = Number.isFinite(rawManual) && rawManual > 0 ? rawManual : 0
+  const manualMinutes = computeManualMinutesForTask(task.id, sessions, task.manualLoggedMinutes)
   const totalMinutes = timerMinutes + manualMinutes
 
   const slots = buildSlots(goalMinutes, totalMinutes, blockMinutes)
@@ -268,4 +302,74 @@ export function blockAmountOptions(
     options.push({ blocks: options.length + 1, minutes: running, isOverflow: true })
   }
   return options
+}
+
+/**
+ * The real instants behind a hand-logged clock range, on the day the task
+ * belongs to.
+ *
+ * Only built when the person actually gave both times. A stretch logged in
+ * blocks has no known interval and gets none invented for it - the entry
+ * records when it was claimed and nothing more.
+ *
+ * The end is derived from the start plus the measured duration rather than
+ * parsed separately, so a stretch that ran past midnight lands on the next day
+ * instead of ending before it began.
+ */
+export function manualIntervalFromClockRange(
+  dayIso: string,
+  from: string,
+  to: string,
+): { startedAt: string; finishedAt: string } | null {
+  const minutes = parseClockRangeMinutes(from, to)
+  if (minutes == null || minutes <= 0) return null
+  const startMinutes = parseClock(from)
+  if (startMinutes == null) return null
+  const parts = dayIso.split('-').map(Number)
+  if (parts.length !== 3 || parts.some((n) => !Number.isFinite(n))) return null
+  const start = new Date(parts[0]!, parts[1]! - 1, parts[2]!, 0, startMinutes, 0, 0)
+  if (Number.isNaN(start.getTime())) return null
+  const end = new Date(start.getTime() + minutes * 60_000)
+  return { startedAt: start.toISOString(), finishedAt: end.toISOString() }
+}
+
+/**
+ * Take hand-logged minutes back off a task, newest entry first.
+ *
+ * Newest first because taking time back is nearly always undoing what you just
+ * said, not editing something from this morning. An entry only partly taken
+ * back keeps the rest, and loses its `finishedAt`: half of a stretch that ran
+ * seven to nine is no longer a stretch that ran seven to nine, and a record
+ * that quietly keeps claiming it would be a lie the UI would happily draw.
+ *
+ * Earned sessions are never touched. The caller applies `legacyRemainder` to
+ * the old per-task total, which is the only place minutes can still be after
+ * the entries run out.
+ */
+export function withdrawManualMinutes(
+  sessions: readonly DeepWorkSession[],
+  taskId: string,
+  minutes: number,
+): { sessions: DeepWorkSession[]; legacyRemainder: number } {
+  let left = Math.max(0, Math.floor(minutes))
+  if (left === 0) return { sessions: [...sessions], legacyRemainder: 0 }
+
+  const next = [...sessions]
+  for (let i = next.length - 1; i >= 0 && left > 0; i -= 1) {
+    const session = next[i]!
+    if (session.taskId !== taskId) continue
+    if (session.cancelledAt || !isManualSession(session)) continue
+    const held = Math.max(0, Math.floor(session.durationMinutes))
+    if (held === 0) continue
+    if (held <= left) {
+      next.splice(i, 1)
+      left -= held
+      continue
+    }
+    const { finishedAt: _dropped, ...rest } = session
+    next[i] = { ...rest, durationMinutes: held - left }
+    left = 0
+  }
+
+  return { sessions: next, legacyRemainder: left }
 }

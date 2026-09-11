@@ -44,9 +44,12 @@ export interface Task {
   /** Planned duration in minutes. Drives the 30-min progress boxes. */
   durationMinutes?: number;
   /**
-   * Minutes logged by hand, always in 30-min increments. Timer minutes are NOT
-   * stored here - they live in DayState.deepWorkSessions keyed by taskId, so a
-   * filled-by-timer box can never be faked. See domain/taskProgress.ts.
+   * Legacy hand-logged minutes: a bare total, with no record of when the work
+   * happened or when the claim was made. Still read everywhere, so old days
+   * keep their rows, but nothing writes it any more - hand-logged time is now a
+   * DeepWorkSession with `source: 'manual'`, which is what gives it a place in
+   * the day, an entry to undo, and survival when the task is deleted.
+   * See domain/taskProgress.ts.
    */
   manualLoggedMinutes?: number;
   /** True when this task is shallow work (logistical, non-cognitively demanding). */
@@ -79,6 +82,20 @@ export interface DeepWorkSession {
   cancelledAt?: string;
   /** Task this session was worked against, when the timer was started from one. */
   taskId?: string;
+  /**
+   * How these minutes came to be recorded. Absent means earned: a countdown
+   * really ran. `'manual'` means the person said so afterwards, and must never
+   * be counted as deep work anywhere - see computeDailyDeepWorkMinutes.
+   */
+  source?: 'manual';
+  /**
+   * When the claim was made (manual only). Kept apart from `startedAt` on
+   * purpose: for a stretch logged by its clock times, startedAt/finishedAt are
+   * the real interval worked; for one logged in blocks, the interval is simply
+   * not known, so `finishedAt` is left off rather than invented. Synthesising
+   * instants is how sessions used to record intervals that never happened.
+   */
+  loggedAt?: string;
 }
 
 export interface DayState {

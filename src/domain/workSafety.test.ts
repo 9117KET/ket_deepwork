@@ -232,6 +232,60 @@ describe('detachSessionsFromTasks — worked minutes outlive the task', () => {
   })
 })
 
+describe('summarizeTaskWork — hand-logged time that is an entry, not a field', () => {
+  const manual = (over: Partial<DeepWorkSession> & Pick<DeepWorkSession, 'id'>): DeepWorkSession => ({
+    ...session(over),
+    source: 'manual',
+    loggedAt: '2026-09-02T18:00:00.000Z',
+  })
+
+  it('counts it as hand-logged, but not as something deletion destroys', () => {
+    const d = day([task({ id: 't1' })], [manual({ id: 'm1', taskId: 't1', durationMinutes: 60 })])
+    const summary = summarizeTaskWork(d, ['t1'])
+    expect(summary.manualMinutes).toBe(60)
+    expect(summary.irrecoverableMinutes).toBe(0)
+    expect(summary.hasRecordedWork).toBe(true)
+    // It is a session now, and sessions are detached rather than dropped.
+    expect(summary.hasIrrecoverableWork).toBe(false)
+  })
+
+  it('never lets it inflate the timed figure', () => {
+    const d = day(
+      [task({ id: 't1' })],
+      [
+        session({ id: 's1', taskId: 't1', durationMinutes: 45 }),
+        manual({ id: 'm1', taskId: 't1', durationMinutes: 60 }),
+      ],
+    )
+    expect(summarizeTaskWork(d, ['t1'])).toMatchObject({
+      sessionMinutes: 45,
+      sessionCount: 1,
+      manualMinutes: 60,
+    })
+  })
+
+  it('still stops you when the legacy per-task total is what would go', () => {
+    const d = day(
+      [task({ id: 't1', manualLoggedMinutes: 20 })],
+      [manual({ id: 'm1', taskId: 't1', durationMinutes: 60 })],
+    )
+    const summary = summarizeTaskWork(d, ['t1'])
+    expect(summary.manualMinutes).toBe(80)
+    expect(summary.irrecoverableMinutes).toBe(20)
+    expect(summary.hasIrrecoverableWork).toBe(true)
+  })
+
+  it('says which half of the hand-logged time survives', () => {
+    const d = day(
+      [task({ id: 't1', manualLoggedMinutes: 20 })],
+      [manual({ id: 'm1', taskId: 't1', durationMinutes: 60 })],
+    )
+    const text = describeWorkLoss(summarizeTaskWork(d, ['t1']))!
+    expect(text).toMatch(/20m you logged by hand will be lost/)
+    expect(text).toMatch(/1h logged by hand stays on the day/)
+  })
+})
+
 describe('describeWorkLoss — the sentence shown before destroying something', () => {
   it('leads with what is actually lost', () => {
     const d = day(

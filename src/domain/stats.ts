@@ -184,7 +184,10 @@ export function getAtRiskHabitIds(
 export function computeDailyDeepWorkMinutes(day: DayState | undefined): number {
   if (!day) return 0
   return day.deepWorkSessions
-    .filter((s) => s.finishedAt && !s.cancelledAt)
+    // Hand-logged entries share the list but are not earned: a range logged by
+    // hand carries a finishedAt like any other, so excluding them by source is
+    // the only thing standing between self-report and the deep work total.
+    .filter((s) => s.finishedAt && !s.cancelledAt && s.source !== 'manual')
     .reduce((sum, s) => sum + s.durationMinutes, 0)
 }
 
@@ -215,10 +218,19 @@ export function computeWeeklyDeepWorkHours(
  */
 export function computeDailySelfReportedMinutes(day: DayState | undefined): number {
   if (!day) return 0
-  return day.tasks.reduce((sum, task) => {
+  // Entries logged by hand, plus the legacy per-task totals from before they
+  // became entries. Unattributed hand-logged time counts too: it was claimed,
+  // whether or not it still points at a task.
+  const fromSessions = day.deepWorkSessions.reduce((sum, session) => {
+    if (session.source !== 'manual' || session.cancelledAt) return sum
+    const minutes = Math.floor(session.durationMinutes)
+    return Number.isFinite(minutes) && minutes > 0 ? sum + minutes : sum
+  }, 0)
+  const legacy = day.tasks.reduce((sum, task) => {
     const minutes = Math.floor(task.manualLoggedMinutes ?? 0)
     return Number.isFinite(minutes) && minutes > 0 ? sum + minutes : sum
   }, 0)
+  return fromSessions + legacy
 }
 
 /** Hand-logged hours across a week (array of 7 ISO dates). */

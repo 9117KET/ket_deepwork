@@ -20,7 +20,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Clock, Minus, Timer, X } from 'lucide-react'
 import type { TaskProgress } from '../../domain/taskProgress'
-import { blockAmountOptions, describeTaskProgress, formatMinutes, parseClockRangeMinutes } from '../../domain/taskProgress'
+import {
+  blockAmountOptions,
+  describeTaskProgress,
+  formatMinutes,
+  manualIntervalFromClockRange,
+  parseClockRangeMinutes,
+} from '../../domain/taskProgress'
 import { BlockAmountPicker } from './BlockAmountPicker'
 import { TaskProgressBoxes } from './TaskProgressBoxes'
 import { useFocusBlocks } from './focusBlockContext'
@@ -28,9 +34,11 @@ import { useFocusBlocks } from './focusBlockContext'
 interface TaskProgressSheetProps {
   taskId: string
   taskTitle: string
+  /** The day the task belongs to - a logged clock range is placed on it. */
+  dayIso: string
   progress: TaskProgress
-  /** Log hand-tracked minutes against the task. */
-  onLogManual: (minutes: number) => void
+  /** Log hand-tracked minutes, with the real interval when one is known. */
+  onLogManual: (minutes: number, interval?: { startedAt: string; finishedAt: string }) => void
   /** Take back the last hand-tracked minutes. Earned time is never removable here. */
   onUndoManual: (minutes: number) => void
   /** Start the next block on the timer. Omitted where no timer is in reach. */
@@ -41,6 +49,7 @@ interface TaskProgressSheetProps {
 export function TaskProgressSheet({
   taskId,
   taskTitle,
+  dayIso,
   progress,
   onLogManual,
   onUndoManual,
@@ -126,7 +135,7 @@ export function TaskProgressSheet({
             </button>
           )}
 
-          <ManualLogPanel progress={progress} onLogManual={onLogManual} />
+          <ManualLogPanel progress={progress} dayIso={dayIso} onLogManual={onLogManual} />
 
           {undoSlot && (
             <button
@@ -168,10 +177,12 @@ export function TaskProgressSheet({
  */
 function ManualLogPanel({
   progress,
+  dayIso,
   onLogManual,
 }: {
   progress: TaskProgress
-  onLogManual: (minutes: number) => void
+  dayIso: string
+  onLogManual: (minutes: number, interval?: { startedAt: string; finishedAt: string }) => void
 }) {
   const [mode, setMode] = useState<'blocks' | 'range'>('blocks')
   const [from, setFrom] = useState('')
@@ -182,6 +193,12 @@ function ManualLogPanel({
   const selected = options.find((option) => option.blocks === blocks) ?? options[0]
 
   const rangeMinutes = useMemo(() => parseClockRangeMinutes(from, to), [from, to])
+  // A range is the one case where the interval worked is actually known, so it
+  // is stored rather than thrown away once the minutes are counted.
+  const rangeInterval = useMemo(
+    () => manualIntervalFromClockRange(dayIso, from, to),
+    [dayIso, from, to],
+  )
   const minutes = mode === 'blocks' ? (selected?.minutes ?? null) : rangeMinutes
   const canLog = minutes != null && minutes > 0
 
@@ -243,7 +260,7 @@ function ManualLogPanel({
         disabled={!canLog}
         onClick={() => {
           if (minutes == null || minutes <= 0) return
-          onLogManual(minutes)
+          onLogManual(minutes, mode === 'range' ? rangeInterval ?? undefined : undefined)
           setFrom('')
           setTo('')
           setBlocks(1)

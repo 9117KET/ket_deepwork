@@ -281,7 +281,21 @@ test('a session started today is credited to today even after paging to yesterda
 
   const today = todayIso()
   await page.getByRole('button', { name: 'Previous day', exact: true }).first().click()
-  await page.waitForTimeout(4_000) // let the block land while yesterday is on screen
+
+  // Wait for the block to actually land rather than for a fixed few seconds: a
+  // three-second countdown raced against a four-second sleep made this guard
+  // flaky under load, and a rule about never losing worked minutes cannot be
+  // policed by a test people learn to re-run.
+  await expect
+    .poll(
+      async () => {
+        const current = await readState(page)
+        return Object.values(current.days as Record<string, { deepWorkSessions?: unknown[] }>)
+          .reduce((n, d) => n + (d.deepWorkSessions?.length ?? 0), 0)
+      },
+      { timeout: 20_000, message: 'the block never landed anywhere' },
+    )
+    .toBeGreaterThanOrEqual(1)
 
   const state = await readState(page)
   const yesterday = new Date(Date.now() - 86_400_000)

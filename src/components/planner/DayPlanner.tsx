@@ -276,7 +276,8 @@ export function DayPlanner({
     handleSaveSideQuestDefs,
     handleSessionComplete,
     handleRecordAwaySession,
-    handleAdjustManualMinutes,
+    handleLogManualMinutes,
+    handleUndoManualMinutes,
     handleMoveToNotDoing,
     handleAbandonTask,
     handleAddToNotDoing,
@@ -980,7 +981,7 @@ Delete anyway?`);
           title={completionClaim.title}
           options={completionClaim.options}
           onLog={(minutes) => {
-            handleAdjustManualMinutes(completionClaim.taskId, minutes);
+            handleLogManualMinutes(completionClaim.taskId, minutes);
             setCompletionClaim(null);
           }}
           onDismiss={() => setCompletionClaim(null)}
@@ -1807,9 +1808,10 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
         <TaskProgressSheet
           taskId={progressSheetTask.id}
           taskTitle={progressSheetTask.title}
+          dayIso={selectedDay}
           progress={progressSheetProgress}
-          onLogManual={(minutes) => handleAdjustManualMinutes(progressSheetTask.id, minutes)}
-          onUndoManual={(minutes) => handleAdjustManualMinutes(progressSheetTask.id, -minutes)}
+          onLogManual={(minutes, interval) => handleLogManualMinutes(progressSheetTask.id, minutes, interval)}
+          onUndoManual={(minutes) => handleUndoManualMinutes(progressSheetTask.id, minutes)}
           onStartBlock={shareMode === 'view' ? undefined : (minutes) => handleStartBlock(progressSheetTask.id, minutes)}
           onClose={() => setProgressSheetTaskId(null)}
         />
