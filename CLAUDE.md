@@ -287,8 +287,15 @@ Nine features built around the *Deep Work* philosophy:
    whole stretch at once — a block stepper, or a clock range parsed by
    `parseClockRangeMinutes` in `taskProgress.ts`. All of it still writes
    `manualLoggedMinutes` and fills faded. Completing a trackable task with an
-   unlogged remainder raises a one-tap offer to log it by hand (12s, then it
-   expires); the row is never filled automatically. `computeWeeklySelfReportedHours`
+   unlogged remainder raises `CompletionClaimPrompt` (12s, then it expires;
+   touching it holds it open, and leaving the day dismisses it). It asks in
+   blocks, not minutes: `blockAmountOptions` in `taskProgress.ts` turns the
+   still-empty blocks into cumulative choices, so eight blocks set aside and two
+   actually worked can be said in one tap. It opens on all of them, so the old
+   one-tap "log the whole remainder" still costs one tap. The same
+   `BlockAmountPicker` is the "In blocks" mode of `ManualLogPanel`, with two
+   blocks of headroom past the estimate. The row is never filled
+   automatically. `computeWeeklySelfReportedHours`
    shows the hand-logged total beside the weekly scoreboard, explicitly *not
    counted* toward it.
 

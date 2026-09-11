@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
+  blockAmountOptions,
   computeTaskProgress,
   computeTimerMinutesForTask,
   describeTaskProgress,
@@ -330,5 +331,70 @@ describe('parseClockRangeMinutes', () => {
     expect(parseClockRangeMinutes('7am', '09:00')).toBeNull()
     expect(parseClockRangeMinutes('25:00', '09:00')).toBeNull()
     expect(parseClockRangeMinutes('09:00', '09:00')).toBeNull()
+  })
+})
+
+describe('blockAmountOptions', () => {
+  const blockMinutes = DEFAULT_FOCUS_BLOCK_MINUTES
+
+  it('offers one option per empty block, cumulative', () => {
+    const progress = computeTaskProgress(task({ durationMinutes: 4 * blockMinutes }), [], blockMinutes)!
+    expect(blockAmountOptions(progress)).toEqual([
+      { blocks: 1, minutes: blockMinutes, isOverflow: false },
+      { blocks: 2, minutes: 2 * blockMinutes, isOverflow: false },
+      { blocks: 3, minutes: 3 * blockMinutes, isOverflow: false },
+      { blocks: 4, minutes: 4 * blockMinutes, isOverflow: false },
+    ])
+  })
+
+  it('counts only what is still empty, so earned blocks are never re-claimed', () => {
+    const progress = computeTaskProgress(
+      task({ durationMinutes: 8 * blockMinutes }),
+      [session({ durationMinutes: 2 * blockMinutes, taskId: 't1' })],
+      blockMinutes,
+    )!
+    const options = blockAmountOptions(progress)
+    expect(options).toHaveLength(6)
+    expect(options.at(-1)).toEqual({ blocks: 6, minutes: 6 * blockMinutes, isOverflow: false })
+  })
+
+  it('lands the last option exactly on the estimate when it is not whole blocks', () => {
+    const progress = computeTaskProgress(task({ durationMinutes: 2 * blockMinutes + 20 }), [], blockMinutes)!
+    const options = blockAmountOptions(progress)
+    expect(options.at(-1)).toEqual({ blocks: 3, minutes: 2 * blockMinutes + 20, isOverflow: false })
+    expect(options.at(-1)!.minutes).toBe(progress.goalMinutes)
+  })
+
+  it('carries a part-filled block as its remaining room', () => {
+    const progress = computeTaskProgress(
+      task({ durationMinutes: 3 * blockMinutes, manualLoggedMinutes: 10 }),
+      [],
+      blockMinutes,
+    )!
+    expect(blockAmountOptions(progress)[0]).toEqual({
+      blocks: 1,
+      minutes: blockMinutes - 10,
+      isOverflow: false,
+    })
+  })
+
+  it('appends whole blocks past the plan only when asked', () => {
+    const progress = computeTaskProgress(task({ durationMinutes: blockMinutes }), [], blockMinutes)!
+    expect(blockAmountOptions(progress)).toHaveLength(1)
+    const withOverflow = blockAmountOptions(progress, 2)
+    expect(withOverflow).toHaveLength(3)
+    expect(withOverflow.at(-1)).toEqual({ blocks: 3, minutes: 3 * blockMinutes, isOverflow: true })
+  })
+
+  it('offers nothing but overflow once the row is full', () => {
+    const progress = computeTaskProgress(
+      task({ durationMinutes: blockMinutes }),
+      [session({ durationMinutes: blockMinutes, taskId: 't1' })],
+      blockMinutes,
+    )!
+    expect(blockAmountOptions(progress)).toEqual([])
+    expect(blockAmountOptions(progress, 1)).toEqual([
+      { blocks: 1, minutes: blockMinutes, isOverflow: true },
+    ])
   })
 })

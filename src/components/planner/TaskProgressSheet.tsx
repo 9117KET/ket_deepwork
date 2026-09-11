@@ -17,10 +17,11 @@
  * earned-hours scoreboard.
  */
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Clock, Minus, Plus, Timer, X } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Clock, Minus, Timer, X } from 'lucide-react'
 import type { TaskProgress } from '../../domain/taskProgress'
-import { describeTaskProgress, formatMinutes, parseClockRangeMinutes } from '../../domain/taskProgress'
+import { blockAmountOptions, describeTaskProgress, formatMinutes, parseClockRangeMinutes } from '../../domain/taskProgress'
+import { BlockAmountPicker } from './BlockAmountPicker'
 import { TaskProgressBoxes } from './TaskProgressBoxes'
 import { useFocusBlocks } from './focusBlockContext'
 
@@ -125,7 +126,7 @@ export function TaskProgressSheet({
             </button>
           )}
 
-          <ManualLogPanel progress={progress} minStep={logMinutes} onLogManual={onLogManual} />
+          <ManualLogPanel progress={progress} onLogManual={onLogManual} />
 
           {undoSlot && (
             <button
@@ -149,51 +150,39 @@ export function TaskProgressSheet({
  * Hand-logging, in one gesture rather than one block at a time.
  *
  * Two ways in, because there are two ways people remember unwatched work. In
- * blocks, when it came in sittings ("that was two blocks"), and as a time
- * range, when it was one continuous stretch whose clock times you know ("out
- * from seven to quarter past nine"). The range is the more precise of the two
- * and the only one that can express a stretch that is not a whole number of
- * blocks.
+ * blocks, when it came in sittings ("that was two of the six I set aside"), and
+ * as a time range, when it was one continuous stretch whose clock times you
+ * know ("out from seven to quarter past nine"). The range is the more precise
+ * of the two and the only one that can express a stretch that is not a whole
+ * number of blocks.
  *
- * Neither is treated as earned. Both write `manualLoggedMinutes`, which is what
- * the note in the corner is telling you.
+ * The block choice is over the empty blocks of this task's own row, so it can
+ * never claim minutes the timer already earned, and the option that finishes
+ * the task carries the real remainder rather than a whole block - on a task
+ * with 1h20 left, "all of it" logs 1h20 and does not claim 1h30. Two blocks of
+ * headroom past the plan stay available for the case the estimate was simply
+ * short; the row draws those amber.
+ *
+ * Neither way is treated as earned. Both write `manualLoggedMinutes`, which is
+ * what the note in the corner is telling you.
  */
 function ManualLogPanel({
   progress,
-  minStep,
   onLogManual,
 }: {
   progress: TaskProgress
-  /** Room left in the next block - the smallest amount worth logging. */
-  minStep: number
   onLogManual: (minutes: number) => void
 }) {
   const [mode, setMode] = useState<'blocks' | 'range'>('blocks')
-  const [blocks, setBlocks] = useState(1)
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
 
-  const remaining = Math.max(0, progress.goalMinutes - progress.totalMinutes)
-  // Enough steps to finish the task, plus headroom for the estimate having been
-  // short - logging past the plan is allowed, and the row draws it amber.
-  const remainingBlocks = Math.max(1, Math.ceil(remaining / progress.blockMinutes))
-  const maxBlocks = remainingBlocks + 2
-
-  /**
-   * The step that finishes the task carries the remainder rather than a whole
-   * block, so on a task with 1h20 left "2 blocks" logs 1h20 and does not claim
-   * 1h30. Steps past that are full blocks of overflow.
-   */
-  const minutesForBlocks = (count: number): number => {
-    if (remaining <= 0) return count * progress.blockMinutes
-    if (count >= remainingBlocks) {
-      return remaining + (count - remainingBlocks) * progress.blockMinutes
-    }
-    return Math.max(minStep, count * progress.blockMinutes)
-  }
+  const options = useMemo(() => blockAmountOptions(progress, 2), [progress])
+  const [blocks, setBlocks] = useState(1)
+  const selected = options.find((option) => option.blocks === blocks) ?? options[0]
 
   const rangeMinutes = useMemo(() => parseClockRangeMinutes(from, to), [from, to])
-  const minutes = mode === 'blocks' ? minutesForBlocks(blocks) : rangeMinutes
+  const minutes = mode === 'blocks' ? (selected?.minutes ?? null) : rangeMinutes
   const canLog = minutes != null && minutes > 0
 
   return (
@@ -222,28 +211,13 @@ function ManualLogPanel({
       </div>
 
       {mode === 'blocks' ? (
-        <div className="mt-3 flex items-center gap-2">
-          <StepButton
-            label="One block fewer"
-            disabled={blocks <= 1}
-            onClick={() => setBlocks((n) => Math.max(1, n - 1))}
-          >
-            <Minus className="h-4 w-4" />
-          </StepButton>
-          <span className="flex-1 text-center text-sm tabular-nums text-share-onSurface">
-            {blocks === 1 ? '1 block' : `${blocks} blocks`}
-            <span className="ml-1.5 text-xs text-share-onSurfaceVariant/70">
-              {formatMinutes(minutesForBlocks(blocks))}
-            </span>
-          </span>
-          <StepButton
-            label="One block more"
-            disabled={blocks >= maxBlocks}
-            onClick={() => setBlocks((n) => Math.min(maxBlocks, n + 1))}
-          >
-            <Plus className="h-4 w-4" />
-          </StepButton>
-        </div>
+        <BlockAmountPicker
+          className="mt-3"
+          options={options}
+          value={selected?.blocks ?? 1}
+          onChange={setBlocks}
+          label="How many blocks did you do?"
+        />
       ) : (
         <div className="mt-3 flex items-center gap-2">
           <input
@@ -280,36 +254,8 @@ function ManualLogPanel({
             : 'cursor-not-allowed border-share-outlineVariant/30 text-share-onSurfaceVariant/50'
         }`}
       >
-        {canLog ? `Log ${formatMinutes(minutes)}` : 'Set a start and end time'}
+        {canLog ? `Log ${formatMinutes(minutes)}` : mode === 'blocks' ? 'Nothing left to log' : 'Set a start and end time'}
       </button>
     </div>
-  )
-}
-
-function StepButton({
-  label,
-  disabled,
-  onClick,
-  children,
-}: {
-  label: string
-  disabled: boolean
-  onClick: () => void
-  children: ReactNode
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      disabled={disabled}
-      onClick={onClick}
-      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-share-outlineVariant/40 ${
-        disabled
-          ? 'cursor-not-allowed text-share-onSurfaceVariant/30'
-          : 'text-share-onSurfaceVariant hover:border-share-primary/60 hover:text-share-primary'
-      }`}
-    >
-      {children}
-    </button>
   )
 }

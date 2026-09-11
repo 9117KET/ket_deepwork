@@ -224,3 +224,48 @@ function parseClock(value: string): number | null {
   if (hours > 23 || mins > 59) return null
   return hours * 60 + mins
 }
+
+/**
+ * The amounts a person can hand-log in one go, counted in the blocks the task
+ * was actually planned as.
+ *
+ * People do not remember unwatched work in minutes, they remember it in
+ * sittings: "I set aside eight blocks for this and got through two". So the
+ * choice offered is over the row already on screen - block 1, blocks 1-2, ...
+ * up to everything still empty - and each option carries the minutes those
+ * blocks really hold. The trailing block of a task that is not a whole number
+ * of blocks carries its remainder, so "all of it" lands exactly on the estimate
+ * instead of overshooting it.
+ *
+ * `overflowBlocks` appends whole blocks past the plan, for the case the
+ * estimate was simply short. Zero of them is the right choice anywhere the
+ * question is "how much of what you allocated did you do".
+ */
+export interface BlockAmountOption {
+  /** Blocks covered, 1-based - the nth option covers the first n empty blocks. */
+  blocks: number
+  /** Minutes logging this option would add. */
+  minutes: number
+  /** True once the option runs past the planned duration. */
+  isOverflow: boolean
+}
+
+export function blockAmountOptions(
+  progress: TaskProgress,
+  overflowBlocks = 0,
+): BlockAmountOption[] {
+  const options: BlockAmountOption[] = []
+  let running = 0
+  for (const slot of progress.slots) {
+    if (slot.isOverflow) continue
+    const room = slot.capacityMinutes - slot.timerMinutes - slot.manualMinutes
+    if (room <= 0) continue
+    running += room
+    options.push({ blocks: options.length + 1, minutes: running, isOverflow: false })
+  }
+  for (let i = 0; i < overflowBlocks; i += 1) {
+    running += progress.blockMinutes
+    options.push({ blocks: options.length + 1, minutes: running, isOverflow: true })
+  }
+  return options
+}

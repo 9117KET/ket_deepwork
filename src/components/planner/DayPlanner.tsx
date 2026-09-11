@@ -35,7 +35,7 @@ import {
   SLEEP_WARN_MINUTES,
   formatTimeOfDay,
 } from "../../domain/sectionTimeBlocks";
-import { computeTaskProgress, formatMinutes, minTrackableMinutes } from "../../domain/taskProgress";
+import { blockAmountOptions, computeTaskProgress, minTrackableMinutes, type BlockAmountOption } from "../../domain/taskProgress";
 import { describeWorkLoss, summarizeTaskWork, taskWithDescendantIds } from '../../domain/workSafety';
 import { useUndoableActions } from '../../hooks/useUndoableActions';
 import { UndoToast } from './UndoToast';
@@ -45,6 +45,7 @@ import { useDayBlockEditor } from "../../hooks/useDayBlockEditor";
 import { useTimeAwareness } from "../../hooks/useTimeAwareness";
 import { PlannerModals } from "./PlannerModals";
 import { TaskProgressSheet } from "./TaskProgressSheet";
+import { CompletionClaimPrompt } from "./CompletionClaimPrompt";
 import { NotDoingPanel } from "./NotDoingPanel";
 import { BlockDurationEditor } from "./BlockDurationEditor";
 import {
@@ -512,7 +513,7 @@ export function DayPlanner({
   const [blockNotice, setBlockNotice] = useState<string | null>(null);
   /** A just-completed task whose progress row is short, offered for logging. */
   const [completionClaim, setCompletionClaim] = useState<
-    { taskId: string; title: string; minutes: number } | null
+    { taskId: string; title: string; options: BlockAmountOption[] } | null
   >(null);
   /** A task whose last block just filled, offered for ticking off. */
   const [doneOffer, setDoneOffer] = useState<{ taskId: string; title: string } | null>(null);
@@ -737,18 +738,21 @@ Delete anyway?`);
 
     if (shareMode) return;
     if (!progress) return;
-    const unlogged = progress.goalMinutes - progress.totalMinutes;
-    if (unlogged <= 0) return;
-    setCompletionClaim({ taskId, title: task.title, minutes: unlogged });
+    // Only the blocks they set aside and never filled. Asking in blocks rather
+    // than in one lump is what lets "I finished in two of the eight" be said at
+    // all - the old single button could only claim the whole remainder.
+    const options = blockAmountOptions(progress);
+    if (options.length === 0) return;
+    setCompletionClaim({ taskId, title: task.title, options });
   }, [dayState.tasks, dayState.deepWorkSessions, blockMinutes, handleToggleTaskBase, shareMode]);
 
-  // The offer expires on its own: an unanswered prompt is an answer of "no",
-  // and a prompt that waits forever turns into a nag.
+  // The offer writes against whichever day is open, and touching its picker
+  // holds it there indefinitely - so leaving the day takes the question with
+  // it, rather than leaving a button that would silently log nothing.
   useEffect(() => {
-    if (!completionClaim) return;
-    const id = window.setTimeout(() => setCompletionClaim(null), 12000);
-    return () => window.clearTimeout(id);
-  }, [completionClaim]);
+    setCompletionClaim(null);
+    setDoneOffer(null);
+  }, [selectedDay]);
 
   // Same 12 seconds, same reasoning: an unanswered offer is an answer of "no".
   useEffect(() => {
@@ -971,34 +975,16 @@ Delete anyway?`);
         </div>
       )}
       {completionClaim && (
-        <div
-          role="status"
-          className="fixed inset-x-3 bottom-20 z-[70] mx-auto max-w-sm rounded-lg border border-share-outlineVariant/50 bg-share-surfaceContainerHigh px-3 py-2.5 shadow-lg lg:bottom-6"
-        >
-          <p className="text-xs text-share-onSurface">
-            <span className="font-medium">{completionClaim.title}</span> done with{" "}
-            {formatMinutes(completionClaim.minutes)} unlogged.
-          </p>
-          <div className="mt-2 flex gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                handleAdjustManualMinutes(completionClaim.taskId, completionClaim.minutes);
-                setCompletionClaim(null);
-              }}
-              className="min-h-[32px] flex-1 rounded-md border border-share-outlineVariant/60 bg-share-surfaceContainer px-2 py-1 text-xs text-share-onSurface hover:border-share-primary/60 hover:text-share-primary"
-            >
-              Log {formatMinutes(completionClaim.minutes)} by hand
-            </button>
-            <button
-              type="button"
-              onClick={() => setCompletionClaim(null)}
-              className="min-h-[32px] rounded-md px-2 py-1 text-xs text-share-onSurfaceVariant hover:text-share-onSurface"
-            >
-              No
-            </button>
-          </div>
-        </div>
+        <CompletionClaimPrompt
+          key={completionClaim.taskId}
+          title={completionClaim.title}
+          options={completionClaim.options}
+          onLog={(minutes) => {
+            handleAdjustManualMinutes(completionClaim.taskId, minutes);
+            setCompletionClaim(null);
+          }}
+          onDismiss={() => setCompletionClaim(null)}
+        />
       )}
       <div
         className={
