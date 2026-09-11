@@ -222,7 +222,7 @@ export function MonthlyReviewBanner({ monthKey, review, onScrollToReview }: Mont
       <button
         type="button"
         onClick={onScrollToReview}
-        className="rounded border border-amber-600 bg-amber-500/20 px-2 py-0.5 text-[10px] font-medium text-amber-300 hover:bg-amber-500/30 transition-colors"
+        className="touch-target-coarse inline-flex shrink-0 items-center justify-center rounded border border-amber-600 bg-amber-500/20 px-2 py-0.5 text-[10px] font-medium text-amber-300 transition-colors hover:bg-amber-500/30"
       >
         Open ↓
       </button>

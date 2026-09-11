@@ -35,7 +35,7 @@ import {
   SLEEP_WARN_MINUTES,
   formatTimeOfDay,
 } from "../../domain/sectionTimeBlocks";
-import { computeTaskProgress, formatMinutes, minTrackableMinutes } from "../../domain/taskProgress";
+import { blockAmountOptions, computeTaskProgress, listManualEntries, minTrackableMinutes, type BlockAmountOption } from "../../domain/taskProgress";
 import { describeWorkLoss, summarizeTaskWork, taskWithDescendantIds } from '../../domain/workSafety';
 import { useUndoableActions } from '../../hooks/useUndoableActions';
 import { UndoToast } from './UndoToast';
@@ -45,6 +45,7 @@ import { useDayBlockEditor } from "../../hooks/useDayBlockEditor";
 import { useTimeAwareness } from "../../hooks/useTimeAwareness";
 import { PlannerModals } from "./PlannerModals";
 import { TaskProgressSheet } from "./TaskProgressSheet";
+import { CompletionClaimPrompt } from "./CompletionClaimPrompt";
 import { NotDoingPanel } from "./NotDoingPanel";
 import { BlockDurationEditor } from "./BlockDurationEditor";
 import {
@@ -97,6 +98,16 @@ function formatDateLabel(isoDay: string): string {
   });
   return formatter.format(date);
 }
+
+/**
+ * How many "how long did that take?" prompts one tick may raise.
+ *
+ * Ticking a parent completes its subtasks too, and each of those may be work
+ * worth recording - but a queue of prompts is a nag, and a nag is answered by
+ * reflex rather than by remembering. Three is the most that still reads as a
+ * question. The sheet logs the rest whenever the user wants.
+ */
+const MAX_COMPLETION_CLAIMS = 3;
 
 /** Short label for a date (e.g. "28 Feb") for copy-from buttons. */
 function formatDateShort(isoDay: string): string {
@@ -275,7 +286,9 @@ export function DayPlanner({
     handleSaveSideQuestDefs,
     handleSessionComplete,
     handleRecordAwaySession,
-    handleAdjustManualMinutes,
+    handleLogManualMinutes,
+    handleUndoManualMinutes,
+    handleReattributeSession,
     handleMoveToNotDoing,
     handleAbandonTask,
     handleAddToNotDoing,
@@ -510,10 +523,18 @@ export function DayPlanner({
 
   /** Why a chip could not start a block, shown briefly. */
   const [blockNotice, setBlockNotice] = useState<string | null>(null);
-  /** A just-completed task whose progress row is short, offered for logging. */
-  const [completionClaim, setCompletionClaim] = useState<
-    { taskId: string; title: string; minutes: number } | null
-  >(null);
+  /**
+   * Just-completed tasks whose progress rows are short, queued for logging.
+   *
+   * A queue rather than one, because ticking a parent ticks its subtasks with
+   * it, and a subtask with an estimate is work that happened just as much as
+   * its parent is. Asking about the parent alone was how that work went
+   * unrecorded without anyone deciding it should.
+   */
+  const [completionClaims, setCompletionClaims] = useState<
+    { taskId: string; title: string; options: BlockAmountOption[] }[]
+  >([]);
+  const completionClaim = completionClaims[0] ?? null;
   /** A task whose last block just filled, offered for ticking off. */
   const [doneOffer, setDoneOffer] = useState<{ taskId: string; title: string } | null>(null);
 
@@ -541,6 +562,42 @@ export function DayPlanner({
     () => dayState.tasks.find((t) => t.id === progressSheetTaskId) ?? null,
     [dayState.tasks, progressSheetTaskId],
   );
+  // The hand-logged entries behind the faded fill, so the sheet can offer to
+  // take the last one back whole rather than a block at a time.
+  const progressSheetManualEntries = useMemo(
+    () =>
+      progressSheetTask
+        ? listManualEntries(
+            progressSheetTask.id,
+            dayState.deepWorkSessions,
+            progressSheetTask.manualLoggedMinutes,
+          )
+        : [],
+    [progressSheetTask, dayState.deepWorkSessions],
+  );
+  /**
+   * Everything recorded against the task the sheet is open on, and where those
+   * minutes could go instead. Done tasks are included as destinations on
+   * purpose: noticing a block belonged to something already ticked off is the
+   * ordinary case, and leaving it out would make the fix impossible exactly
+   * when it is needed.
+   */
+  const progressSheetSessions = useMemo(
+    () =>
+      progressSheetTask
+        ? dayState.deepWorkSessions.filter(
+            (session) => session.taskId === progressSheetTask.id && !session.cancelledAt,
+          )
+        : [],
+    [progressSheetTask, dayState.deepWorkSessions],
+  );
+  const attributionTargets = useMemo(() => {
+    const floor = minTrackableMinutes(blockMinutes);
+    return dayState.tasks
+      .filter((t) => (t.durationMinutes ?? 0) >= floor)
+      .map((t) => ({ id: t.id, title: t.title, isDone: t.isDone }));
+  }, [dayState.tasks, blockMinutes]);
+
   // Recomputed from live state, so the sheet's boxes move as you log into them.
   const progressSheetProgress = useMemo(
     () => (progressSheetTask ? computeTaskProgress(progressSheetTask, dayState.deepWorkSessions, blockMinutes) : null),
@@ -736,19 +793,48 @@ Delete anyway?`);
     );
 
     if (shareMode) return;
-    if (!progress) return;
-    const unlogged = progress.goalMinutes - progress.totalMinutes;
-    if (unlogged <= 0) return;
-    setCompletionClaim({ taskId, title: task.title, minutes: unlogged });
+
+    // Everything this tick completed: the task, plus the subtasks it carried
+    // with it that were not already done.
+    const completed = [
+      task,
+      ...taskWithDescendantIds(dayState.tasks, taskId)
+        .filter((id) => id !== taskId)
+        .map((id) => dayState.tasks.find((t) => t.id === id))
+        .filter((t): t is Task => Boolean(t) && !t!.isDone),
+    ];
+
+    // Only the blocks they set aside and never filled. Asking in blocks rather
+    // than in one lump is what lets "I finished in two of the eight" be said at
+    // all - the old single button could only claim the whole remainder.
+    const claims = completed
+      .map((candidate) => {
+        const candidateProgress = computeTaskProgress(
+          candidate,
+          dayState.deepWorkSessions,
+          blockMinutes,
+        );
+        if (!candidateProgress) return null;
+        const options = blockAmountOptions(candidateProgress);
+        if (options.length === 0) return null;
+        return { taskId: candidate.id, title: candidate.title, options };
+      })
+      .filter((claim): claim is NonNullable<typeof claim> => claim != null)
+      // Capped: a parent with six trackable subtasks would otherwise become six
+      // prompts in a row, which is a nag, and a nag gets dismissed on reflex.
+      // The sheet still logs the rest, in the user's own time.
+      .slice(0, MAX_COMPLETION_CLAIMS);
+    if (claims.length === 0) return;
+    setCompletionClaims(claims);
   }, [dayState.tasks, dayState.deepWorkSessions, blockMinutes, handleToggleTaskBase, shareMode]);
 
-  // The offer expires on its own: an unanswered prompt is an answer of "no",
-  // and a prompt that waits forever turns into a nag.
+  // The offer writes against whichever day is open, and touching its picker
+  // holds it there indefinitely - so leaving the day takes the question with
+  // it, rather than leaving a button that would silently log nothing.
   useEffect(() => {
-    if (!completionClaim) return;
-    const id = window.setTimeout(() => setCompletionClaim(null), 12000);
-    return () => window.clearTimeout(id);
-  }, [completionClaim]);
+    setCompletionClaims([]);
+    setDoneOffer(null);
+  }, [selectedDay]);
 
   // Same 12 seconds, same reasoning: an unanswered offer is an answer of "no".
   useEffect(() => {
@@ -971,34 +1057,17 @@ Delete anyway?`);
         </div>
       )}
       {completionClaim && (
-        <div
-          role="status"
-          className="fixed inset-x-3 bottom-20 z-[70] mx-auto max-w-sm rounded-lg border border-share-outlineVariant/50 bg-share-surfaceContainerHigh px-3 py-2.5 shadow-lg lg:bottom-6"
-        >
-          <p className="text-xs text-share-onSurface">
-            <span className="font-medium">{completionClaim.title}</span> done with{" "}
-            {formatMinutes(completionClaim.minutes)} unlogged.
-          </p>
-          <div className="mt-2 flex gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                handleAdjustManualMinutes(completionClaim.taskId, completionClaim.minutes);
-                setCompletionClaim(null);
-              }}
-              className="min-h-[32px] flex-1 rounded-md border border-share-outlineVariant/60 bg-share-surfaceContainer px-2 py-1 text-xs text-share-onSurface hover:border-share-primary/60 hover:text-share-primary"
-            >
-              Log {formatMinutes(completionClaim.minutes)} by hand
-            </button>
-            <button
-              type="button"
-              onClick={() => setCompletionClaim(null)}
-              className="min-h-[32px] rounded-md px-2 py-1 text-xs text-share-onSurfaceVariant hover:text-share-onSurface"
-            >
-              No
-            </button>
-          </div>
-        </div>
+        <CompletionClaimPrompt
+          key={completionClaim.taskId}
+          title={completionClaim.title}
+          queuedAfter={completionClaims.length - 1}
+          options={completionClaim.options}
+          onLog={(minutes) => {
+            handleLogManualMinutes(completionClaim.taskId, minutes);
+            setCompletionClaims((queue) => queue.slice(1));
+          }}
+          onDismiss={() => setCompletionClaims((queue) => queue.slice(1))}
+        />
       )}
       <div
         className={
@@ -1821,9 +1890,14 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
         <TaskProgressSheet
           taskId={progressSheetTask.id}
           taskTitle={progressSheetTask.title}
+          dayIso={selectedDay}
           progress={progressSheetProgress}
-          onLogManual={(minutes) => handleAdjustManualMinutes(progressSheetTask.id, minutes)}
-          onUndoManual={(minutes) => handleAdjustManualMinutes(progressSheetTask.id, -minutes)}
+          manualEntries={progressSheetManualEntries}
+          attributedSessions={progressSheetSessions}
+          attributionTargets={attributionTargets}
+          onReattribute={shareMode === 'view' ? undefined : handleReattributeSession}
+          onLogManual={(minutes, interval) => handleLogManualMinutes(progressSheetTask.id, minutes, interval)}
+          onUndoManual={(minutes) => handleUndoManualMinutes(progressSheetTask.id, minutes)}
           onStartBlock={shareMode === 'view' ? undefined : (minutes) => handleStartBlock(progressSheetTask.id, minutes)}
           onClose={() => setProgressSheetTaskId(null)}
         />

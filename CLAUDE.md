@@ -117,13 +117,17 @@ Task
   parentId?      ← subtask; completing parent auto-completes children
   scheduledAt?   ← "HH:MM"; opt-in anchor for externally fixed times only
   durationMinutes?    ← the planned cost; drives the focus-block progress row
-  manualLoggedMinutes?  ← hand-logged progress (timer minutes live on the session)
+  manualLoggedMinutes?  ← LEGACY hand-logged total; still read, never written
+                           (hand-logged time is now a manual DeepWorkSession)
   isShallow?     ← marks logistical / non-deep work (Cal Newport)
 
 DeepWorkSession
   id, label, durationMinutes, startedAt, finishedAt?
   taskId?        ← task the block was worked against (earned progress)
-  ← recorded when a countdown completes, or when an away block is claimed
+  source?        ← 'manual' = self-reported; absent = earned on the timer
+  loggedAt?      ← when a manual claim was made (manual only)
+  ← recorded when a countdown completes, when an away block is claimed,
+    or when work is logged by hand
 ```
 
 The running block is mirrored into `localStorage` under
@@ -256,7 +260,8 @@ Nine features built around the *Deep Work* philosophy:
    30-minute boxes (`TaskProgressBoxes`), collapsing to a segmented bar past six.
    `computeTaskProgress` in `src/domain/taskProgress.ts` fills them: solid teal for
    minutes earned from an attributed `DeepWorkSession`, faded teal for
-   `Task.manualLoggedMinutes`, amber for anything logged past the estimate. Timer
+   hand-logged minutes (`computeManualMinutesForTask`), amber for anything
+   logged past the estimate. Timer
    minutes always fill from the left, so earned work is one contiguous run and can
    never be confused with self-reported time. Only manual minutes can be undone.
    On phones the row is one button opening `TaskProgressSheet`, which offers the
@@ -286,9 +291,31 @@ Nine features built around the *Deep Work* philosophy:
    For work no timer ever saw, `ManualLogPanel` in `TaskProgressSheet` logs a
    whole stretch at once — a block stepper, or a clock range parsed by
    `parseClockRangeMinutes` in `taskProgress.ts`. All of it still writes
-   `manualLoggedMinutes` and fills faded. Completing a trackable task with an
-   unlogged remainder raises a one-tap offer to log it by hand (12s, then it
-   expires); the row is never filled automatically. `computeWeeklySelfReportedHours`
+   a `DeepWorkSession` marked `source: 'manual'` and fills faded — an entry on
+   the day, so it has a place in time, can be taken back on its own, and is
+   detached rather than destroyed when the task is deleted. A clock range stores
+   the real interval; a count of blocks stores only `loggedAt`, because an
+   interval nobody knows is not invented. Manual entries are excluded from
+   `computeDailyDeepWorkMinutes` by `source`, which is the only thing standing
+   between self-report and the earned total. Undo takes back the last *entry*
+   whole (`listManualEntries`), since logging is one gesture and taking it back
+   has to be one too. `SessionAttributionPanel` (folded away under the logging
+   controls) points a recorded block at a different task or at none, via
+   `reattributeSession` in `workSafety.ts` — the minutes, instants and earned
+   status are untouched, so only what the work was *for* changes. Done tasks are
+   offered as destinations; realising a block belonged to something already
+   ticked off is the common case. Completing a trackable task with an
+   unlogged remainder raises `CompletionClaimPrompt` (12s, then it expires;
+   touching it holds it open, and leaving the day dismisses it). One tick can
+   raise several: ticking a parent completes its subtasks, and each trackable
+   one is queued behind it, capped at `MAX_COMPLETION_CLAIMS` = 3. It asks in
+   blocks, not minutes: `blockAmountOptions` in `taskProgress.ts` turns the
+   still-empty blocks into cumulative choices, so eight blocks set aside and two
+   actually worked can be said in one tap. It opens on all of them, so the old
+   one-tap "log the whole remainder" still costs one tap. The same
+   `BlockAmountPicker` is the "In blocks" mode of `ManualLogPanel`, with two
+   blocks of headroom past the estimate. The row is never filled
+   automatically. `computeWeeklySelfReportedHours`
    shows the hand-logged total beside the weekly scoreboard, explicitly *not
    counted* toward it.
 
@@ -314,7 +341,7 @@ Nine features built around the *Deep Work* philosophy:
     place in a tool someone depends on. Muting is per-device (localStorage,
     deliberately outside the synced `AppState`).
 
-Both `depthPhilosophy` and `deepWorkGoalHoursPerWeek` are global settings synced via `user_settings` JSONB — no migration required. `manualLoggedMinutes` and `taskId` are additive optional fields on existing JSON payloads — no migration either.
+Both `depthPhilosophy` and `deepWorkGoalHoursPerWeek` are global settings synced via `user_settings` JSONB — no migration required. `manualLoggedMinutes`, `taskId`, `source` and `loggedAt` are additive optional fields on existing JSON payloads (`plannerDays` stores tasks and sessions as `v.any()`) — no migration and no backend deploy.
 
 ### Atomic Habits features
 

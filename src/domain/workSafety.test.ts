@@ -11,6 +11,7 @@ import {
   describeWorkLoss,
   detachSessionsFromTasks,
   bankableMinutes,
+  reattributeSession,
   summarizeTaskWork,
   taskWithDescendantIds,
 } from './workSafety'
@@ -229,6 +230,122 @@ describe('detachSessionsFromTasks — worked minutes outlive the task', () => {
       session({ id: 's3' }),
     ]
     expect(detachSessionsFromTasks(sessions, tasks, ['t1', 't2'])).toHaveLength(3)
+  })
+})
+
+describe('summarizeTaskWork — hand-logged time that is an entry, not a field', () => {
+  const manual = (over: Partial<DeepWorkSession> & Pick<DeepWorkSession, 'id'>): DeepWorkSession => ({
+    ...session(over),
+    source: 'manual',
+    loggedAt: '2026-09-02T18:00:00.000Z',
+  })
+
+  it('counts it as hand-logged, but not as something deletion destroys', () => {
+    const d = day([task({ id: 't1' })], [manual({ id: 'm1', taskId: 't1', durationMinutes: 60 })])
+    const summary = summarizeTaskWork(d, ['t1'])
+    expect(summary.manualMinutes).toBe(60)
+    expect(summary.irrecoverableMinutes).toBe(0)
+    expect(summary.hasRecordedWork).toBe(true)
+    // It is a session now, and sessions are detached rather than dropped.
+    expect(summary.hasIrrecoverableWork).toBe(false)
+  })
+
+  it('never lets it inflate the timed figure', () => {
+    const d = day(
+      [task({ id: 't1' })],
+      [
+        session({ id: 's1', taskId: 't1', durationMinutes: 45 }),
+        manual({ id: 'm1', taskId: 't1', durationMinutes: 60 }),
+      ],
+    )
+    expect(summarizeTaskWork(d, ['t1'])).toMatchObject({
+      sessionMinutes: 45,
+      sessionCount: 1,
+      manualMinutes: 60,
+    })
+  })
+
+  it('still stops you when the legacy per-task total is what would go', () => {
+    const d = day(
+      [task({ id: 't1', manualLoggedMinutes: 20 })],
+      [manual({ id: 'm1', taskId: 't1', durationMinutes: 60 })],
+    )
+    const summary = summarizeTaskWork(d, ['t1'])
+    expect(summary.manualMinutes).toBe(80)
+    expect(summary.irrecoverableMinutes).toBe(20)
+    expect(summary.hasIrrecoverableWork).toBe(true)
+  })
+
+  it('says which half of the hand-logged time survives', () => {
+    const d = day(
+      [task({ id: 't1', manualLoggedMinutes: 20 })],
+      [manual({ id: 'm1', taskId: 't1', durationMinutes: 60 })],
+    )
+    const text = describeWorkLoss(summarizeTaskWork(d, ['t1']))!
+    expect(text).toMatch(/20m you logged by hand will be lost/)
+    expect(text).toMatch(/1h logged by hand stays on the day/)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Scenario: you picked the wrong task in "Working on" and worked ninety minutes.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('reattributeSession — moving minutes to the task they were really for', () => {
+  const tasks = [task({ id: 't1', title: 'Wrong one' }), task({ id: 't2', title: 'Right one' })]
+
+  it('moves the session without touching the work it records', () => {
+    const original = session({
+      id: 's1',
+      taskId: 't1',
+      durationMinutes: 90,
+      finishedAt: '2026-09-02T10:30:00.000Z',
+    })
+    const [moved] = reattributeSession([original], 's1', 't2', tasks)
+    expect(moved).toMatchObject({
+      taskId: 't2',
+      durationMinutes: 90,
+      startedAt: original.startedAt,
+      finishedAt: original.finishedAt,
+    })
+  })
+
+  it('keeps the label a person gave a timed block', () => {
+    const [moved] = reattributeSession(
+      [session({ id: 's1', taskId: 't1', label: 'Morning block' })],
+      's1',
+      't2',
+      tasks,
+    )
+    expect(moved!.label).toBe('Morning block')
+  })
+
+  it('renames a hand-logged entry, whose label was only ever the task title', () => {
+    const [moved] = reattributeSession(
+      [{ ...session({ id: 'm1', taskId: 't1', label: 'Wrong one' }), source: 'manual' as const }],
+      'm1',
+      't2',
+      tasks,
+    )
+    expect(moved!.label).toBe('Right one')
+  })
+
+  it('can point minutes at no task at all', () => {
+    const [moved] = reattributeSession([session({ id: 's1', taskId: 't1' })], 's1', undefined, tasks)
+    expect(moved!.taskId).toBeUndefined()
+    expect(moved!.durationMinutes).toBe(45)
+  })
+
+  it('refuses a task that is not on the day, rather than orphaning the minutes', () => {
+    const before = session({ id: 's1', taskId: 't1' })
+    expect(reattributeSession([before], 's1', 'ghost', tasks)).toEqual([before])
+  })
+
+  it('leaves every other session alone', () => {
+    const others = [session({ id: 's1', taskId: 't1' }), session({ id: 's2', taskId: 't1' })]
+    const after = reattributeSession(others, 's1', 't2', tasks)
+    expect(after[1]).toEqual(others[1])
+    expect(after).toHaveLength(2)
   })
 })
 

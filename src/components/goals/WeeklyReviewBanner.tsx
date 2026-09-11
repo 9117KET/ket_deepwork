@@ -35,7 +35,7 @@ export function WeeklyReviewBanner({
       <button
         type="button"
         onClick={onOpen}
-        className="ml-auto text-[10px] text-share-onSurfaceVariant/60 hover:text-share-onBg transition-colors"
+        className="touch-target-coarse ml-auto inline-flex items-center justify-center rounded px-1 text-[10px] text-share-onSurfaceVariant/60 transition-colors hover:text-share-onBg"
       >
         Revisit ↓
       </button>
@@ -49,7 +49,7 @@ export function WeeklyReviewBanner({
       <button
         type="button"
         onClick={onOpen}
-        className="shrink-0 rounded border border-share-primary/50 bg-share-primary/20 px-2 py-0.5 text-[10px] font-medium text-share-primary transition-colors hover:bg-share-primary/30"
+        className="touch-target-coarse inline-flex shrink-0 items-center justify-center rounded border border-share-primary/50 bg-share-primary/20 px-2 py-0.5 text-[10px] font-medium text-share-primary transition-colors hover:bg-share-primary/30"
       >
         Open ↓
       </button>

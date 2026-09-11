@@ -70,11 +70,14 @@ export interface TaskWorkSummary {
   sessionMinutes: number
   /** How many sessions are attributed to them. */
   sessionCount: number
-  /**
-   * Hand-logged minutes. These live ON the task, so deleting it destroys them
-   * outright — there is no other record anywhere.
-   */
+  /** All hand-logged minutes affected, whichever record holds them. */
   manualMinutes: number
+  /**
+   * The subset of those that would be destroyed outright: minutes held in the
+   * legacy per-task total, which goes with the task and exists nowhere else.
+   * Hand-logged entries recorded as sessions are detached like timed ones.
+   */
+  irrecoverableMinutes: number
   /** True when anything at all would be affected. */
   hasRecordedWork: boolean
   /** True when something would be destroyed rather than merely detached. */
@@ -85,6 +88,7 @@ const EMPTY_SUMMARY: TaskWorkSummary = {
   sessionMinutes: 0,
   sessionCount: 0,
   manualMinutes: 0,
+  irrecoverableMinutes: 0,
   hasRecordedWork: false,
   hasIrrecoverableWork: false,
 }
@@ -92,11 +96,12 @@ const EMPTY_SUMMARY: TaskWorkSummary = {
 /**
  * What removing these tasks would cost.
  *
- * The two kinds of minutes are counted separately because they have different
+ * The kinds of minutes are counted separately because they have different
  * fates. A `DeepWorkSession` is stored on the day, so it survives the task and
- * keeps counting toward the weekly scoreboard — it only loses the label saying
- * what it was for. `manualLoggedMinutes` is a field on the task itself and goes
- * with it. Only the second kind justifies stopping someone.
+ * only loses the label saying what it was for — true of a timed block and now
+ * equally true of a stretch logged by hand, which is a session as well. What
+ * still dies with the task is the legacy `manualLoggedMinutes` total from
+ * before that was so, and it is the only thing that justifies stopping someone.
  */
 export function summarizeTaskWork(
   day: Pick<DayState, 'tasks' | 'deepWorkSessions'> | undefined,
@@ -105,26 +110,34 @@ export function summarizeTaskWork(
   if (!day || taskIds.length === 0) return { ...EMPTY_SUMMARY }
   const ids = new Set(taskIds)
 
-  let manualMinutes = 0
+  let irrecoverableMinutes = 0
   for (const task of day.tasks ?? []) {
-    if (ids.has(task.id)) manualMinutes += Math.max(0, task.manualLoggedMinutes ?? 0)
+    if (ids.has(task.id)) irrecoverableMinutes += Math.max(0, task.manualLoggedMinutes ?? 0)
   }
 
   let sessionMinutes = 0
   let sessionCount = 0
+  let manualSessionMinutes = 0
   for (const session of day.deepWorkSessions ?? []) {
-    if (session.taskId && ids.has(session.taskId)) {
-      sessionMinutes += Math.max(0, session.durationMinutes ?? 0)
-      sessionCount += 1
+    if (!session.taskId || !ids.has(session.taskId)) continue
+    if (session.cancelledAt) continue
+    const minutes = Math.max(0, session.durationMinutes ?? 0)
+    if (session.source === 'manual') {
+      manualSessionMinutes += minutes
+      continue
     }
+    sessionMinutes += minutes
+    sessionCount += 1
   }
 
+  const manualMinutes = manualSessionMinutes + irrecoverableMinutes
   return {
     sessionMinutes,
     sessionCount,
     manualMinutes,
+    irrecoverableMinutes,
     hasRecordedWork: sessionMinutes > 0 || manualMinutes > 0,
-    hasIrrecoverableWork: manualMinutes > 0,
+    hasIrrecoverableWork: irrecoverableMinutes > 0,
   }
 }
 
@@ -159,8 +172,14 @@ export function describeWorkLoss(summary: TaskWorkSummary, taskCount = 1): strin
   const subject = taskCount === 1 ? 'This task' : `These ${taskCount} tasks`
   const parts: string[] = []
 
-  if (summary.manualMinutes > 0) {
-    parts.push(`${formatMinutes(summary.manualMinutes)} you logged by hand will be lost`)
+  if (summary.irrecoverableMinutes > 0) {
+    parts.push(`${formatMinutes(summary.irrecoverableMinutes)} you logged by hand will be lost`)
+  }
+  const survivingManual = summary.manualMinutes - summary.irrecoverableMinutes
+  if (survivingManual > 0) {
+    parts.push(
+      `${formatMinutes(survivingManual)} logged by hand stays on the day but loses its label`,
+    )
   }
   if (summary.sessionMinutes > 0) {
     const blocks = summary.sessionCount === 1 ? 'block' : 'blocks'
@@ -196,6 +215,46 @@ export function detachSessionsFromTasks(
     return {
       ...rest,
       label: title && !session.label.includes(title) ? `${session.label} — ${title}` : session.label,
+    }
+  })
+}
+
+/**
+ * Point a session at a different task, or at none.
+ *
+ * The gap this closes: pick the wrong task in "Working on", run ninety minutes,
+ * and those minutes were stuck on the wrong row for good. Nothing in the app
+ * could move them, and the only lever that touched them at all was deleting the
+ * task - which is to say the only remedy for a mislabelled record was to
+ * destroy the label entirely.
+ *
+ * Re-attribution is not destruction, so it needs no confirmation and no undo of
+ * its own: the minutes, the instants and the duration are untouched, and only
+ * the answer to "what was this for" changes. That is also why this refuses to
+ * do anything else - a function that could quietly adjust `durationMinutes`
+ * while renaming would be a way to launder invented work into the ledger.
+ *
+ * A hand-logged entry takes the new task's title, since its label was only ever
+ * a copy of it. A timed block keeps the label the person gave the block.
+ */
+export function reattributeSession(
+  sessions: readonly DeepWorkSession[],
+  sessionId: string,
+  toTaskId: string | undefined,
+  tasks: readonly Task[],
+): DeepWorkSession[] {
+  return sessions.map((session) => {
+    if (session.id !== sessionId) return session
+    if (!toTaskId) {
+      const { taskId: _dropped, ...rest } = session
+      return rest
+    }
+    const target = tasks.find((task) => task.id === toTaskId)
+    if (!target) return session
+    return {
+      ...session,
+      taskId: toTaskId,
+      label: session.source === 'manual' ? target.title : session.label,
     }
   })
 }
