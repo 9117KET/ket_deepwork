@@ -84,6 +84,9 @@ _Last updated: 2026-10-11_
 
 ## Shipping the minimal rewrite (`feature/minimal-today`)
 
+> **2026-10-11:** step 1 done (both exports verified: prod 194 planner days, 1
+> trip, 1 finance doc) and step 2 pushed to dev. Steps 3–4 pending.
+
 This branch changes **both sides**: the client calls `listEvents`,
 `scheduleTask`, `unscheduleTask` and `logWorkBlock`, and the old
 `syncFromGoogle` / `syncToGoogle` / travel / finance / sharing functions are
