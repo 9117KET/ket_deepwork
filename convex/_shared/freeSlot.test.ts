@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { findFreeSlot, sessionEventId, SLOT_STEP_MS } from "./freeSlot"
+import { busyFromEvents, findFreeSlot, sessionEventId, SLOT_STEP_MS } from "./freeSlot"
 
 const MIN = 60_000
 const H = 60 * MIN
@@ -69,5 +69,60 @@ describe("sessionEventId", () => {
   test("is stable, and distinct for distinct sessions", () => {
     expect(sessionEventId("abc")).toBe(sessionEventId("abc"))
     expect(sessionEventId("abc")).not.toBe(sessionEventId("abd"))
+  })
+})
+
+describe("busyFromEvents", () => {
+  const timed = (start: string, end: string, extra = {}) => ({
+    start: { dateTime: start },
+    end: { dateTime: end },
+    ...extra,
+  })
+
+  test("counts timed events as busy", () => {
+    expect(busyFromEvents([timed("2026-10-12T08:00:00Z", "2026-10-12T09:00:00Z")])).toEqual([
+      { start: Date.parse("2026-10-12T08:00:00Z"), end: Date.parse("2026-10-12T09:00:00Z") },
+    ])
+  })
+
+  test("all-day events never block the day", () => {
+    expect(busyFromEvents([{ start: { date: "2026-10-12" }, end: { date: "2026-10-13" } }])).toEqual([])
+  })
+
+  test("events marked free, cancelled or declined do not block time", () => {
+    expect(
+      busyFromEvents([
+        timed("2026-10-12T08:00:00Z", "2026-10-12T09:00:00Z", { transparency: "transparent" }),
+        timed("2026-10-12T10:00:00Z", "2026-10-12T11:00:00Z", { status: "cancelled" }),
+        timed("2026-10-12T12:00:00Z", "2026-10-12T13:00:00Z", {
+          attendees: [{ self: true, responseStatus: "declined" }],
+        }),
+      ]),
+    ).toEqual([])
+  })
+
+  test("an event someone else declined still blocks your time", () => {
+    const ev = timed("2026-10-12T12:00:00Z", "2026-10-12T13:00:00Z", {
+      attendees: [{ responseStatus: "declined" }, { self: true, responseStatus: "accepted" }],
+    })
+    expect(busyFromEvents([ev])).toHaveLength(1)
+  })
+})
+
+describe("busyFromEvents: multi-day spans", () => {
+  test("a timed event lasting a day or more does not block time", () => {
+    const span = {
+      start: { dateTime: "2026-10-04T22:30:00+02:00" },
+      end: { dateTime: "2026-10-16T23:00:00+02:00" },
+    }
+    expect(busyFromEvents([span])).toEqual([])
+  })
+
+  test("a long but same-day event still blocks", () => {
+    const workshop = {
+      start: { dateTime: "2026-10-12T08:00:00+02:00" },
+      end: { dateTime: "2026-10-12T20:00:00+02:00" },
+    }
+    expect(busyFromEvents([workshop])).toHaveLength(1)
   })
 })

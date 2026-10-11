@@ -63,3 +63,40 @@ export function sessionEventId(sessionId: string): string {
   for (const byte of bytes) hex += byte.toString(16).padStart(2, "0")
   return `deepblock${hex}`.slice(0, 1024)
 }
+
+/** The fields of a Google Calendar event that decide whether it blocks time. */
+export interface CalendarEventTiming {
+  status?: string
+  transparency?: string
+  start?: { dateTime?: string; date?: string }
+  end?: { dateTime?: string; date?: string }
+  attendees?: Array<{ self?: boolean; responseStatus?: string }>
+}
+
+/** A timed event this long is a span to plan around, not a block of time. */
+export const SPAN_MS = 24 * 3_600_000
+
+/**
+ * Busy intervals from a day's events, counting only what really blocks time.
+ *
+ * Google's freeBusy answer counts every opaque all-day event as busy from
+ * midnight to midnight, so one all-day reminder or holiday made the whole day
+ * "full" and the slot search gave up. All-day events, timed events lasting a
+ * day or more (a trip or project period entered with times — a real calendar
+ * had one running twelve days), events marked "free" (transparent), cancelled
+ * ones and ones you declined do not occupy the clock.
+ */
+export function busyFromEvents(events: CalendarEventTiming[]): BusyInterval[] {
+  const out: BusyInterval[] = []
+  for (const ev of events) {
+    if (ev.status === "cancelled" || ev.transparency === "transparent") continue
+    if (!ev.start?.dateTime || !ev.end?.dateTime) continue
+    if (ev.attendees?.some((a) => a.self && a.responseStatus === "declined")) continue
+    const start = Date.parse(ev.start.dateTime)
+    const end = Date.parse(ev.end.dateTime)
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) continue
+    if (end - start >= SPAN_MS) continue
+    out.push({ start, end })
+  }
+  return out
+}

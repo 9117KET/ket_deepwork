@@ -29,8 +29,6 @@ const TOKEN_URL = 'https://oauth2.googleapis.com/token'
 type MockState = {
   eventsList: unknown[]
   calendarList: Array<{ id: string; summary: string; primary?: boolean }>
-  /** Busy intervals returned by freeBusy (ISO strings). */
-  busy: Array<{ start: string; end: string }>
   createdEvent: { id: string; etag?: string }
   createdCalendar: { id: string }
   /** Status for event POSTs, unless `postStatusQueue` has one queued. */
@@ -59,9 +57,6 @@ function installFetchMock() {
       return json({ refresh_token: 'rt_test', access_token: 'at_test', expires_in: 3600 })
     }
     if (url.includes('/users/me/calendarList')) return json({ items: mock.calendarList })
-    if (url.endsWith('/freeBusy')) {
-      return json({ calendars: { primary: { busy: mock.busy } } })
-    }
     if (url.endsWith('/calendars') && method === 'POST') return json(mock.createdCalendar)
     if (url.includes('/events')) {
       if (method === 'GET') return json({ items: mock.eventsList })
@@ -93,7 +88,6 @@ beforeEach(() => {
   mock = {
     eventsList: [],
     calendarList: [{ id: 'primary', summary: 'Personal', primary: true }],
-    busy: [],
     createdEvent: { id: 'gevent_new', etag: 'etag_1' },
     createdCalendar: { id: 'log_cal' },
     postStatus: 200,
@@ -248,7 +242,11 @@ describe('scheduleTask', () => {
     const t = convexTest(schema, modules)
     const asUser = await connect(t)
     // Busy 08:00–09:30 local (UTC+1 in March) → a 60m task lands at 09:30.
-    mock.busy = [{ start: '2030-03-04T07:00:00Z', end: '2030-03-04T08:30:00Z' }]
+    mock.eventsList = [
+      { start: { dateTime: '2030-03-04T07:00:00Z' }, end: { dateTime: '2030-03-04T08:30:00Z' } },
+      // An all-day event must not make the whole day look full.
+      { start: { date: '2030-03-04' }, end: { date: '2030-03-05' } },
+    ]
 
     const result = await asUser.action(api.calendar.scheduleTask, {
       ...base, title: 'Write chapter 2', durationMinutes: 60,
@@ -267,12 +265,12 @@ describe('scheduleTask', () => {
     })
   })
 
-  test('an explicit start time skips free/busy and goes exactly there', async () => {
+  test('an explicit start time skips reading the calendar and goes exactly there', async () => {
     const t = convexTest(schema, modules)
     const asUser = await connect(t)
     const result = await asUser.action(api.calendar.scheduleTask, { ...base, startTime: '14:15' })
     expect(result.startTime).toBe('14:15')
-    expect(fetchCalls.some((c) => c.url.endsWith('/freeBusy'))).toBe(false)
+    expect(fetchCalls.some((c) => c.method === 'GET' && c.url.includes('/events?'))).toBe(false)
   })
 
   test('scheduling an already-scheduled task moves its event instead of duplicating it', async () => {
@@ -302,7 +300,7 @@ describe('scheduleTask', () => {
   test('says so when the day has no gap long enough', async () => {
     const t = convexTest(schema, modules)
     const asUser = await connect(t)
-    mock.busy = [{ start: '2030-03-04T06:00:00Z', end: '2030-03-04T21:00:00Z' }]
+    mock.eventsList = [{ start: { dateTime: '2030-03-04T06:00:00Z' }, end: { dateTime: '2030-03-04T21:00:00Z' } }]
     await expect(
       asUser.action(api.calendar.scheduleTask, { ...base, durationMinutes: 60 }),
     ).rejects.toThrow(/no free 60-minute slot/i)

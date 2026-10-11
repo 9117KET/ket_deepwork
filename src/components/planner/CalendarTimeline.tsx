@@ -22,6 +22,8 @@ interface CalendarTimelineProps {
   now: number
 }
 
+const DAY_MS = 24 * 3_600_000
+
 const timeFmt = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' })
 
 function fmt(iso: string) {
@@ -32,10 +34,14 @@ export function CalendarTimeline({ status, events, isToday, now }: CalendarTimel
   const [showEarlier, setShowEarlier] = useState(false)
 
   const { allDay, earlier, rest } = useMemo(() => {
-    const timed = events.filter((e) => !e.allDay && e.start && e.end)
+    // A timed event lasting a day or more (a trip entered with times) reads as
+    // a chip like an all-day one, not as a "Now" row that never ends.
+    const isSpan = (e: CalendarEvent) =>
+      !e.allDay && e.start && e.end && Date.parse(e.end) - Date.parse(e.start) >= DAY_MS
+    const timed = events.filter((e) => !e.allDay && e.start && e.end && !isSpan(e))
     const ended = (e: CalendarEvent) => isToday && Date.parse(e.end!) <= now
     return {
-      allDay: events.filter((e) => e.allDay),
+      allDay: events.filter((e) => e.allDay || isSpan(e)),
       earlier: timed.filter(ended),
       rest: timed.filter((e) => !ended(e)),
     }

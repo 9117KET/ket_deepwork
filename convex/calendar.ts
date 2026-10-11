@@ -16,7 +16,13 @@ import {
 import { encryptToEnvelope, decryptFromEnvelope } from "./_shared/crypto"
 import { getUserId } from "./_shared/auth"
 import { toLocalIsoDay, hhmmFromDate, zonedWallTimeToUtc } from "./_shared/calendarTime"
-import { findFreeSlot, sessionEventId } from "./_shared/freeSlot"
+import {
+  busyFromEvents,
+  findFreeSlot,
+  sessionEventId,
+  type BusyInterval,
+  type CalendarEventTiming,
+} from "./_shared/freeSlot"
 
 // ─── Connection status (client-readable, no secrets) ───────────────────────────
 
@@ -259,7 +265,7 @@ export const listEvents = action({
  *
  * With `startTime` the task goes exactly there; without it, into the first gap
  * that fits between now (or the start of the working day) and its end, read
- * from Google's free/busy across the chosen calendar and `primary`. A task
+ * from the events on the chosen calendar and `primary`. A task
  * that is already scheduled is moved, never duplicated.
  */
 export const scheduleTask = action({
@@ -288,24 +294,21 @@ export const scheduleTask = action({
       const from = Math.max(dayStart, Date.now())
       if (from >= dayEnd) throw new Error("No time left in this day to schedule it")
 
-      const items = [...new Set([calendarId, "primary"])].map((id) => ({ id }))
-      const fb = await fetch(`${GOOGLE_CALENDAR_BASE}/freeBusy`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${accessToken}`, "content-type": "application/json" },
-        body: JSON.stringify({
-          timeMin: new Date(from).toISOString(),
-          timeMax: new Date(dayEnd).toISOString(),
-          timeZone: args.timezone,
-          items,
-        }),
-      })
-      if (!fb.ok) throw new Error(`Failed to read free/busy (${fb.status})`)
-      const fbData = (await fb.json()) as {
-        calendars?: Record<string, { busy?: Array<{ start: string; end: string }> }>
+      // Read the events rather than asking freeBusy: freeBusy counts every
+      // all-day event as busy all day, which made any day with an all-day
+      // reminder look full. See busyFromEvents for what does block time.
+      const busy: BusyInterval[] = []
+      for (const id of new Set([calendarId, "primary"])) {
+        const url = new URL(eventsUrl(id))
+        url.searchParams.set("singleEvents", "true")
+        url.searchParams.set("maxResults", "250")
+        url.searchParams.set("timeMin", new Date(from).toISOString())
+        url.searchParams.set("timeMax", new Date(dayEnd).toISOString())
+        const resp = await fetch(url.toString(), { headers: { Authorization: `Bearer ${accessToken}` } })
+        if (!resp.ok) throw new Error(`Failed to read the calendar (${resp.status})`)
+        const data = (await resp.json()) as { items?: CalendarEventTiming[] }
+        busy.push(...busyFromEvents(data.items ?? []))
       }
-      const busy = Object.values(fbData.calendars ?? {}).flatMap((c) =>
-        (c.busy ?? []).map((b) => ({ start: Date.parse(b.start), end: Date.parse(b.end) })),
-      )
       const slot = findFreeSlot({ busy, from, to: dayEnd, durationMs })
       if (slot === null) {
         throw new Error(`No free ${Math.round(durationMs / 60_000)}-minute slot left in this day`)
