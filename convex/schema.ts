@@ -96,6 +96,8 @@ export default defineSchema({
     encryptedRefreshToken: v.string(),
     selectedCalendarId: v.optional(v.string()),
     selectedCalendarSummary: v.optional(v.string()),
+    /** The "Deepblock log" calendar worked blocks are written to; created on first use. */
+    logCalendarId: v.optional(v.string()),
   })
     .index("by_user", ["userId"]),
 
