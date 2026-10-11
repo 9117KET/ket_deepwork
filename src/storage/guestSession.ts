@@ -4,7 +4,7 @@
  * Whether this browsing session has chosen to use the planner signed out.
  *
  * It lives here rather than in `PlannerPage`'s state because two routes now
- * need to agree about it. `/planner` asks the question; `/planner/review` never
+ * need to agree about it. `/planner` asks the question; `/review` never
  * did, and rendered the same planner data to anyone who opened it. That was
  * invisible while the planner was one page, but the phone's tab bar moves
  * between the two, so a guest could tap Today on Review and land on a sign-in

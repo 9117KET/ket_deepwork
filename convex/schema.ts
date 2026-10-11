@@ -54,6 +54,12 @@ export default defineSchema({
   })
     .index("by_user", ["userId"]),
 
+  // ── Legacy: sharing, finance, travel ──────────────────────────────────────
+  // The features and every function that read or wrote these tables were
+  // removed in the minimal rewrite. The tables stay so existing rows are kept
+  // until they have been exported (see docs/DEPLOYMENT.md, "Retiring the old
+  // features"). Deleting them is a separate, explicit step — never a side
+  // effect of a schema change.
   shareTokens: defineTable({
     ownerUserId: v.string(),
     token: v.string(),
@@ -96,6 +102,8 @@ export default defineSchema({
     encryptedRefreshToken: v.string(),
     selectedCalendarId: v.optional(v.string()),
     selectedCalendarSummary: v.optional(v.string()),
+    /** The "Deepblock log" calendar worked blocks are written to; created on first use. */
+    logCalendarId: v.optional(v.string()),
   })
     .index("by_user", ["userId"]),
 

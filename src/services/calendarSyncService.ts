@@ -1,7 +1,7 @@
 /**
  * services/calendarSyncService.ts
  *
- * Frontend wrapper around Convex actions for Google Calendar sync.
+ * Frontend wrapper around the Convex Google Calendar actions.
  * Replaces the old Supabase Edge Function invocations.
  */
 
@@ -40,6 +40,24 @@ export async function startGoogleOAuth(): Promise<{ url: string; state: string }
     // sessionStorage unavailable (private mode) — proceed without CSRF check.
   }
   return result
+}
+
+/**
+ * The CSRF check on its own, so the callback page can reject a forged
+ * callback at once — before, and regardless of, sign-in being restored.
+ * Throws on a mismatch; does not consume the stored state.
+ */
+export function checkOAuthState(returnedState?: string): void {
+  const expected = (() => {
+    try {
+      return sessionStorage.getItem(OAUTH_STATE_KEY)
+    } catch {
+      return null
+    }
+  })()
+  if (expected && expected !== returnedState) {
+    throw new Error("OAuth state mismatch — possible CSRF. Please try connecting again.")
+  }
 }
 
 export async function completeGoogleOAuth(code: string, returnedState?: string): Promise<void> {
@@ -81,32 +99,63 @@ export async function selectGoogleCalendar(params: {
   })
 }
 
-export async function syncFromGoogle(params?: {
-  startDate?: string
-  endDate?: string
-}): Promise<{ imported: number; updated: number; removed: number }> {
-  const result = (await convex.action(api.calendar.syncFromGoogle, {
-    ...params,
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-  })) as { imported: number; updated?: number; removed?: number }
-  return {
-    imported: result.imported,
-    updated: result.updated ?? 0,
-    removed: result.removed ?? 0,
-  }
-}
-
-export async function syncToGoogle(params?: {
-  startDate?: string
-  endDate?: string
-}): Promise<{ created: number; updated: number; skipped: number }> {
-  return await convex.action(api.calendar.syncToGoogle, {
-    ...params,
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-  }) as { created: number; updated: number; skipped: number }
-}
-
 export async function disconnectGoogle(): Promise<void> {
   // Action (not mutation): the backend also revokes the token at Google.
   await convex.action(api.calendar.disconnectGoogle, {})
+}
+
+/** The device's IANA zone; every calendar call is phrased in local days. */
+function timezone(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone
+}
+
+export interface CalendarEvent {
+  id: string
+  title: string
+  allDay: boolean
+  /** ISO instants; null for all-day events. */
+  start: string | null
+  end: string | null
+  htmlLink: string | null
+  /** Set when the event was created by Schedule for a planner task. */
+  taskId: string | null
+}
+
+export async function listCalendarEvents(date: string): Promise<CalendarEvent[]> {
+  return await convex.action(api.calendar.listEvents, { date, timezone: timezone() })
+}
+
+export interface ScheduledSlot {
+  eventId: string
+  htmlLink: string | null
+  date: string
+  /** "HH:MM", local. */
+  startTime: string
+}
+
+/** Put a task on the calendar: the next free slot, or exactly `startTime`. */
+export async function scheduleTaskInCalendar(params: {
+  taskId: string
+  taskDate: string
+  title: string
+  durationMinutes: number
+  startTime?: string
+}): Promise<ScheduledSlot> {
+  return await convex.action(api.calendar.scheduleTask, { ...params, timezone: timezone() })
+}
+
+export async function unscheduleTaskFromCalendar(params: {
+  taskId: string
+  taskDate: string
+}): Promise<void> {
+  await convex.action(api.calendar.unscheduleTask, params)
+}
+
+export async function logWorkBlockToCalendar(params: {
+  sessionId: string
+  title: string
+  startedAt: string
+  finishedAt: string
+}): Promise<void> {
+  await convex.action(api.calendar.logWorkBlock, { ...params, timezone: timezone() })
 }

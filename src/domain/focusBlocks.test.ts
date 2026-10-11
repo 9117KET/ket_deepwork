@@ -1,14 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import {
-  DEFAULT_FOCUS_BLOCK_MINUTES,
-  FOCUS_BLOCK_PRESETS,
-  MAX_PLANNED_BLOCKS,
-  blockPlanOptions,
-  blocksForMinutes,
-  formatBlockCount,
-  normalizeFocusBlockMinutes,
-  suggestedBreakMinutes,
-} from './focusBlocks'
+import { DEFAULT_FOCUS_BLOCK_MINUTES, FOCUS_BLOCK_PRESETS, MAX_PLANNED_BLOCKS, blockPlanOptions, formatBlockCount, normalizeFocusBlockMinutes, suggestedBreakMinutes } from './focusBlocks'
 
 describe('normalizeFocusBlockMinutes', () => {
   it('falls back to the default for missing or nonsense values', () => {
@@ -50,14 +41,6 @@ describe('blockPlanOptions', () => {
     expect(options).toHaveLength(MAX_PLANNED_BLOCKS)
     expect(options[0]).toEqual({ blocks: 1, minutes: 45 })
     expect(options[3]).toEqual({ blocks: 4, minutes: 180 })
-  })
-})
-
-describe('blocksForMinutes', () => {
-  it('rounds up, because a part-block still needs a sitting', () => {
-    expect(blocksForMinutes(90, 45)).toBe(2)
-    expect(blocksForMinutes(95, 45)).toBe(3)
-    expect(blocksForMinutes(0, 45)).toBe(0)
   })
 })
 

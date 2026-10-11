@@ -103,7 +103,7 @@ function seed(page: Page, withSubtask = false) {
 async function expandHighPriority(page: Page) {
   const section = page
     .locator('section')
-    .filter({ has: page.getByRole('heading', { name: 'High Priority (Focus Tasks)' }) })
+    .filter({ has: page.getByRole('heading', { name: 'Tasks', exact: true }) })
     .first()
   const expand = section.getByRole('button', { name: 'Expand section' })
   if (await expand.count()) await expand.click()

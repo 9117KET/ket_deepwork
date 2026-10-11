@@ -1,19 +1,15 @@
 /**
  * pages/PlannerPage.tsx
  *
- * Wrapper for the Day Planner: requires auth or guest; AppChrome + DayPlanner + modals.
+ * Wrapper for the Day Planner: requires auth or guest; AppChrome + DayPlanner.
  */
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useMemo, useState, useTransition } from "react";
 import { useNavigate } from "react-router-dom";
 import { DayPlanner } from "../components/planner/DayPlanner";
-import { HelpModal } from "../components/HelpModal";
-import { OnboardingTour } from "../components/OnboardingTour";
-import { getTourCompleted } from "../utils/tourStorage";
 import { useAuth } from "../contexts/AuthContext";
 import { isGuestSession, markGuestSession } from "../storage/guestSession";
 import { LoginForm } from "../components/auth/LoginForm";
-import { ShareModal } from "../components/sharing/ShareModal";
 import { AccountMenu } from "../components/nav/AccountMenu";
 import { AppChrome } from "../components/layout/AppChrome";
 
@@ -36,9 +32,6 @@ export function PlannerPage() {
     setGuest(true);
   }, []);
   const [, startTransition] = useTransition();
-  const [helpOpen, setHelpOpen] = useState(false);
-  const [shareOpen, setShareOpen] = useState(false);
-  const [tourActive, setTourActive] = useState(false);
 
   const isAuthenticated = Boolean(user);
   const showPlanner = isAuthenticated || guest;
@@ -54,22 +47,9 @@ export function PlannerPage() {
     if (error) console.error("[auth] Failed to sign out", error);
   };
 
-  // Both used to scroll to elements rendered under the day. Those live at
-  // /planner/review now, so these navigate instead of hunting for an id.
-  const handleOpenDashboard = useCallback(() => navigate("/planner/review"), [navigate]);
-  const handleOpenTracking = useCallback(() => navigate("/planner/review"), [navigate]);
-
-  useEffect(() => {
-    let mounted = true;
-    queueMicrotask(() => {
-      if (mounted && !getTourCompleted()) setTourActive(true);
-    });
-    return () => { mounted = false; };
-  }, []);
-
   if (loading) {
     return (
-      <AppChrome mobileActive="planner" showMobileNav={false}>
+      <AppChrome>
         <div className="flex min-h-[50vh] items-center justify-center text-share-onSurfaceVariant">
           <p className="text-sm">Loading your workspace…</p>
         </div>
@@ -79,7 +59,7 @@ export function PlannerPage() {
 
   if (!showPlanner) {
     return (
-      <AppChrome mobileActive="planner" showMobileNav={false}>
+      <AppChrome>
         <div className="flex min-h-[calc(100dvh-8rem)] items-center justify-center px-4">
           <LoginForm onContinueAsGuest={() => startTransition(continueAsGuest)} />
         </div>
@@ -88,92 +68,47 @@ export function PlannerPage() {
   }
 
   return (
-    <>
-      <AppChrome
-        mobileActive="planner"
-        showMobileNav={false}
-        showCalendarLink={isAuthenticated}
-        showHelp
-        onHelpClick={() => setHelpOpen(true)}
-        trailing={
-          <AccountMenu
-            dropUp
-            userInitial={userInitial}
-            userEmail={user?.email}
-            items={[
-              {
-                kind: "action",
-                key: "help",
-                label: "Help & tips",
-                onSelect: () => setHelpOpen(true),
-              },
-              { kind: "separator", key: "sep-1" },
-              {
-                kind: "action",
-                key: "progress",
-                label: "Progress dashboard",
-                onSelect: handleOpenDashboard,
-              },
-              {
-                kind: "action",
-                key: "monthly",
-                label: "Monthly tracker",
-                onSelect: handleOpenTracking,
-              },
-              {
-                kind: "action",
-                key: "calendar",
-                label: "Calendar sync",
-                onSelect: () => navigate("/calendar"),
-                hidden: !isAuthenticated,
-              },
-              {
-                kind: "separator",
-                key: "sep-2",
-                hidden: !isAuthenticated,
-              },
-              {
-                kind: "action",
-                key: "share",
-                label: "Share…",
-                onSelect: () => setShareOpen(true),
-                hidden: !isAuthenticated,
-              },
-              {
-                kind: "action",
-                key: "signout",
-                label: "Sign out",
-                onSelect: handleSignOut,
-                hidden: !isAuthenticated,
-                muted: true,
-              },
-            ]}
-          />
-        }
-      >
-        <div className="px-4 pt-4 pb-20 md:px-6 md:pt-5 md:pb-8">
-          <DayPlanner stickyTopClass="top-0" />
-        </div>
-      </AppChrome>
-      <HelpModal
-        isOpen={helpOpen}
-        onClose={() => setHelpOpen(false)}
-        onStartTour={() => {
-          setHelpOpen(false);
-          setTourActive(true);
-        }}
-      />
-      <OnboardingTour
-        isActive={tourActive}
-        onComplete={() => setTourActive(false)}
-      />
-      {isAuthenticated && user && (
-        <ShareModal
-          userId={user.id}
-          isOpen={shareOpen}
-          onClose={() => setShareOpen(false)}
+    <AppChrome
+      showCalendarLink={isAuthenticated}
+      trailing={
+        <AccountMenu
+          dropUp
+          userInitial={userInitial}
+          userEmail={user?.email}
+          items={[
+            {
+              kind: "action",
+              key: "review",
+              label: "Review",
+              onSelect: () => navigate("/review"),
+            },
+            {
+              kind: "action",
+              key: "calendar",
+              label: "Calendar sync",
+              onSelect: () => navigate("/calendar"),
+              hidden: !isAuthenticated,
+            },
+            {
+              kind: "separator",
+              key: "sep-1",
+              hidden: !isAuthenticated,
+            },
+            {
+              kind: "action",
+              key: "signout",
+              label: "Sign out",
+              onSelect: handleSignOut,
+              hidden: !isAuthenticated,
+              muted: true,
+            },
+          ]}
         />
-      )}
-    </>
+      }
+    >
+      <div className="px-4 pt-4 pb-20 md:px-6 md:pt-5 md:pb-8">
+        <DayPlanner />
+      </div>
+    </AppChrome>
   );
 }

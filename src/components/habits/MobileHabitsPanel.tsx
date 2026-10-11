@@ -37,8 +37,6 @@ interface MobileHabitsPanelProps {
   onToggle: (habitId: string, value: boolean) => void
   onSetIdentity: (value: string) => void
   onEditHabits: () => void
-  /** On an active trip, never-miss-twice alerts are suppressed. */
-  travelingToday?: boolean
 }
 
 const DOT_CLASS: Record<string, string> = {
@@ -58,7 +56,6 @@ export function MobileHabitsPanel({
   onToggle,
   onSetIdentity,
   onEditHabits,
-  travelingToday = false,
 }: MobileHabitsPanelProps) {
   const [editingIdentity, setEditingIdentity] = useState(false)
   const [identityDraft, setIdentityDraft] = useState('')
@@ -130,7 +127,7 @@ export function MobileHabitsPanel({
       <div className="mt-5 flex flex-col gap-2">
         {habits.map((habit) => {
           const isDone = completions[habit.id] === true
-          const atRisk = !travelingToday && atRiskHabitIds.has(habit.id)
+          const atRisk = atRiskHabitIds.has(habit.id)
           const week = computeHabitWeek(days, habit.id, selectedDay)
           return (
             <div

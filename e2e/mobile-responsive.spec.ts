@@ -12,7 +12,7 @@
 import { test, expect, type Page } from '@playwright/test'
 
 const MOBILE = { width: 390, height: 844 } // iPhone 14/15
-const ROUTES = ['/', '/planner', '/travel', '/finance', '/calendar'] as const
+const ROUTES = ['/', '/review', '/calendar'] as const
 
 test.use({ viewport: MOBILE, isMobile: true, hasTouch: true })
 
@@ -115,7 +115,7 @@ test('every app route offers a bottom tab bar on mobile', async ({ page }) => {
   // /planner deliberately swaps the global AppMobileNav for its own
   // Plan/Timer/Habits/Stats bar (PlannerPage passes showMobileNav={false}),
   // so match any bottom-fixed nav rather than the global one specifically.
-  for (const route of ['/planner', '/travel', '/finance'] as const) {
+  for (const route of ['/', '/review'] as const) {
     await page.goto(route)
     await settle(page)
     const bar = await page.evaluate(() => {
@@ -214,119 +214,6 @@ test('planner tab bar does not overlap the desktop sidebar at tablet widths', as
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Onboarding tour
-// ─────────────────────────────────────────────────────────────────────────────
-
-/** Seed guest state but leave the tour un-completed so it opens. */
-async function injectGuestStateWithTour(page: Page) {
-  await injectGuestState(page)
-  await page.addInitScript(() => window.localStorage.removeItem('deepblock_tour_done'))
-}
-
-const tourCard = (page: Page) =>
-  page.evaluate(() => {
-    const c = document.querySelector('[role="dialog"][aria-labelledby="tour-title"] div.fixed.z-10')
-    if (!c) return null
-    const r = c.getBoundingClientRect()
-    const next = Array.from(c.querySelectorAll('button')).find((b) => /Next|Finish/.test(b.textContent || ''))
-    const back = Array.from(c.querySelectorAll('button')).find((b) => /^Back$/.test(b.textContent || ''))
-    return {
-      title: c.querySelector('#tour-title')?.textContent ?? '',
-      body: c.querySelector('#tour-body')?.textContent ?? '',
-      left: r.left, right: r.right, top: r.top, bottom: r.bottom,
-      nextBottom: next ? next.getBoundingClientRect().bottom : null,
-      backBottom: back ? back.getBoundingClientRect().bottom : null,
-      vh: window.innerHeight, vw: window.innerWidth,
-    }
-  })
-
-async function advanceTour(page: Page) {
-  return page.evaluate(() => {
-    const c = document.querySelector('[role="dialog"][aria-labelledby="tour-title"] div.fixed.z-10')
-    if (!c) return false
-    const n = Array.from(c.querySelectorAll('button')).find((b) => /Next|Finish/.test(b.textContent || ''))
-    if (!n) return false
-    ;(n as HTMLButtonElement).click()
-    return true
-  })
-}
-
-test('every onboarding step fits the phone with its controls reachable', async ({ page }) => {
-  // Regression: the card only became `position: fixed` when a step had a
-  // spotlight, which dropped the overlay's padding (card ran edge-to-edge) and
-  // left long steps overflowing the bottom with Back/Next off screen.
-  await injectGuestStateWithTour(page)
-  await page.goto('/planner')
-  await settle(page)
-
-  const seen: string[] = []
-  for (let i = 0; i < 12; i++) {
-    const card = await tourCard(page)
-    if (!card) break
-    seen.push(card.title)
-
-    expect(card.left, `step "${card.title}" touches the left edge`).toBeGreaterThan(0)
-    expect(card.right, `step "${card.title}" touches the right edge`).toBeLessThan(card.vw)
-    expect(card.top, `step "${card.title}" starts above the viewport`).toBeGreaterThanOrEqual(0)
-    expect(card.bottom, `step "${card.title}" overflows the bottom`).toBeLessThanOrEqual(card.vh + 1)
-    expect(card.nextBottom!, `step "${card.title}": Next is off screen`).toBeLessThanOrEqual(card.vh)
-    expect(card.backBottom!, `step "${card.title}": Back is off screen`).toBeLessThanOrEqual(card.vh)
-
-    if (!(await advanceTour(page))) break
-    await page.waitForTimeout(350)
-  }
-  expect(seen.length, 'tour did not advance through its steps').toBeGreaterThanOrEqual(10)
-})
-
-test('onboarding copy matches the mobile UI, not the desktop sidebar', async ({ page }) => {
-  await injectGuestStateWithTour(page)
-  await page.goto('/planner')
-  await settle(page)
-
-  const bodies: string[] = []
-  for (let i = 0; i < 12; i++) {
-    const card = await tourCard(page)
-    if (!card) break
-    bodies.push(`${card.title} :: ${card.body}`)
-    if (!(await advanceTour(page))) break
-    await page.waitForTimeout(300)
-  }
-  const all = bodies.join('\n')
-
-  // On phones there is no sidebar and no right-click; the tools live in the
-  // Timer / Habits / Stats tabs.
-  expect(all, 'mobile copy still says "right-click"').not.toMatch(/right-click/i)
-  expect(all, 'mobile copy still points at "the sidebar"').not.toMatch(/\bthe sidebar\b/i)
-  expect(all, 'mobile copy should name the bottom tabs').toMatch(/bottom tabs|Stats tab/i)
-})
-
-test.describe('desktop keeps the full-width copy', () => {
-  test.use({ viewport: { width: 1280, height: 900 }, isMobile: false, hasTouch: false })
-
-  test('desktop tour still describes the sidebar and right-click', async ({ page }) => {
-    await injectGuestStateWithTour(page)
-    await page.goto('/planner')
-    await settle(page)
-
-    const bodies: string[] = []
-    for (let i = 0; i < 12; i++) {
-      const card = await tourCard(page)
-      if (!card) break
-      bodies.push(`${card.title} :: ${card.body}`)
-      // The card must stay on screen here too.
-      expect(card.bottom, `desktop step "${card.title}" overflows`).toBeLessThanOrEqual(card.vh + 1)
-      expect(card.nextBottom!, `desktop step "${card.title}": Next off screen`).toBeLessThanOrEqual(card.vh)
-      if (!(await advanceTour(page))) break
-      await page.waitForTimeout(300)
-    }
-    const all = bodies.join('\n')
-    expect(bodies.length, 'desktop tour did not advance').toBeGreaterThanOrEqual(10)
-    expect(all, 'desktop copy lost the right-click hint').toMatch(/right-click/i)
-    expect(all, 'desktop copy lost the sidebar wording').toMatch(/\bthe sidebar\b|Sidebar:/i)
-  })
-})
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Device-compatibility foundations
 //
 // The checks above prove the app fits one iPhone-class viewport. These prove it
@@ -349,7 +236,7 @@ const DEVICE_MATRIX = [
 ] as const
 
 for (const device of DEVICE_MATRIX) {
-  for (const route of ['/planner', '/finance'] as const) {
+  for (const route of ['/', '/review'] as const) {
     test(`${route} fits a ${device.name} (${device.width}x${device.height})`, async ({ page }) => {
       await page.setViewportSize({ width: device.width, height: device.height })
       await injectGuestState(page)
@@ -420,7 +307,7 @@ async function undersizedTouchTargets(page: Page) {
   })
 }
 
-for (const route of ['/planner', '/finance'] as const) {
+for (const route of ['/', '/review'] as const) {
   test(`${route} controls are thumb-sized on touch devices`, async ({ page }) => {
     await injectGuestState(page)
     await page.goto(route)

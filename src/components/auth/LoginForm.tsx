@@ -128,8 +128,6 @@ export function LoginForm({ onContinueAsGuest }: LoginFormProps) {
         {mode === 'signup' && (
           <p className="mt-1 text-center text-xs text-share-onSurfaceVariant">
             By creating an account you agree to our{' '}
-            <Link to="/terms" className="font-medium text-share-primary hover:underline">Terms</Link>
-            {' '}and{' '}
             <Link to="/privacy" className="font-medium text-share-primary hover:underline">Privacy Policy</Link>.
           </p>
         )}

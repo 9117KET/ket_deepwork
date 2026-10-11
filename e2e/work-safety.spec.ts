@@ -144,7 +144,7 @@ async function openPlanner(page: Page) {
   // keeps these tests independent of the hour they run at.
   const expand = page
     .locator('section')
-    .filter({ has: page.getByRole('heading', { name: 'High Priority (Focus Tasks)' }) })
+    .filter({ has: page.getByRole('heading', { name: 'Tasks', exact: true }) })
     .first()
     .getByRole('button', { name: 'Expand section' })
   if (await expand.count()) {

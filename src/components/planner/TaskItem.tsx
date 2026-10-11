@@ -12,7 +12,7 @@ import { computeTaskProgress } from '../../domain/taskProgress'
 import { ArrowUp, ArrowDown, MoreVertical } from 'lucide-react'
 import { TaskProgressBoxes } from './TaskProgressBoxes'
 import { TaskDurationPicker } from './TaskDurationPicker'
-import { TimeAnchor } from './TimeAnchor'
+import { ScheduleChip } from './ScheduleChip'
 import { useFocusBlocks } from './focusBlockContext'
 
 interface TaskItemProps {
@@ -21,19 +21,12 @@ interface TaskItemProps {
   isDragging?: boolean
   showDropAbove?: boolean
   showDropBelow?: boolean
-  isDueNow?: boolean
-  /** When true, task is part of multi-selection (Ctrl+Click). */
-  isSelected?: boolean
-  /** Called when user Ctrl/Cmd+clicks the task to toggle selection. */
-  onToggleSelect?: () => void
   onToggle: () => void
   onDelete: () => void
   onAddTaskAbove?: () => void
   onAddTaskBelow?: () => void
   onAddSubtask?: () => void
   onUpdateTask?: (patch: { scheduledAt?: string; durationMinutes?: number; title?: string; isShallow?: boolean }) => void
-  /** Move this task to the not-doing list (global). */
-  onMoveToNotDoing?: () => void
   /** Consciously abandon this task (Drucker: abandonment as a success). */
   onAbandon?: () => void
   /** Subtask only: open the parent picker to move to a different parent or promote. */
@@ -53,6 +46,8 @@ interface TaskItemProps {
   onStartBlock?: (minutes: number) => void
   /** Open the progress actions sheet (hand-logging and undo). */
   onOpenProgressSheet?: () => void
+  /** Open the schedule sheet: put this task on the calendar. */
+  onSchedule?: () => void
 }
 
 function GripIcon() {
@@ -80,16 +75,12 @@ export function TaskItem({
   isDragging = false,
   showDropAbove = false,
   showDropBelow = false,
-  isDueNow = false,
-  isSelected = false,
-  onToggleSelect,
   onToggle,
   onDelete,
   onAddTaskAbove,
   onAddTaskBelow,
   onAddSubtask,
   onUpdateTask,
-  onMoveToNotDoing,
   onAbandon,
   onMoveToAnotherParent,
   onDragStart,
@@ -102,10 +93,10 @@ export function TaskItem({
   deepWorkSessions,
   onStartBlock,
   onOpenProgressSheet,
+  onSchedule,
 }: TaskItemProps) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
   const [isEditing, setIsEditing] = useState(false)
-  const [isEditingTime, setIsEditingTime] = useState(false)
   const [draftTitle, setDraftTitle] = useState(task.title)
   const gripRef = useRef<HTMLDivElement | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
@@ -160,7 +151,7 @@ export function TaskItem({
     [task, deepWorkSessions, blockMinutes],
   )
   const showContextMenu = Boolean(
-    onUpdateTask ?? onAddTaskAbove ?? onAddTaskBelow ?? onAddSubtask ?? onMoveToNotDoing ?? onAbandon ?? onDelete ?? onMoveToAnotherParent,
+    onUpdateTask ?? onAddTaskAbove ?? onAddTaskBelow ?? onAddSubtask ?? onAbandon ?? onDelete ?? onMoveToAnotherParent,
   )
 
   const handleDragStart = (e: React.DragEvent) => {
@@ -262,14 +253,6 @@ export function TaskItem({
     fn?.()
   }
 
-  const handleRowClickCapture = (e: React.MouseEvent) => {
-    if (e.ctrlKey || e.metaKey) {
-      e.preventDefault()
-      e.stopPropagation()
-      onToggleSelect?.()
-    }
-  }
-
   return (
     <div className={`relative ${isSubtask ? 'ml-6 border-l-2 border-share-outlineVariant/40 pl-2' : ''}`}>
       {showDropAbove && (
@@ -283,14 +266,7 @@ export function TaskItem({
         draggable={isReorderable}
         onDragStart={isReorderable ? handleDragStart : undefined}
         onDragEnd={isReorderable ? onDragEnd : undefined}
-        onClickCapture={handleRowClickCapture}
-        onKeyDown={(e) => {
-          if ((e.ctrlKey || e.metaKey) && (e.key === 'Enter' || e.key === ' ')) {
-            e.preventDefault()
-            onToggleSelect?.()
-          }
-        }}
-        className={`group flex flex-wrap items-center gap-2 py-1.5 ${isReorderable ? 'cursor-grab active:cursor-grabbing' : ''} ${isDragging ? 'opacity-50' : ''} ${isDueNow ? 'rounded-md border border-amber-500/70 bg-amber-500/10' : ''} ${isSelected ? 'rounded-md bg-sky-500/20 ring-1 ring-sky-500/50' : ''}`}
+        className={`group flex flex-wrap items-center gap-2 py-1.5 ${isReorderable ? 'cursor-grab active:cursor-grabbing' : ''} ${isDragging ? 'opacity-50' : ''}`}
         onDragOver={handleDragOver}
         onDragLeave={onDragLeave}
         onDrop={handleDrop}
@@ -336,11 +312,11 @@ export function TaskItem({
             ><ArrowDown className="h-3 w-3" /></button>
           </span>
         )}
-        {/* basis + a hard min-width give the title a floor to stand on. With
-            `flex-1` alone it shrank to nothing on phones while the duration
-            picker held its place on the same line, breaking titles a character
-            at a time ("Revie / w pull / reque / sts"). Now the row wraps. */}
-        <label className="flex min-w-[9rem] flex-1 basis-40 cursor-pointer items-center gap-2">
+        {/* A hard min-width gives the title a floor to stand on: with `flex-1`
+            alone it once shrank to a character per line ("Revie / w pull").
+            basis-0 lets it share the line with the schedule chip, and the row
+            still wraps below 8rem. */}
+        <label className="flex min-w-[8rem] flex-1 basis-0 cursor-pointer items-center gap-2">
           <input
             type="checkbox"
             checked={task.isDone}
@@ -399,16 +375,13 @@ export function TaskItem({
         </label>
         {canEditTime && (
           <span className="flex shrink-0 items-center gap-1">
-            <TimeAnchor
-              value={task.scheduledAt}
-              onChange={(next) => onUpdateTask?.({ scheduledAt: next })}
-              isEditing={isEditingTime}
-              onEditingChange={setIsEditingTime}
-            />
+            {onSchedule && !isSubtask && !task.isDone && (
+              <ScheduleChip scheduledAt={task.scheduledAt} onClick={onSchedule} />
+            )}
             <TaskDurationPicker
               value={task.durationMinutes}
               onChange={(minutes) => onUpdateTask?.({ durationMinutes: minutes })}
-              className="w-[7.5rem]"
+              className={onSchedule && !isSubtask ? "hidden w-[7.5rem] sm:block" : "w-[7.5rem]"}
             />
           </span>
         )}
@@ -448,19 +421,14 @@ export function TaskItem({
               {task.isShallow ? 'Mark as deep work' : 'Mark as shallow'}
             </button>
           )}
-          {onUpdateTask && (
+          {onSchedule && !isSubtask && (
             <button
               type="button"
               role="menuitem"
               className="w-full px-3 py-1.5 text-left text-sm text-share-onSurface hover:bg-share-surfaceContainerHighest"
-              onClick={() =>
-                closeAnd(() => {
-                  if (task.scheduledAt) onUpdateTask?.({ scheduledAt: undefined })
-                  else setIsEditingTime(true)
-                })
-              }
+              onClick={() => closeAnd(onSchedule)}
             >
-              {task.scheduledAt ? 'Remove time anchor' : 'Anchor to a time'}
+              {task.scheduledAt ? 'Reschedule…' : 'Schedule…'}
             </button>
           )}
           {onAddTaskAbove && (
@@ -491,16 +459,6 @@ export function TaskItem({
               onClick={() => closeAnd(onAddSubtask)}
             >
               Add subtask
-            </button>
-          )}
-          {onMoveToNotDoing && (
-            <button
-              type="button"
-              role="menuitem"
-              className="w-full px-3 py-1.5 text-left text-sm text-amber-300 hover:bg-share-surfaceContainerHighest"
-              onClick={() => closeAnd(onMoveToNotDoing)}
-            >
-              Move to Not Doing
             </button>
           )}
           {onMoveToAnotherParent && (

@@ -105,15 +105,6 @@ export function blockPlanOptions(blockMinutes: number): BlockPlanOption[] {
   return options
 }
 
-/**
- * How many blocks a duration works out to, rounded up - a task 5 minutes over
- * two blocks still needs a third sitting to finish.
- */
-export function blocksForMinutes(minutes: number, blockMinutes: number): number {
-  if (blockMinutes <= 0) return 0
-  return Math.ceil(minutes / blockMinutes)
-}
-
 /** "1 block" / "3 blocks". */
 export function formatBlockCount(blocks: number): string {
   return blocks === 1 ? '1 block' : `${blocks} blocks`

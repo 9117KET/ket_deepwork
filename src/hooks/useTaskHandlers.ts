@@ -11,32 +11,25 @@ import {
   type AbandonedTask,
   type AppState,
   type DeepWorkSession,
-  type MonthlyReview,
-  type NotDoingItem,
-  type SideQuestDef,
   type Task,
   type TaskSectionId,
 } from "../domain/types";
-import { addDays, todayIso, deriveActiveDaysFromDays } from "../domain/dateUtils";
+import { deriveActiveDaysFromDays } from "../domain/dateUtils";
 import {
   createTaskId,
   reorderTasks,
   getOrderedTasksForSection,
   getDescendantIds,
   cloneTasksForDay,
-  pickMustsToCopyForward,
 } from "../domain/taskUtils";
 import { blockDayIso, detachSessionsFromTasks, reattributeSession } from "../domain/workSafety";
 import { withdrawManualMinutes } from "../domain/taskProgress";
 import { getOrCreateDay } from "../storage/localStorageState";
 
-/** Max MUSTs per day — mirrors MAX_MUSTS in TomorrowMustPanel. */
-const MAX_TOMORROW_MUSTS = 3;
 
 export function useTaskHandlers(
   updateAppState: (updater: (prev: AppState) => AppState) => void,
   selectedDay: string,
-  travelingToday: boolean,
 ) {
   const [draggedTask, setDraggedTask] = useState<{
     sectionId: TaskSectionId;
@@ -48,112 +41,6 @@ export function useTaskHandlers(
     sectionId: TaskSectionId;
     taskId: string;
   } | null>(null);
-
-  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
-
-  const handleToggleSelect = (taskId: string) => {
-    setSelectedTaskIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(taskId)) next.delete(taskId);
-      else next.add(taskId);
-      return next;
-    });
-  };
-
-  const handleDeleteSelected = () => {
-    if (selectedTaskIds.size === 0) return;
-    updateAppState((prev) => {
-      const existingDay = getOrCreateDay(prev, selectedDay);
-      const toRemove = new Set<string>(selectedTaskIds);
-      for (const id of selectedTaskIds) {
-        getDescendantIds(existingDay.tasks, id).forEach((desc) => toRemove.add(desc));
-      }
-      const nextTasks = existingDay.tasks.filter((t) => !toRemove.has(t.id));
-      return {
-        ...prev,
-        days: {
-          ...prev.days,
-          [selectedDay]: {
-            ...existingDay,
-            tasks: nextTasks,
-            deepWorkSessions: detachSessionsFromTasks(
-              existingDay.deepWorkSessions,
-              existingDay.tasks,
-              [...toRemove],
-            ),
-          },
-        },
-      };
-    });
-    setSelectedTaskIds(new Set());
-  };
-
-  /** Mark every selected task (and its descendants) complete. Mirrors handleToggleTask's activeDays recompute. */
-  const handleCompleteSelected = () => {
-    if (selectedTaskIds.size === 0) return;
-    updateAppState((prev) => {
-      const existingDay = getOrCreateDay(prev, selectedDay);
-      const toComplete = new Set<string>(selectedTaskIds);
-      for (const id of selectedTaskIds) {
-        getDescendantIds(existingDay.tasks, id).forEach((desc) => toComplete.add(desc));
-      }
-      const nextTasks = existingDay.tasks.map((t) =>
-        toComplete.has(t.id) ? { ...t, isDone: true } : t,
-      );
-      const nextDays = {
-        ...prev.days,
-        [selectedDay]: { ...existingDay, tasks: nextTasks },
-      };
-      return {
-        ...prev,
-        days: nextDays,
-        activeDays: deriveActiveDaysFromDays(nextDays),
-      };
-    });
-    setSelectedTaskIds(new Set());
-  };
-
-  /** Mark every selected task shallow (value=true) or deep (value=false). */
-  const handleSetShallowSelected = (value: boolean) => {
-    if (selectedTaskIds.size === 0) return;
-    updateAppState((prev) => {
-      const existingDay = getOrCreateDay(prev, selectedDay);
-      const nextTasks = existingDay.tasks.map((t) =>
-        selectedTaskIds.has(t.id) ? { ...t, isShallow: value } : t,
-      );
-      return {
-        ...prev,
-        days: {
-          ...prev.days,
-          [selectedDay]: { ...existingDay, tasks: nextTasks },
-        },
-      };
-    });
-    setSelectedTaskIds(new Set());
-  };
-
-  /** Move every selected root task (and its descendants) to another section, appended to the end. */
-  const handleMoveSelectedToSection = (toSectionId: TaskSectionId) => {
-    if (selectedTaskIds.size === 0) return;
-    updateAppState((prev) => {
-      const existingDay = getOrCreateDay(prev, selectedDay);
-      const toMove = new Set<string>(selectedTaskIds);
-      for (const id of selectedTaskIds) {
-        getDescendantIds(existingDay.tasks, id).forEach((desc) => toMove.add(desc));
-      }
-      const nextTasks = existingDay.tasks.map((t) =>
-        toMove.has(t.id) ? { ...t, sectionId: toSectionId } : t,
-      );
-      return {
-        ...prev,
-        days: {
-          ...prev.days,
-          [selectedDay]: { ...existingDay, tasks: nextTasks },
-        },
-      };
-    });
-    setSelectedTaskIds(new Set());
-  };
 
   const handleDragStart = (sectionId: TaskSectionId, taskId: string) => {
     draggedTaskRef.current = { sectionId, taskId };
@@ -176,8 +63,6 @@ export function useTaskHandlers(
           sectionId,
           date: selectedDay,
           isDone: false,
-          // Travel days are shallow by default - user can unmark if needed
-          ...(travelingToday ? { isShallow: true } : {}),
         },
       ];
 
@@ -568,62 +453,6 @@ export function useTaskHandlers(
     });
   };
 
-  const handleUpdateMonthlyReview = useCallback((monthKey: string, review: MonthlyReview) => {
-    updateAppState((prev) => ({
-      ...prev,
-      monthlyReviews: { ...(prev.monthlyReviews ?? {}), [monthKey]: review },
-    }))
-  }, [updateAppState])
-
-  const handleUpdateWeeklyReview = useCallback((dateKey: string, review: import('../domain/types').WeeklyReview) => {
-    updateAppState((prev) => ({
-      ...prev,
-      weeklyReviews: { ...(prev.weeklyReviews ?? {}), [dateKey]: review },
-    }))
-  }, [updateAppState])
-
-  const handleToggleSideQuestCompletion = useCallback((id: string, value: boolean) => {
-    updateAppState((prev) => {
-      const day = getOrCreateDay(prev, selectedDay)
-      const currentCompletions = day.sideQuestCompletions ?? {}
-      const wasComplete = currentCompletions[id] ?? false
-      const newCompletions = { ...currentCompletions, [id]: value }
-
-      // XP: tracks actual completions (decrements on untick)
-      const xpDelta = (value && !wasComplete) ? 1 : (!value && wasComplete) ? -1 : 0
-
-      // Streak: earned on first completion today only (not reverted on untick)
-      // Only update when on today's date to prevent retroactive streak manipulation
-      let newStreak = prev.sideQuestStreak ?? 0
-      let newLastStreakDate = prev.sideQuestLastStreakDate
-      if (value && !wasComplete && selectedDay === todayIso() && prev.sideQuestLastStreakDate !== selectedDay) {
-        const yesterday = addDays(selectedDay, -1)
-        newStreak = prev.sideQuestLastStreakDate === yesterday
-          ? (prev.sideQuestStreak ?? 0) + 1
-          : 1
-        newLastStreakDate = selectedDay
-      }
-
-      return {
-        ...prev,
-        sideQuestXp: Math.max(0, (prev.sideQuestXp ?? 0) + xpDelta),
-        sideQuestStreak: newStreak,
-        sideQuestLastStreakDate: newLastStreakDate,
-        days: {
-          ...prev.days,
-          [selectedDay]: {
-            ...day,
-            sideQuestCompletions: newCompletions,
-          },
-        },
-      }
-    })
-  }, [selectedDay, updateAppState])
-
-  const handleSaveSideQuestDefs = useCallback((defs: SideQuestDef[]) => {
-    updateAppState((prev) => ({ ...prev, sideQuestDefs: defs }))
-  }, [updateAppState])
-
   /**
    * Record a completed deep work session into the current day. When the timer
    * was pointed at a task, `taskId` attributes the minutes to it - that is what
@@ -809,28 +638,6 @@ export function useTaskHandlers(
     [selectedDay, updateAppState],
   );
 
-  /** Move a task to the global not-doing list and remove it from the plan. */
-  const handleMoveToNotDoing = useCallback((taskId: string) => {
-    updateAppState((prev) => {
-      const existingDay = getOrCreateDay(prev, selectedDay);
-      const task = existingDay.tasks.find((t) => t.id === taskId);
-      if (!task) return prev;
-      const descendantIds = getDescendantIds(existingDay.tasks, taskId);
-      const toRemove = new Set([taskId, ...descendantIds]);
-      const nextTasks = existingDay.tasks.filter((t) => !toRemove.has(t.id));
-      const newItem: NotDoingItem = {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        text: task.title,
-        createdAt: new Date().toISOString(),
-      };
-      return {
-        ...prev,
-        notDoingList: [...(prev.notDoingList ?? []), newItem],
-        days: { ...prev.days, [selectedDay]: { ...existingDay, tasks: nextTasks } },
-      };
-    });
-  }, [updateAppState, selectedDay]);
-
   /** Consciously abandon a task (Drucker: abandonment as a success). */
   const handleAbandonTask = useCallback((taskId: string) => {
     updateAppState((prev) => {
@@ -859,168 +666,6 @@ export function useTaskHandlers(
       };
     });
   }, [updateAppState, selectedDay]);
-
-  /** Add an item to the global not-doing list. */
-  const handleAddToNotDoing = useCallback((text: string) => {
-    updateAppState((prev) => {
-      const newItem: NotDoingItem = {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        text,
-        createdAt: new Date().toISOString(),
-      };
-      return { ...prev, notDoingList: [...(prev.notDoingList ?? []), newItem] };
-    });
-  }, [updateAppState]);
-
-  /** Remove an item from the global not-doing list. */
-  const handleRemoveFromNotDoing = useCallback((id: string) => {
-    updateAppState((prev) => ({
-      ...prev,
-      notDoingList: (prev.notDoingList ?? []).filter((item) => item.id !== id),
-    }));
-  }, [updateAppState]);
-
-  /** Add a per-day not-doing item. */
-  const handleAddDayNotDoing = useCallback((text: string) => {
-    updateAppState((prev) => {
-      const existingDay = getOrCreateDay(prev, selectedDay);
-      const newItem: NotDoingItem = {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        text,
-        createdAt: new Date().toISOString(),
-      };
-      return {
-        ...prev,
-        days: {
-          ...prev.days,
-          [selectedDay]: {
-            ...existingDay,
-            notDoingItems: [...(existingDay.notDoingItems ?? []), newItem],
-          },
-        },
-      };
-    });
-  }, [updateAppState, selectedDay]);
-
-  /** Remove a per-day not-doing item. */
-  const handleRemoveDayNotDoing = useCallback((id: string) => {
-    updateAppState((prev) => {
-      const existingDay = getOrCreateDay(prev, selectedDay);
-      return {
-        ...prev,
-        days: {
-          ...prev.days,
-          [selectedDay]: {
-            ...existingDay,
-            notDoingItems: (existingDay.notDoingItems ?? []).filter((item) => item.id !== id),
-          },
-        },
-      };
-    });
-  }, [updateAppState, selectedDay]);
-
-  const handleAddTomorrowMust = useCallback((title: string) => {
-    const tomorrowDate = addDays(selectedDay, 1);
-    updateAppState((prev) => {
-      const day = getOrCreateDay(prev, tomorrowDate);
-      const task: Task = {
-        id: `must-tmrw-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        title,
-        sectionId: 'mustDo',
-        date: tomorrowDate,
-        isDone: false,
-      };
-      return {
-        ...prev,
-        days: { ...prev.days, [tomorrowDate]: { ...day, tasks: [...day.tasks, task] } },
-      };
-    });
-  }, [selectedDay, updateAppState]);
-
-  const handleDeleteTomorrowMust = useCallback((taskId: string) => {
-    const tomorrowDate = addDays(selectedDay, 1);
-    updateAppState((prev) => {
-      const day = getOrCreateDay(prev, tomorrowDate);
-      return {
-        ...prev,
-        days: {
-          ...prev.days,
-          [tomorrowDate]: { ...day, tasks: day.tasks.filter((t) => t.id !== taskId) },
-        },
-      };
-    });
-  }, [selectedDay, updateAppState]);
-
-  const handleEditTomorrowMust = useCallback((taskId: string, title: string) => {
-    const tomorrowDate = addDays(selectedDay, 1);
-    updateAppState((prev) => {
-      const day = getOrCreateDay(prev, tomorrowDate);
-      return {
-        ...prev,
-        days: {
-          ...prev.days,
-          [tomorrowDate]: {
-            ...day,
-            tasks: day.tasks.map((t) => t.id === taskId ? { ...t, title } : t),
-          },
-        },
-      };
-    });
-  }, [selectedDay, updateAppState]);
-
-  const handleUpdateTomorrowMust = useCallback((taskId: string, patch: { scheduledAt?: string; durationMinutes?: number }) => {
-    const tomorrowDate = addDays(selectedDay, 1);
-    updateAppState((prev) => {
-      const day = getOrCreateDay(prev, tomorrowDate);
-      return {
-        ...prev,
-        days: {
-          ...prev.days,
-          [tomorrowDate]: { ...day, tasks: day.tasks.map((t) => t.id === taskId ? { ...t, ...patch } : t) },
-        },
-      };
-    });
-  }, [selectedDay, updateAppState]);
-
-  /**
-   * Copy the currently-viewed day's MUSTs into tomorrow's MUST slots. Fills only
-   * the empty slots (cap of 3), skips titles already set for tomorrow, resets
-   * completion, and carries over scheduled time / duration. Lets the user repeat
-   * a recurring MUST for the next day with one click instead of retyping it.
-   */
-  const handleCopyTodayMustsToTomorrow = useCallback(() => {
-    const tomorrowDate = addDays(selectedDay, 1);
-    updateAppState((prev) => {
-      const sourceMusts = (prev.days[selectedDay]?.tasks ?? []).filter(
-        (t) => t.sectionId === 'mustDo' && !t.parentId,
-      );
-      if (sourceMusts.length === 0) return prev;
-
-      const tomorrow = getOrCreateDay(prev, tomorrowDate);
-      const existingMusts = tomorrow.tasks.filter((t) => t.sectionId === 'mustDo' && !t.parentId);
-      const toCopy = pickMustsToCopyForward(sourceMusts, existingMusts, MAX_TOMORROW_MUSTS);
-      if (toCopy.length === 0) return prev;
-
-      const stamp = Date.now();
-      const additions: Task[] = toCopy.map((src, i) => ({
-        id: `must-tmrw-${stamp}-${i}-${Math.random().toString(36).slice(2, 6)}`,
-        title: src.title,
-        sectionId: 'mustDo',
-        date: tomorrowDate,
-        isDone: false,
-        ...(src.scheduledAt ? { scheduledAt: src.scheduledAt } : {}),
-        ...(src.durationMinutes ? { durationMinutes: src.durationMinutes } : {}),
-      }));
-
-      return {
-        ...prev,
-        days: {
-          ...prev.days,
-          [tomorrowDate]: { ...tomorrow, tasks: [...tomorrow.tasks, ...additions] },
-        },
-      };
-    });
-  }, [selectedDay, updateAppState]);
 
   const handleReorderSubtask = useCallback(
     (parentId: string, subtaskId: string, insertIndex: number) => {
@@ -1110,13 +755,6 @@ export function useTaskHandlers(
 
   return {
     draggedTask,
-    setSelectedTaskIds,
-    selectedTaskIds,
-    handleToggleSelect,
-    handleDeleteSelected,
-    handleCompleteSelected,
-    handleSetShallowSelected,
-    handleMoveSelectedToSection,
     handleDragStart,
     handleDragEnd,
     handleDrop,
@@ -1127,29 +765,14 @@ export function useTaskHandlers(
     handleAddTaskBelow,
     handleAddSubtask,
     handleReorderTask,
-    handleMoveTask,
     handleCopyFromDay,
     handleUpdateTask,
-    handleUpdateMonthlyReview,
-    handleUpdateWeeklyReview,
-    handleToggleSideQuestCompletion,
-    handleSaveSideQuestDefs,
     handleSessionComplete,
     handleRecordAwaySession,
     handleLogManualMinutes,
     handleUndoManualMinutes,
     handleReattributeSession,
-    handleMoveToNotDoing,
     handleAbandonTask,
-    handleAddToNotDoing,
-    handleRemoveFromNotDoing,
-    handleAddDayNotDoing,
-    handleRemoveDayNotDoing,
-    handleAddTomorrowMust,
-    handleDeleteTomorrowMust,
-    handleEditTomorrowMust,
-    handleUpdateTomorrowMust,
-    handleCopyTodayMustsToTomorrow,
     handleReorderSubtask,
     handleMoveSubtask,
   };

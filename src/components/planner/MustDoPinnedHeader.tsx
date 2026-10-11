@@ -16,7 +16,7 @@ import { computeTaskProgress } from '../../domain/taskProgress'
 import { ArrowDown, ArrowUp, CheckCircle2, ChevronUp, ChevronDown, GripVertical, X } from 'lucide-react'
 import { TaskProgressBoxes } from './TaskProgressBoxes'
 import { TaskDurationPicker } from './TaskDurationPicker'
-import { TimeAnchor } from './TimeAnchor'
+import { ScheduleChip } from './ScheduleChip'
 import { useFocusBlocks } from './focusBlockContext'
 
 interface MustDoPinnedHeaderProps {
@@ -41,6 +41,8 @@ interface MustDoPinnedHeaderProps {
   onMoveDown?: (taskId: string) => void
   /** Id of the MUST currently being dragged, if any. */
   draggedTaskId?: string | null
+  /** Open the schedule sheet for a MUST. */
+  onSchedule?: (taskId: string) => void
 }
 
 const MAX = 3
@@ -60,6 +62,7 @@ export function MustDoPinnedHeader({
   onMoveUp,
   onMoveDown,
   draggedTaskId,
+  onSchedule,
 }: MustDoPinnedHeaderProps) {
   const { blockMinutes } = useFocusBlocks()
 
@@ -129,13 +132,10 @@ export function MustDoPinnedHeader({
   const donePct = rootTasks.length === 0 ? 0 : Math.round((rootTasks.filter(t => t.isDone).length / rootTasks.length) * 100)
 
   const [showAdd, setShowAdd] = useState(false)
-  /** MUST whose time anchor is being edited, if any. */
-  const [timeEditTaskId, setTimeEditTaskId] = useState<string | null>(null)
   const [input, setInput] = useState('')
   const [doneExpanded, setDoneExpanded] = useState(false)
-  // Collapses when all 3 slots are filled; user can re-expand by clicking the header row.
-  // Triggered in handleAdd (not useEffect) to satisfy react-hooks/set-state-in-effect.
-  const [listCollapsed, setListCollapsed] = useState(() => rootTasks.length >= MAX)
+  // Open by default: on Today the three are the content, not a pinned summary.
+  const [listCollapsed, setListCollapsed] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   /** Insert index the drop indicator is currently sitting on. */
   const [dropIndex, setDropIndex] = useState<number | null>(null)
@@ -152,10 +152,7 @@ export function MustDoPinnedHeader({
     if (!trimmed || rootTasks.length >= MAX) return
     onAdd(trimmed)
     setInput('')
-    if (rootTasks.length + 1 >= MAX) {
-      setShowAdd(false)
-      setListCollapsed(true)
-    }
+    if (rootTasks.length + 1 >= MAX) setShowAdd(false)
   }
 
   // ── Collapsed "all done" state ────────────────────────────────────────────
@@ -214,18 +211,10 @@ export function MustDoPinnedHeader({
                   )}
                 </label>
                 <span className="flex shrink-0 items-center gap-1">
-                  <TimeAnchor
-                    value={task.scheduledAt}
-                    onChange={next => onUpdate(task.id, { scheduledAt: next })}
-                    isEditing={timeEditTaskId === task.id}
-                    onEditingChange={editing => setTimeEditTaskId(editing ? task.id : null)}
-                    showAddButton
-                    size="md"
-                  />
                   <TaskDurationPicker
                     value={task.durationMinutes}
                     onChange={minutes => onUpdate(task.id, { durationMinutes: minutes })}
-                    className="w-[7.5rem]"
+                    className={onSchedule ? "hidden w-[7.5rem] sm:block" : "w-[7.5rem]"}
                   />
                 </span>
                 {renderProgress(task)}
@@ -338,7 +327,7 @@ export function MustDoPinnedHeader({
             <span className="w-4 shrink-0 text-center text-[10px] font-bold text-share-onSurfaceVariant/50">
               {idx + 1}
             </span>
-            <label className="flex min-w-0 flex-1 basis-[55%] cursor-pointer items-center gap-2">
+            <label className="flex min-w-[8rem] flex-1 basis-0 cursor-pointer items-center gap-2">
               <input
                 type="checkbox"
                 checked={task.isDone}
@@ -372,18 +361,13 @@ export function MustDoPinnedHeader({
               )}
             </label>
             <span className="flex shrink-0 items-center gap-1">
-              <TimeAnchor
-                  value={task.scheduledAt}
-                  onChange={next => onUpdate(task.id, { scheduledAt: next })}
-                  isEditing={timeEditTaskId === task.id}
-                  onEditingChange={editing => setTimeEditTaskId(editing ? task.id : null)}
-                  showAddButton
-                  size="md"
-                />
+              {onSchedule && !task.isDone && (
+                <ScheduleChip scheduledAt={task.scheduledAt} onClick={() => onSchedule(task.id)} />
+              )}
               <TaskDurationPicker
                 value={task.durationMinutes}
                 onChange={minutes => onUpdate(task.id, { durationMinutes: minutes })}
-                className="w-[7.5rem]"
+                className={onSchedule ? "hidden w-[7.5rem] sm:block" : "w-[7.5rem]"}
               />
             </span>
             {renderProgress(task)}
