@@ -13,7 +13,7 @@
  * that actually went into it.
  */
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   DEFAULT_HABIT_DEFINITIONS,
@@ -395,6 +395,9 @@ export function DayPlanner() {
     return () => window.clearTimeout(id);
   }, [doneOffer]);
 
+  /** Calendar events of deleted tasks, removed once the delete can no longer be undone. */
+  const pendingUnschedules = useRef<{ taskId: string; taskDate: string }[]>([]);
+
   /**
    * Delete a task, stopping first if it would destroy work that cannot be
    * recovered. Timed sessions survive a deletion on their own (detached, not
@@ -408,11 +411,30 @@ export function DayPlanner() {
         const detail = describeWorkLoss(summary, ids.length);
         if (!window.confirm(`${detail}\n\nDelete anyway?`)) return;
       }
-      const title = dayState.tasks.find((t) => t.id === taskId)?.title ?? "task";
-      undoable.run(`Deleted “${title}”`, () => handleDeleteTask(taskId));
+      const task = dayState.tasks.find((t) => t.id === taskId);
+      undoable.run(`Deleted “${task?.title ?? "task"}”`, () => handleDeleteTask(taskId));
+      if (task?.scheduledAt && calendar.connected) {
+        pendingUnschedules.current.push({ taskId, taskDate: selectedDay });
+      }
     },
-    [dayState, handleDeleteTask, undoable],
+    [dayState, handleDeleteTask, undoable, calendar.connected, selectedDay],
   );
+
+  /**
+   * A deleted task's calendar event goes once the delete is final, not when it
+   * happens: removing it straight away would leave Undo bringing back a task
+   * whose reminder no longer exists. So it waits until no undo is on offer,
+   * and then only removes the event if the task is in fact still gone.
+   */
+  useEffect(() => {
+    if (undoable.entry || pendingUnschedules.current.length === 0) return;
+    const pending = pendingUnschedules.current.splice(0);
+    for (const p of pending) {
+      const stillThere = appState.days[p.taskDate]?.tasks.some((t) => t.id === p.taskId);
+      if (stillThere) continue;
+      unscheduleTaskFromCalendar(p).catch((e) => console.warn("[schedule] could not remove event", e));
+    }
+  }, [undoable.entry, appState.days]);
 
   // Offered while the list below the Top 3 is still empty: the three are
   // usually set first thing, and carrying yesterday's list over comes after.

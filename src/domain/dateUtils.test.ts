@@ -1,15 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import {
-  addDays,
-  weekForDay,
-  normalizeHhmm,
-  computeStreak,
-  computeBestStreak,
-  dayCountsForStreak,
-  toMonthId,
-  previousMonthId,
-  nextMonthId,
-} from './dateUtils'
+import { addDays, weekForDay, computeStreak, computeBestStreak, dayCountsForStreak } from './dateUtils'
 import type { DayState } from './types'
 
 // ── addDays ──────────────────────────────────────────────────────────────────
@@ -82,32 +72,6 @@ describe('weekForDay', () => {
 })
 
 // ── normalizeHhmm ─────────────────────────────────────────────────────────────
-
-describe('normalizeHhmm', () => {
-  it('pads single-digit hour', () => {
-    expect(normalizeHhmm('9:30')).toBe('09:30')
-  })
-
-  it('pads single-digit minute', () => {
-    expect(normalizeHhmm('09:5')).toBe('09:05')
-  })
-
-  it('passes well-formed value through', () => {
-    expect(normalizeHhmm('14:30')).toBe('14:30')
-  })
-
-  it('clamps hour above 23 to 23', () => {
-    expect(normalizeHhmm('25:00')).toBe('23:00')
-  })
-
-  it('clamps minute above 59 to 59', () => {
-    expect(normalizeHhmm('12:60')).toBe('12:59')
-  })
-
-  it('handles midnight', () => {
-    expect(normalizeHhmm('00:00')).toBe('00:00')
-  })
-})
 
 // ── computeStreak ─────────────────────────────────────────────────────────────
 
@@ -197,25 +161,3 @@ describe('dayCountsForStreak', () => {
 })
 
 // ── toMonthId / previousMonthId / nextMonthId ─────────────────────────────────
-
-describe('month navigation', () => {
-  it('toMonthId extracts YYYY-MM', () => {
-    expect(toMonthId('2026-05-12')).toBe('2026-05')
-  })
-
-  it('previousMonthId normal month', () => {
-    expect(previousMonthId('2026-05')).toBe('2026-04')
-  })
-
-  it('previousMonthId wraps year', () => {
-    expect(previousMonthId('2026-01')).toBe('2025-12')
-  })
-
-  it('nextMonthId normal month', () => {
-    expect(nextMonthId('2026-05')).toBe('2026-06')
-  })
-
-  it('nextMonthId wraps year', () => {
-    expect(nextMonthId('2026-12')).toBe('2027-01')
-  })
-})

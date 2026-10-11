@@ -21,19 +21,12 @@ interface TaskItemProps {
   isDragging?: boolean
   showDropAbove?: boolean
   showDropBelow?: boolean
-  isDueNow?: boolean
-  /** When true, task is part of multi-selection (Ctrl+Click). */
-  isSelected?: boolean
-  /** Called when user Ctrl/Cmd+clicks the task to toggle selection. */
-  onToggleSelect?: () => void
   onToggle: () => void
   onDelete: () => void
   onAddTaskAbove?: () => void
   onAddTaskBelow?: () => void
   onAddSubtask?: () => void
   onUpdateTask?: (patch: { scheduledAt?: string; durationMinutes?: number; title?: string; isShallow?: boolean }) => void
-  /** Move this task to the not-doing list (global). */
-  onMoveToNotDoing?: () => void
   /** Consciously abandon this task (Drucker: abandonment as a success). */
   onAbandon?: () => void
   /** Subtask only: open the parent picker to move to a different parent or promote. */
@@ -82,16 +75,12 @@ export function TaskItem({
   isDragging = false,
   showDropAbove = false,
   showDropBelow = false,
-  isDueNow = false,
-  isSelected = false,
-  onToggleSelect,
   onToggle,
   onDelete,
   onAddTaskAbove,
   onAddTaskBelow,
   onAddSubtask,
   onUpdateTask,
-  onMoveToNotDoing,
   onAbandon,
   onMoveToAnotherParent,
   onDragStart,
@@ -162,7 +151,7 @@ export function TaskItem({
     [task, deepWorkSessions, blockMinutes],
   )
   const showContextMenu = Boolean(
-    onUpdateTask ?? onAddTaskAbove ?? onAddTaskBelow ?? onAddSubtask ?? onMoveToNotDoing ?? onAbandon ?? onDelete ?? onMoveToAnotherParent,
+    onUpdateTask ?? onAddTaskAbove ?? onAddTaskBelow ?? onAddSubtask ?? onAbandon ?? onDelete ?? onMoveToAnotherParent,
   )
 
   const handleDragStart = (e: React.DragEvent) => {
@@ -264,14 +253,6 @@ export function TaskItem({
     fn?.()
   }
 
-  const handleRowClickCapture = (e: React.MouseEvent) => {
-    if (e.ctrlKey || e.metaKey) {
-      e.preventDefault()
-      e.stopPropagation()
-      onToggleSelect?.()
-    }
-  }
-
   return (
     <div className={`relative ${isSubtask ? 'ml-6 border-l-2 border-share-outlineVariant/40 pl-2' : ''}`}>
       {showDropAbove && (
@@ -285,14 +266,7 @@ export function TaskItem({
         draggable={isReorderable}
         onDragStart={isReorderable ? handleDragStart : undefined}
         onDragEnd={isReorderable ? onDragEnd : undefined}
-        onClickCapture={handleRowClickCapture}
-        onKeyDown={(e) => {
-          if ((e.ctrlKey || e.metaKey) && (e.key === 'Enter' || e.key === ' ')) {
-            e.preventDefault()
-            onToggleSelect?.()
-          }
-        }}
-        className={`group flex flex-wrap items-center gap-2 py-1.5 ${isReorderable ? 'cursor-grab active:cursor-grabbing' : ''} ${isDragging ? 'opacity-50' : ''} ${isDueNow ? 'rounded-md border border-amber-500/70 bg-amber-500/10' : ''} ${isSelected ? 'rounded-md bg-sky-500/20 ring-1 ring-sky-500/50' : ''}`}
+        className={`group flex flex-wrap items-center gap-2 py-1.5 ${isReorderable ? 'cursor-grab active:cursor-grabbing' : ''} ${isDragging ? 'opacity-50' : ''}`}
         onDragOver={handleDragOver}
         onDragLeave={onDragLeave}
         onDrop={handleDrop}
@@ -485,16 +459,6 @@ export function TaskItem({
               onClick={() => closeAnd(onAddSubtask)}
             >
               Add subtask
-            </button>
-          )}
-          {onMoveToNotDoing && (
-            <button
-              type="button"
-              role="menuitem"
-              className="w-full px-3 py-1.5 text-left text-sm text-amber-300 hover:bg-share-surfaceContainerHighest"
-              onClick={() => closeAnd(onMoveToNotDoing)}
-            >
-              Move to Not Doing
             </button>
           )}
           {onMoveToAnotherParent && (

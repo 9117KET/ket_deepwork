@@ -36,3 +36,6 @@ playwright-report
 
 # Claude Code agent worktrees (local scratch, not project files)
 .claude/worktrees/
+
+# Convex data exports (docs/DEPLOYMENT.md)
+backups/

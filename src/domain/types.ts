@@ -310,18 +310,6 @@ export interface AppState {
   sideQuestLastStreakDate?: string;
 }
 
-export interface WeeklyStatsDaySummary {
-  date: string;
-  completedCount: number;
-  totalCount: number;
-}
-
-export interface WeeklyStats {
-  days: WeeklyStatsDaySummary[];
-  totalCompleted: number;
-  totalTasks: number;
-}
-
 export const FIXED_SECTIONS: TaskSection[] = [
   {
     id: "mustDo",

@@ -1,6 +1,6 @@
 # Deployment setup & pending steps
 
-_Last updated: 2026-06-11_
+_Last updated: 2026-10-11_
 
 ## Architecture
 
@@ -81,6 +81,49 @@ _Last updated: 2026-06-11_
    Still sign in first from the device holding the most complete data. Old
    server-side data can be exported from `dapper-crab-847` /
    `knowing-gopher-377` via the Convex dashboard.
+
+## Shipping the minimal rewrite (`feature/minimal-today`)
+
+This branch changes **both sides**: the client calls `listEvents`,
+`scheduleTask`, `unscheduleTask` and `logWorkBlock`, and the old
+`syncFromGoogle` / `syncToGoogle` / travel / finance / sharing functions are
+gone. Shipping one side without the other breaks the calendar on the live
+site, so follow this order. Every step needs `npx convex login` first.
+
+1. **Back up both deployments** (backups/ is git-ignored). Exports include the
+   legacy `financialSettings`, `travelTrips` and `shareTokens` tables, which
+   no code reads any more but which still hold your data:
+   ```bash
+   npx convex export --path backups/dev-before-minimal.zip
+   npx convex export --prod --path backups/prod-before-minimal.zip
+   ```
+2. **Push the backend to dev** and try it with `npm run dev`: sign in, connect
+   the calendar on `/calendar`, check Today lists events, schedule a task, run
+   a short focus block and see it appear in the "Deepblock log" calendar.
+   ```bash
+   npx convex dev --once
+   ```
+   This also regenerates `convex/_generated/` — commit any difference.
+3. **Ship prod together**: merge to `main` (Vercel deploys the client), then
+   immediately:
+   ```bash
+   npx convex deploy
+   ```
+4. **Google OAuth client** (Google Cloud console → APIs & Services):
+   - Authorized redirect URIs must include the *site* callback, which is what
+     `buildRedirectUri` sends: `https://ket-deepwork.vercel.app/calendar/callback`
+     (and `http://localhost:5173/calendar/callback` for dev).
+   - OAuth consent screen → **Publish app** (Testing → In production). While
+     in Testing, Google expires refresh tokens after 7 days and the calendar
+     silently disconnects every week. Use
+     `https://ket-deepwork.vercel.app/privacy` as the privacy policy URL; it
+     describes exactly the calendar access the app uses. A personal app with
+     the `calendar` scope shows an "unverified app" warning until Google
+     verifies it — click through it for your own account.
+5. **Later, optional — retire the legacy tables.** Once the backups in step 1
+   are confirmed readable, the three legacy tables can be emptied in the
+   Convex dashboard and their definitions removed from `convex/schema.ts`.
+   Not before: the schema comment there explains why.
 
 ## ⚠ Deploys are gated on a TypeScript check
 

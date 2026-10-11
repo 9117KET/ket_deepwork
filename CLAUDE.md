@@ -197,10 +197,11 @@ any unknown path redirect, so old bookmarks still land.
 
 The landing page, travel, finance, sharing, goals/reviews, journal, shutdown
 ritual, side quests and onboarding tour were removed in the minimal rewrite.
-Their *backend* (`convex/travel*.ts`, `financial*.ts`, `receiptParser.ts`,
-`sharing.ts`) and their fields in `AppState` are still in place on purpose: the
-data has not been exported yet, and removing a field from the type would let
-the next settings write drop it.
+Their Convex functions are gone too, but their **tables** (`shareTokens`,
+`financialSettings`, `travelTrips`) stay in `convex/schema.ts`, and their fields
+stay in `AppState`, on purpose: removing a table definition or a field is how
+stored data gets dropped, and that only happens after the export in
+`docs/DEPLOYMENT.md` ("Shipping the minimal rewrite").
 
 ### Key directories
 

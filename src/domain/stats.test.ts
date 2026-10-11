@@ -1,12 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import {
-  computePerHabitStreaks,
-  getAtRiskHabitIds,
-  computeDailyDeepWorkMinutes,
-  computeDailySelfReportedMinutes,
-  computeSectionCompletion,
-  computeWeeklyDeepWorkHours,
-} from './stats'
+import { computePerHabitStreaks, getAtRiskHabitIds, computeDailyDeepWorkMinutes, computeDailySelfReportedMinutes } from './stats'
 import type { DayState, DeepWorkSession, Task } from './types'
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -121,25 +114,6 @@ describe('hand-logged entries and the deep work total', () => {
 
 // ── computeWeeklyDeepWorkHours ────────────────────────────────────────────────
 
-describe('computeWeeklyDeepWorkHours', () => {
-  it('returns 0 when no sessions across week', () => {
-    const days = { '2026-05-12': makeDay() }
-    expect(computeWeeklyDeepWorkHours(days, ['2026-05-12'])).toBe(0)
-  })
-
-  it('converts minutes to hours correctly', () => {
-    const days = {
-      '2026-05-12': makeDay({ deepWorkSessions: [session('s1', 90)] }),
-      '2026-05-13': makeDay({ deepWorkSessions: [session('s2', 30)] }),
-    }
-    expect(computeWeeklyDeepWorkHours(days, ['2026-05-12', '2026-05-13'])).toBe(2)
-  })
-
-  it('handles missing days gracefully', () => {
-    expect(computeWeeklyDeepWorkHours({}, ['2026-05-12', '2026-05-13'])).toBe(0)
-  })
-})
-
 // ── computePerHabitStreaks ────────────────────────────────────────────────────
 
 describe('computePerHabitStreaks', () => {
@@ -233,29 +207,3 @@ describe('getAtRiskHabitIds', () => {
 })
 
 // ── computeSectionCompletion ──────────────────────────────────────────────────
-
-describe('computeSectionCompletion', () => {
-  it('returns empty object for no tasks', () => {
-    expect(computeSectionCompletion([])).toEqual({})
-  })
-
-  it('counts root tasks per section', () => {
-    const tasks = [
-      task('a', { sectionId: 'highPriority', isDone: true }),
-      task('b', { sectionId: 'highPriority', isDone: false }),
-      task('c', { sectionId: 'mediumPriority', isDone: true }),
-    ]
-    const result = computeSectionCompletion(tasks)
-    expect(result['highPriority']).toEqual({ total: 2, completed: 1 })
-    expect(result['mediumPriority']).toEqual({ total: 1, completed: 1 })
-  })
-
-  it('ignores subtasks (parentId set)', () => {
-    const tasks = [
-      task('p', { sectionId: 'highPriority' }),
-      task('c', { sectionId: 'highPriority', parentId: 'p', isDone: true }),
-    ]
-    const result = computeSectionCompletion(tasks)
-    expect(result['highPriority']).toEqual({ total: 1, completed: 0 })
-  })
-})

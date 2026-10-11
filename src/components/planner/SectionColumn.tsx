@@ -35,10 +35,6 @@ interface SectionColumnProps {
     taskId: string,
     patch: { scheduledAt?: string; durationMinutes?: number; title?: string; isShallow?: boolean },
   ) => void
-  /** Task ids that are part of multi-selection (Ctrl+Click). */
-  selectedTaskIds?: Set<string>
-  /** Toggle task in multi-selection. */
-  onToggleSelect?: (taskId: string) => void
   /** Mobile reorder: move a root task up within this section. */
   onMoveTaskUp?: (taskId: string) => void
   /** Mobile reorder: move a root task down within this section. */
@@ -83,8 +79,6 @@ export function SectionColumn({
   onToggleTask,
   onDeleteTask,
   onUpdateTask,
-  selectedTaskIds = new Set(),
-  onToggleSelect,
   onMoveTaskUp,
   onMoveTaskDown,
   onAbandonTask,
@@ -253,8 +247,6 @@ export function SectionColumn({
                     ? subtaskDropTarget?.subtaskId === task.id && subtaskDropTarget.position === 'below'
                     : dropTarget?.index === index && dropTarget?.position === 'below'
                 }
-                isSelected={selectedTaskIds.has(task.id)}
-                onToggleSelect={onToggleSelect ? () => onToggleSelect(task.id) : undefined}
                 onToggle={() => onToggleTask(task.id)}
                 onDelete={() => onDeleteTask(task.id)}
                 onAddTaskAbove={onAddTaskAbove ? () => onAddTaskAbove(task.id) : undefined}

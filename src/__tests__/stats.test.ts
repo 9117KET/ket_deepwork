@@ -1,10 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import {
-  computePerHabitStreaks,
-  getAtRiskHabitIds,
-  computeDailyDeepWorkMinutes,
-  computeWeeklyDeepWorkHours,
-} from '../domain/stats'
+import { computePerHabitStreaks, getAtRiskHabitIds, computeDailyDeepWorkMinutes } from '../domain/stats'
 import type { DayState } from '../domain/types'
 
 function makeDay(date: string, completions: Record<string, boolean> = {}): DayState {
@@ -153,42 +148,3 @@ describe('computeDailyDeepWorkMinutes', () => {
 })
 
 // ─── computeWeeklyDeepWorkHours ──────────────────────────────────────────────
-
-describe('computeWeeklyDeepWorkHours', () => {
-  it('returns 0 for a week with no sessions', () => {
-    expect(computeWeeklyDeepWorkHours({}, ['2026-05-19', '2026-05-20'])).toBe(0)
-  })
-
-  it('converts minutes to hours correctly', () => {
-    const days: Record<string, DayState> = {
-      '2026-05-19': {
-        date: '2026-05-19',
-        tasks: [],
-        deepWorkSessions: [
-          { id: 's1', label: 'Code', durationMinutes: 90, startedAt: '', finishedAt: '2026-05-19T10:00:00Z' },
-        ],
-      },
-      '2026-05-20': {
-        date: '2026-05-20',
-        tasks: [],
-        deepWorkSessions: [
-          { id: 's2', label: 'Read', durationMinutes: 30, startedAt: '', finishedAt: '2026-05-20T10:00:00Z' },
-        ],
-      },
-    }
-    expect(computeWeeklyDeepWorkHours(days, ['2026-05-19', '2026-05-20'])).toBe(2)
-  })
-
-  it('ignores days not in the weekDays list', () => {
-    const days: Record<string, DayState> = {
-      '2026-05-15': {
-        date: '2026-05-15',
-        tasks: [],
-        deepWorkSessions: [
-          { id: 's1', label: 'Excluded', durationMinutes: 120, startedAt: '', finishedAt: '2026-05-15T10:00:00Z' },
-        ],
-      },
-    }
-    expect(computeWeeklyDeepWorkHours(days, ['2026-05-19', '2026-05-20'])).toBe(0)
-  })
-})
