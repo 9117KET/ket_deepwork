@@ -1,13 +1,14 @@
 /**
  * pages/CalendarSyncPage.tsx
  *
- * Google Calendar two-way sync.
+ * Google Calendar connection.
  *  - Connect / disconnect a Google account (OAuth via Convex actions)
- *  - Pick which calendar to sync against
- *  - Import events Google → planner, and push scheduled tasks planner → Google
+ *  - Pick which calendar Today reads and Schedule writes into (default: primary)
  *
- * The whole sync engine lives in `convex/calendar.ts`; this page only drives it
- * through `src/services/calendarSyncService.ts`.
+ * There is nothing to "sync" by hand: Today reads the calendar live, Schedule
+ * writes an event, and finished focus blocks go to a "Deepblock log" calendar.
+ * The integration lives in `convex/calendar.ts`, driven through
+ * `src/services/calendarSyncService.ts`.
  */
 
 import { useCallback, useEffect, useState } from "react";
@@ -15,14 +16,11 @@ import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { AppChrome } from "../components/layout/AppChrome";
 import { useAuth } from "../contexts/AuthContext";
-import { todayIso, addDays } from "../domain/dateUtils";
 import {
   type CalendarListItem,
   startGoogleOAuth,
   listGoogleCalendars,
   selectGoogleCalendar,
-  syncFromGoogle,
-  syncToGoogle,
   disconnectGoogle,
 } from "../services/calendarSyncService";
 
@@ -39,11 +37,9 @@ export function CalendarSyncPage() {
 
   const [calendars, setCalendars] = useState<CalendarListItem[] | null>(null);
   const [loadingCalendars, setLoadingCalendars] = useState(false);
-  const [busy, setBusy] = useState<null | "connect" | "pull" | "push" | "disconnect" | "select">(null);
+  const [busy, setBusy] = useState<null | "connect" | "disconnect" | "select">(null);
   const [banner, setBanner] = useState<Banner>(null);
 
-  const [startDate, setStartDate] = useState(todayIso);
-  const [endDate, setEndDate] = useState(() => addDays(todayIso(), 14));
 
   const connected = status?.connected === true;
   const selectedCalendarId = status?.connected ? status.selectedCalendarId : undefined;
@@ -86,45 +82,7 @@ export function CalendarSyncPage() {
     setBanner(null);
     try {
       await selectGoogleCalendar({ calendarId, calendarSummary: cal?.summary });
-      setBanner({ kind: "ok", text: `Now syncing with "${cal?.summary ?? calendarId}".` });
-    } catch (e) {
-      setBanner({ kind: "error", text: (e as Error).message });
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const handlePull = async () => {
-    setBusy("pull");
-    setBanner(null);
-    try {
-      const { imported, updated, removed } = await syncFromGoogle({ startDate, endDate });
-      const parts: string[] = [];
-      if (imported > 0) parts.push(`${imported} new event${imported === 1 ? "" : "s"} imported`);
-      if (updated > 0) parts.push(`${updated} updated`);
-      if (removed > 0) parts.push(`${removed} removed`);
-      setBanner({
-        kind: "ok",
-        text:
-          parts.length > 0
-            ? `Synced from Google: ${parts.join(", ")}.`
-            : "Already up to date — nothing to import.",
-      });
-    } catch (e) {
-      setBanner({ kind: "error", text: (e as Error).message });
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const handlePush = async () => {
-    setBusy("push");
-    setBanner(null);
-    try {
-      const { created, updated, skipped } = await syncToGoogle({ startDate, endDate });
-      const parts = [`${created} created`, `${updated} updated`];
-      if (skipped > 0) parts.push(`${skipped} skipped`);
-      setBanner({ kind: "ok", text: `Pushed scheduled tasks to Google: ${parts.join(", ")}.` });
+      setBanner({ kind: "ok", text: `Now using "${cal?.summary ?? calendarId}".` });
     } catch (e) {
       setBanner({ kind: "error", text: (e as Error).message });
     } finally {
@@ -133,7 +91,7 @@ export function CalendarSyncPage() {
   };
 
   const handleDisconnect = async () => {
-    if (!window.confirm("Disconnect Google Calendar? Synced tasks stay in your planner, but the link to Google events is removed.")) {
+    if (!window.confirm("Disconnect Google Calendar? Your tasks and logged work stay in the planner, and events already in Google stay there.")) {
       return;
     }
     setBusy("disconnect");
@@ -154,12 +112,13 @@ export function CalendarSyncPage() {
       <div className="mx-auto max-w-3xl px-4 py-6 md:px-8 pb-28 md:pb-10">
         <header className="mb-6">
           <h1 className="font-shareHeadline text-2xl font-black text-share-onSurface">
-            Google Calendar sync
+            Google Calendar
           </h1>
           <p className="mt-1 text-sm text-share-onSurfaceVariant">
-            Two-way sync between your planner and a Google calendar. Imported events
-            land in <span className="font-semibold">High priority</span>; scheduled
-            tasks (with a time and duration) are pushed back to Google.
+            Your calendar is the schedule. Today shows its events beside your tasks,{" "}
+            <span className="font-semibold">Schedule</span> puts a task into the next free
+            slot with a reminder, and finished focus blocks are logged to a separate{" "}
+            <span className="font-semibold">Deepblock log</span> calendar.
           </p>
         </header>
 
@@ -183,7 +142,7 @@ export function CalendarSyncPage() {
         ) : !isAuthenticated ? (
           <div className="rounded-2xl border border-share-outlineVariant/50 bg-share-surfaceContainerHigh p-6">
             <p className="text-sm text-share-onSurface">
-              Sign in to connect Google Calendar — sync needs an account so your
+              Sign in to connect Google Calendar — it needs an account so your
               events and tasks stay together across devices.
             </p>
             <a
@@ -200,8 +159,8 @@ export function CalendarSyncPage() {
           <div className="rounded-2xl border border-share-outlineVariant/50 bg-share-surfaceContainerHigh p-6">
             <h2 className="text-base font-bold text-share-onSurface">Not connected</h2>
             <p className="mt-1 text-sm text-share-onSurfaceVariant">
-              Connect your Google account to start syncing. You'll be asked to grant
-              calendar access, then choose which calendar to use.
+              Connect once and it stays connected. You will be asked to grant
+              calendar access; your primary calendar is used unless you pick another.
             </p>
             <button
               type="button"
@@ -225,8 +184,8 @@ export function CalendarSyncPage() {
                   </div>
                   <p className="mt-1 text-sm text-share-onSurfaceVariant">
                     {selectedCalendarId
-                      ? <>Syncing with <span className="font-semibold text-share-onSurface">{selectedCalendarSummary ?? selectedCalendarId}</span>.</>
-                      : "Choose a calendar below to start syncing."}
+                      ? <>Using <span className="font-semibold text-share-onSurface">{selectedCalendarSummary ?? selectedCalendarId}</span>.</>
+                      : "Using your primary calendar."}
                   </p>
                 </div>
                 <button
@@ -279,58 +238,6 @@ export function CalendarSyncPage() {
               )}
             </div>
 
-            {/* Sync controls */}
-            <div className="rounded-2xl border border-share-outlineVariant/50 bg-share-surfaceContainerHigh p-6">
-              <h2 className="text-base font-bold text-share-onSurface">Sync</h2>
-              <p className="mt-1 text-sm text-share-onSurfaceVariant">
-                Choose a date range, then import or push within it.
-              </p>
-              <div className="mt-4 flex flex-wrap items-end gap-4">
-                <label className="flex flex-col text-xs font-bold text-share-onSurfaceVariant">
-                  From
-                  <input
-                    type="date"
-                    value={startDate}
-                    max={endDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    className="mt-1 rounded-lg border border-share-outlineVariant/50 bg-share-surfaceContainerLow px-3 py-2 text-sm font-normal text-share-onSurface focus:border-share-primary focus:outline-none"
-                  />
-                </label>
-                <label className="flex flex-col text-xs font-bold text-share-onSurfaceVariant">
-                  To
-                  <input
-                    type="date"
-                    value={endDate}
-                    min={startDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    className="mt-1 rounded-lg border border-share-outlineVariant/50 bg-share-surfaceContainerLow px-3 py-2 text-sm font-normal text-share-onSurface focus:border-share-primary focus:outline-none"
-                  />
-                </label>
-              </div>
-              <div className="mt-5 flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  onClick={handlePull}
-                  disabled={!selectedCalendarId || busy !== null}
-                  className="rounded-lg bg-share-primary px-4 py-2 text-sm font-bold text-share-onPrimary hover:bg-share-primaryContainer disabled:opacity-60"
-                >
-                  {busy === "pull" ? "Importing…" : "Import from Google"}
-                </button>
-                <button
-                  type="button"
-                  onClick={handlePush}
-                  disabled={!selectedCalendarId || busy !== null}
-                  className="rounded-lg border border-share-outlineVariant/50 px-4 py-2 text-sm font-bold text-share-onSurface hover:border-share-primary/50 disabled:opacity-60"
-                >
-                  {busy === "push" ? "Pushing…" : "Push to Google"}
-                </button>
-              </div>
-              {!selectedCalendarId && (
-                <p className="mt-3 text-xs text-amber-300">
-                  Select a calendar above to enable syncing.
-                </p>
-              )}
-            </div>
           </div>
         )}
       </div>

@@ -1,7 +1,8 @@
 /**
  * pages/PrivacyPage.tsx
  *
- * Privacy Policy for Life Planner.
+ * Privacy Policy. Also the privacy URL on the Google OAuth consent screen,
+ * which is why it describes exactly what is done with calendar data.
  */
 
 import { Link } from "react-router-dom";
@@ -15,14 +16,14 @@ export function PrivacyPage() {
           to="/"
           className="mb-8 inline-flex items-center gap-1 text-sm text-share-onSurfaceVariant hover:text-share-onSurface"
         >
-          ← Back to Life Planner
+          ← Back to Deepblock
         </Link>
 
         <h1 className="mb-2 font-shareHeadline text-4xl font-black text-share-onSurface">
           Privacy Policy
         </h1>
         <p className="mb-10 text-sm text-share-onSurfaceVariant">
-          Last updated: April 2026 &nbsp;·&nbsp; Life Planner by KET Foundation / Kinlo Ephriam Tangiri
+          Last updated: October 2026 &nbsp;·&nbsp; Deepblock by KET Foundation / Kinlo Ephriam Tangiri
         </p>
 
         <div className="space-y-10 text-share-onSurfaceVariant [&_h2]:mb-3 [&_h2]:font-shareHeadline [&_h2]:text-xl [&_h2]:font-bold [&_h2]:text-share-onSurface [&_p]:leading-relaxed [&_ul]:mt-2 [&_ul]:space-y-1 [&_ul]:pl-5 [&_ul]:list-disc">
@@ -30,7 +31,7 @@ export function PrivacyPage() {
           <section>
             <h2>1. Who we are</h2>
             <p>
-              Life Planner is operated by <strong className="text-share-onSurface">Kinlo Ephriam Tangiri (KET Foundation)</strong>, based in Germany. If you have any questions about this policy, contact us at{" "}
+              Deepblock is operated by <strong className="text-share-onSurface">Kinlo Ephriam Tangiri (KET Foundation)</strong>, based in Germany. If you have any questions about this policy, contact us at{" "}
               <a href="mailto:kinlotangir1@gmail.com" className="text-share-primary underline">
                 kinlotangir1@gmail.com
               </a>.
@@ -43,9 +44,8 @@ export function PrivacyPage() {
             <ul>
               <li><strong className="text-share-onSurface">Account data</strong> — email address and hashed password, stored via Convex Auth.</li>
               <li><strong className="text-share-onSurface">Planner data</strong> — tasks, deep work sessions, sleep hours, wake/sleep times, mood entries, and habit completions you enter into the app.</li>
-              <li><strong className="text-share-onSurface">Settings</strong> — habit definitions, month titles, block duration preferences, and streak history.</li>
-              <li><strong className="text-share-onSurface">Google Calendar tokens</strong> — if you connect Google Calendar, OAuth tokens are stored server-side in our database and are never exposed to the browser. We use them solely to read and write calendar events on your behalf.</li>
-              <li><strong className="text-share-onSurface">Share tokens</strong> — if you share your planner, a token and permission level (view/edit) are stored to allow access.</li>
+              <li><strong className="text-share-onSurface">Settings</strong> — habit definitions, focus block length, weekly goal, and streak history.</li>
+              <li><strong className="text-share-onSurface">Google Calendar tokens</strong> — if you connect Google Calendar, OAuth tokens are stored server-side in our database and are never exposed to the browser. They are encrypted at rest and used only as described in "Google user data" below.</li>
             </ul>
             <p className="mt-3">
               We do <strong className="text-share-onSurface">not</strong> collect payment information, device identifiers, advertising IDs, or browsing history.
@@ -57,10 +57,27 @@ export function PrivacyPage() {
             <ul>
               <li>To sync your planner across devices when you are signed in.</li>
               <li>To display your tasks, habits, sleep, and deep work history.</li>
-              <li>To enable Google Calendar sync when you choose to connect it.</li>
-              <li>To allow you to share your planner with others via a link.</li>
+              <li>To show your calendar and schedule tasks into it, if you connect Google Calendar.</li>
             </ul>
             <p className="mt-3">We do not sell, rent, or share your data with third parties for marketing purposes.</p>
+          </section>
+
+          <section>
+            <h2>Google user data</h2>
+            <p>If you connect Google Calendar, Deepblock uses that access only to:</p>
+            <ul>
+              <li><strong className="text-share-onSurface">Read</strong> the events of the calendar you chose (your primary calendar unless you pick another) to show them beside your tasks. Events are not stored on our servers; the app keeps a short-lived copy on your device so it loads quickly.</li>
+              <li><strong className="text-share-onSurface">Read free/busy</strong> times when you ask it to find a slot for a task.</li>
+              <li><strong className="text-share-onSurface">Create, move or delete</strong> an event when you schedule, reschedule or unschedule a task, with a reminder.</li>
+              <li><strong className="text-share-onSurface">Create one calendar</strong> named &ldquo;Deepblock log&rdquo; and add an event for each focus block you finish on the timer.</li>
+            </ul>
+            <p className="mt-3">
+              Deepblock&apos;s use and transfer of information received from Google APIs adheres to the{" "}
+              <a href="https://developers.google.com/terms/api-services-user-data-policy" className="text-share-primary underline" target="_blank" rel="noreferrer">
+                Google API Services User Data Policy
+              </a>
+              , including the Limited Use requirements. Google user data is never sold, used for advertising, or shared with anyone else. Disconnecting in the app revokes the access token at Google and deletes it from our database.
+            </p>
           </section>
 
           <section>
@@ -101,7 +118,7 @@ export function PrivacyPage() {
           <section>
             <h2>7. Cookies and local storage</h2>
             <p>
-              Life Planner uses browser <strong className="text-share-onSurface">localStorage</strong> to cache your planner state locally so the app works offline and loads instantly. No third-party cookies or tracking scripts are used.
+              Deepblock uses browser <strong className="text-share-onSurface">localStorage</strong> to cache your planner state locally so the app works offline and loads instantly. No third-party cookies or tracking scripts are used.
             </p>
           </section>
 

@@ -104,7 +104,7 @@ async function mouseDrag(
 async function expandSection(page: Page, heading: string) {
   const section = page
     .locator('section')
-    .filter({ has: page.getByRole('heading', { name: heading }) })
+    .filter({ has: page.getByRole('heading', { name: heading, exact: true }) })
     .first()
   const expand = section.getByRole('button', { name: 'Expand section' })
   if (await expand.count()) await expand.click()
@@ -123,7 +123,7 @@ test('dragging a task by its body reorders it (no crash)', async ({ page }) => {
   ])
   await openPlanner(page)
   await dismissModals(page)
-  await expandSection(page, 'High Priority (Focus Tasks)')
+  await expandSection(page, 'Tasks')
   await page.getByText('AAA', { exact: true }).waitFor({ timeout: 10_000 })
 
   expect(await readOrder(page)).toEqual(['AAA', 'BBB', 'CCC'])
@@ -140,55 +140,23 @@ test('clicking a task checkbox toggles it instead of starting a drag', async ({ 
   await seed(page, [{ id: 'A', title: 'AAA', sectionId: 'highPriority', isDone: false }])
   await openPlanner(page)
   await dismissModals(page)
-  await expandSection(page, 'High Priority (Focus Tasks)')
+  await expandSection(page, 'Tasks')
   const checkbox = page.getByRole('checkbox').first()
   await checkbox.waitFor({ timeout: 10_000 })
   await checkbox.click()
   await expect(checkbox).toBeChecked()
 })
 
-test('sleep card is bedtime-anchored and sidebar is consolidated', async ({ page }) => {
-  // Wake 07:00, bedtime 23:00, 900 min of blocks (the routines here are longer
-  // than the 45/30 reservations, so they cost what they say). The day ends at
-  // 22:00: the night is the 8h the user set, and the spare hour reads as open
-  // evening rather than being quietly absorbed into a longer night.
-  await seed(page, [
-    { id: 'm0', title: 'Morning routine', sectionId: 'morningRoutine', isDone: false, durationMinutes: 60 },
-    { id: 'h0', title: 'Deep work', sectionId: 'highPriority', isDone: false, durationMinutes: 480 },
-    { id: 'md0', title: 'Admin', sectionId: 'mediumPriority', isDone: false, durationMinutes: 180 },
-    { id: 'lo0', title: 'Errand', sectionId: 'lowPriority', isDone: false, durationMinutes: 120 },
-    { id: 'n0', title: 'Night routine', sectionId: 'nightRoutine', isDone: false, durationMinutes: 60 },
-  ])
+test('the sidebar holds only the timer and habits', async ({ page }) => {
+  await seed(page, [{ id: 'h0', title: 'Deep work', sectionId: 'highPriority', isDone: false, durationMinutes: 60 }])
   await openPlanner(page)
   await dismissModals(page)
 
-  const sleep = page.locator('section[aria-label="Sleep block"]').first()
-  await expect(sleep).toBeVisible({ timeout: 10_000 })
-  await expect(sleep).toContainText('11 PM → 7 AM · 8h')
-  await expect(sleep).toContainText('1h open before bed')
-
-  // The minimal rail is the timer and habits; goal, motivation and not-doing
-  // cards were removed with the features they belonged to.
+  // Time lives in the calendar now: no sleep card, no block schedule.
+  await expect(page.locator('section[aria-label="Sleep block"]')).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: 'Deep work timer' })).toBeVisible()
   await expect(page.getByRole('button', { name: /Motivation/ })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Expand Not doing' })).toHaveCount(0)
-})
-
-test('an overrunning plan pushes bedtime later and says what it costs', async ({ page }) => {
-  // Blocks from a 07:00 wake run well past the 23:00 target.
-  await seed(page, [
-    { id: 'm1', title: 'Morning routine', sectionId: 'morningRoutine', isDone: false, durationMinutes: 60 },
-    { id: 'h1', title: 'Deep work', sectionId: 'highPriority', isDone: false, durationMinutes: 600 },
-    { id: 'md1', title: 'Admin', sectionId: 'mediumPriority', isDone: false, durationMinutes: 240 },
-    { id: 'lo1', title: 'Errand', sectionId: 'lowPriority', isDone: false, durationMinutes: 180 },
-    { id: 'n1', title: 'Night routine', sectionId: 'nightRoutine', isDone: false, durationMinutes: 60 },
-  ])
-  await openPlanner(page)
-  await dismissModals(page)
-
-  const sleep = page.locator('section[aria-label="Sleep block"]').first()
-  await expect(sleep).toBeVisible({ timeout: 10_000 })
-  await expect(sleep).toContainText('past your bedtime')
-  await expect(sleep).not.toContainText('open before bed')
 })
 
 test('the top three priorities can be dragged into a new order', async ({ page }) => {
@@ -210,8 +178,6 @@ test('the top three priorities can be dragged into a new order', async ({ page }
       return day.tasks.filter((t) => t.sectionId === 'mustDo').map((t) => t.title)
     })
 
-  // Three filled slots collapse the pinned list; open it to reach the rows.
-  await page.getByText('Your Top Three Priorities for today').click()
   await page.getByText('First priority', { exact: true }).waitFor({ timeout: 10_000 })
   expect(await readMusts()).toEqual(['First priority', 'Second priority', 'Third priority'])
 

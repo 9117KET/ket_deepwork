@@ -36,7 +36,6 @@ const MAX_TOMORROW_MUSTS = 3;
 export function useTaskHandlers(
   updateAppState: (updater: (prev: AppState) => AppState) => void,
   selectedDay: string,
-  travelingToday: boolean,
 ) {
   const [draggedTask, setDraggedTask] = useState<{
     sectionId: TaskSectionId;
@@ -176,8 +175,6 @@ export function useTaskHandlers(
           sectionId,
           date: selectedDay,
           isDone: false,
-          // Travel days are shallow by default - user can unmark if needed
-          ...(travelingToday ? { isShallow: true } : {}),
         },
       ];
 

@@ -1,85 +1,92 @@
 /**
  * components/planner/DayPlanner.tsx
  *
- * Orchestrates the selected date, tasks, and layout for the main planner view.
- * This component ties together storage + domain logic + UI sections.
+ * Today: the calendar's day, the Top 3, and one task list — plus the focus
+ * timer and habits beside it on a wide screen, or behind the tab bar on a
+ * phone.
+ *
+ * Time belongs to the calendar. The planner no longer sizes blocks, derives a
+ * bedtime or asks for a day setup; a task gets a time by being scheduled into
+ * the calendar (with a reminder), and work done gets recorded by the timer and
+ * copied to the "Deepblock log" calendar. What stays here is what a calendar
+ * cannot do: a short list of what matters, and an honest record of the hours
+ * that actually went into it.
  */
 
-import type React from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, useTransition, type SetStateAction } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   DEFAULT_HABIT_DEFINITIONS,
   FIXED_SECTIONS,
   type AppState,
-  type BlockDurations,
   type HabitDefinition,
   type Task,
   type TaskSectionId,
 } from "../../domain/types";
+import { addDays, todayIso, sameWeekdayLastWeek, computeAccountabilityStats } from "../../domain/dateUtils";
 import {
-  addDays,
-  todayIso,
-  sameWeekdayLastWeek,
-  computeAccountabilityStats,
-} from "../../domain/dateUtils";
-import {
-  BLOCK_MIN_MINUTES,
-  BLOCK_ORDER,
-  SLEEP_MIN_MINUTES,
-  SLEEP_WINDDOWN_BUFFER_MINUTES,
-  sleepMinutesFromTarget,
-  SLEEP_WARN_MINUTES,
-  formatTimeOfDay,
-} from "../../domain/sectionTimeBlocks";
-import { blockAmountOptions, computeTaskProgress, listManualEntries, minTrackableMinutes, type BlockAmountOption } from "../../domain/taskProgress";
-import { describeWorkLoss, summarizeTaskWork, taskWithDescendantIds } from '../../domain/workSafety';
-import { useUndoableActions } from '../../hooks/useUndoableActions';
-import { UndoToast } from './UndoToast';
+  blockAmountOptions,
+  computeTaskProgress,
+  listManualEntries,
+  minTrackableMinutes,
+  type BlockAmountOption,
+} from "../../domain/taskProgress";
+import { describeWorkLoss, summarizeTaskWork, taskWithDescendantIds } from "../../domain/workSafety";
 import { normalizeFocusBlockMinutes, suggestedBreakMinutes } from "../../domain/focusBlocks";
+import { computePerHabitStreaks, getAtRiskHabitIds, computeDailyDeepWorkMinutes } from "../../domain/stats";
+import { getOrderedTasksForSection } from "../../domain/taskUtils";
+import { useUndoableActions } from "../../hooks/useUndoableActions";
 import { useTaskHandlers } from "../../hooks/useTaskHandlers";
-import { useDayBlockEditor } from "../../hooks/useDayBlockEditor";
-import { useTimeAwareness } from "../../hooks/useTimeAwareness";
-import { PlannerModals } from "./PlannerModals";
+import { useCalendarDay } from "../../hooks/useCalendarDay";
+import { useWorkLog } from "../../hooks/useWorkLog";
+import { usePersistentState, getOrCreateDay } from "../../storage/localStorageState";
+import { useAuth } from "../../contexts/AuthContext";
+import { scheduleTaskInCalendar, unscheduleTaskFromCalendar } from "../../services/calendarSyncService";
+import { playChime } from "../../audio/chimes";
+import { UndoToast } from "./UndoToast";
 import { TaskProgressSheet } from "./TaskProgressSheet";
 import { CompletionClaimPrompt } from "./CompletionClaimPrompt";
-import { BlockDurationEditor } from "./BlockDurationEditor";
-import {
-  usePersistentState,
-  getOrCreateDay,
-} from "../../storage/localStorageState";
-import { selectNowFocus } from "../../domain/nowFocus";
-import { computeDayCompletion, computePerHabitStreaks, getAtRiskHabitIds, computeDailyDeepWorkMinutes } from "../../domain/stats";
 import { DayHeader } from "./DayHeader";
-import { NowCard } from "./NowCard";
 import { SectionColumn } from "./SectionColumn";
-import { WeeklyOverview } from "./WeeklyOverview";
+import { MustDoPinnedHeader } from "./MustDoPinnedHeader";
+import { CalendarTimeline } from "./CalendarTimeline";
+import { ScheduleSheet, type ScheduleRequest } from "./ScheduleSheet";
+import { AwayBlockClaim } from "./AwayBlockClaim";
+import { SidebarCard } from "./SidebarCard";
+import { MobileTabBar, type MobileTab } from "./MobileTabBar";
+import { FocusBlockContext } from "./focusBlockContext";
 import { DeepWorkTimer } from "../timer/DeepWorkTimer";
 import { MobileFocusPanel } from "../timer/MobileFocusPanel";
-import { MobileHabitsPanel } from "../habits/MobileHabitsPanel";
 import { FocusMode } from "../timer/FocusMode";
 import { useDeepWorkTimer, type TimerTaskOption } from "../timer/useDeepWorkTimer";
-import { FocusBlockContext } from "./focusBlockContext";
 import { HabitChecklist } from "../habits/HabitChecklist";
-import { SidebarCard } from "./SidebarCard";
-import { TomorrowMustPanel } from "./TomorrowMustPanel";
-import { MustDoPinnedHeader } from "./MustDoPinnedHeader";
-import { playChime } from "../../audio/chimes";
-import { MobileTabBar, type MobileTab } from "./MobileTabBar";
-import { AwayBlockClaim } from "./AwayBlockClaim";
+import { MobileHabitsPanel } from "../habits/MobileHabitsPanel";
+import { HabitEditorModal } from "../habits/HabitEditorModal";
 import { ErrorBoundary } from "../ErrorBoundary";
-import { getOrderedTasksForSection } from "../../domain/taskUtils";
 
 function formatDateLabel(isoDay: string): string {
-  const [year, month, day] = isoDay.split("-").map((part) => Number(part));
-  const date = new Date(year, month - 1, day);
-  const formatter = new Intl.DateTimeFormat(undefined, {
-    weekday: "long",
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-  return formatter.format(date);
+  const [year, month, day] = isoDay.split("-").map(Number);
+  return new Intl.DateTimeFormat(undefined, { weekday: "long", month: "short", day: "numeric" }).format(
+    new Date(year!, month! - 1, day!),
+  );
+}
+
+/** Short label for a date (e.g. "28 Feb") for the copy-from button. */
+function formatDateShort(isoDay: string): string {
+  const [year, month, day] = isoDay.split("-").map(Number);
+  return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(
+    new Date(year!, month! - 1, day!),
+  );
+}
+
+/** Most recent date before `beforeDate` that has at least one task. */
+function getLastDayWithTasks(state: AppState, beforeDate: string): string | null {
+  let last: string | null = null;
+  for (const date of Object.keys(state.days)) {
+    if (date >= beforeDate) continue;
+    if ((state.days[date]?.tasks.length ?? 0) > 0 && (last === null || date > last)) last = date;
+  }
+  return last;
 }
 
 /**
@@ -92,96 +99,27 @@ function formatDateLabel(isoDay: string): string {
  */
 const MAX_COMPLETION_CLAIMS = 3;
 
-/** Short label for a date (e.g. "28 Feb") for copy-from buttons. */
-function formatDateShort(isoDay: string): string {
-  const [year, month, day] = isoDay.split("-").map((part) => Number(part));
-  const date = new Date(year!, month! - 1, day!);
-  return new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-  }).format(date);
-}
+/** Where new tasks go. The other sections only appear for days that used them. */
+const LIST_SECTION_ID: TaskSectionId = "highPriority";
+const LEGACY_SECTION_IDS: TaskSectionId[] = ["morningRoutine", "mediumPriority", "lowPriority", "nightRoutine", "sideQuest"];
 
-/**
- * Most recent date before beforeDate that has at least one task in state.
- * Used when yesterday and same-day-last-week have no tasks (e.g. first week or after a skip).
- */
-function getLastDayWithTasks(state: AppState, beforeDate: string): string | null {
-  let last: string | null = null;
-  for (const date of Object.keys(state.days)) {
-    if (date >= beforeDate) continue;
-    const day = state.days[date];
-    if (day?.tasks && day.tasks.length > 0) {
-      if (last === null || date > last) last = date;
-    }
-  }
-  return last;
-}
-
-interface DayPlannerProps {
-  /**
-   * 'view' = read-only shared planner (all actions disabled).
-   * 'edit' = shared planner with task add/complete/delete via external updater.
-   * Omit for normal owner mode.
-   */
-  shareMode?: 'view' | 'edit'
-  /** External AppState to display instead of the owner's persisted state. */
-  externalState?: AppState
-  /** Called when any AppState update is requested in shared mode; parent handles persistence. */
-  onExternalUpdate?: (updater: (prev: AppState) => AppState) => void
-  /** When true with shareMode, hide internal weekly sidebar (parent shell provides layout). */
-  shareShellLayout?: boolean
-  /** Controlled selected day (e.g. shared shell keeps sidebar stats in sync). */
-  selectedDay?: string
-  onSelectedDayChange?: (day: string) => void
-  /** Sticky offset for the day header under a fixed app bar (e.g. top-16). */
-  stickyTopClass?: string
-}
-
-export function DayPlanner({
-  shareMode,
-  externalState,
-  onExternalUpdate,
-  shareShellLayout = false,
-  selectedDay: selectedDayProp,
-  onSelectedDayChange,
-  stickyTopClass,
-}: DayPlannerProps = {}) {
-  const [ownState, updateOwnState, isHydrating] = usePersistentState();
-  // Use external shared state when provided; fall back to owner's state.
-  const appState = externalState ?? ownState;
-  const baseUpdateAppState = (shareMode && onExternalUpdate) ? onExternalUpdate : updateOwnState;
+export function DayPlanner() {
+  const [appState, baseUpdateAppState, isHydrating] = usePersistentState();
   /**
    * Every mutation goes through here. The undo gateway has to see all of them:
    * a change it cannot see is a change its snapshot could destroy.
    */
   const undoable = useUndoableActions(appState, baseUpdateAppState);
   const updateAppState = undoable.update;
-  const navigate = useNavigate();
-  const [internalSelectedDay, setInternalSelectedDay] = useState<string>(todayIso);
-  const isSelectedDayControlled = selectedDayProp !== undefined;
-  const selectedDay = isSelectedDayControlled ? selectedDayProp : internalSelectedDay;
-  const [, startDayTransition] = useTransition();
+  const { user } = useAuth();
 
-  const setSelectedDay = useCallback(
-    (update: SetStateAction<string>) => {
-      startDayTransition(() => {
-        if (isSelectedDayControlled) {
-          const next =
-            typeof update === "function"
-              ? (update as (prev: string) => string)(selectedDayProp!)
-              : update;
-          onSelectedDayChange?.(next);
-        } else {
-          setInternalSelectedDay((prev) =>
-            typeof update === "function" ? (update as (p: string) => string)(prev) : update,
-          );
-        }
-      });
-    },
-    [isSelectedDayControlled, selectedDayProp, onSelectedDayChange],
-  );
-  const [splitRatio, setSplitRatio] = useState(0.68); // fraction of width for task column
+  const [selectedDay, setSelectedDayRaw] = useState<string>(todayIso);
+  const [, startDayTransition] = useTransition();
+  const setSelectedDay = useCallback((next: string | ((prev: string) => string)) => {
+    startDayTransition(() => setSelectedDayRaw(next));
+  }, []);
+  const isToday = selectedDay === todayIso();
+
   /**
    * Review is a separate route, so its copy of the tab bar hands the chosen tab
    * back through the URL. Without this, tapping Habits from Review landed on
@@ -189,69 +127,33 @@ export function DayPlanner({
    */
   const [searchParams] = useSearchParams();
   const [mobileTab, setMobileTab] = useState<MobileTab>(() => {
-    const requested = searchParams.get('tab');
-    return requested === 'focus' || requested === 'habits' ? requested : 'today';
+    const requested = searchParams.get("tab");
+    return requested === "focus" || requested === "habits" ? requested : "today";
   });
-  const gridRef = useRef<HTMLDivElement | null>(null);
-  const dragStateRef = useRef<{
-    startX: number;
-    startRatio: number;
-    width: number;
-  } | null>(null);
 
-  const MIN_SPLIT_RATIO = 0.5;
-  const MAX_SPLIT_RATIO = 0.8;
+  // A minute tick, so "Now" on the timeline moves without a reload.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
 
-  const timeOffsetMinutes = appState.timeOffsetMinutes ?? 0;
+  const calendar = useCalendarDay(selectedDay);
+  useWorkLog(appState, calendar.connected);
 
-  const dayState = useMemo(
-    () => getOrCreateDay(appState, selectedDay),
-    [appState, selectedDay],
-  );
-
-  const dayCompletion = useMemo(
-    () => computeDayCompletion(appState, selectedDay),
-    [appState, selectedDay],
-  );
-  const dayCompletionRatio =
-    dayCompletion.totalCount === 0
-      ? 0
-      : dayCompletion.completedCount / dayCompletion.totalCount;
-
+  const dayState = useMemo(() => getOrCreateDay(appState, selectedDay), [appState, selectedDay]);
   const deepWorkMinutesToday = useMemo(
     () => computeDailyDeepWorkMinutes(appState.days[selectedDay]),
     [appState, selectedDay],
   );
-
-  // Travel mode was removed with the travel planner; habits no longer pause for trips.
-  const travelingToday = false;
-
-  const rootTasks = useMemo(
-    () => (appState.days[selectedDay]?.tasks ?? []).filter((t) => !t.parentId),
-    [appState, selectedDay],
-  );
-  const completedRootCount = useMemo(
-    () => rootTasks.filter((t) => t.isDone).length,
-    [rootTasks],
-  );
-  const totalRootCount = rootTasks.length;
-
+  const rootTasks = useMemo(() => dayState.tasks.filter((t) => !t.parentId), [dayState.tasks]);
   const accountabilityStats = useMemo(
     () => computeAccountabilityStats(appState.activeDays ?? [], appState.days),
     [appState.activeDays, appState.days],
   );
 
-  // --- Extracted hooks ---
-  const taskHandlers = useTaskHandlers(updateAppState, selectedDay, travelingToday);
   const {
     draggedTask,
-    setSelectedTaskIds,
-    selectedTaskIds,
-    handleToggleSelect,
-    handleDeleteSelected,
-    handleCompleteSelected,
-    handleSetShallowSelected,
-    handleMoveSelectedToSection,
     handleDragStart,
     handleDragEnd,
     handleDrop,
@@ -264,72 +166,28 @@ export function DayPlanner({
     handleReorderTask,
     handleCopyFromDay,
     handleUpdateTask,
-    handleUpdateMonthlyReview: _handleUpdateMonthlyReview,
     handleSessionComplete,
     handleRecordAwaySession,
     handleLogManualMinutes,
     handleUndoManualMinutes,
     handleReattributeSession,
-    handleMoveToNotDoing,
     handleAbandonTask,
-    handleAddTomorrowMust,
-    handleDeleteTomorrowMust,
-    handleEditTomorrowMust,
-    handleUpdateTomorrowMust,
-    handleCopyTodayMustsToTomorrow,
     handleReorderSubtask,
     handleMoveSubtask,
-  } = taskHandlers;
+  } = useTaskHandlers(updateAppState, selectedDay);
 
-  const blockEditor = useDayBlockEditor(
-    dayState,
-    appState.blockDurationRatios,
-    appState.routineMinutes,
-    selectedDay,
-    updateAppState,
-    shareMode,
-  );
-  const { effectiveBlockDurations, computedBlocks, sleepWindow, mustDoMinutes, plannedBySection, isManualOverride, setDaySetupOpen, handleBlockDurationChange } = blockEditor;
-
-  // Per-section allocated window minutes, derived from the actual rendered blocks
-  // (single source of truth for the capacity-vs-plan chips on each section).
-  const blockWindowBySection = useMemo(() => {
-    const map: Partial<Record<TaskSectionId, number>> = {};
-    for (const b of computedBlocks ?? []) {
-      const dur = b.end >= b.start ? b.end - b.start : b.end + 1440 - b.start;
-      for (const sid of b.sectionIds) map[sid] = dur;
-    }
-    return map;
-  }, [computedBlocks]);
-
-  // Short note shown next to the High Priority window: how much of it is reserved
-  // for today's Top 3 tasks. In auto mode the window already absorbed that time
-  // (capacity sizing folds Top 3 into High), so it reads "incl."; under a manual
-  // override the fold is added on top of the user's raw number, so it reads "+".
-  const highPriorityTop3Note = useMemo(() => {
-    if (shareMode || mustDoMinutes <= 0) return null;
-    const h = Math.floor(mustDoMinutes / 60);
-    const m = mustDoMinutes % 60;
-    const dur = h > 0 ? `${h}h${m > 0 ? `${m}m` : ''}` : `${m}m`;
-    return `${isManualOverride ? '+' : 'incl. '}${dur} Top Three`;
-  }, [mustDoMinutes, isManualOverride, shareMode]);
-
-  const { taskIdsDueNow, activeSectionIds, isSleepTimeNow, timeframeLabelsBySection } =
-    useTimeAwareness(appState, timeOffsetMinutes, computedBlocks, sleepWindow?.startMin);
-
-  // --- Handlers that stay in DayPlanner (simple, few lines each) ---
+  // ── Habits ────────────────────────────────────────────────────────────────
   const habits = appState.habitDefinitions ?? DEFAULT_HABIT_DEFINITIONS;
   const habitIds = useMemo(() => habits.map((h) => h.id), [habits]);
-
   const habitStreaks = useMemo(
     () => computePerHabitStreaks(appState.days, habitIds, selectedDay),
     [appState.days, habitIds, selectedDay],
   );
-
   const atRiskHabitIds = useMemo(
     () => getAtRiskHabitIds(appState.days, habitIds, selectedDay),
     [appState.days, habitIds, selectedDay],
   );
+  const [editHabitsOpen, setEditHabitsOpen] = useState(false);
 
   const handleToggleHabit = useCallback(
     (habitId: string, value: boolean) => {
@@ -339,48 +197,39 @@ export function DayPlanner({
           ...prev,
           days: {
             ...prev.days,
-            [selectedDay]: {
-              ...day,
-              habitCompletions: { ...(day.habitCompletions ?? {}), [habitId]: value },
-            },
+            [selectedDay]: { ...day, habitCompletions: { ...(day.habitCompletions ?? {}), [habitId]: value } },
           },
         };
       });
     },
     [updateAppState, selectedDay],
   );
-
   const handleSetIdentity = useCallback(
-    (value: string) => {
-      updateAppState((prev) => ({ ...prev, identityStatement: value }));
-    },
+    (value: string) => updateAppState((prev) => ({ ...prev, identityStatement: value })),
     [updateAppState],
   );
-
-  const handleUpdateHabitDefinitions = useCallback(
-    (updatedHabits: HabitDefinition[]) => {
-      updateAppState((prev) => ({ ...prev, habitDefinitions: updatedHabits }));
+  /** Removing a habit definition takes its history off every past day. */
+  const handleSaveHabits = useCallback(
+    (defs: HabitDefinition[]) => {
+      undoable.run("Updated habits", () => updateAppState((prev) => ({ ...prev, habitDefinitions: defs })));
     },
-    [updateAppState],
+    [undoable, updateAppState],
   );
 
-  const [editHabitsOpen, setEditHabitsOpen] = useState(false);
-  const [moveSubtaskId, setMoveSubtaskId] = useState<string | null>(null);
-  const [bulkMoveOpen, setBulkMoveOpen] = useState(false);
-  /** Task the deep work timer is currently pointed at, if any. */
+  // ── Focus blocks ──────────────────────────────────────────────────────────
+  /** The unit the whole planner counts in: one block, one run of the timer. */
+  const blockMinutes = normalizeFocusBlockMinutes(appState.focusBlockMinutes);
+  const breakMinutes = appState.focusBreakMinutes ?? suggestedBreakMinutes(blockMinutes);
   const [timerTaskId, setTimerTaskId] = useState<string | undefined>(undefined);
-  /** Task whose progress actions sheet is open (phones). */
   const [progressSheetTaskId, setProgressSheetTaskId] = useState<string | null>(null);
-
-  /** Why a chip could not start a block, shown briefly. */
+  const [moveSubtaskId, setMoveSubtaskId] = useState<string | null>(null);
   const [blockNotice, setBlockNotice] = useState<string | null>(null);
   /**
    * Just-completed tasks whose progress rows are short, queued for logging.
    *
    * A queue rather than one, because ticking a parent ticks its subtasks with
    * it, and a subtask with an estimate is work that happened just as much as
-   * its parent is. Asking about the parent alone was how that work went
-   * unrecorded without anyone deciding it should.
+   * its parent is.
    */
   const [completionClaims, setCompletionClaims] = useState<
     { taskId: string; title: string; options: BlockAmountOption[] }[]
@@ -388,10 +237,6 @@ export function DayPlanner({
   const completionClaim = completionClaims[0] ?? null;
   /** A task whose last block just filled, offered for ticking off. */
   const [doneOffer, setDoneOffer] = useState<{ taskId: string; title: string } | null>(null);
-
-  /** The unit the whole planner counts in: one block, one run of the timer. */
-  const blockMinutes = normalizeFocusBlockMinutes(appState.focusBlockMinutes);
-  const breakMinutes = appState.focusBreakMinutes ?? suggestedBreakMinutes(blockMinutes);
 
   /** Unfinished tasks big enough to track, offered to the timer for attribution. */
   const timerTaskOptions = useMemo<TimerTaskOption[]>(() => {
@@ -401,90 +246,26 @@ export function DayPlanner({
       .map((t) => ({ id: t.id, title: t.title }));
   }, [dayState.tasks, blockMinutes]);
 
-  // Drop the selection when the task is finished, deleted or moved off the day,
-  // so the timer never credits a block to something no longer on the plan.
-  useEffect(() => {
-    if (timerTaskId && !timerTaskOptions.some((option) => option.id === timerTaskId)) {
-      setTimerTaskId(undefined);
-    }
-  }, [timerTaskId, timerTaskOptions]);
-
-  const progressSheetTask = useMemo(
-    () => dayState.tasks.find((t) => t.id === progressSheetTaskId) ?? null,
-    [dayState.tasks, progressSheetTaskId],
-  );
-  // The hand-logged entries behind the faded fill, so the sheet can offer to
-  // take the last one back whole rather than a block at a time.
-  const progressSheetManualEntries = useMemo(
-    () =>
-      progressSheetTask
-        ? listManualEntries(
-            progressSheetTask.id,
-            dayState.deepWorkSessions,
-            progressSheetTask.manualLoggedMinutes,
-          )
-        : [],
-    [progressSheetTask, dayState.deepWorkSessions],
-  );
-  /**
-   * Everything recorded against the task the sheet is open on, and where those
-   * minutes could go instead. Done tasks are included as destinations on
-   * purpose: noticing a block belonged to something already ticked off is the
-   * ordinary case, and leaving it out would make the fix impossible exactly
-   * when it is needed.
-   */
-  const progressSheetSessions = useMemo(
-    () =>
-      progressSheetTask
-        ? dayState.deepWorkSessions.filter(
-            (session) => session.taskId === progressSheetTask.id && !session.cancelledAt,
-          )
-        : [],
-    [progressSheetTask, dayState.deepWorkSessions],
-  );
-  const attributionTargets = useMemo(() => {
-    const floor = minTrackableMinutes(blockMinutes);
-    return dayState.tasks
-      .filter((t) => (t.durationMinutes ?? 0) >= floor)
-      .map((t) => ({ id: t.id, title: t.title, isDone: t.isDone }));
-  }, [dayState.tasks, blockMinutes]);
-
-  // Recomputed from live state, so the sheet's boxes move as you log into them.
-  const progressSheetProgress = useMemo(
-    () => (progressSheetTask ? computeTaskProgress(progressSheetTask, dayState.deepWorkSessions, blockMinutes) : null),
-    [progressSheetTask, dayState.deepWorkSessions, blockMinutes],
-  );
-
   /**
    * Record the block, then — if it was the one that filled the task's row —
-   * offer to tick the task off.
-   *
-   * Offered, not done. The estimate is what the work was expected to cost, not
-   * a definition of finished, so a full row means "this is probably done",
-   * which is a question. Ticking it automatically would also take the tick away
-   * from you: the reward is the act, and a box that ticks itself the instant
-   * the row fills is a reward you saw coming, which is no reward at all.
+   * offer to tick the task off. Offered, not done: the estimate is what the
+   * work was expected to cost, not a definition of finished.
    */
-  const handleSessionCompleteWithOffer = useCallback((
-    label: string,
-    durationMinutes: number,
-    taskId?: string,
-    startedAt?: string,
-  ) => {
-    handleSessionComplete(label, durationMinutes, taskId, startedAt);
-    if (!taskId || shareMode) return;
-    const task = dayState.tasks.find((t) => t.id === taskId);
-    if (!task || task.isDone) return;
-    const before = computeTaskProgress(task, dayState.deepWorkSessions, blockMinutes);
-    // Already full before this block: the row was finished a while ago and the
-    // offer was answered (or ignored) then. Asking again is nagging.
-    if (!before || before.isComplete) return;
-    if (before.totalMinutes + durationMinutes < before.goalMinutes) return;
-    setDoneOffer({ taskId, title: task.title });
-  }, [handleSessionComplete, dayState.tasks, dayState.deepWorkSessions, blockMinutes, shareMode]);
+  const handleSessionCompleteWithOffer = useCallback(
+    (label: string, durationMinutes: number, taskId?: string, startedAt?: string) => {
+      handleSessionComplete(label, durationMinutes, taskId, startedAt);
+      if (!taskId) return;
+      const task = dayState.tasks.find((t) => t.id === taskId);
+      if (!task || task.isDone) return;
+      const before = computeTaskProgress(task, dayState.deepWorkSessions, blockMinutes);
+      if (!before || before.isComplete) return;
+      if (before.totalMinutes + durationMinutes < before.goalMinutes) return;
+      setDoneOffer({ taskId, title: task.title });
+    },
+    [handleSessionComplete, dayState.tasks, dayState.deepWorkSessions, blockMinutes],
+  );
 
-  // One countdown for the whole planner. The sidebar and the mobile tab are two
-  // views of it, and a task's progress chip is a third way to start it.
+  // One countdown for the whole planner; the rail and the Focus tab are two views of it.
   const timer = useDeepWorkTimer({
     onSessionComplete: handleSessionCompleteWithOffer,
     taskOptions: timerTaskOptions,
@@ -495,111 +276,23 @@ export function DayPlanner({
     onAwayBlockConfirmed: handleRecordAwaySession,
   });
 
-  /**
-   * Delete a task, stopping first if it would destroy work that cannot be
-   * recovered.
-   *
-   * Timed sessions survive a deletion on their own (they are detached, not
-   * dropped), so they alone are not worth interrupting anyone over. Minutes
-   * logged by hand live on the task itself and have no other record anywhere -
-   * those are what this asks about.
-   */
-  const confirmDeleteTasks = useCallback((taskIds: string[]): boolean => {
-    const summary = summarizeTaskWork(dayState, taskIds);
-    if (!summary.hasIrrecoverableWork) return true;
-    const detail = describeWorkLoss(summary, taskIds.length);
-    return window.confirm(`${detail}
-
-Delete anyway?`);
-  }, [dayState]);
-
-  const handleDeleteTaskGuarded = useCallback((taskId: string) => {
-    const ids = taskWithDescendantIds(dayState.tasks, taskId);
-    if (!confirmDeleteTasks(ids)) return;
-    const title = dayState.tasks.find((t) => t.id === taskId)?.title ?? 'task';
-    undoable.run(`Deleted “${title}”`, () => handleDeleteTask(taskId));
-  }, [dayState.tasks, confirmDeleteTasks, handleDeleteTask, undoable]);
-
-  const handleDeleteSelectedGuarded = useCallback(() => {
-    const ids = [...selectedTaskIds].flatMap((id) => taskWithDescendantIds(dayState.tasks, id));
-    if (ids.length === 0) return;
-    if (!confirmDeleteTasks(ids)) return;
-    const count = selectedTaskIds.size;
-    undoable.run(
-      `Deleted ${count} task${count === 1 ? '' : 's'}`,
-      () => handleDeleteSelected(),
-    );
-  }, [selectedTaskIds, dayState.tasks, confirmDeleteTasks, handleDeleteSelected, undoable]);
-
-  /** Copying a day can add a dozen rows at once — easily the biggest single edit. */
-  const handleCopyFromDayUndoable = useCallback((sourceDate: string, label: string) => {
-    undoable.run(`Copied ${label.toLowerCase()}`, () => handleCopyFromDay(sourceDate));
-  }, [handleCopyFromDay, undoable]);
-
-  /** Removing a habit or quest definition takes its history off every past day. */
-  const handleSaveHabitsUndoable = useCallback((defs: Parameters<typeof handleUpdateHabitDefinitions>[0]) => {
-    undoable.run('Updated habits', () => handleUpdateHabitDefinitions(defs));
-  }, [handleUpdateHabitDefinitions, undoable]);
-
-  /**
-   * Start a block against a task from its progress row. Refuses while another
-   * block is under way rather than retargeting it - those minutes are already
-   * being earned by something else.
-   */
-  /**
-   * Desktop Focus: a running block covers the day. Dismissing is remembered
-   * for as long as that block lasts, so a screen you pushed away stays away
-   * instead of reappearing a second later; the next block starts clean.
-   */
-  const [focusDismissed, setFocusDismissed] = useState(false);
-  const timerRunning = timer.status === 'running' || timer.status === 'paused';
-  useEffect(() => {
-    if (!timerRunning) setFocusDismissed(false);
-  }, [timerRunning]);
-  const showFocusMode = !shareMode && timerRunning && !focusDismissed;
-
-  const focusTaskProgress = useMemo(() => {
-    const taskId = timer.selectedTask?.id;
-    if (!taskId) return null;
-    const task = dayState.tasks.find((t) => t.id === taskId);
-    if (!task) return null;
-    return computeTaskProgress(task, dayState.deepWorkSessions ?? [], blockMinutes);
-  }, [timer.selectedTask, dayState.tasks, dayState.deepWorkSessions, blockMinutes]);
-
-  /** Blocks already banked today, so the running one can be numbered. */
-  const completedBlocksToday = (dayState.deepWorkSessions ?? []).filter(
-    (session) => !session.cancelledAt,
-  ).length;
-
-  /**
-   * What the clock says you should be on. Only for today: on any other day
-   * there is no "now" to point at, and a card that guessed would be lying.
-   * Shared views get no card either — a read-only planner has no timer to start.
-   */
-  const nowFocus = useMemo(() => {
-    if (shareMode || selectedDay !== todayIso()) return null;
-    return selectNowFocus(dayState.tasks, activeSectionIds);
-  }, [shareMode, selectedDay, dayState.tasks, activeSectionIds]);
-
-  const nowProgress = useMemo(() => {
-    if (!nowFocus || nowFocus.kind !== 'task') return null;
-    return computeTaskProgress(nowFocus.task, dayState.deepWorkSessions ?? [], blockMinutes);
-  }, [nowFocus, dayState.deepWorkSessions, blockMinutes]);
-
-  const handleStartBlock = useCallback((taskId: string, minutes: number) => {
-    const task = dayState.tasks.find((t) => t.id === taskId);
-    const result = timer.startBlock({ taskId, minutes, label: task?.title });
-    if (result === 'busy') {
-      // Name the way out. The old copy said "reset it", which was the one
-      // action that destroyed the minutes already earned.
-      setBlockNotice(
-        timer.hasBankableWork
-          ? `A block is already running. Stop it from the timer to keep its ${timer.elapsedMinutes}m first.`
-          : 'A block is already running. Stop it from the timer first.',
-      );
-    }
-    return result;
-  }, [dayState.tasks, timer]);
+  const handleStartBlock = useCallback(
+    (taskId: string, minutes: number) => {
+      const task = dayState.tasks.find((t) => t.id === taskId);
+      const result = timer.startBlock({ taskId, minutes, label: task?.title });
+      if (result === "busy") {
+        // Name the way out. "Reset it" was the one action that destroyed the
+        // minutes already earned.
+        setBlockNotice(
+          timer.hasBankableWork
+            ? `A block is already running. Stop it from the timer to keep its ${timer.elapsedMinutes}m first.`
+            : "A block is already running. Stop it from the timer first.",
+        );
+      }
+      return result;
+    },
+    [dayState.tasks, timer],
+  );
 
   useEffect(() => {
     if (!blockNotice) return;
@@ -607,83 +300,95 @@ Delete anyway?`);
     return () => window.clearTimeout(id);
   }, [blockNotice]);
 
+  const handleSetBlockLength = useCallback(
+    (minutes: number, breakLength: number) => {
+      updateAppState((prev) => ({ ...prev, focusBlockMinutes: minutes, focusBreakMinutes: breakLength }));
+    },
+    [updateAppState],
+  );
+
+  const focusBlockValue = useMemo(
+    () => ({
+      blockMinutes,
+      breakMinutes,
+      activeBlock: timer.activeBlock,
+      startBlock: ({ taskId, minutes }: { taskId: string; minutes: number; label: string }) =>
+        handleStartBlock(taskId, minutes),
+    }),
+    [blockMinutes, breakMinutes, timer.activeBlock, handleStartBlock],
+  );
+
+  /**
+   * Desktop Focus: a running block covers the day. Dismissing is remembered
+   * for as long as that block lasts; the next block starts clean.
+   */
+  const [focusDismissed, setFocusDismissed] = useState(false);
+  const timerRunning = timer.status === "running" || timer.status === "paused";
+  const [wasRunning, setWasRunning] = useState(timerRunning);
+  if (wasRunning !== timerRunning) {
+    setWasRunning(timerRunning);
+    if (!timerRunning) setFocusDismissed(false);
+  }
+
+  const focusTaskProgress = useMemo(() => {
+    const task = dayState.tasks.find((t) => t.id === timer.selectedTask?.id);
+    return task ? computeTaskProgress(task, dayState.deepWorkSessions ?? [], blockMinutes) : null;
+  }, [timer.selectedTask, dayState.tasks, dayState.deepWorkSessions, blockMinutes]);
+
+  /** Blocks already banked today, so the running one can be numbered. */
+  const completedBlocksToday = (dayState.deepWorkSessions ?? []).filter((s) => !s.cancelledAt).length;
+
+  // ── Ticking, deleting, copying ────────────────────────────────────────────
   /**
    * Completing a task is the last moment anyone remembers how long it took, so
-   * it is the moment to ask - a task ticked off with an empty progress row is
-   * work that happened and left no trace.
-   *
-   * Asked, never assumed. Filling the row automatically on completion would
-   * make it a record of what was planned rather than what was done, and within
-   * a week the distinction the row exists to draw would be worthless. So the
-   * offer is one tap, it lands faded like anything else self-reported, and
-   * ignoring it costs nothing.
+   * it is the moment to ask. Asked, never assumed: filling the row on
+   * completion would make it a record of the plan rather than the work.
    */
-  const handleToggleTask = useCallback((taskId: string) => {
-    const task = dayState.tasks.find((t) => t.id === taskId);
-    handleToggleTaskBase(taskId);
-    setDoneOffer((current) => (current?.taskId === taskId ? null : current));
-    // Un-ticking is silent: taking a tick back is a correction, not an
-    // achievement, and a reward sound for it would be a lie.
-    if (!task || task.isDone) return;
+  const handleToggleTask = useCallback(
+    (taskId: string) => {
+      const task = dayState.tasks.find((t) => t.id === taskId);
+      handleToggleTaskBase(taskId);
+      setDoneOffer((current) => (current?.taskId === taskId ? null : current));
+      // Un-ticking is silent: taking a tick back is a correction, not an achievement.
+      if (!task || task.isDone) return;
 
-    const progress = computeTaskProgress(task, dayState.deepWorkSessions, blockMinutes);
+      const progress = computeTaskProgress(task, dayState.deepWorkSessions, blockMinutes);
+      const musts = dayState.tasks.filter((t) => t.sectionId === "mustDo" && !t.parentId);
+      const clearedTopThree =
+        task.sectionId === "mustDo" && musts.length > 0 && musts.every((t) => t.id === taskId || t.isDone);
+      playChime(clearedTopThree ? "dayComplete" : progress?.isComplete ? "taskComplete" : "taskTicked");
 
-    // Three sizes of the same motif. The rarest event wins, so clearing the
-    // Top Three is never drowned out by the tick that cleared it.
-    const musts = dayState.tasks.filter((t) => t.sectionId === 'mustDo' && !t.parentId);
-    const clearedTopThree =
-      task.sectionId === 'mustDo' &&
-      musts.length > 0 &&
-      musts.every((t) => t.id === taskId || t.isDone);
-    playChime(
-      clearedTopThree ? 'dayComplete' : progress?.isComplete ? 'taskComplete' : 'taskTicked',
-    );
+      // Everything this tick completed: the task, plus the subtasks it carried.
+      const completed = [
+        task,
+        ...taskWithDescendantIds(dayState.tasks, taskId)
+          .filter((id) => id !== taskId)
+          .map((id) => dayState.tasks.find((t) => t.id === id))
+          .filter((t): t is Task => Boolean(t) && !t!.isDone),
+      ];
+      const claims = completed
+        .map((candidate) => {
+          const candidateProgress = computeTaskProgress(candidate, dayState.deepWorkSessions, blockMinutes);
+          if (!candidateProgress) return null;
+          const options = blockAmountOptions(candidateProgress);
+          return options.length === 0 ? null : { taskId: candidate.id, title: candidate.title, options };
+        })
+        .filter((claim): claim is NonNullable<typeof claim> => claim != null)
+        .slice(0, MAX_COMPLETION_CLAIMS);
+      if (claims.length > 0) setCompletionClaims(claims);
+    },
+    [dayState.tasks, dayState.deepWorkSessions, blockMinutes, handleToggleTaskBase],
+  );
 
-    if (shareMode) return;
-
-    // Everything this tick completed: the task, plus the subtasks it carried
-    // with it that were not already done.
-    const completed = [
-      task,
-      ...taskWithDescendantIds(dayState.tasks, taskId)
-        .filter((id) => id !== taskId)
-        .map((id) => dayState.tasks.find((t) => t.id === id))
-        .filter((t): t is Task => Boolean(t) && !t!.isDone),
-    ];
-
-    // Only the blocks they set aside and never filled. Asking in blocks rather
-    // than in one lump is what lets "I finished in two of the eight" be said at
-    // all - the old single button could only claim the whole remainder.
-    const claims = completed
-      .map((candidate) => {
-        const candidateProgress = computeTaskProgress(
-          candidate,
-          dayState.deepWorkSessions,
-          blockMinutes,
-        );
-        if (!candidateProgress) return null;
-        const options = blockAmountOptions(candidateProgress);
-        if (options.length === 0) return null;
-        return { taskId: candidate.id, title: candidate.title, options };
-      })
-      .filter((claim): claim is NonNullable<typeof claim> => claim != null)
-      // Capped: a parent with six trackable subtasks would otherwise become six
-      // prompts in a row, which is a nag, and a nag gets dismissed on reflex.
-      // The sheet still logs the rest, in the user's own time.
-      .slice(0, MAX_COMPLETION_CLAIMS);
-    if (claims.length === 0) return;
-    setCompletionClaims(claims);
-  }, [dayState.tasks, dayState.deepWorkSessions, blockMinutes, handleToggleTaskBase, shareMode]);
-
-  // The offer writes against whichever day is open, and touching its picker
-  // holds it there indefinitely - so leaving the day takes the question with
-  // it, rather than leaving a button that would silently log nothing.
-  useEffect(() => {
+  // Offers write against whichever day is open, so leaving the day takes them with it.
+  const [offersDay, setOffersDay] = useState(selectedDay);
+  if (offersDay !== selectedDay) {
+    setOffersDay(selectedDay);
     setCompletionClaims([]);
     setDoneOffer(null);
-  }, [selectedDay]);
+  }
 
-  // Same 12 seconds, same reasoning: an unanswered offer is an answer of "no".
+  // An unanswered offer is an answer of "no".
   useEffect(() => {
     if (!doneOffer) return;
     const id = window.setTimeout(() => setDoneOffer(null), 12000);
@@ -691,121 +396,141 @@ Delete anyway?`);
   }, [doneOffer]);
 
   /**
-   * Adopt a length as the configured focus block. The break moves with it
-   * unless it has already been set by hand elsewhere - a 90-minute block with a
-   * 5-minute break is not a setting anyone chose.
+   * Delete a task, stopping first if it would destroy work that cannot be
+   * recovered. Timed sessions survive a deletion on their own (detached, not
+   * dropped); hand-logged minutes on the task itself are what this asks about.
    */
-  const handleSetBlockLength = useCallback((minutes: number, breakLength: number) => {
-    updateAppState((prev) => ({ ...prev, focusBlockMinutes: minutes, focusBreakMinutes: breakLength }));
-  }, [updateAppState]);
-
-  const focusBlockValue = useMemo(() => ({
-    blockMinutes,
-    breakMinutes,
-    activeBlock: timer.activeBlock,
-    startBlock: shareMode === 'view'
-      ? undefined
-      : ({ taskId, minutes }: { taskId: string; minutes: number; label: string }) =>
-          handleStartBlock(taskId, minutes),
-  }), [blockMinutes, breakMinutes, timer.activeBlock, shareMode, handleStartBlock]);
-
-  const tomorrowDate = useMemo(() => addDays(selectedDay, 1), [selectedDay]);
-
-  const tomorrowMustTasks = useMemo(() =>
-    (appState.days[tomorrowDate]?.tasks ?? []).filter(
-      (t) => t.sectionId === 'mustDo' && !t.parentId,
-    ),
-    [appState.days, tomorrowDate],
+  const handleDeleteTaskGuarded = useCallback(
+    (taskId: string) => {
+      const ids = taskWithDescendantIds(dayState.tasks, taskId);
+      const summary = summarizeTaskWork(dayState, ids);
+      if (summary.hasIrrecoverableWork) {
+        const detail = describeWorkLoss(summary, ids.length);
+        if (!window.confirm(`${detail}\n\nDelete anyway?`)) return;
+      }
+      const title = dayState.tasks.find((t) => t.id === taskId)?.title ?? "task";
+      undoable.run(`Deleted “${title}”`, () => handleDeleteTask(taskId));
+    },
+    [dayState, handleDeleteTask, undoable],
   );
 
-  const tasksBySection: Record<TaskSectionId, Task[]> = useMemo(() => {
-    const grouped: Record<TaskSectionId, Task[]> = {
-      mustDo: [],
-      morningRoutine: [],
-      highPriority: [],
-      mediumPriority: [],
-      lowPriority: [],
-      nightRoutine: [],
-      sideQuest: [],
-    };
+  // Offered while the list below the Top 3 is still empty: the three are
+  // usually set first thing, and carrying yesterday's list over comes after.
+  const copySource = useMemo(() => {
+    if (dayState.tasks.some((t) => t.sectionId !== "mustDo")) return null;
+    const yesterday = addDays(selectedDay, -1);
+    if ((appState.days[yesterday]?.tasks.length ?? 0) > 0) return { date: yesterday, label: "Fill from yesterday" };
+    const lastWeekday = sameWeekdayLastWeek(selectedDay);
+    if ((appState.days[lastWeekday]?.tasks.length ?? 0) > 0) return { date: lastWeekday, label: "Fill from last week" };
+    const last = getLastDayWithTasks(appState, selectedDay);
+    return last ? { date: last, label: `Copy from ${formatDateShort(last)}` } : null;
+  }, [appState, dayState.tasks, selectedDay]);
 
-    for (const task of dayState.tasks) {
-      if (task) grouped[task.sectionId]?.push(task);
-    }
+  // ── Scheduling into the calendar ──────────────────────────────────────────
+  const [scheduleTaskId, setScheduleTaskId] = useState<string | null>(null);
+  const scheduleTask = useMemo(
+    () => dayState.tasks.find((t) => t.id === scheduleTaskId) ?? null,
+    [dayState.tasks, scheduleTaskId],
+  );
 
+  const handleSchedule = useCallback(
+    async (task: Task, req: ScheduleRequest) => {
+      if (calendar.connected) {
+        const slot = await scheduleTaskInCalendar({
+          taskId: task.id,
+          taskDate: selectedDay,
+          title: task.title,
+          durationMinutes: req.durationMinutes,
+          startTime: req.startTime,
+        });
+        handleUpdateTask(task.id, { scheduledAt: slot.startTime, durationMinutes: req.durationMinutes });
+        calendar.refresh();
+        return;
+      }
+      if (!req.startTime) throw new Error("Pick a time first.");
+      handleUpdateTask(task.id, { scheduledAt: req.startTime, durationMinutes: req.durationMinutes });
+    },
+    [calendar, selectedDay, handleUpdateTask],
+  );
+
+  const handleUnschedule = useCallback(
+    async (task: Task) => {
+      if (calendar.connected) {
+        await unscheduleTaskFromCalendar({ taskId: task.id, taskDate: selectedDay });
+        calendar.refresh();
+      }
+      handleUpdateTask(task.id, { scheduledAt: undefined });
+    },
+    [calendar, selectedDay, handleUpdateTask],
+  );
+
+  // ── Progress sheet ────────────────────────────────────────────────────────
+  const progressSheetTask = useMemo(
+    () => dayState.tasks.find((t) => t.id === progressSheetTaskId) ?? null,
+    [dayState.tasks, progressSheetTaskId],
+  );
+  const progressSheetProgress = useMemo(
+    () => (progressSheetTask ? computeTaskProgress(progressSheetTask, dayState.deepWorkSessions, blockMinutes) : null),
+    [progressSheetTask, dayState.deepWorkSessions, blockMinutes],
+  );
+  const attributionTargets = useMemo(() => {
+    const floor = minTrackableMinutes(blockMinutes);
+    return dayState.tasks
+      .filter((t) => (t.durationMinutes ?? 0) >= floor)
+      .map((t) => ({ id: t.id, title: t.title, isDone: t.isDone }));
+  }, [dayState.tasks, blockMinutes]);
+
+  // ── Lists ─────────────────────────────────────────────────────────────────
+  const tasksBySection = useMemo(() => {
+    const grouped = {} as Record<TaskSectionId, Task[]>;
+    for (const section of FIXED_SECTIONS) grouped[section.id] = [];
+    for (const task of dayState.tasks) grouped[task.sectionId]?.push(task);
     for (const key of Object.keys(grouped) as TaskSectionId[]) {
       grouped[key] = getOrderedTasksForSection(grouped[key] ?? []);
     }
     return grouped;
   }, [dayState.tasks]);
 
-  const prevDay = addDays(selectedDay, -1);
-  const lastWeekday = sameWeekdayLastWeek(selectedDay);
-  const prevDayState = useMemo(
-    () => getOrCreateDay(appState, prevDay),
-    [appState, prevDay],
+  const listSection = useMemo(
+    () => ({ ...FIXED_SECTIONS.find((s) => s.id === LIST_SECTION_ID)!, title: "Tasks" }),
+    [],
   );
-  const lastWeekdayState = useMemo(
-    () => getOrCreateDay(appState, lastWeekday),
-    [appState, lastWeekday],
+  // Days planned before the minimal rewrite keep their sections, so nothing
+  // recorded on them goes out of sight. New days only ever use the one list.
+  const legacySections = FIXED_SECTIONS.filter(
+    (s) => LEGACY_SECTION_IDS.includes(s.id) && (tasksBySection[s.id]?.length ?? 0) > 0,
   );
-  /** Fallback when yesterday and same-day-last-week have no tasks: last day that had tasks. */
-  const lastDayWithTasks = useMemo(
-    () => getLastDayWithTasks(appState, selectedDay),
-    [appState, selectedDay],
+
+  const renderSection = (section: (typeof FIXED_SECTIONS)[number], extra?: { overloadThreshold?: number; addPlaceholder?: string }) => (
+    <SectionColumn
+      key={section.id}
+      section={section}
+      tasks={tasksBySection[section.id] ?? []}
+      draggedTask={draggedTask}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      onDrop={(insertIndex: number) => handleDrop(section.id, insertIndex)}
+      onAddTask={(title) => handleAddTask(section.id, title)}
+      onAddTaskAbove={(beforeTaskId) => handleAddTaskAbove(section.id, beforeTaskId)}
+      onAddTaskBelow={(afterTaskId) => handleAddTaskBelow(section.id, afterTaskId)}
+      onAddSubtask={handleAddSubtask}
+      onToggleTask={handleToggleTask}
+      onDeleteTask={handleDeleteTaskGuarded}
+      onUpdateTask={handleUpdateTask}
+      deepWorkSessions={dayState.deepWorkSessions}
+      onStartBlock={handleStartBlock}
+      onOpenProgressSheet={setProgressSheetTaskId}
+      onScheduleTask={setScheduleTaskId}
+      onMoveTaskUp={(taskId) => handleReorderTask(taskId, section.id, "up")}
+      onMoveTaskDown={(taskId) => handleReorderTask(taskId, section.id, "down")}
+      onAbandonTask={handleAbandonTask}
+      onReorderSubtask={handleReorderSubtask}
+      onRequestMoveSubtask={setMoveSubtaskId}
+      {...extra}
+    />
   );
-  const lastDayWithTasksState = useMemo(
-    () =>
-      lastDayWithTasks
-        ? getOrCreateDay(appState, lastDayWithTasks)
-        : { tasks: [] as Task[] },
-    [appState, lastDayWithTasks],
-  );
-  const weekdayLabel = useMemo(() => {
-    const [y, m, d] = selectedDay.split("-").map(Number);
-    return new Intl.DateTimeFormat(undefined, { weekday: "long" }).format(
-      new Date(y!, m! - 1, d!),
-    );
-  }, [selectedDay]);
 
-  useEffect(() => {
-    return () => {
-      window.removeEventListener("mousemove", handleSplitterMouseMove);
-      window.removeEventListener("mouseup", handleSplitterMouseUp);
-    };
-    // We intentionally omit handleSplitterMouseMove / handleSplitterMouseUp from deps
-    // because they are stable function declarations and we only need this cleanup on unmount.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  function handleSplitterMouseDown(event: React.MouseEvent<HTMLDivElement>) {
-    if (!gridRef.current) return;
-    const rect = gridRef.current.getBoundingClientRect();
-    dragStateRef.current = {
-      startX: event.clientX,
-      startRatio: splitRatio,
-      width: rect.width,
-    };
-    window.addEventListener("mousemove", handleSplitterMouseMove);
-    window.addEventListener("mouseup", handleSplitterMouseUp);
-  }
-
-  function handleSplitterMouseMove(event: MouseEvent) {
-    const state = dragStateRef.current;
-    if (!state || !gridRef.current) return;
-    const deltaX = event.clientX - state.startX;
-    const rawRatio = state.startRatio + deltaX / state.width;
-    const clamped = Math.min(MAX_SPLIT_RATIO, Math.max(MIN_SPLIT_RATIO, rawRatio));
-    setSplitRatio(clamped);
-  }
-
-  function handleSplitterMouseUp() {
-    dragStateRef.current = null;
-    window.removeEventListener("mousemove", handleSplitterMouseMove);
-    window.removeEventListener("mouseup", handleSplitterMouseUp);
-  }
-
-  if (!shareMode && isHydrating) {
+  if (isHydrating) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
         <div className="text-center">
@@ -813,27 +538,144 @@ Delete anyway?`);
           <p className="text-sm text-share-onSurfaceVariant">Syncing your data…</p>
         </div>
       </div>
-    )
+    );
   }
 
   return (
     <FocusBlockContext.Provider value={focusBlockValue}>
-    <div className="space-y-4 sm:space-y-6">
-      {/* A block that ran out while the app was closed, waiting to be claimed.
-          Above everything else: it is about work already done, and answering it
-          is one tap. */}
-      {timer.pendingAwayBlock && (
-        <AwayBlockClaim
-          block={timer.pendingAwayBlock}
-          taskTitle={
-            appState.days[timer.pendingAwayBlock.dayIso]?.tasks.find(
-              (t) => t.id === timer.pendingAwayBlock?.taskId,
-            )?.title
-          }
-          onConfirm={timer.confirmAwayBlock}
-          onDiscard={timer.discardAwayBlock}
+      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start lg:gap-6">
+        {/* ── The day ─────────────────────────────────────────────────── */}
+        <div className={`space-y-3 ${mobileTab !== "today" ? "hidden lg:block" : ""}`}>
+          {/* A block that ran out while the app was closed, waiting to be claimed. */}
+          {timer.pendingAwayBlock && (
+            <AwayBlockClaim
+              block={timer.pendingAwayBlock}
+              taskTitle={
+                appState.days[timer.pendingAwayBlock.dayIso]?.tasks.find(
+                  (t) => t.id === timer.pendingAwayBlock?.taskId,
+                )?.title
+              }
+              onConfirm={timer.confirmAwayBlock}
+              onDiscard={timer.discardAwayBlock}
+            />
+          )}
+
+          <div data-tour="date-nav">
+            <DayHeader
+              dateLabel={formatDateLabel(selectedDay)}
+              completedTaskCount={rootTasks.filter((t) => t.isDone).length}
+              totalTaskCount={rootTasks.length}
+              streak={accountabilityStats.streak}
+              isToday={isToday}
+              onPrevDay={() => setSelectedDay((current) => addDays(current, -1))}
+              onNextDay={() => setSelectedDay((current) => addDays(current, 1))}
+              onToday={() => setSelectedDay(todayIso())}
+              deepWorkMinutesToday={deepWorkMinutesToday}
+            />
+          </div>
+
+          <ErrorBoundary fallback={null} resetKeys={[selectedDay]}>
+            <CalendarTimeline status={calendar.status} events={calendar.events} isToday={isToday} now={now} />
+          </ErrorBoundary>
+
+          <ErrorBoundary
+            resetKeys={[selectedDay]}
+            fallback={(reset) => (
+              <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-200">
+                <p className="font-medium">This list hit a snag.</p>
+                <p className="mt-1 text-amber-200/80">Your tasks are saved. Reload it to continue.</p>
+                <button
+                  type="button"
+                  onClick={reset}
+                  className="mt-3 rounded border border-amber-400/50 bg-amber-500/20 px-3 py-1.5 text-xs font-medium text-amber-100 hover:bg-amber-500/30"
+                >
+                  Reload tasks
+                </button>
+              </div>
+            )}
+          >
+            <MustDoPinnedHeader
+              tasks={tasksBySection.mustDo ?? []}
+              onToggle={handleToggleTask}
+              onAdd={(title) => handleAddTask("mustDo", title)}
+              onDelete={handleDeleteTaskGuarded}
+              onUpdate={(id, patch) => handleUpdateTask(id, patch)}
+              deepWorkSessions={dayState.deepWorkSessions}
+              onStartBlock={handleStartBlock}
+              onOpenProgressSheet={setProgressSheetTaskId}
+              onSchedule={setScheduleTaskId}
+              onDragStart={(taskId) => handleDragStart("mustDo", taskId)}
+              onDragEnd={handleDragEnd}
+              onDropAt={(insertIndex) => handleDrop("mustDo", insertIndex)}
+              onMoveUp={(taskId) => handleReorderTask(taskId, "mustDo", "up")}
+              onMoveDown={(taskId) => handleReorderTask(taskId, "mustDo", "down")}
+              draggedTaskId={draggedTask?.sectionId === "mustDo" ? draggedTask.taskId : null}
+            />
+
+            {copySource && (
+              <button
+                type="button"
+                onClick={() =>
+                  undoable.run(`Copied ${copySource.label.toLowerCase()}`, () => handleCopyFromDay(copySource.date))
+                }
+                className="touch-target-coarse rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainer px-3 py-1.5 text-xs text-share-onSurface hover:border-share-primary/60 hover:text-share-primary"
+              >
+                {copySource.label}
+              </button>
+            )}
+
+            {renderSection(listSection, { overloadThreshold: 7, addPlaceholder: "Add a task" })}
+            {legacySections.map((section) => renderSection(section))}
+          </ErrorBoundary>
+        </div>
+
+        {/* ── Rail (desktop): what you reach for while working ───────────── */}
+        <aside className="hidden space-y-3 lg:sticky lg:top-4 lg:block lg:max-h-[calc(100dvh-2rem)] lg:overflow-y-auto">
+          <SidebarCard cardId="deepWorkTimer" title="Deep work timer">
+            <DeepWorkTimer timer={timer} breakMinutes={breakMinutes} onSetBlockLength={handleSetBlockLength} />
+          </SidebarCard>
+          <SidebarCard cardId="habits" title="Habits">
+            <HabitChecklist
+              habits={habits}
+              completions={dayState.habitCompletions ?? {}}
+              streaks={habitStreaks}
+              atRiskHabitIds={atRiskHabitIds}
+              identityStatement={appState.identityStatement ?? ""}
+              onToggle={handleToggleHabit}
+              onSetIdentity={handleSetIdentity}
+              onEditHabits={() => setEditHabitsOpen(true)}
+            />
+          </SidebarCard>
+        </aside>
+      </div>
+
+      {/* ── Phone destinations ────────────────────────────────────────── */}
+      {mobileTab === "focus" && (
+        <MobileFocusPanel
+          timer={timer}
+          breakMinutes={breakMinutes}
+          onSetBlockLength={handleSetBlockLength}
+          completedBlocksToday={completedBlocksToday}
         />
       )}
+      {mobileTab === "habits" && (
+        <MobileHabitsPanel
+          habits={habits}
+          days={appState.days}
+          selectedDay={selectedDay}
+          completions={dayState.habitCompletions ?? {}}
+          streaks={habitStreaks}
+          atRiskHabitIds={atRiskHabitIds}
+          identityStatement={appState.identityStatement ?? ""}
+          onToggle={handleToggleHabit}
+          onSetIdentity={handleSetIdentity}
+          onEditHabits={() => setEditHabitsOpen(true)}
+        />
+      )}
+      {/* Spacer so content doesn't hide behind the fixed MobileTabBar */}
+      <div className="h-16 pb-safe lg:hidden" />
+
+      {/* ── Transient prompts ─────────────────────────────────────────── */}
       {blockNotice && (
         <div
           role="status"
@@ -885,532 +727,9 @@ Delete anyway?`);
           onDismiss={() => setCompletionClaims((queue) => queue.slice(1))}
         />
       )}
-      <div
-        className={
-          shareShellLayout
-            ? "sticky top-[6.5rem] z-20 border-b border-share-outlineVariant/25 bg-share-bg/95 pb-3 backdrop-blur-sm"
-            : `sticky z-20 border-b border-share-outlineVariant/30 bg-share-bg/95 pb-3 backdrop-blur-sm ${stickyTopClass ?? "top-0"}`
-        }
-        data-tour="date-nav"
-      >
-        <DayHeader
-          dateLabel={formatDateLabel(selectedDay)}
-          completionRatio={dayCompletionRatio}
-          completedTaskCount={completedRootCount}
-          totalTaskCount={totalRootCount}
-          streak={accountabilityStats.streak}
-          bestStreak={accountabilityStats.bestStreak}
-          daysMissed={shareMode ? undefined : accountabilityStats.daysMissed}
-          onPrevDay={() => setSelectedDay((current) => addDays(current, -1))}
-          onNextDay={() => setSelectedDay((current) => addDays(current, 1))}
-          onToday={() => setSelectedDay(todayIso())}
-          deepWorkMinutesToday={shareMode ? undefined : deepWorkMinutesToday}
-          depthPhilosophy={shareMode ? undefined : appState.depthPhilosophy}
-          onOpenReview={shareMode ? undefined : () => navigate('/review')}
-        />
-        {!shareMode && (
-          <MustDoPinnedHeader
-            tasks={tasksBySection['mustDo'] ?? []}
-            onToggle={handleToggleTask}
-            onAdd={(title) => handleAddTask('mustDo', title)}
-            onDelete={handleDeleteTaskGuarded}
-            onUpdate={(id, patch) => handleUpdateTask(id, patch)}
-            deepWorkSessions={dayState.deepWorkSessions}
-            onStartBlock={handleStartBlock}
-            onOpenProgressSheet={setProgressSheetTaskId}
-            onDragStart={(taskId) => handleDragStart('mustDo', taskId)}
-            onDragEnd={handleDragEnd}
-            onDropAt={(insertIndex) => handleDrop('mustDo', insertIndex)}
-            onMoveUp={(taskId) => handleReorderTask(taskId, 'mustDo', 'up')}
-            onMoveDown={(taskId) => handleReorderTask(taskId, 'mustDo', 'down')}
-            draggedTaskId={draggedTask?.sectionId === 'mustDo' ? draggedTask.taskId : null}
-          />
-        )}
-        {/* Copy/fill: owner only — don't expose other days' tasks to shared visitors */}
-        {!shareMode && dayState.tasks.filter(t => t.sectionId !== 'mustDo').length === 0 && (() => {
-          const copyOptions: { label: string; sourceDate: string; title?: string }[] = [];
-          if (lastWeekdayState.tasks.length > 0) {
-            copyOptions.push({ label: `Fill from last ${weekdayLabel}`, sourceDate: lastWeekday });
-          }
-          if (prevDayState.tasks.length > 0) {
-            copyOptions.push({ label: 'Fill from yesterday', sourceDate: prevDay });
-          }
-          if (lastDayWithTasks != null && lastDayWithTasksState.tasks.length > 0 && lastDayWithTasks !== prevDay && lastDayWithTasks !== lastWeekday) {
-            copyOptions.push({
-              label: `Copy from ${formatDateShort(lastDayWithTasks)}`,
-              sourceDate: lastDayWithTasks,
-              title: `Copy tasks from ${formatDateLabel(lastDayWithTasks)} (last day with tasks)`,
-            });
-          }
-          if (copyOptions.length === 0) return null;
-          return (
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs" data-tour="fill-day">
-              {copyOptions.map(({ label, sourceDate, title }) => (
-                <button
-                  key={sourceDate}
-                  type="button"
-                  onClick={() => handleCopyFromDayUndoable(sourceDate, label)}
-                  className="rounded-md border border-share-outlineVariant/40 bg-share-surfaceContainer px-2 py-1.5 text-share-onSurface hover:border-share-primary/60 hover:text-share-primary"
-                  title={title}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          );
-        })()}
-        {!shareMode && selectedTaskIds.size === 0 && dayState.tasks.length > 0 && (
-          <p className="mt-2 text-[11px] text-share-onSurfaceVariant/70">
-Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
-          </p>
-        )}
-        {selectedTaskIds.size > 0 && (
-          <div className="mt-2 flex flex-wrap items-center gap-2 rounded-md border border-sky-600/60 bg-sky-500/10 px-2 py-1.5 text-xs">
-            <span className="text-share-onBg">
-              {selectedTaskIds.size} selected
-            </span>
-            {!shareMode && (
-              <>
-                <button
-                  type="button"
-                  onClick={handleCompleteSelected}
-                  className="rounded border border-emerald-600/60 bg-emerald-500/20 px-2 py-1 text-emerald-300 hover:bg-emerald-500/30"
-                >
-                  Mark complete
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSetShallowSelected(true)}
-                  className="rounded border border-amber-600/60 bg-amber-500/20 px-2 py-1 text-amber-300 hover:bg-amber-500/30"
-                >
-                  Mark shallow
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSetShallowSelected(false)}
-                  className="rounded border border-teal-600/60 bg-teal-500/20 px-2 py-1 text-teal-300 hover:bg-teal-500/30"
-                >
-                  Mark deep
-                </button>
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setBulkMoveOpen((o) => !o)}
-                    className="rounded border border-share-outlineVariant/40 bg-share-surfaceContainer px-2 py-1 text-share-onSurface hover:border-share-primary/60 hover:text-share-primary"
-                  >
-                    Move to section ▾
-                  </button>
-                  {bulkMoveOpen && (
-                    <div className="absolute left-0 top-full z-30 mt-1 w-48 rounded-md border border-share-outlineVariant/50 bg-share-surfaceContainerHigh py-1 shadow-2xl">
-                      {FIXED_SECTIONS.map((section) => (
-                        <button
-                          key={section.id}
-                          type="button"
-                          className="block w-full px-3 py-1.5 text-left text-share-onSurface hover:bg-share-surfaceContainerHighest"
-                          onClick={() => {
-                            handleMoveSelectedToSection(section.id);
-                            setBulkMoveOpen(false);
-                          }}
-                        >
-                          {section.title}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
-            <button
-              type="button"
-              onClick={handleDeleteSelectedGuarded}
-              className="rounded border border-red-600/60 bg-red-500/20 px-2 py-1 text-red-300 hover:bg-red-500/30"
-            >
-              Delete selected
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedTaskIds(new Set());
-                setBulkMoveOpen(false);
-              }}
-              className="rounded border border-share-outlineVariant/40 px-2 py-1 text-share-onSurfaceVariant hover:bg-share-surfaceContainer"
-            >
-              Clear selection
-            </button>
-          </div>
-        )}
-      </div>
 
-      <div
-        ref={shareShellLayout ? undefined : gridRef}
-        className={
-          shareShellLayout
-            ? "mt-3 flex flex-col gap-3"
-            : "mt-3 flex flex-col gap-3 lg:grid lg:gap-y-3 lg:gap-x-3 lg:items-start"
-        }
-        style={
-          shareShellLayout
-            ? undefined
-            : {
-                gridTemplateColumns: `minmax(0, ${splitRatio}fr) 4px minmax(0, ${
-                  1 - splitRatio
-                }fr)`,
-              }
-        }
-      >
-        <div className={`space-y-3${!shareShellLayout && mobileTab !== 'today' ? ' hidden lg:block' : ''}`} data-tour="tasks-section">
-         <ErrorBoundary
-           resetKeys={[selectedDay]}
-           fallback={(reset) => (
-             <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-200">
-               <p className="font-medium">This section hit a snag.</p>
-               <p className="mt-1 text-amber-200/80">Your tasks are saved. Reload this section to continue.</p>
-               <button
-                 type="button"
-                 onClick={reset}
-                 className="mt-3 rounded border border-amber-400/50 bg-amber-500/20 px-3 py-1.5 text-xs font-medium text-amber-100 hover:bg-amber-500/30"
-               >
-                 Reload tasks
-               </button>
-             </div>
-           )}
-         >
-          {/* The day opens by naming the one thing, not by listing six sections. */}
-          {nowFocus && (
-            <NowCard
-              focus={nowFocus}
-              timeframeLabel={timeframeLabelsBySection[nowFocus.sectionId]}
-              progress={nowProgress}
-              blockMinutes={blockMinutes}
-              onToggleTask={handleToggleTask}
-              onStartBlock={handleStartBlock}
-              onOpenActions={setProgressSheetTaskId}
-            />
-          )}
-          {!shareMode && (() => {
-            const shallowMinutesUsed = (appState.days[selectedDay]?.tasks ?? [])
-              .filter((t) => t.isShallow && t.isDone && t.durationMinutes)
-              .reduce((sum, t) => sum + (t.durationMinutes ?? 0), 0)
-            if (shallowMinutesUsed < 120) return null
-            const h = Math.floor(shallowMinutesUsed / 60)
-            const m = shallowMinutesUsed % 60
-            const label = h > 0 ? `${h}h ${m > 0 ? `${m}m` : ''}`.trim() : `${m}m`
-            return (
-              <div className="rounded border border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-300">
-                Shallow time: {label} / 2h daily limit. Protect your deep work blocks
-              </div>
-            )
-          })()}
-          {FIXED_SECTIONS.filter(s => s.id !== 'mustDo' && s.id !== 'sideQuest').map((section) => {
-            // The clock only speaks about today. Yesterday has no active block,
-            // so it must not auto-expand one or claim a section is running.
-            const isActive = !shareMode && selectedDay === todayIso() && activeSectionIds.includes(section.id)
-            const isDeepBlock = !shareMode && section.id === 'highPriority' && appState.depthPhilosophy === 'rhythmic'
-            const timeLabel = timeframeLabelsBySection[section.id]
-            return (
-            <Fragment key={section.id}>
-              {/*
-                * Only the rhythmic deep-block banner survives. The plain
-                * "Active · 7:40 PM - 11:40 PM" strip said exactly what the NOW
-                * card now says one card above it, in the same accent — two
-                * claims on the same attention, which is what rule 4 is for.
-                */}
-              {isDeepBlock && (
-                <div className="flex items-center gap-2 rounded border border-teal-700 bg-teal-900/30 px-3 py-1.5 text-xs text-teal-300">
-                  <span>
-                    {`Deep Block${timeLabel ? ` · ${timeLabel}` : ''} · protect this time`}
-                  </span>
-                </div>
-              )}
-            <SectionColumn
-              key={section.id}
-              section={section}
-              tasks={tasksBySection[section.id]}
-              /*
-               * Rule 3 of the redesign: the block you are in is open, the other
-               * five are one line each. This is only the default — an explicit
-               * expand or collapse is remembered per section and still wins, so
-               * the day does not fight someone who opened a section on purpose.
-               */
-              defaultCollapsed={!isActive}
-              isTimeBlockActive={isActive}
-              timeframeLabel={timeframeLabelsBySection[section.id]}
-              timeframeNote={section.id === 'highPriority' ? highPriorityTop3Note : null}
-              draggedTask={shareMode ? null : draggedTask}
-              onDragStart={shareMode ? () => undefined : handleDragStart}
-              onDragEnd={shareMode ? () => undefined : handleDragEnd}
-              onDrop={shareMode ? () => undefined : (insertIndex: number) => handleDrop(section.id, insertIndex)}
-              selectedTaskIds={shareMode ? new Set<string>() : selectedTaskIds}
-              onToggleSelect={shareMode ? () => undefined : handleToggleSelect}
-              onAddTask={shareMode === 'view' ? () => undefined : (title) => handleAddTask(section.id, title)}
-              onAddTaskAbove={shareMode === 'view' ? () => undefined : (beforeTaskId) =>
-                handleAddTaskAbove(section.id, beforeTaskId)
-              }
-              onAddTaskBelow={shareMode === 'view' ? () => undefined : (afterTaskId) =>
-                handleAddTaskBelow(section.id, afterTaskId)
-              }
-              onAddSubtask={shareMode === 'view' ? () => undefined : handleAddSubtask}
-              onToggleTask={shareMode === 'view' ? () => undefined : (taskId) => handleToggleTask(taskId)}
-              onDeleteTask={shareMode === 'view' ? () => undefined : handleDeleteTaskGuarded}
-              onUpdateTask={shareMode === 'view' ? () => undefined : handleUpdateTask}
-              deepWorkSessions={dayState.deepWorkSessions}
-              onStartBlock={shareMode === 'view' ? undefined : handleStartBlock}
-              onOpenProgressSheet={shareMode === 'view' ? undefined : setProgressSheetTaskId}
-              taskIdsDueNow={taskIdsDueNow}
-              onMoveTaskUp={shareMode === 'view' ? undefined : (taskId) => handleReorderTask(taskId, section.id, 'up')}
-              onMoveTaskDown={shareMode === 'view' ? undefined : (taskId) => handleReorderTask(taskId, section.id, 'down')}
-              onMoveToNotDoing={shareMode === 'view' ? undefined : handleMoveToNotDoing}
-              onAbandonTask={shareMode === 'view' ? undefined : handleAbandonTask}
-              onReorderSubtask={shareMode === 'view' ? undefined : handleReorderSubtask}
-              onRequestMoveSubtask={shareMode === 'view' ? undefined : (id) => setMoveSubtaskId(id)}
-              overloadThreshold={
-                section.id === 'mustDo' ? 3
-                : section.id === 'highPriority' ? 5
-                : undefined
-              }
-              plannedMinutes={shareMode ? undefined : plannedBySection?.[section.id as keyof BlockDurations]}
-              windowMinutes={shareMode ? undefined : blockWindowBySection[section.id]}
-              headerAction={(() => {
-                if (shareMode || !effectiveBlockDurations) return undefined;
-                const sId = section.id as keyof BlockDurations;
-                if (!(sId in effectiveBlockDurations)) return undefined;
-                const idx = BLOCK_ORDER.indexOf(sId);
-                const isLast = idx === BLOCK_ORDER.length - 1;
-                const nextId = isLast ? null : BLOCK_ORDER[idx + 1];
-                const nextSection = nextId ? FIXED_SECTIONS.find((s) => s.id === nextId) : null;
-                const currentSleepMins = sleepMinutesFromTarget(
-                  dayState.wakeTime ?? "07:00",
-                  dayState.sleepTarget ?? "23:00",
-                );
-                return (
-                  <BlockDurationEditor
-                    currentDuration={effectiveBlockDurations[sId]}
-                    minDuration={BLOCK_MIN_MINUTES[sId]}
-                    adjacentLabel={isLast ? "Sleep" : (nextSection?.title ?? "Next block")}
-                    adjacentDuration={isLast ? currentSleepMins : (nextId ? effectiveBlockDurations[nextId] : 0)}
-                    adjacentMin={isLast ? SLEEP_MIN_MINUTES : (nextId ? BLOCK_MIN_MINUTES[nextId] : 0)}
-                    affectsSleep={isLast}
-                    sleepMinutes={currentSleepMins}
-                    onConfirm={(newDur) => handleBlockDurationChange(sId, newDur)}
-                  />
-                );
-              })()}
-            />
-            {!shareMode && section.id === 'nightRoutine' && (
-              <TomorrowMustPanel
-                tomorrowDate={tomorrowDate}
-                tasks={tomorrowMustTasks}
-                sourceMustCount={(tasksBySection['mustDo'] ?? []).filter((t) => !t.parentId).length}
-                onAdd={handleAddTomorrowMust}
-                onDelete={handleDeleteTomorrowMust}
-                onEdit={handleEditTomorrowMust}
-                onUpdate={handleUpdateTomorrowMust}
-                onCopyFromToday={handleCopyTodayMustsToTomorrow}
-              />
-            )}
-            </Fragment>
-          )
-          })}
-          {/* Sleep block: same style as sections, no tasks, highlights when current time is 11 PM - 5 AM */}
-          <section
-            className={`rounded-lg border p-3 sm:p-4 ${
-              isSleepTimeNow
-                ? 'border-amber-500/60 bg-amber-500/10'
-                : 'border-share-outlineVariant/25 bg-share-surfaceContainerLow'
-            }`}
-            aria-label="Sleep block"
-          >
-            <header className="mb-2 flex items-start justify-between gap-2">
-              <div>
-                <h3 className="text-sm sm:text-base font-semibold text-share-onBg">
-                  Sleep
-                </h3>
-                {(() => {
-                  // The night is anchored on the bedtime the user set. Finishing
-                  // the plan early buys open evening, not sleep — only a plan that
-                  // overruns the target pushes bedtime later and costs sleep.
-                  const wake = dayState.wakeTime ?? '07:00';
-                  const [wh, wm] = wake.split(':').map(Number);
-                  const wakeMin = (wh ?? 0) * 60 + (wm ?? 0);
-                  const win = sleepWindow;
-                  const startMin = win
-                    ? win.startMin
-                    : (() => {
-                        const [bh, bm] = (dayState.sleepTarget ?? '23:00').split(':').map(Number);
-                        return (bh ?? 0) * 60 + (bm ?? 0);
-                      })();
-                  const durationMin = win ? win.durationMin : ((wakeMin - startMin + 1440) % 1440);
-                  const fmtDur = (mins: number) => {
-                    const h = Math.floor(mins / 60);
-                    const m = mins % 60;
-                    if (h === 0) return `${m}m`;
-                    return m > 0 ? `${h}h ${m}m` : `${h}h`;
-                  };
-                  const dur = fmtDur(durationMin);
-                  const tooLittle = durationMin < SLEEP_MIN_MINUTES;
-                  const underTarget = !tooLittle && durationMin < SLEEP_WARN_MINUTES;
-                  return (
-                    <>
-                      <p className="text-xs text-share-onSurfaceVariant tabular-nums">
-                        {formatTimeOfDay(startMin)} → {formatTimeOfDay(wakeMin)} · {dur}
-                      </p>
-                      {win && win.overran ? (
-                        <p className="mt-0.5 text-xs text-amber-400">
-                          The plan runs {fmtDur(win.lostMinutes)} past your bedtime — that comes out of sleep.
-                        </p>
-                      ) : win && win.freeMinutes < SLEEP_WINDDOWN_BUFFER_MINUTES ? (
-                        <p className="mt-0.5 text-xs text-amber-400">
-                          The plan ends right at bedtime — no wind-down.
-                        </p>
-                      ) : win ? (
-                        <p className="mt-0.5 text-xs text-share-onSurfaceVariant/60">
-                          {fmtDur(win.freeMinutes)} open before bed.
-                        </p>
-                      ) : null}
-                      {tooLittle ? (
-                        <p className="mt-0.5 text-xs text-red-400">Below the 5h floor — you'll need to catch up.</p>
-                      ) : underTarget ? (
-                        <p className="mt-0.5 text-xs text-amber-400">Under 6h — aim for 6–8h.</p>
-                      ) : null}
-                    </>
-                  );
-                })()}
-              </div>
-              {!shareMode && (
-                <div className="flex shrink-0 items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setDaySetupOpen(true)}
-                    className="touch-target-coarse rounded border border-share-outlineVariant/40 bg-share-surfaceContainer px-2 py-1 text-xs text-share-onSurface hover:border-share-primary/50 hover:text-share-primary"
-                  >
-                    Edit schedule
-                  </button>
-                  {effectiveBlockDurations && dayState.wakeTime && dayState.sleepTarget && (() => {
-                    const sleepMins = sleepMinutesFromTarget(dayState.wakeTime, dayState.sleepTarget);
-                    return (
-                      <BlockDurationEditor
-                        currentDuration={sleepMins}
-                        minDuration={SLEEP_MIN_MINUTES}
-                        adjacentLabel="Night routine"
-                        adjacentDuration={effectiveBlockDurations.nightRoutine}
-                        adjacentMin={BLOCK_MIN_MINUTES.nightRoutine}
-                        affectsSleep={false}
-                        onConfirm={(newSleepMins) => {
-                          const delta = newSleepMins - sleepMins;
-                          // Adjusting sleep adjusts Night Routine in the opposite direction
-                          handleBlockDurationChange('nightRoutine', effectiveBlockDurations.nightRoutine - delta);
-                        }}
-                      />
-                    );
-                  })()}
-                </div>
-              )}
-            </header>
-          </section>
-         </ErrorBoundary>
-        </div>
-
-        {!shareShellLayout && (
-          <>
-            <div
-              className="hidden h-full w-1 cursor-col-resize rounded-full bg-share-outlineVariant/30 hover:bg-share-primary lg:block"
-              onMouseDown={handleSplitterMouseDown}
-              aria-hidden="true"
-            />
-
-            <div className="hidden lg:block space-y-3 lg:sticky lg:top-4 lg:max-h-[calc(100dvh-2rem)] lg:overflow-y-auto lg:pr-1" data-tour="sidebar">
-              {/* The rail is Focus, Habits, One Thing — the three cards you
-                  reach for while working rather than while planning, and on a
-                  phone the three that are separate destinations. Width is the
-                  only reason they can sit beside the day instead of instead of
-                  it. Everything glanceable is collapsed below them. */}
-              {!shareMode && (
-                <SidebarCard cardId="deepWorkTimer" title="Deep work timer">
-                  <div className="space-y-3">
-                    <DeepWorkTimer
-                      timer={timer}
-                      breakMinutes={breakMinutes}
-                      onSetBlockLength={handleSetBlockLength}
-                    />
-                  </div>
-                </SidebarCard>
-              )}
-              {!shareMode && (
-                <SidebarCard cardId="habits" title="Habits">
-                  <HabitChecklist
-                    habits={habits}
-                    completions={dayState.habitCompletions ?? {}}
-                    streaks={habitStreaks}
-                    atRiskHabitIds={atRiskHabitIds}
-                    identityStatement={appState.identityStatement ?? ''}
-                    onToggle={handleToggleHabit}
-                    onSetIdentity={handleSetIdentity}
-                    onEditHabits={() => setEditHabitsOpen(true)}
-                    travelingToday={travelingToday}
-                  />
-                </SidebarCard>
-              )}
-              <SidebarCard cardId="weeklyOverview" title="Weekly overview" defaultCollapsed>
-                <WeeklyOverview
-                  state={appState as AppState}
-                  referenceDay={selectedDay}
-                />
-              </SidebarCard>
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Mobile tab panels — rendered outside the grid so they don't affect desktop layout */}
-      {!shareMode && !shareShellLayout && (
-        <>
-          {mobileTab === 'focus' && (
-            <MobileFocusPanel
-              timer={timer}
-              breakMinutes={breakMinutes}
-              onSetBlockLength={handleSetBlockLength}
-              completedBlocksToday={completedBlocksToday}
-            />
-          )}
-          {mobileTab === 'habits' && (
-            <MobileHabitsPanel
-              habits={habits}
-              days={appState.days}
-              selectedDay={selectedDay}
-              completions={dayState.habitCompletions ?? {}}
-              streaks={habitStreaks}
-              atRiskHabitIds={atRiskHabitIds}
-              identityStatement={appState.identityStatement ?? ''}
-              onToggle={handleToggleHabit}
-              onSetIdentity={handleSetIdentity}
-              travelingToday={travelingToday}
-              onEditHabits={() => setEditHabitsOpen(true)}
-            />
-          )}
-          {/*
-            The Stats tab is gone. It rendered the weekly overview above the
-            same dashboard every other tab rendered, which is precisely the
-            duplication the redesign removes; month-scale views live at
-            /review, and the tab bar links there directly.
-          */}
-          {/* Spacer so content doesn't hide behind the fixed MobileTabBar */}
-          <div className="h-16 pb-safe lg:hidden" />
-        </>
-      )}
-
-      {/*
-        The day journal and the monthly tracking dashboard used to render here,
-        under the day, on every screen and every mobile tab — ~2,500px that was
-        identical across all four tabs. They live at /review now, which
-        is what makes the tab bar mean something. See docs/design/README.md.
-      */}
-
-      {/*
-        Desktop Focus. Rendered last so it sits over the day, and only on lg —
-        a phone reaches Focus by tapping its tab, where there is no day to
-        cover in the first place.
-      */}
-      {showFocusMode && (
+      {/* ── Overlays ──────────────────────────────────────────────────── */}
+      {timerRunning && !focusDismissed && (
         <FocusMode
           timer={timer}
           progress={focusTaskProgress}
@@ -1420,74 +739,77 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
         />
       )}
 
-      {moveSubtaskId && !shareMode && (() => {
-        const subtask = dayState.tasks.find(t => t.id === moveSubtaskId)
-        if (!subtask) return null
-        const parentsBySection = FIXED_SECTIONS
-          .filter(s => s.id !== 'sideQuest')
-          .map(s => ({
-            section: s,
-            roots: (tasksBySection[s.id] ?? []).filter(t => !t.parentId && t.id !== moveSubtaskId && t.id !== subtask.parentId),
-          }))
-          .filter(({ roots }) => roots.length > 0)
-        return (
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
-            onClick={() => setMoveSubtaskId(null)}
-          >
+      {scheduleTask && (
+        <ScheduleSheet
+          task={scheduleTask}
+          defaultMinutes={blockMinutes}
+          connected={calendar.connected}
+          canConnect={Boolean(user)}
+          onSchedule={(req) => handleSchedule(scheduleTask, req)}
+          onUnschedule={() => handleUnschedule(scheduleTask)}
+          onSaveLength={(minutes) => handleUpdateTask(scheduleTask.id, { durationMinutes: minutes })}
+          onClose={() => setScheduleTaskId(null)}
+        />
+      )}
+
+      {moveSubtaskId &&
+        (() => {
+          const subtask = dayState.tasks.find((t) => t.id === moveSubtaskId);
+          if (!subtask) return null;
+          const parents = dayState.tasks.filter(
+            (t) => !t.parentId && t.id !== moveSubtaskId && t.id !== subtask.parentId,
+          );
+          return (
             <div
-              className="w-full max-w-sm rounded-lg border border-share-outlineVariant/50 bg-share-surfaceContainerHigh p-4 shadow-2xl"
-              onClick={e => e.stopPropagation()}
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+              onClick={() => setMoveSubtaskId(null)}
             >
-              <h3 className="mb-3 text-sm font-semibold text-share-onBg">Move subtask to...</h3>
-              <div className="max-h-64 overflow-y-auto space-y-1">
-                {parentsBySection.map(({ section, roots }) => (
-                  <div key={section.id}>
-                    <p className="px-3 py-1 text-[10px] uppercase tracking-wide text-share-onSurfaceVariant/60">{section.title}</p>
-                    {roots.map(parent => (
-                      <button
-                        key={parent.id}
-                        type="button"
-                        className="w-full rounded px-3 py-2 text-left text-sm text-share-onSurface hover:bg-share-surfaceContainerHighest"
-                        onClick={() => {
-                          handleMoveSubtask(moveSubtaskId, parent.id)
-                          setMoveSubtaskId(null)
-                        }}
-                      >
-                        {parent.title}
-                      </button>
-                    ))}
-                  </div>
-                ))}
-                {parentsBySection.length === 0 && (
-                  <p className="px-3 py-2 text-sm text-share-onSurfaceVariant/60">No other tasks to move to.</p>
-                )}
-              </div>
-              <div className="mt-3 border-t border-share-outlineVariant/30 pt-3">
-                <button
-                  type="button"
-                  className="w-full rounded px-3 py-2 text-left text-sm text-share-onSurfaceVariant hover:bg-share-surfaceContainerHighest"
-                  onClick={() => {
-                    handleMoveSubtask(moveSubtaskId, null)
-                    setMoveSubtaskId(null)
-                  }}
-                >
-                  Make it a top-level task
-                </button>
-              </div>
-              <div className="mt-2">
-                <button
-                  type="button"
-                  className="w-full rounded px-3 py-1.5 text-center text-xs text-share-onSurfaceVariant/70 hover:bg-share-surfaceContainerHighest"
-                  onClick={() => setMoveSubtaskId(null)}
-                >
-                  Cancel
-                </button>
+              <div
+                className="w-full max-w-sm rounded-lg border border-share-outlineVariant/50 bg-share-surfaceContainerHigh p-4 shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <h3 className="mb-3 text-sm font-semibold text-share-onBg">Move subtask to...</h3>
+                <div className="max-h-64 space-y-1 overflow-y-auto">
+                  {parents.map((parent) => (
+                    <button
+                      key={parent.id}
+                      type="button"
+                      className="w-full rounded px-3 py-2 text-left text-sm text-share-onSurface hover:bg-share-surfaceContainerHighest"
+                      onClick={() => {
+                        handleMoveSubtask(moveSubtaskId, parent.id);
+                        setMoveSubtaskId(null);
+                      }}
+                    >
+                      {parent.title}
+                    </button>
+                  ))}
+                  {parents.length === 0 && (
+                    <p className="px-3 py-2 text-sm text-share-onSurfaceVariant/60">No other tasks to move to.</p>
+                  )}
+                </div>
+                <div className="mt-3 border-t border-share-outlineVariant/30 pt-3">
+                  <button
+                    type="button"
+                    className="w-full rounded px-3 py-2 text-left text-sm text-share-onSurfaceVariant hover:bg-share-surfaceContainerHighest"
+                    onClick={() => {
+                      handleMoveSubtask(moveSubtaskId, null);
+                      setMoveSubtaskId(null);
+                    }}
+                  >
+                    Make it a top-level task
+                  </button>
+                  <button
+                    type="button"
+                    className="mt-1 w-full rounded px-3 py-1.5 text-center text-xs text-share-onSurfaceVariant/70 hover:bg-share-surfaceContainerHighest"
+                    onClick={() => setMoveSubtaskId(null)}
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        )
-      })()}
+          );
+        })()}
 
       {progressSheetTask && progressSheetProgress && (
         <TaskProgressSheet
@@ -1495,38 +817,29 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
           taskTitle={progressSheetTask.title}
           dayIso={selectedDay}
           progress={progressSheetProgress}
-          manualEntries={progressSheetManualEntries}
-          attributedSessions={progressSheetSessions}
+          manualEntries={listManualEntries(
+            progressSheetTask.id,
+            dayState.deepWorkSessions,
+            progressSheetTask.manualLoggedMinutes,
+          )}
+          attributedSessions={dayState.deepWorkSessions.filter(
+            (session) => session.taskId === progressSheetTask.id && !session.cancelledAt,
+          )}
           attributionTargets={attributionTargets}
-          onReattribute={shareMode === 'view' ? undefined : handleReattributeSession}
+          onReattribute={handleReattributeSession}
           onLogManual={(minutes, interval) => handleLogManualMinutes(progressSheetTask.id, minutes, interval)}
           onUndoManual={(minutes) => handleUndoManualMinutes(progressSheetTask.id, minutes)}
-          onStartBlock={shareMode === 'view' ? undefined : (minutes) => handleStartBlock(progressSheetTask.id, minutes)}
+          onStartBlock={(minutes) => handleStartBlock(progressSheetTask.id, minutes)}
           onClose={() => setProgressSheetTaskId(null)}
         />
       )}
 
-      <PlannerModals
-        selectedDay={selectedDay}
-        dayState={dayState}
-        prevDayState={prevDayState}
-        blockEditor={blockEditor}
-        routineMinutes={appState.routineMinutes}
-        habits={habits}
-        editHabitsOpen={editHabitsOpen}
-        onCloseHabits={() => setEditHabitsOpen(false)}
-        onSaveHabits={handleSaveHabitsUndoable}
-      />
-
-      {/* Mobile bottom tab bar — owner only, not shown in shared views */}
-      {!shareMode && !shareShellLayout && (
-        <MobileTabBar activeTab={mobileTab} onTabChange={setMobileTab} />
+      {editHabitsOpen && (
+        <HabitEditorModal habits={habits} onSave={handleSaveHabits} onClose={() => setEditHabitsOpen(false)} />
       )}
 
-      {!shareMode && (
-        <UndoToast entry={undoable.entry} onUndo={undoable.undo} onDismiss={undoable.dismiss} />
-      )}
-    </div>
+      <MobileTabBar activeTab={mobileTab} onTabChange={setMobileTab} />
+      <UndoToast entry={undoable.entry} onUndo={undoable.undo} onDismiss={undoable.dismiss} />
     </FocusBlockContext.Provider>
   );
 }

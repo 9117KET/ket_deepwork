@@ -9,7 +9,7 @@
 import { useState } from 'react'
 import type React from 'react'
 import type { HabitDefinition } from '../../domain/types'
-import { Plane, Check, AlertTriangle, Flame } from 'lucide-react'
+import { Check, AlertTriangle, Flame } from 'lucide-react'
 
 interface HabitChecklistProps {
   habits: HabitDefinition[]
@@ -20,8 +20,6 @@ interface HabitChecklistProps {
   onToggle: (habitId: string, value: boolean) => void
   onSetIdentity: (value: string) => void
   onEditHabits: () => void
-  /** When true (user is on an active trip), suppress never-miss-twice alerts. */
-  travelingToday?: boolean
 }
 
 export function HabitChecklist({
@@ -33,7 +31,6 @@ export function HabitChecklist({
   onToggle,
   onSetIdentity,
   onEditHabits,
-  travelingToday = false,
 }: HabitChecklistProps) {
   const [collapsed, setCollapsed] = useState(false)
   const [editingIdentity, setEditingIdentity] = useState(false)
@@ -91,12 +88,6 @@ export function HabitChecklist({
 
       {!collapsed && (
         <>
-          {/* Travel context note */}
-          {travelingToday && (
-            <p className="mb-2 flex items-center gap-1.5 rounded bg-teal-500/10 border border-teal-500/20 px-2 py-1 text-xs text-teal-300">
-              <Plane className="h-3.5 w-3.5 shrink-0" /> You&apos;re traveling - at-risk alerts paused.
-            </p>
-          )}
           {/* Identity statement */}
           <div className="mb-3">
             {editingIdentity ? (
@@ -129,8 +120,7 @@ export function HabitChecklist({
             {habits.map((habit) => {
               const done = completions[habit.id] === true
               const streak = streaks[habit.id] ?? 0
-              // Suppress never-miss-twice alert when traveling — context explains the miss
-              const atRisk = atRiskHabitIds.has(habit.id) && !done && !travelingToday
+              const atRisk = atRiskHabitIds.has(habit.id) && !done
 
               return (
                 <li

@@ -136,32 +136,27 @@ tab — see feature 8 below.
 
 `sectionId` is one of: `mustDo | morningRoutine | highPriority | mediumPriority | lowPriority | nightRoutine`
 
-### The day's schedule (`src/domain/sectionTimeBlocks.ts`)
+### Today and the calendar
 
-Blocks are **demand-first**: each work block sizes to the minutes its tasks
-actually need, so an ordinary day's last block ends in the afternoon.
+Time belongs to Google Calendar; the planner keeps what a calendar cannot.
+`DayPlanner` renders, top to bottom: `DayHeader`, `CalendarTimeline` (the day's
+events, read-only, via `useCalendarDay`), the Top 3 (`MustDoPinnedHeader`), and
+one list, "Tasks" (`highPriority`). Days planned before the minimal rewrite
+still show their other sections (`morningRoutine` … `sideQuest`) whenever they
+hold tasks — never hidden, never migrated. New tasks only use the one list.
 
-Morning and night are the exception — they are **reservations**, not demand.
-They hold `AppState.routineMinutes` (default 45m / 30m, `0` allowed and meaning
-"I don't have one") even with no tasks in them, because habits live in the
-sidebar checklist and those blocks read as empty on a day you fully did them.
-The lengths are stated in Day Setup and stored globally, never re-derived: they
-used to be `10% of the awake window, capped at 90m`, which meant a later bedtime
-silently lengthened your morning routine and reserved three hours a day nobody
-had agreed to.
+There is no block schedule, day setup, sleep window or NOW card any more
+(`sectionTimeBlocks.ts`, `useDayBlockEditor`, `useTimeAwareness` were deleted).
+A task gets a time by being **scheduled**: `ScheduleChip` → `ScheduleSheet` →
+`scheduleTask`, which writes a real event with a 10-minute popup reminder, so
+the calendar does the reminding on every device. `Task.scheduledAt` mirrors the
+event's start. Without a connection the sheet still sets a plain time and says
+no reminder comes with it.
 
-The night is **not** derived from that. Sleep is anchored on the bedtime the
-user set (`DayState.sleepTarget`), and `computeSleepWindow` only moves it later
-when the plan overruns. Deriving bedtime from the block end instead made every
-light day claim a 12h night, clamped to a 10h ceiling — a number matching
-neither the schedule nor anything else on screen. Finishing early buys
-`freeMinutes` of open evening; overrunning costs `lostMinutes` of sleep.
-`SLEEP_WINDDOWN_BUFFER_MINUTES` is advisory (the gap that should exist before
-bed), never part of the anchor.
-
-`sleepMinutesFromTarget` / `sleepTargetFromMinutes` are the only place bedtime
-and night length convert into each other — they run backwards from wake across
-midnight, and the sign is easy to get wrong.
+`useWorkLog` copies each finished, earned (`source !== 'manual'`) session from
+the last 36h to the "Deepblock log" calendar. It is driven by recorded sessions,
+not the timer callback, so away-block claims and other devices are covered too;
+the server derives the event id from the session id, so re-sending is a no-op.
 
 ### Responsive foundations
 
@@ -211,41 +206,43 @@ the next settings write drop it.
 
 | Path | Purpose |
 |------|---------|
-| `src/domain/` | Types, date utils, stats, time-block allocation — no React, pure logic |
-| `src/storage/` | All persistence: localStorage, Supabase planner/sharing/settings |
-| `src/contexts/AuthContext.tsx` | Supabase auth state, exposed via `useAuth()` |
-| `src/components/planner/` | Day planner UI, task items, weekly overview |
-| `src/components/timer/` | Deep work timer (Pomodoro-style) + motivation card |
-| `src/components/tracking/` | Monthly habit/mood/sleep dashboard |
+| `src/domain/` | Types, date utils, stats, task progress, work safety — no React, pure logic |
+| `src/storage/` | All persistence: localStorage gateway, Convex sync, active block mirror |
+| `src/contexts/AuthContext.tsx` | Convex auth state, exposed via `useAuth()` |
+| `src/components/planner/` | Today: header, calendar timeline, Top 3, task list, schedule sheet |
+| `src/components/timer/` | Deep work timer, phone Focus panel, desktop Focus mode |
+| `src/components/habits/` | Habit checklist, phone Habits panel, habit editor |
+| `src/hooks/` | `useTaskHandlers`, `useCalendarDay`, `useWorkLog`, undo |
 | `src/pages/` | Route-level page components |
-| `src/services/` | Google Calendar helpers (called by `CalendarSyncPage`) |
-| `supabase/functions/` | Edge Functions for Google Calendar OAuth + sync |
-| `supabase/migrations/` | SQL schema (5 migration files) |
+| `src/services/calendarSyncService.ts` | Client wrappers for the Convex calendar actions |
 
 ### Google Calendar (Convex)
 
-> Migrated off Supabase Edge Functions onto Convex. Any `supabase/functions/*`
-> calendar code is legacy/unused — the live integration is below. See
-> `docs/ROADMAP.md` (Google Calendar phase status) for the backlog.
-
 - **Backend:** `convex/calendar.ts` (public actions/queries) + `convex/calendarInternal.ts`
   (internal queries/mutations). Shared Google helpers in `convex/_shared/google.ts`,
-  envelope encryption in `convex/_shared/crypto.ts`.
+  envelope encryption in `convex/_shared/crypto.ts`, the free-slot search and the
+  log event id in `convex/_shared/freeSlot.ts` (pure, unit-tested).
 - **Public API:** `connectionStatus` (query), `googleOauthStart` / `googleOauthCallback`,
-  `listCalendars`, `selectCalendar`, `syncFromGoogle`, `syncToGoogle`, `disconnectGoogle`.
-- **Tables:** `googleCalendarConnections` (encrypted refresh token + selected calendar)
-  and `calendarEventLinks` (task ↔ google event mapping + etag). The client never
+  `listCalendars`, `selectCalendar`, `listEvents`, `scheduleTask`, `unscheduleTask`,
+  `logWorkBlock`, `disconnectGoogle`.
+- **Rules:** `listEvents` is read-only and writes nothing to the planner (the old
+  import copied events in as tasks; it is gone). `scheduleTask` places a task in
+  the first free gap between now/08:00 and 22:00 using freeBusy on the chosen
+  calendar and `primary`, or at an exact `startTime`; a task already linked is
+  moved (PATCH), never duplicated. `logWorkBlock` lazily creates the "Deepblock
+  log" calendar (`googleCalendarConnections.logCalendarId`), recreates it if the
+  user deleted it, and treats 409 as already logged. The calendar defaults to
+  `primary` when none is selected.
+- **Tables:** `googleCalendarConnections` (encrypted refresh token, selected calendar,
+  log calendar) and `calendarEventLinks` (task ↔ event mapping). The client never
   sees tokens — actions decrypt the refresh token and mint short-lived access tokens.
-- **Frontend:** `src/services/calendarSyncService.ts` wraps the actions;
-  `CalendarSyncPage.tsx` is the UI, `CalendarCallbackPage.tsx` handles the OAuth redirect.
-- **Sync rules:** import = timed events → `highPriority` tasks (all-day skipped);
-  push = tasks with `scheduledAt` + `durationMinutes` and no `parentId`.
+- **Tests:** `npm run test:convex` runs `convex/calendar.test.ts` against a mocked
+  Google `fetch`.
 - **Env vars** (Convex dashboard): `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
   `GOOGLE_TOKEN_ENCRYPTION_KEY_B64`. Prod still needs these copied over (DEPLOYMENT.md step 2).
-
-### Sharing
-
-`supabase/functions` is not involved — sharing uses `src/storage/supabaseSharing.ts` directly. A share token record in Supabase encodes `permission: "view" | "edit"` and the owner's user ID.
+- **OAuth app status:** while the Google consent screen is in *Testing*, refresh
+  tokens expire after 7 days and the calendar silently disconnects weekly.
+  Publishing it needs `/privacy`, which describes exactly this data use.
 
 ### Streak logic
 
@@ -253,7 +250,7 @@ Streaks require at least one task created **and** at least one task completed on
 
 ### Deep Work framework (Cal Newport)
 
-Nine features built around the *Deep Work* philosophy:
+Features built around the *Deep Work* philosophy:
 
 1. **Session recording** — `DeepWorkTimer` (first card in the sidebar) calls `onSessionComplete(label, minutes, taskId?)` when the countdown ends. A "Working on" selector attributes the block to one of the day's trackable tasks; the selection locks while a session is running or paused. `DayPlanner.handleSessionComplete` appends a `DeepWorkSession` to `DayState.deepWorkSessions`, which is persisted via the normal Supabase sync path (`planner_days.deep_work_sessions` JSONB column).
 
@@ -261,9 +258,9 @@ Nine features built around the *Deep Work* philosophy:
 
 3. **Task depth classification** — `Task.isShallow?: boolean`. Right-click / ⋮ menu shows "Mark as shallow / Mark as deep work". Shallow tasks show an amber badge. When completed shallow tasks total ≥ 120 min, a warning banner appears above the sections.
 
-4. **Weekly scoreboard** — `MonthlyTrackingDashboard` shows a "Deep Work This Week" card: progress bar (hours done vs. editable goal), per-day bar chart. Stats computed by `computeWeeklyDeepWorkHours` in `stats.ts`.
+4. **Weekly scoreboard** — `/review` (`ReviewPage`) shows this week's earned hours against `deepWorkGoalHoursPerWeek` (editable there), a bar per day, and hand-logged time beside it but never added to it.
 
-5. **Depth philosophy** — Three chips (Rhythmic / Journalistic / Bimodal) in the tracking dashboard set `AppState.depthPhilosophy`. The *block length* is no longer set there — the dashboard shows a readout and the control lives under the timer's preset chips (feature 9). When set to `rhythmic`, a teal banner above the *High Priority* section shows the current deep block time window.
+5. **Depth philosophy** — removed from the UI with the time blocks; `AppState.depthPhilosophy` is kept so existing settings are not dropped.
 
 6. **Task progress boxes** — a task with `durationMinutes >= 30` renders a row of
    30-minute boxes (`TaskProgressBoxes`), collapsing to a segmented bar past six.
@@ -275,16 +272,12 @@ Nine features built around the *Deep Work* philosophy:
    never be confused with self-reported time. Only manual minutes can be undone.
    On phones the row is one button opening `TaskProgressSheet`, which offers the
    timer first and hand-logging second. Rendered by `TaskItem` (via
-   `SectionColumn` / `SideQuestSection`), `MustDoPinnedHeader`, and read-only in
-   `TomorrowMustPanel` (tomorrow has no logged work yet).
+   `SectionColumn`) and `MustDoPinnedHeader`.
 
-7. **Time as an opt-in anchor** — `Task.scheduledAt` is no longer a field on the
-   task row. Sections already say when work happens, so tasks are budgeted by
-   duration; a clock time is set only for externally fixed commitments, via
-   `TimeAnchor` (the ⋮ menu in `TaskItem`, a hover clock icon in the MUST panels).
-   Everything keyed on `scheduledAt` — `useTimeAwareness` nudges,
-   `TaskConflictModal`, calendar push in `convex/calendar.ts` — is unchanged and
-   now fires only on anchored tasks.
+7. **Time comes from the calendar** — a task's time is set by scheduling it into
+   Google Calendar (`ScheduleChip` → `ScheduleSheet`, see "Today and the
+   calendar" above); `Task.scheduledAt` mirrors the event start. On phones the
+   duration picker lives in that sheet, so a row stays one line.
 
 8. **Work done away from the screen** — the countdown is mirrored to
    `localStorage` (`src/storage/activeBlock.ts`) on every state change, keyed on
@@ -331,8 +324,7 @@ Nine features built around the *Deep Work* philosophy:
 9. **Block length is set from the timer** — the preset chips pick this run's
    length; the line under them (`BlockLengthLine`) shows `Your block: Xm on · Ym
    off` and offers "Make Nm my block" whenever the picked length differs from
-   the configured one, calling `handleSetBlockLength` in `DayPlanner`. The
-   tracking dashboard keeps a readout only.
+   the configured one, calling `handleSetBlockLength` in `DayPlanner`.
 
 10. **Completion is offered, never taken** — a block that fills a task's row
     raises a one-tap "Mark done?" (`doneOffer` in `DayPlanner`, the twin of the
@@ -360,7 +352,7 @@ Both `depthPhilosophy` and `deepWorkGoalHoursPerWeek` are global settings synced
 - **Never-miss-twice logic** — `getAtRiskHabitIds(days, habitIds, today)` in `stats.ts`: a habit is at-risk when `days[yesterday].habitCompletions[id] !== true` AND `days[dayBeforeYesterday].habitCompletions[id] === true`. Displayed as amber border + ⚠ icon; tooltip: "You missed yesterday — don't miss twice".
 - **Per-habit streaks** — `computePerHabitStreaks(days, habitIds, untilDate)` in `stats.ts`: walks backwards up to 365 days counting consecutive completed days.
 - **Habit completions** — `DayState.habitCompletions: Record<string, boolean>`. Toggled via `handleToggleHabit` in `DayPlanner`, persisted via the normal planner day upsert path.
-- **Monthly habit grid** — `HabitTrackingGrid` inside `MonthlyTrackingDashboard`: rows = habits, columns = days 1–31, final column = streak. Wrapped in `HabitGridBoundary` error boundary. Read-only (completions toggled from the sidebar, not the grid).
+- **Week of habits** — `/review` shows the last seven days of each habit as dots (`computeHabitWeek` in `habitWeek.ts`); the monthly grid was removed.
 - **Habit editor modal** (`src/components/habits/HabitEditorModal.tsx`) — opened via `setEditHabitsOpen(true)` in DayPlanner. Works on a local `draft` copy of `HabitDefinition[]`; saves on "Save" click only.
 
 <!-- convex-ai-start -->
