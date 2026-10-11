@@ -4,14 +4,13 @@
  * All modal overlays rendered by DayPlanner, extracted to keep DayPlanner lean.
  */
 
-import type { DayState, HabitDefinition, RoutineMinutes, SideQuestDef } from "../../domain/types";
+import type { DayState, HabitDefinition, RoutineMinutes } from "../../domain/types";
 import type { useDayBlockEditor } from "../../hooks/useDayBlockEditor";
 import { getOrCreateDay } from "../../storage/localStorageState";
 import { DaySetupModal } from "./DaySetupModal";
 import { BlockDurationScopeModal } from "./BlockDurationScopeModal";
 import { TaskConflictModal } from "./TaskConflictModal";
 import { HabitEditorModal } from "../habits/HabitEditorModal";
-import { SideQuestEditorModal } from "./SideQuestEditorModal";
 
 interface PlannerModalsProps {
   selectedDay: string;
@@ -20,13 +19,9 @@ interface PlannerModalsProps {
   blockEditor: ReturnType<typeof useDayBlockEditor>;
   routineMinutes?: RoutineMinutes | null;
   habits: HabitDefinition[];
-  sideQuestDefs: SideQuestDef[];
   editHabitsOpen: boolean;
-  editSideQuestOpen: boolean;
   onCloseHabits: () => void;
-  onCloseSideQuests: () => void;
   onSaveHabits: (habits: HabitDefinition[]) => void;
-  onSaveSideQuests: (defs: SideQuestDef[]) => void;
 }
 
 export function PlannerModals({
@@ -36,13 +31,9 @@ export function PlannerModals({
   blockEditor,
   routineMinutes,
   habits,
-  sideQuestDefs,
   editHabitsOpen,
-  editSideQuestOpen,
   onCloseHabits,
-  onCloseSideQuests,
   onSaveHabits,
-  onSaveSideQuests,
 }: PlannerModalsProps) {
   const {
     showDaySetupModal,
@@ -202,13 +193,6 @@ export function PlannerModals({
       )}
 
       {/* Side quest editor */}
-      {editSideQuestOpen && (
-        <SideQuestEditorModal
-          defs={sideQuestDefs}
-          onSave={onSaveSideQuests}
-          onClose={onCloseSideQuests}
-        />
-      )}
     </>
   );
 }

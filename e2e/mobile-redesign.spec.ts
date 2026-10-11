@@ -92,7 +92,7 @@ function seed(page: Page) {
   })
 }
 
-async function openPlanner(page: Page, path = '/planner') {
+async function openPlanner(page: Page, path = '/') {
   await page.setViewportSize(PHONE)
   await seed(page)
   await page.goto(path)
@@ -101,7 +101,7 @@ async function openPlanner(page: Page, path = '/planner') {
       if (document.querySelector('[data-tour="date-nav"]')) return true
       // Lowercased on purpose: these labels are uppercased with CSS, and
       // innerText returns the *rendered* text, so an authored-case match fails.
-      if (document.body.innerText.toLowerCase().includes('deep work this week')) return true
+      if (document.body.innerText.toLowerCase().includes('this week')) return true
       const guest = Array.from(document.querySelectorAll('button')).find(
         (b) => b.textContent?.trim() === 'Continue as guest',
       )
@@ -125,7 +125,7 @@ function tab(page: Page, name: 'Today' | 'Focus' | 'Habits' | 'Review') {
 }
 
 test.describe('mobile destinations', () => {
-  test('the tab bar offers exactly the four destinations plus Home', async ({ page }) => {
+  test('the tab bar offers exactly the four destinations', async ({ page }) => {
     await openPlanner(page)
     for (const name of ['Today', 'Focus', 'Habits', 'Review'] as const) {
       await expect(tab(page, name)).toBeVisible()
@@ -134,7 +134,7 @@ test.describe('mobile destinations', () => {
     await expect(
       page.getByTestId('mobile-tab-bar').getByRole('button', { name: 'Stats', exact: true }),
     ).toHaveCount(0)
-    await expect(tab(page, 'Review')).toHaveAttribute('href', '/planner/review')
+    await expect(tab(page, 'Review')).toHaveAttribute('href', '/review')
   })
 
   test('no tab renders the monthly dashboard — the reason the bar partitions anything', async ({ page }) => {
@@ -235,26 +235,17 @@ test.describe('mobile destinations', () => {
     await expect(page.getByRole('button', { name: /^Uncheck Gym$/ })).toBeVisible()
   })
 
-  test('Review summarises and keeps the heavy content behind a tap', async ({ page }) => {
-    await openPlanner(page, '/planner/review')
-
-    const panel = page.getByTestId('mobile-review')
-    await expect(panel).toBeVisible()
-    await expect(panel).toContainText('Deep work this week')
-    await expect(panel).toContainText('Block completion')
-    await expect(panel).toContainText('Open the month grid')
-
-    // The dashboard is not rendered until asked for.
+  test('Review is one short screen: the week, the goal, the habits', async ({ page }) => {
+    await openPlanner(page, '/review')
+    await expect(page.getByRole('heading', { name: 'This week' })).toBeVisible()
+    await expect(page.getByLabel('Weekly deep work goal in hours')).toBeVisible()
     await expect(page.getByText('Monthly tracking')).toHaveCount(0)
-
-    await page.getByRole('button', { name: 'Open the month grid' }).click()
-    await expect(page.getByText('Monthly tracking')).toBeVisible()
   })
 
   test('the tab bar carries the chosen tab back from Review to the planner', async ({ page }) => {
-    await openPlanner(page, '/planner/review')
+    await openPlanner(page, '/review')
     await tab(page, 'Habits').click()
-    await expect(page).toHaveURL(/\/planner\?tab=habits/)
+    await expect(page).toHaveURL(/\/\?tab=habits/)
     await expect(page.getByTestId('mobile-habits')).toBeVisible()
   })
 })

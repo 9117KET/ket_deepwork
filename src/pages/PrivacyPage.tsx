@@ -9,7 +9,7 @@ import { AppChrome } from "../components/layout/AppChrome";
 
 export function PrivacyPage() {
   return (
-    <AppChrome mobileActive="home" hideSidebar>
+    <AppChrome hideSidebar>
       <div className="mx-auto max-w-3xl px-4 py-12 md:px-8 pb-32 md:pb-12">
         <Link
           to="/"

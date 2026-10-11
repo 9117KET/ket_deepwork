@@ -167,9 +167,10 @@ test('sleep card is bedtime-anchored and sidebar is consolidated', async ({ page
   await expect(sleep).toContainText('11 PM → 7 AM · 8h')
   await expect(sleep).toContainText('1h open before bed')
 
-  await expect(page.getByRole('button', { name: /Focus/ })).toBeVisible()
+  // The minimal rail is the timer and habits; goal, motivation and not-doing
+  // cards were removed with the features they belonged to.
   await expect(page.getByRole('button', { name: /Motivation/ })).toHaveCount(0)
-  await expect(page.getByRole('button', { name: 'Expand Not doing' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Expand Not doing' })).toHaveCount(0)
 })
 
 test('an overrunning plan pushes bedtime later and says what it costs', async ({ page }) => {

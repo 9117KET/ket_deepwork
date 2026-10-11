@@ -20,11 +20,8 @@ import {
 import {
   addDays,
   todayIso,
-  toMonthId,
   sameWeekdayLastWeek,
   computeAccountabilityStats,
-  isEndOfMonth,
-  isWeeklyReviewDay,
 } from "../../domain/dateUtils";
 import {
   BLOCK_MIN_MINUTES,
@@ -46,7 +43,6 @@ import { useTimeAwareness } from "../../hooks/useTimeAwareness";
 import { PlannerModals } from "./PlannerModals";
 import { TaskProgressSheet } from "./TaskProgressSheet";
 import { CompletionClaimPrompt } from "./CompletionClaimPrompt";
-import { NotDoingPanel } from "./NotDoingPanel";
 import { BlockDurationEditor } from "./BlockDurationEditor";
 import {
   usePersistentState,
@@ -64,27 +60,14 @@ import { MobileHabitsPanel } from "../habits/MobileHabitsPanel";
 import { FocusMode } from "../timer/FocusMode";
 import { useDeepWorkTimer, type TimerTaskOption } from "../timer/useDeepWorkTimer";
 import { FocusBlockContext } from "./focusBlockContext";
-import { MotivationCard } from "../timer/MotivationCard";
 import { HabitChecklist } from "../habits/HabitChecklist";
-import { NorthStarCard } from "../goals/NorthStarCard";
-import { OneThingCard } from "../goals/OneThingCard";
-import { WeeklyProjectCard } from "./WeeklyProjectCard";
 import { SidebarCard } from "./SidebarCard";
 import { TomorrowMustPanel } from "./TomorrowMustPanel";
 import { MustDoPinnedHeader } from "./MustDoPinnedHeader";
 import { playChime } from "../../audio/chimes";
-import { MonthlyReviewBanner } from "../goals/MonthlyReviewBanner";
-import { WeeklyReviewBanner } from "../goals/WeeklyReviewBanner";
-import { ShutdownRitualModal } from "./ShutdownRitualModal";
-import { SideQuestSection } from "./SideQuestSection";
-import { getDailyQuestSelection } from "../../domain/sideQuestAlgorithm";
 import { MobileTabBar, type MobileTab } from "./MobileTabBar";
-import { ActiveTripBanner } from "./ActiveTripBanner";
-import { DaySummaryCard } from "./DaySummaryCard";
 import { AwayBlockClaim } from "./AwayBlockClaim";
-import { useActiveTripStatus } from "../../hooks/useActiveTripStatus";
 import { ErrorBoundary } from "../ErrorBoundary";
-import { useDayContext } from "../../hooks/useDayContext";
 import { getOrderedTasksForSection } from "../../domain/taskUtils";
 
 function formatDateLabel(isoDay: string): string {
@@ -240,8 +223,8 @@ export function DayPlanner({
     [appState, selectedDay],
   );
 
-  // Active trip status - managed via child component to isolate Convex query errors
-  const [travelingToday, setTravelingToday] = useState(false);
+  // Travel mode was removed with the travel planner; habits no longer pause for trips.
+  const travelingToday = false;
 
   const rootTasks = useMemo(
     () => (appState.days[selectedDay]?.tasks ?? []).filter((t) => !t.parentId),
@@ -282,8 +265,6 @@ export function DayPlanner({
     handleCopyFromDay,
     handleUpdateTask,
     handleUpdateMonthlyReview: _handleUpdateMonthlyReview,
-    handleToggleSideQuestCompletion,
-    handleSaveSideQuestDefs,
     handleSessionComplete,
     handleRecordAwaySession,
     handleLogManualMinutes,
@@ -291,10 +272,6 @@ export function DayPlanner({
     handleReattributeSession,
     handleMoveToNotDoing,
     handleAbandonTask,
-    handleAddToNotDoing,
-    handleRemoveFromNotDoing,
-    handleAddDayNotDoing,
-    handleRemoveDayNotDoing,
     handleAddTomorrowMust,
     handleDeleteTomorrowMust,
     handleEditTomorrowMust,
@@ -354,13 +331,6 @@ export function DayPlanner({
     [appState.days, habitIds, selectedDay],
   );
 
-  const dayCtx = useDayContext(selectedDay, {
-    appState,
-    habitIds,
-  });
-
-  const shutdownAlreadyDone = Boolean(dayState.shutdownCompletedAt);
-
   const handleToggleHabit = useCallback(
     (habitId: string, value: boolean) => {
       updateAppState((prev) => {
@@ -387,83 +357,6 @@ export function DayPlanner({
     [updateAppState],
   );
 
-  const handleSetNorthStar = useCallback(
-    (value: string) => {
-      updateAppState((prev) => ({ ...prev, northStar: value }));
-    },
-    [updateAppState],
-  );
-
-  const handleSaveDayJournal = useCallback(
-    (note: string) => {
-      updateAppState((prev) => {
-        const day = getOrCreateDay(prev, selectedDay);
-        return { ...prev, days: { ...prev.days, [selectedDay]: { ...day, dayNote: note } } };
-      });
-    },
-    [updateAppState, selectedDay],
-  );
-
-  const handleSaveFocusHijacker = useCallback(
-    (hijacker: import("../../domain/types").FocusHijacker) => {
-      updateAppState((prev) => {
-        const day = getOrCreateDay(prev, selectedDay);
-        return { ...prev, days: { ...prev.days, [selectedDay]: { ...day, focusHijacker: hijacker } } };
-      });
-    },
-    [updateAppState, selectedDay],
-  );
-
-  const handleShutdownComplete = useCallback(() => {
-    updateAppState((prev) => {
-      const day = getOrCreateDay(prev, selectedDay);
-      return {
-        ...prev,
-        days: {
-          ...prev.days,
-          [selectedDay]: { ...day, shutdownCompletedAt: new Date().toISOString() },
-        },
-      };
-    });
-  }, [updateAppState, selectedDay]);
-
-  const handleSetDayOneThing = useCallback(
-    (date: string, value: string) => {
-      updateAppState((prev) => ({
-        ...prev,
-        dayOneThings: { ...(prev.dayOneThings ?? {}), [date]: value },
-      }));
-    },
-    [updateAppState],
-  );
-
-  const handleSetWeekOneThing = useCallback(
-    (weekStart: string, value: string) => {
-      updateAppState((prev) => ({
-        ...prev,
-        weekOneThings: { ...(prev.weekOneThings ?? {}), [weekStart]: value },
-      }));
-    },
-    [updateAppState],
-  );
-
-  const handleSetMonthOneThing = useCallback(
-    (monthKey: string, value: string) => {
-      updateAppState((prev) => ({
-        ...prev,
-        monthOneThings: { ...(prev.monthOneThings ?? {}), [monthKey]: value },
-      }));
-    },
-    [updateAppState],
-  );
-
-  const handleUpdateWeeklyProjects = useCallback(
-    (projects: AppState['weeklyProjectRotation']) => {
-      updateAppState((prev) => ({ ...prev, weeklyProjectRotation: projects }));
-    },
-    [updateAppState],
-  );
-
   const handleUpdateHabitDefinitions = useCallback(
     (updatedHabits: HabitDefinition[]) => {
       updateAppState((prev) => ({ ...prev, habitDefinitions: updatedHabits }));
@@ -471,51 +364,9 @@ export function DayPlanner({
     [updateAppState],
   );
 
-  const handleTrackingUpdateSettings = useCallback(
-    (patch: {
-      habitDefinitions?: HabitDefinition[];
-      monthTitles?: Record<string, string>;
-      depthPhilosophy?: AppState['depthPhilosophy'];
-      deepWorkGoalHoursPerWeek?: number;
-      focusBlockMinutes?: number;
-      focusBreakMinutes?: number;
-      goalCascade?: AppState['goalCascade'];
-      monthlyReviews?: AppState['monthlyReviews'];
-      weeklyReviews?: AppState['weeklyReviews'];
-      weeklyReviewDay?: AppState['weeklyReviewDay'];
-      weeklyReviewQuestions?: AppState['weeklyReviewQuestions'];
-    }) => {
-      updateAppState((prev) => ({
-        ...prev,
-        habitDefinitions: patch.habitDefinitions ?? prev.habitDefinitions,
-        monthTitles: patch.monthTitles ?? prev.monthTitles,
-        depthPhilosophy: patch.depthPhilosophy !== undefined ? patch.depthPhilosophy : prev.depthPhilosophy,
-        deepWorkGoalHoursPerWeek: patch.deepWorkGoalHoursPerWeek !== undefined ? patch.deepWorkGoalHoursPerWeek : prev.deepWorkGoalHoursPerWeek,
-        focusBlockMinutes: patch.focusBlockMinutes !== undefined ? patch.focusBlockMinutes : prev.focusBlockMinutes,
-        focusBreakMinutes: patch.focusBreakMinutes !== undefined ? patch.focusBreakMinutes : prev.focusBreakMinutes,
-        goalCascade: patch.goalCascade !== undefined ? patch.goalCascade : prev.goalCascade,
-        monthlyReviews: patch.monthlyReviews !== undefined ? patch.monthlyReviews : prev.monthlyReviews,
-        weeklyReviews: patch.weeklyReviews !== undefined ? patch.weeklyReviews : prev.weeklyReviews,
-        weeklyReviewDay: patch.weeklyReviewDay !== undefined ? patch.weeklyReviewDay : prev.weeklyReviewDay,
-        weeklyReviewQuestions: patch.weeklyReviewQuestions !== undefined ? patch.weeklyReviewQuestions : prev.weeklyReviewQuestions,
-      }));
-    },
-    [updateAppState],
-  );
-
   const [editHabitsOpen, setEditHabitsOpen] = useState(false);
   const [moveSubtaskId, setMoveSubtaskId] = useState<string | null>(null);
   const [bulkMoveOpen, setBulkMoveOpen] = useState(false);
-  const [editSideQuestOpen, setEditSideQuestOpen] = useState(false);
-  /**
-   * The review cards live at /planner/review now, so a banner navigates there
-   * and names which card to open rather than nudging a local trigger.
-   */
-  const openReview = useCallback(
-    (target: 'monthly' | 'weekly') => navigate(`/planner/review?open=${target}`),
-    [navigate],
-  );
-  const [showShutdown, setShowShutdown] = useState(false);
   /** Task the deep work timer is currently pointed at, if any. */
   const [timerTaskId, setTimerTaskId] = useState<string | undefined>(undefined);
   /** Task whose progress actions sheet is open (phones). */
@@ -690,10 +541,6 @@ Delete anyway?`);
     undoable.run('Updated habits', () => handleUpdateHabitDefinitions(defs));
   }, [handleUpdateHabitDefinitions, undoable]);
 
-  const handleSaveSideQuestsUndoable = useCallback((defs: Parameters<typeof handleSaveSideQuestDefs>[0]) => {
-    undoable.run('Updated side quests', () => handleSaveSideQuestDefs(defs));
-  }, [handleSaveSideQuestDefs, undoable]);
-
   /**
    * Start a block against a task from its progress row. Refuses while another
    * block is under way rather than retargeting it - those minutes are already
@@ -849,8 +696,8 @@ Delete anyway?`);
    * 5-minute break is not a setting anyone chose.
    */
   const handleSetBlockLength = useCallback((minutes: number, breakLength: number) => {
-    handleTrackingUpdateSettings({ focusBlockMinutes: minutes, focusBreakMinutes: breakLength });
-  }, [handleTrackingUpdateSettings]);
+    updateAppState((prev) => ({ ...prev, focusBlockMinutes: minutes, focusBreakMinutes: breakLength }));
+  }, [updateAppState]);
 
   const focusBlockValue = useMemo(() => ({
     blockMinutes,
@@ -869,11 +716,6 @@ Delete anyway?`);
       (t) => t.sectionId === 'mustDo' && !t.parentId,
     ),
     [appState.days, tomorrowDate],
-  );
-
-  const todayQuestIds = useMemo(
-    () => getDailyQuestSelection(appState.sideQuestDefs ?? [], appState.days, selectedDay),
-    [appState.sideQuestDefs, appState.days, selectedDay],
   );
 
   const tasksBySection: Record<TaskSectionId, Task[]> = useMemo(() => {
@@ -925,32 +767,6 @@ Delete anyway?`);
       new Date(y!, m! - 1, d!),
     );
   }, [selectedDay]);
-
-  // Auto-nudge: trigger shutdown modal when ALL night-routine tasks are completed.
-  const nightRoutineTasks = useMemo(
-    () => (tasksBySection['nightRoutine'] ?? []).filter(t => !t.parentId),
-    [tasksBySection],
-  );
-  const allNightDone = nightRoutineTasks.length > 0 && nightRoutineTasks.every(t => t.isDone);
-
-  useEffect(() => {
-    if (!shareMode && allNightDone && !shutdownAlreadyDone && selectedDay === todayIso()) {
-      const timer = setTimeout(() => setShowShutdown(true), 800);
-      return () => clearTimeout(timer);
-    }
-  }, [allNightDone, shutdownAlreadyDone, selectedDay, shareMode]);
-
-  // Evening auto-prompt: show shutdown modal at 9 PM+ if shutdown hasn't been done today
-  useEffect(() => {
-    if (shareMode || shutdownAlreadyDone || selectedDay !== todayIso()) return;
-    const hour = new Date().getHours();
-    if (hour < 21) return;
-    const sessionKey = `shutdown_reminder_shown_${todayIso()}`;
-    if (sessionStorage.getItem(sessionKey)) return;
-    sessionStorage.setItem(sessionKey, '1');
-    setShowShutdown(true);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shutdownAlreadyDone, selectedDay]);
 
   useEffect(() => {
     return () => {
@@ -1090,9 +906,7 @@ Delete anyway?`);
           onToday={() => setSelectedDay(todayIso())}
           deepWorkMinutesToday={shareMode ? undefined : deepWorkMinutesToday}
           depthPhilosophy={shareMode ? undefined : appState.depthPhilosophy}
-          shutdownCompleted={shareMode ? undefined : shutdownAlreadyDone}
-          onShutdown={shareMode ? undefined : () => setShowShutdown(true)}
-          onOpenReview={shareMode ? undefined : () => navigate('/planner/review')}
+          onOpenReview={shareMode ? undefined : () => navigate('/review')}
         />
         {!shareMode && (
           <MustDoPinnedHeader
@@ -1111,95 +925,6 @@ Delete anyway?`);
             onMoveDown={(taskId) => handleReorderTask(taskId, 'mustDo', 'down')}
             draggedTaskId={draggedTask?.sectionId === 'mustDo' ? draggedTask.taskId : null}
           />
-        )}
-        {/* Monthly/Weekly review + goal: collapse into one thin "needs attention"
-            row when more than one would show; otherwise render the full banner. */}
-        {!shareMode && (() => {
-          const showMonthly = isEndOfMonth(selectedDay)
-          const showWeekly = isWeeklyReviewDay(selectedDay, appState.weeklyReviewDay ?? 5)
-          const goal = appState.goalCascade?.threeMonths ?? appState.goalCascade?.oneYear
-          const goalLabel = appState.goalCascade?.threeMonths ? '3-month' : '1-year'
-
-          const activeCount = (showMonthly ? 1 : 0) + (showWeekly ? 1 : 0) + (goal ? 1 : 0)
-          if (activeCount === 0) return null
-
-          // Single active item → keep the existing full-width banner / goal line.
-          if (activeCount === 1) {
-            if (showMonthly) {
-              return (
-                <MonthlyReviewBanner
-                  selectedDay={selectedDay}
-                  review={appState.monthlyReviews?.[toMonthId(selectedDay)]}
-                  onOpen={() => openReview('monthly')}
-                />
-              )
-            }
-            if (showWeekly) {
-              return (
-                <WeeklyReviewBanner
-                  selectedDay={selectedDay}
-                  review={appState.weeklyReviews?.[selectedDay]}
-                  reviewWeekday={appState.weeklyReviewDay ?? 5}
-                  onOpen={() => openReview('weekly')}
-                />
-              )
-            }
-            return (
-              <div className="mt-1 rounded border border-share-outlineVariant/30 bg-share-surfaceContainerLow px-3 py-1.5 text-xs text-share-onSurfaceVariant">
-                <span className="text-share-onSurfaceVariant/70">{goalLabel} goal: </span>
-                <span className="text-share-onBg">{goal}</span>
-              </div>
-            )
-          }
-
-          // Multiple active → one compact chip row.
-          const monthlyDone = Boolean(appState.monthlyReviews?.[toMonthId(selectedDay)]?.completedAt)
-          const weeklyDone = Boolean(appState.weeklyReviews?.[selectedDay]?.completedAt)
-          return (
-            <div className="mt-1 flex flex-wrap items-center gap-2 rounded border border-share-outlineVariant/30 bg-share-surfaceContainerLow px-2.5 py-1.5 text-[11px]">
-              <span className="uppercase tracking-wide text-share-onSurfaceVariant/60">Needs attention</span>
-              {showMonthly && (
-                <button
-                  type="button"
-                  onClick={() => openReview('monthly')}
-                  className={`rounded border px-2 py-0.5 font-medium transition-colors ${
-                    monthlyDone
-                      ? 'border-emerald-700/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
-                      : 'border-amber-600/50 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20'
-                  }`}
-                  title={monthlyDone ? 'Revisit your monthly review' : 'Open your monthly review'}
-                >
-                  Monthly review {monthlyDone ? '✓' : '↓'}
-                </button>
-              )}
-              {showWeekly && (
-                <button
-                  type="button"
-                  onClick={() => openReview('weekly')}
-                  className={`rounded border px-2 py-0.5 font-medium transition-colors ${
-                    weeklyDone
-                      ? 'border-emerald-700/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
-                      : 'border-sky-600/50 bg-sky-500/10 text-sky-300 hover:bg-sky-500/20'
-                  }`}
-                  title={weeklyDone ? 'Revisit your weekly review' : 'Open your weekly review'}
-                >
-                  Weekly review {weeklyDone ? '✓' : '↓'}
-                </button>
-              )}
-              {goal && (
-                <span className="text-share-onSurfaceVariant/80" title={`${goalLabel} goal`}>
-                  <span className="text-share-onSurfaceVariant/60">{goalLabel} goal: </span>
-                  <span className="text-share-onBg">{goal}</span>
-                </span>
-              )}
-            </div>
-          )
-        })()}
-        {/* Active trip context banner - isolated so a Convex query error only hides the banner */}
-        {!shareMode && (
-          <ErrorBoundary fallback={null}>
-            <TripStatusBanner date={selectedDay} onTravelingChange={setTravelingToday} />
-          </ErrorBoundary>
         )}
         {/* Copy/fill: owner only — don't expose other days' tasks to shared visitors */}
         {!shareMode && dayState.tasks.filter(t => t.sectionId !== 'mustDo').length === 0 && (() => {
@@ -1471,44 +1196,6 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
                 );
               })()}
             />
-            {!shareMode && section.id === 'lowPriority' && (() => {
-              const sq = FIXED_SECTIONS.find(s => s.id === 'sideQuest')!
-              return (
-                <SideQuestSection
-                  dayCompletionRatio={dayCompletionRatio}
-                  section={sq}
-                  tasks={tasksBySection['sideQuest'] ?? []}
-                  defs={appState.sideQuestDefs ?? []}
-                  selectedQuestIds={todayQuestIds}
-                  completions={dayState.sideQuestCompletions ?? {}}
-                  xp={appState.sideQuestXp ?? 0}
-                  streak={appState.sideQuestStreak ?? 0}
-                  onToggleCompletion={handleToggleSideQuestCompletion}
-                  onManageDefs={() => setEditSideQuestOpen(true)}
-                  draggedTask={draggedTask}
-                  onDragStart={handleDragStart}
-                  onDragEnd={handleDragEnd}
-                  onDrop={(insertIndex) => handleDrop('sideQuest', insertIndex)}
-                  selectedTaskIds={selectedTaskIds}
-                  onToggleSelect={handleToggleSelect}
-                  onAddTask={(title) => handleAddTask('sideQuest', title)}
-                  onAddTaskAbove={(beforeTaskId) => handleAddTaskAbove('sideQuest', beforeTaskId)}
-                  onAddTaskBelow={(afterTaskId) => handleAddTaskBelow('sideQuest', afterTaskId)}
-                  onAddSubtask={handleAddSubtask}
-                  onToggleTask={handleToggleTask}
-                  onDeleteTask={handleDeleteTaskGuarded}
-                  onUpdateTask={handleUpdateTask}
-                  deepWorkSessions={dayState.deepWorkSessions}
-                  onStartBlock={handleStartBlock}
-                  onOpenProgressSheet={setProgressSheetTaskId}
-                  taskIdsDueNow={taskIdsDueNow}
-                  onMoveTaskUp={(taskId) => handleReorderTask(taskId, 'sideQuest', 'up')}
-                  onMoveTaskDown={(taskId) => handleReorderTask(taskId, 'sideQuest', 'down')}
-                  onMoveToNotDoing={handleMoveToNotDoing}
-                  onAbandonTask={handleAbandonTask}
-                />
-              )
-            })()}
             {!shareMode && section.id === 'nightRoutine' && (
               <TomorrowMustPanel
                 tomorrowDate={tomorrowDate}
@@ -1645,7 +1332,6 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
                       breakMinutes={breakMinutes}
                       onSetBlockLength={handleSetBlockLength}
                     />
-                    <MotivationCard />
                   </div>
                 </SidebarCard>
               )}
@@ -1664,64 +1350,12 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
                   />
                 </SidebarCard>
               )}
-              {/* Focus: the daily/weekly/monthly ONE thing plus the long-term North
-                  Star, consolidated into a single "what matters" card. */}
-              {!shareMode && (
-                <SidebarCard cardId="focus" title="Focus">
-                  <div className="space-y-3">
-                    <OneThingCard
-                      selectedDay={selectedDay}
-                      dayOneThings={appState.dayOneThings ?? {}}
-                      weekOneThings={appState.weekOneThings ?? {}}
-                      monthOneThings={appState.monthOneThings ?? {}}
-                      onSetDay={handleSetDayOneThing}
-                      onSetWeek={handleSetWeekOneThing}
-                      onSetMonth={handleSetMonthOneThing}
-                    />
-                    <div className="border-t border-share-outlineVariant/20 pt-3">
-                      <NorthStarCard
-                        northStar={appState.northStar ?? ''}
-                        onSetNorthStar={handleSetNorthStar}
-                      />
-                    </div>
-                  </div>
-                </SidebarCard>
-              )}
-              {/* Glanceable / occasional cards — collapsed by default to keep the
-                  sidebar short; expand state is remembered per card. */}
-              {!shareMode && (
-                <SidebarCard cardId="daySummary" title="Day snapshot" defaultCollapsed>
-                  <DaySummaryCard ctx={dayCtx} />
-                </SidebarCard>
-              )}
               <SidebarCard cardId="weeklyOverview" title="Weekly overview" defaultCollapsed>
                 <WeeklyOverview
                   state={appState as AppState}
                   referenceDay={selectedDay}
                 />
               </SidebarCard>
-              {!shareMode && (
-                <SidebarCard cardId="weeklyProjects" title="Weekly projects" defaultCollapsed>
-                  <WeeklyProjectCard
-                    selectedDate={selectedDay}
-                    projects={appState.weeklyProjectRotation ?? []}
-                    onUpdate={handleUpdateWeeklyProjects}
-                  />
-                </SidebarCard>
-              )}
-              {!shareMode && (
-                <SidebarCard cardId="notDoing" title="Not doing" defaultCollapsed>
-                  <NotDoingPanel
-                    globalList={appState.notDoingList ?? []}
-                    dayList={dayState.notDoingItems ?? []}
-                    selectedDay={selectedDay}
-                    onAddGlobal={handleAddToNotDoing}
-                    onRemoveGlobal={handleRemoveFromNotDoing}
-                    onAddDay={handleAddDayNotDoing}
-                    onRemoveDay={handleRemoveDayNotDoing}
-                  />
-                </SidebarCard>
-              )}
             </div>
           </>
         )}
@@ -1757,7 +1391,7 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
             The Stats tab is gone. It rendered the weekly overview above the
             same dashboard every other tab rendered, which is precisely the
             duplication the redesign removes; month-scale views live at
-            /planner/review, and the tab bar links there directly.
+            /review, and the tab bar links there directly.
           */}
           {/* Spacer so content doesn't hide behind the fixed MobileTabBar */}
           <div className="h-16 pb-safe lg:hidden" />
@@ -1767,7 +1401,7 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
       {/*
         The day journal and the monthly tracking dashboard used to render here,
         under the day, on every screen and every mobile tab — ~2,500px that was
-        identical across all four tabs. They live at /planner/review now, which
+        identical across all four tabs. They live at /review now, which
         is what makes the tab bar mean something. See docs/design/README.md.
       */}
 
@@ -1785,37 +1419,6 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
           onLeave={() => setFocusDismissed(true)}
         />
       )}
-
-      {/* Shutdown ritual modal */}
-      {!shareMode && showShutdown && (() => {
-        const incompleteTasks = dayState.tasks.filter(
-          t => !t.isDone && !t.parentId && t.sectionId !== 'mustDo'
-        );
-        const tomorrowDate = addDays(selectedDay, 1);
-        const tomorrowMustDos = (appState.days[tomorrowDate]?.tasks ?? []).filter(
-          t => t.sectionId === 'mustDo' && !t.parentId
-        );
-        const habitDone = habits.filter(h => dayState.habitCompletions?.[h.id]).length;
-        const habitFraction = habits.length > 0 ? habitDone / habits.length : 0;
-
-        return (
-          <ShutdownRitualModal
-            incompleteTasks={incompleteTasks}
-            tomorrowMustDos={tomorrowMustDos}
-            dayNote={dayState.dayNote}
-            focusHijacker={dayState.focusHijacker}
-            deepWorkMinutesToday={deepWorkMinutesToday}
-            habitFraction={habitFraction}
-            onSaveJournal={(note, hijacker) => {
-              handleSaveDayJournal(note);
-              handleSaveFocusHijacker(hijacker);
-            }}
-            onDropTask={task => handleAbandonTask(task.id)}
-            onComplete={handleShutdownComplete}
-            onClose={() => setShowShutdown(false)}
-          />
-        );
-      })()}
 
       {moveSubtaskId && !shareMode && (() => {
         const subtask = dayState.tasks.find(t => t.id === moveSubtaskId)
@@ -1910,13 +1513,9 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
         blockEditor={blockEditor}
         routineMinutes={appState.routineMinutes}
         habits={habits}
-        sideQuestDefs={appState.sideQuestDefs ?? []}
         editHabitsOpen={editHabitsOpen}
-        editSideQuestOpen={editSideQuestOpen}
         onCloseHabits={() => setEditHabitsOpen(false)}
-        onCloseSideQuests={() => setEditSideQuestOpen(false)}
         onSaveHabits={handleSaveHabitsUndoable}
-        onSaveSideQuests={handleSaveSideQuestsUndoable}
       />
 
       {/* Mobile bottom tab bar — owner only, not shown in shared views */}
@@ -1930,18 +1529,4 @@ Tip: Ctrl/Cmd-click tasks to select several for bulk actions.
     </div>
     </FocusBlockContext.Provider>
   );
-}
-
-interface TripStatusBannerProps {
-  date: string
-  onTravelingChange: (traveling: boolean) => void
-}
-
-function TripStatusBanner({ date, onTravelingChange }: TripStatusBannerProps) {
-  const status = useActiveTripStatus(date)
-  useEffect(() => {
-    onTravelingChange(status !== null)
-  }, [status, onTravelingChange])
-  if (!status) return null
-  return <ActiveTripBanner trip={status} />
 }

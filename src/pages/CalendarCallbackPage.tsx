@@ -45,7 +45,6 @@ export function CalendarCallbackPage() {
 
   return (
     <AppChrome
-      mobileActive="planner"
       showCalendarLink
     >
       <div className="mx-auto max-w-xl px-4 py-6 md:px-8 pb-28 md:pb-10">

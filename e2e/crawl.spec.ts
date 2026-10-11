@@ -3,9 +3,9 @@
  *
  * Deepblock comprehensive crawl & smoke harness.
  *
- * Covers: landing, /planner (guest mode), /finance, /travel, /calendar,
- * /calendar/callback, share-link error state, and core user actions
- * (task create/complete/delete, habit toggle, finance entry, deep work
+ * Covers: the planner (guest mode), /review, /calendar,
+ * /calendar/callback, and core user actions
+ * (task create/complete/delete, habit toggle, deep work
  * timer UI, navigation, and section interactions).
  *
  * Environment: dev server at http://localhost:5173, guest mode only
@@ -93,63 +93,6 @@ async function dismissDaySetup(page: Page) {
     await skip.click()
   }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 1. Landing page
-// ─────────────────────────────────────────────────────────────────────────────
-
-test.describe('Landing page (/)', () => {
-  test('loads without crashing and has navigation links', async ({ page }) => {
-    const errors: string[] = []
-    page.on('pageerror', (e) => errors.push(e.message))
-    page.on('console', (m) => {
-      if (m.type() === 'error') errors.push(m.text())
-    })
-
-    await page.goto('/')
-    // The page should not show a React error boundary
-    await expect(page.locator('body')).not.toContainText('Something went wrong', { timeout: 5_000 })
-
-    // Navigation: link to /planner should exist
-    const plannerLink = page.locator('a[href="/planner"]').first()
-    await expect(plannerLink).toBeVisible()
-
-    // No JS errors
-    expect(errors.filter((e) => !e.includes('ResizeObserver') && !e.includes('Non-Error'))).toHaveLength(0)
-  })
-
-  test('How it works section renders and allows stepping through', async ({ page }) => {
-    await page.goto('/')
-    // Some landing content should be visible
-    const body = page.locator('body')
-    await expect(body).toBeVisible()
-    // The "How it works" section exists
-    await expect(page.getByText('How it works').first()).toBeVisible()
-
-    // Step buttons (Next / Back) exist and clicking Next doesn't crash
-    const nextBtn = page.getByRole('button', { name: 'Next' })
-    if (await nextBtn.isVisible({ timeout: 2_000 }).catch(() => false)) {
-      await nextBtn.click()
-      await expect(page.locator('body')).not.toContainText('Something went wrong', { timeout: 3_000 })
-    }
-  })
-
-  test('footer links render (privacy, terms, support)', async ({ page }) => {
-    await page.goto('/')
-    // At least one of the legal links should exist in the DOM
-    const privacyLink = page.locator('a[href="/privacy"], a[href*="privacy"]').first()
-    const termsLink = page.locator('a[href="/terms"], a[href*="terms"]').first()
-    // Flexible: either link is acceptable
-    const hasPrivacy = await privacyLink.isVisible({ timeout: 3_000 }).catch(() => false)
-    const hasTerms = await termsLink.isVisible({ timeout: 3_000 }).catch(() => false)
-    // At least one legal link visible, or the page doesn't crash
-    await expect(page.locator('body')).not.toContainText('Something went wrong', { timeout: 3_000 })
-    // Soft check: warn if both missing, but don't fail — the footer may be off-screen
-    if (!hasPrivacy && !hasTerms) {
-      console.warn('[crawl] No privacy/terms links found in viewport')
-    }
-  })
-})
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 2. Planner — task lifecycle (create / complete / delete)
@@ -405,200 +348,28 @@ test.describe('Planner — Deep Work Timer', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 6. Planner — Tracking dashboard (habit grid, mood, sleep)
+// 6. Review — this week's worked time and habits
 // ─────────────────────────────────────────────────────────────────────────────
 
-test.describe('Planner — Monthly Tracking Dashboard', () => {
+test.describe('Review (/review)', () => {
   test.beforeEach(async ({ page }) => {
     await injectGuestState(page)
-    await openPlannerAsGuest(page)
-    await dismissDaySetup(page)
   })
 
-  test('tracking dashboard renders without crashing', async ({ page }) => {
-    await page.evaluate(() => {
-      document.getElementById('tracking-dashboard')?.scrollIntoView({ behavior: 'instant' })
-    })
-    await page.waitForTimeout(500)
-    await expect(page.locator('body')).not.toContainText('Something went wrong', { timeout: 5_000 })
+  test('shows the week, the deep work goal and habits without crashing', async ({ page }) => {
+    await page.goto('/review')
+    await expect(page.getByRole('heading', { name: 'This week' })).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByLabel('Weekly deep work goal in hours')).toBeVisible()
+    await expect(page.getByText('Habits · last 7 days')).toBeVisible()
+    await expect(page.locator('body')).not.toContainText('Something went wrong')
   })
 
-  test('habit toggle does not crash the page', async ({ page }) => {
-    // Scroll to tracking dashboard
-    await page.evaluate(() => {
-      document.getElementById('tracking-dashboard')?.scrollIntoView({ behavior: 'instant' })
-    })
-    await page.waitForTimeout(500)
-
-    // Find a habit toggle button
-    const habitBtn = page.locator('[class*="habit" i] button').first()
-    if (await habitBtn.isVisible({ timeout: 3_000 }).catch(() => false)) {
-      await habitBtn.click()
-      await expect(page.locator('body')).not.toContainText('Something went wrong', { timeout: 3_000 })
-    }
-  })
-
-  test('Deep Work scoreboard section renders', async ({ page }) => {
-    await page.evaluate(() => {
-      document.getElementById('tracking-dashboard')?.scrollIntoView({ behavior: 'instant' })
-    })
-    await page.waitForTimeout(500)
-    // Check for "Deep Work" text in the dashboard
-    const deepWorkSection = page.getByText('Deep Work', { exact: false }).first()
-    // May not be visible if scrolled out; just check no crash
-    await expect(page.locator('body')).not.toContainText('Something went wrong', { timeout: 3_000 })
-    // Log whether deep work section found
-    const found = await deepWorkSection.isVisible({ timeout: 2_000 }).catch(() => false)
-    if (!found) console.warn('[crawl] Deep Work section not visible in viewport')
-  })
-})
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 7. Finance page (/finance)
-// ─────────────────────────────────────────────────────────────────────────────
-
-test.describe('Finance page (/finance)', () => {
-  test.beforeEach(async ({ page }) => {
-    // No finance-specific localStorage needed; the page uses its own STORAGE_KEY
-    page.on('pageerror', (e) => console.error('[pageerror]', e.message))
-  })
-
-  test('loads without crashing', async ({ page }) => {
-    const errors: string[] = []
-    page.on('pageerror', (e) => errors.push(e.message))
-    page.on('console', (m) => {
-      if (m.type() === 'error') errors.push(m.text())
-    })
-
-    await page.goto('/finance')
-    await expect(page.locator('body')).not.toContainText('Something went wrong', { timeout: 10_000 })
-
-    // Main nav should render
-    await page.waitForTimeout(1000) // let Convex query settle
-    const criticalErrors = errors.filter(
-      (e) => !e.includes('ResizeObserver') && !e.includes('Non-Error') && !e.includes('ConvexError'),
-    )
-    expect(criticalErrors).toHaveLength(0)
-  })
-
-  test('Today tab shows the waterfall dashboard', async ({ page }) => {
-    await page.goto('/finance')
-    await page.waitForTimeout(1500)
-    await expect(page.locator('body')).not.toContainText('Something went wrong', { timeout: 8_000 })
-    // The waterfall has income section or overview
-    const hasContent = await page.getByText(/Income|Overview|left to spend/i).first().isVisible({ timeout: 5_000 }).catch(() => false)
-    if (!hasContent) console.warn('[crawl] Finance waterfall content not found — may need Convex connection')
-  })
-
-  test('tab navigation: Plan tab renders without crashing', async ({ page }) => {
-    await page.goto('/finance')
-    await page.waitForTimeout(1000)
-
-    const planTab = page.getByRole('button', { name: 'Plan', exact: false }).first()
-    if (await planTab.isVisible({ timeout: 3_000 }).catch(() => false)) {
-      await planTab.click()
-      await page.waitForTimeout(500)
-      await expect(page.locator('body')).not.toContainText('Something went wrong', { timeout: 5_000 })
-    }
-  })
-
-  test('tab navigation: Grow tab renders without crashing', async ({ page }) => {
-    await page.goto('/finance')
-    await page.waitForTimeout(1000)
-
-    const growTab = page.getByRole('button', { name: 'Grow', exact: false }).first()
-    if (await growTab.isVisible({ timeout: 3_000 }).catch(() => false)) {
-      await growTab.click()
-      await page.waitForTimeout(500)
-      await expect(page.locator('body')).not.toContainText('Something went wrong', { timeout: 5_000 })
-    }
-  })
-
-  test('FIRE calculator: input change does not crash', async ({ page }) => {
-    await page.goto('/finance')
-    await page.waitForTimeout(1000)
-
-    // Navigate to Grow > FIRE tab
-    const growTab = page.getByRole('button', { name: 'Grow', exact: false }).first()
-    if (await growTab.isVisible({ timeout: 3_000 }).catch(() => false)) {
-      await growTab.click()
-      await page.waitForTimeout(300)
-      const fireTab = page.getByRole('button', { name: 'FIRE', exact: false }).first()
-      if (await fireTab.isVisible({ timeout: 2_000 }).catch(() => false)) {
-        await fireTab.click()
-        await page.waitForTimeout(500)
-        // Find a number input in the FIRE calculator
-        const input = page.locator('input[type="number"]').first()
-        if (await input.isVisible({ timeout: 2_000 }).catch(() => false)) {
-          await input.fill('50000')
-          await page.waitForTimeout(300)
-          await expect(page.locator('body')).not.toContainText('Something went wrong', { timeout: 3_000 })
-        }
-      }
-    }
-  })
-
-  test('expense entry: adding a transaction does not crash', async ({ page }) => {
-    await page.goto('/finance')
-    await page.waitForTimeout(1000)
-
-    // Navigate to Today > Expenses
-    const expensesTab = page.getByRole('button', { name: 'Expenses', exact: false }).first()
-    if (await expensesTab.isVisible({ timeout: 3_000 }).catch(() => false)) {
-      await expensesTab.click()
-      await page.waitForTimeout(500)
-
-      // Look for an amount input
-      const amountInput = page.locator('input[placeholder*="Amount" i], input[placeholder*="amount" i]').first()
-      const labelInput = page.locator('input[placeholder*="Label" i], input[placeholder*="label" i], input[placeholder*="Expense" i]').first()
-
-      if (await amountInput.isVisible({ timeout: 2_000 }).catch(() => false)) {
-        await amountInput.fill('15.50')
-        if (await labelInput.isVisible({ timeout: 1_000 }).catch(() => false)) {
-          await labelInput.fill('Crawl test expense')
-        }
-        // Submit if there's an Add button
-        const addBtn = page.getByRole('button', { name: /Add|Save|Log/i }).first()
-        if (await addBtn.isVisible({ timeout: 1_000 }).catch(() => false)) {
-          await addBtn.click()
-          await page.waitForTimeout(500)
-          await expect(page.locator('body')).not.toContainText('Something went wrong', { timeout: 3_000 })
-        }
-      }
-    }
-  })
-})
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 8. Travel page (/travel)
-// ─────────────────────────────────────────────────────────────────────────────
-
-test.describe('Travel page (/travel)', () => {
-  test('loads without crashing and shows sign-in prompt for unauthenticated users', async ({ page }) => {
-    const errors: string[] = []
-    page.on('pageerror', (e) => errors.push(e.message))
-
-    await page.goto('/travel')
-    await expect(page.locator('body')).not.toContainText('Something went wrong', { timeout: 10_000 })
-
-    // Unauthenticated users should see a sign-in message or an empty state
-    await page.waitForTimeout(1500)
-    const hasSignIn = await page.getByText(/sign in/i).first().isVisible({ timeout: 3_000 }).catch(() => false)
-    if (!hasSignIn) {
-      // If trips list renders without sign-in gating, that's also acceptable
-      console.warn('[crawl] Travel page: no sign-in prompt found; page may render trip list directly')
-    }
-
-    const criticalErrors = errors.filter(
-      (e) => !e.includes('ResizeObserver') && !e.includes('Non-Error') && !e.includes('ConvexError'),
-    )
-    expect(criticalErrors).toHaveLength(0)
-  })
-
-  test('heading "Travel Planner" is visible', async ({ page }) => {
-    await page.goto('/travel')
-    await page.waitForTimeout(1500)
-    await expect(page.getByText('Travel Planner', { exact: false }).first()).toBeVisible({ timeout: 8_000 })
+  test('the next-week button is disabled on the current week', async ({ page }) => {
+    await page.goto('/review')
+    await expect(page.getByRole('button', { name: 'Next week' })).toBeDisabled({ timeout: 10_000 })
+    await page.getByRole('button', { name: 'Previous week' }).click()
+    await expect(page.getByRole('heading', { name: 'Week' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Next week' })).toBeEnabled()
   })
 })
 
@@ -673,41 +444,11 @@ test.describe('Calendar callback (/calendar/callback)', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 11. Share link (?share=TOKEN)
-// ─────────────────────────────────────────────────────────────────────────────
-
-test.describe('Share link (?share=TOKEN)', () => {
-  test('invalid/expired token shows a user-friendly error, not a crash', async ({ page }) => {
-    const errors: string[] = []
-    page.on('pageerror', (e) => errors.push(e.message))
-
-    await page.goto('/?share=invalid_token_xyz')
-    // Should show loading, then an error state
-    await page.waitForTimeout(4000)
-
-    // Must show "not found" or "expired" message
-    const hasError = await page.getByText(/not found|expired|removed/i).first().isVisible({ timeout: 5_000 }).catch(() => false)
-    // Don't assert on exact text — the error message may differ
-    // But do assert no React error boundary
-    await expect(page.locator('body')).not.toContainText('Something went wrong', { timeout: 5_000 })
-
-    if (!hasError) {
-      console.warn('[crawl] Share link error state: no "not found/expired" message found')
-    }
-
-    const criticalErrors = errors.filter(
-      (e) => !e.includes('ResizeObserver') && !e.includes('Non-Error') && !e.includes('ConvexError'),
-    )
-    expect(criticalErrors).toHaveLength(0)
-  })
-})
-
-// ─────────────────────────────────────────────────────────────────────────────
 // 12. Privacy / Terms / Support pages
 // ─────────────────────────────────────────────────────────────────────────────
 
 test.describe('Legal/support pages', () => {
-  for (const path of ['/privacy', '/terms', '/support']) {
+  for (const path of ['/privacy']) {
     test(`${path} renders without crashing`, async ({ page }) => {
       const errors: string[] = []
       page.on('pageerror', (e) => errors.push(e.message))
@@ -729,7 +470,7 @@ test.describe('Legal/support pages', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 test.describe('Cross-route navigation', () => {
-  const routes = ['/', '/planner', '/finance', '/travel', '/calendar', '/privacy', '/terms', '/support']
+  const routes = ['/', '/review', '/calendar', '/privacy']
 
   test('all defined routes load without blank body or React crash', async ({ page }) => {
     await page.addInitScript(() => {
@@ -769,38 +510,6 @@ test.describe('Cross-route navigation', () => {
 
       page.off('pageerror', handler)
     }
-  })
-})
-
-// ─────────────────────────────────────────────────────────────────────────────
-// 14. Finance — waterfall domain logic (unit-style via page.evaluate)
-// ─────────────────────────────────────────────────────────────────────────────
-
-test.describe('Finance — localStorage state integrity', () => {
-  test('finance state round-trips through localStorage without corruption', async ({ page }) => {
-    await page.goto('/finance')
-    await page.waitForTimeout(2000)
-
-    // Read whatever the finance page wrote to localStorage
-    const stored = await page.evaluate(() => {
-      const raw = window.localStorage.getItem('deepblock_finance_v1')
-      if (!raw) return null
-      try {
-        return JSON.parse(raw)
-      } catch {
-        return 'PARSE_ERROR'
-      }
-    })
-
-    if (stored === null) {
-      // Finance state not yet written — page may need interaction to persist
-      console.warn('[crawl] Finance localStorage not yet written; skipping integrity check')
-      return
-    }
-
-    expect(stored).not.toBe('PARSE_ERROR')
-    expect(stored).toHaveProperty('version')
-    expect(stored).toHaveProperty('state')
   })
 })
 

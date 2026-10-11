@@ -150,7 +150,7 @@ export function CalendarSyncPage() {
   };
 
   return (
-    <AppChrome mobileActive="planner" showCalendarLink={isAuthenticated}>
+    <AppChrome showCalendarLink={isAuthenticated}>
       <div className="mx-auto max-w-3xl px-4 py-6 md:px-8 pb-28 md:pb-10">
         <header className="mb-6">
           <h1 className="font-shareHeadline text-2xl font-black text-share-onSurface">
@@ -187,7 +187,7 @@ export function CalendarSyncPage() {
               events and tasks stay together across devices.
             </p>
             <a
-              href="/planner"
+              href="/"
               className="mt-4 inline-block rounded-lg bg-share-primary px-4 py-2 text-sm font-bold text-share-onPrimary hover:bg-share-primaryContainer"
             >
               Go to sign in

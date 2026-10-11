@@ -23,7 +23,7 @@ interface MobileTabBarProps {
   /** Null on the Review route, where none of the planner's own tabs is active. */
   activeTab: MobileTab | null
   onTabChange: (tab: MobileTab) => void
-  /** True on /planner/review, so Review lights up instead. */
+  /** True on /review, so Review lights up instead. */
   reviewActive?: boolean
 }
 
@@ -83,14 +83,6 @@ export function MobileTabBar({ activeTab, onTabChange, reviewActive }: MobileTab
       className="fixed bottom-0 left-0 right-0 z-[60] border-t border-share-outlineVariant/30 bg-share-bg/95 pb-safe-nav backdrop-blur-sm md:left-[240px] lg:hidden"
     >
       <div className="flex">
-        <Link
-          to="/"
-          className={`${itemClass} font-medium text-share-onSurfaceVariant/60 hover:text-share-onSurface`}
-          aria-label="Home"
-        >
-          <span className="material-symbols-outlined text-[1.1rem]">home</span>
-          <span>Home</span>
-        </Link>
         {TABS.map((tab) => {
           const isActive = !reviewActive && activeTab === tab.id
           return (
@@ -111,7 +103,7 @@ export function MobileTabBar({ activeTab, onTabChange, reviewActive }: MobileTab
           )
         })}
         <Link
-          to="/planner/review"
+          to="/review"
           aria-current={reviewActive ? 'page' : undefined}
           className={`${itemClass} ${
             reviewActive

@@ -2,24 +2,20 @@
  * AppSidebar.tsx
  *
  * Fixed left sidebar for desktop layout (md+).
- * Mobile uses AppMobileNav instead.
+ * Phones use the planner's MobileTabBar instead.
  */
 
 import type { ReactNode } from "react";
 import { NavLink } from "react-router-dom";
 import { MaterialIcon } from "../ui/MaterialIcon";
-import type { MobileNavKey } from "./AppMobileNav";
 
 export interface AppSidebarProps {
-  active: MobileNavKey;
   showCalendarLink?: boolean;
-  showHelp?: boolean;
-  onHelpClick?: () => void;
   trailing?: ReactNode;
 }
 
 interface NavItem {
-  key: MobileNavKey | "calendar";
+  key: string;
   label: string;
   icon: string;
   to: string;
@@ -27,11 +23,16 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { key: "home", label: "Home", icon: "home", to: "/", end: true },
-  { key: "planner", label: "Planner", icon: "target", to: "/planner" },
-  { key: "travel", label: "Travel", icon: "flight", to: "/travel" },
-  { key: "finance", label: "Finance", icon: "account_balance", to: "/finance" },
+  { key: "today", label: "Today", icon: "today", to: "/", end: true },
+  { key: "review", label: "Review", icon: "insights", to: "/review" },
 ];
+
+const CALENDAR_ITEM: NavItem = {
+  key: "calendar",
+  label: "Calendar",
+  icon: "calendar_month",
+  to: "/calendar",
+};
 
 function navItemClass(isActive: boolean) {
   return [
@@ -42,23 +43,8 @@ function navItemClass(isActive: boolean) {
   ].join(" ");
 }
 
-export function AppSidebar({
-  showCalendarLink = false,
-  showHelp = false,
-  onHelpClick,
-  trailing,
-}: AppSidebarProps) {
-  const items = showCalendarLink
-    ? [
-        ...NAV_ITEMS,
-        {
-          key: "calendar" as const,
-          label: "Calendar",
-          icon: "calendar_month",
-          to: "/calendar",
-        },
-      ]
-    : NAV_ITEMS;
+export function AppSidebar({ showCalendarLink = false, trailing }: AppSidebarProps) {
+  const items = showCalendarLink ? [...NAV_ITEMS, CALENDAR_ITEM] : NAV_ITEMS;
 
   return (
     <aside className="fixed left-0 top-0 z-40 hidden h-dvh w-[240px] shrink-0 flex-col border-r border-share-outlineVariant/25 bg-[#161a1d] md:flex">
@@ -87,24 +73,11 @@ export function AppSidebar({
         ))}
       </nav>
 
-      {/* Bottom section */}
-      <div className="px-3 pb-4 pt-2 border-t border-share-outlineVariant/15 space-y-1">
-        {showHelp && (
-          <button
-            type="button"
-            onClick={onHelpClick}
-            className="flex w-full touch-target-coarse items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-share-onSurfaceVariant transition-colors hover:bg-share-surfaceContainerHigh hover:text-share-onSurface"
-          >
-            <MaterialIcon name="help" className="shrink-0 text-[1.2rem]" />
-            <span>Help & tips</span>
-          </button>
-        )}
-        {trailing && (
-          <div className="flex items-center px-1 py-1">
-            {trailing}
-          </div>
-        )}
-      </div>
+      {trailing && (
+        <div className="px-3 pb-4 pt-2 border-t border-share-outlineVariant/15">
+          <div className="flex items-center px-1 py-1">{trailing}</div>
+        </div>
+      )}
     </aside>
   );
 }

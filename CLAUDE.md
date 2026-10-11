@@ -194,9 +194,18 @@ Utilities live in `src/index.css` under `@layer utilities`; breakpoints in
 
 ### Routing (`src/App.tsx` + `src/main.tsx`)
 
-`main.tsx` wraps the app in `<BrowserRouter>` + `<AuthProvider>`. `App.tsx` handles:
-1. `?share=TOKEN` — fetches shared planner from Supabase, renders read-only or editable shell
-2. Normal routes: `/` (landing), `/planner`, `/travel`, `/finance`, `/calendar`, `/calendar/callback`
+`main.tsx` wraps the app in `<BrowserRouter>` + `<AuthProvider>`. `App.tsx` routes:
+`/` (the planner — there is no landing page), `/review` (this week's worked
+time + habits), `/calendar`, `/calendar/callback`, `/privacy` (needed for the
+Google OAuth consent screen) and `/restore`. `/planner`, `/planner/review` and
+any unknown path redirect, so old bookmarks still land.
+
+The landing page, travel, finance, sharing, goals/reviews, journal, shutdown
+ritual, side quests and onboarding tour were removed in the minimal rewrite.
+Their *backend* (`convex/travel*.ts`, `financial*.ts`, `receiptParser.ts`,
+`sharing.ts`) and their fields in `AppState` are still in place on purpose: the
+data has not been exported yet, and removing a field from the type would let
+the next settings write drop it.
 
 ### Key directories
 
