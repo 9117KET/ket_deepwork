@@ -11,7 +11,17 @@ import { ErrorBoundary } from "./components/ErrorBoundary"
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <ErrorBoundary>
-      <ConvexAuthProvider client={convex}>
+      {/*
+        Convex Auth reads any `?code=` in the URL as its own sign-in code.
+        Google's calendar consent comes back to /calendar/callback with a
+        `?code=` too; letting Convex Auth consume it fails ("Invalid
+        verification code"), signs the user out, and the calendar callback
+        then runs unauthenticated. That page owns its code.
+      */}
+      <ConvexAuthProvider
+        client={convex}
+        shouldHandleCode={() => !window.location.pathname.startsWith("/calendar/callback")}
+      >
         <BrowserRouter>
           <AuthProvider>
             <ErrorBoundary>

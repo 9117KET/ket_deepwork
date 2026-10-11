@@ -42,6 +42,24 @@ export async function startGoogleOAuth(): Promise<{ url: string; state: string }
   return result
 }
 
+/**
+ * The CSRF check on its own, so the callback page can reject a forged
+ * callback at once — before, and regardless of, sign-in being restored.
+ * Throws on a mismatch; does not consume the stored state.
+ */
+export function checkOAuthState(returnedState?: string): void {
+  const expected = (() => {
+    try {
+      return sessionStorage.getItem(OAUTH_STATE_KEY)
+    } catch {
+      return null
+    }
+  })()
+  if (expected && expected !== returnedState) {
+    throw new Error("OAuth state mismatch — possible CSRF. Please try connecting again.")
+  }
+}
+
 export async function completeGoogleOAuth(code: string, returnedState?: string): Promise<void> {
   const expected = (() => {
     try {
