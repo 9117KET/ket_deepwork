@@ -1,3 +1,8 @@
+import { ConvexError } from "convex/values"
+
+/** `ConvexError` code for a refresh token Google no longer accepts. */
+export const GOOGLE_RECONNECT = "GOOGLE_RECONNECT"
+
 export const GOOGLE_AUTH_BASE = "https://accounts.google.com/o/oauth2/v2/auth"
 export const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 export const GOOGLE_REVOKE_URL = "https://oauth2.googleapis.com/revoke"
@@ -28,7 +33,17 @@ export async function getGoogleAccessToken(params: {
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body,
   })
-  if (!resp.ok) throw new Error(`Token refresh failed (${resp.status})`)
+  if (!resp.ok) {
+    // invalid_grant means the refresh token is dead: revoked, or expired after
+    // 7 days while the OAuth consent screen is in Testing. Only reconnecting
+    // fixes it, so say so in a ConvexError — plain Errors reach a prod client
+    // as an anonymous "Server Error".
+    const body = (await resp.json().catch(() => ({}))) as { error?: string }
+    if (body.error === "invalid_grant") {
+      throw new ConvexError({ code: GOOGLE_RECONNECT, message: "Google Calendar access has expired. Reconnect to continue." })
+    }
+    throw new Error(`Token refresh failed (${resp.status})`)
+  }
   const data = (await resp.json()) as { access_token: string; expires_in: number }
   return { accessToken: data.access_token, expiresIn: data.expires_in }
 }

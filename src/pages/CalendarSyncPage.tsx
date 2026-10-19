@@ -22,6 +22,8 @@ import {
   listGoogleCalendars,
   selectGoogleCalendar,
   disconnectGoogle,
+  isReconnectError,
+  calendarErrorMessage,
 } from "../services/calendarSyncService";
 
 type Banner = { kind: "ok" | "error" | "info"; text: string } | null;
@@ -45,13 +47,20 @@ export function CalendarSyncPage() {
   const selectedCalendarId = status?.connected ? status.selectedCalendarId : undefined;
   const selectedCalendarSummary = status?.connected ? status.selectedCalendarSummary : undefined;
 
+  const [needsReconnect, setNeedsReconnect] = useState(false);
+  // One automatic load per connection. Keying it on `calendars === null` alone
+  // retried a failing load in a tight loop, since a failure leaves it null.
+  const [autoLoaded, setAutoLoaded] = useState(false);
+
   const loadCalendars = useCallback(async () => {
     setLoadingCalendars(true);
     setBanner(null);
     try {
       setCalendars(await listGoogleCalendars());
+      setNeedsReconnect(false);
     } catch (e) {
-      setBanner({ kind: "error", text: (e as Error).message });
+      setNeedsReconnect(isReconnectError(e));
+      setBanner({ kind: "error", text: calendarErrorMessage(e) });
     } finally {
       setLoadingCalendars(false);
     }
@@ -59,10 +68,12 @@ export function CalendarSyncPage() {
 
   // Once connected, load the calendar list so the user can pick / change.
   useEffect(() => {
-    if (connected && calendars === null && !loadingCalendars) {
+    if (connected && !autoLoaded) {
+      setAutoLoaded(true);
       void loadCalendars();
     }
-  }, [connected, calendars, loadingCalendars, loadCalendars]);
+    if (!connected && autoLoaded) setAutoLoaded(false);
+  }, [connected, autoLoaded, loadCalendars]);
 
   const handleConnect = async () => {
     setBusy("connect");
@@ -179,8 +190,10 @@ export function CalendarSyncPage() {
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="inline-block h-2 w-2 rounded-full bg-emerald-400" />
-                    <h2 className="text-base font-bold text-share-onSurface">Connected</h2>
+                    <span className={`inline-block h-2 w-2 rounded-full ${needsReconnect ? "bg-amber-400" : "bg-emerald-400"}`} />
+                    <h2 className="text-base font-bold text-share-onSurface">
+                      {needsReconnect ? "Access expired" : "Connected"}
+                    </h2>
                   </div>
                   <p className="mt-1 text-sm text-share-onSurfaceVariant">
                     {selectedCalendarId
@@ -188,14 +201,28 @@ export function CalendarSyncPage() {
                       : "Using your primary calendar."}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleDisconnect}
-                  disabled={busy === "disconnect"}
-                  className="shrink-0 rounded-lg border border-share-outlineVariant/50 px-3 py-1.5 text-xs font-bold text-share-onSurfaceVariant hover:border-red-500/50 hover:text-red-300 disabled:opacity-60"
-                >
-                  {busy === "disconnect" ? "Disconnecting…" : "Disconnect"}
-                </button>
+                <div className="flex shrink-0 items-center gap-2">
+                  {/* Reconnecting replaces only the stored token; the chosen
+                      calendar and task ↔ event links survive it. */}
+                  {needsReconnect && (
+                    <button
+                      type="button"
+                      onClick={handleConnect}
+                      disabled={busy === "connect"}
+                      className="rounded-lg bg-share-primary px-3 py-1.5 text-xs font-bold text-share-onPrimary hover:bg-share-primaryContainer disabled:opacity-60"
+                    >
+                      {busy === "connect" ? "Redirecting…" : "Reconnect"}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleDisconnect}
+                    disabled={busy === "disconnect"}
+                    className="rounded-lg border border-share-outlineVariant/50 px-3 py-1.5 text-xs font-bold text-share-onSurfaceVariant hover:border-red-500/50 hover:text-red-300 disabled:opacity-60"
+                  >
+                    {busy === "disconnect" ? "Disconnecting…" : "Disconnect"}
+                  </button>
+                </div>
               </div>
             </div>
 

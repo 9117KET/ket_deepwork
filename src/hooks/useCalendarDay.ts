@@ -14,7 +14,12 @@ import { useCallback, useEffect, useState } from "react"
 import { useQuery } from "convex/react"
 import { api } from "../../convex/_generated/api"
 import { useAuth } from "../contexts/AuthContext"
-import { listCalendarEvents, type CalendarEvent } from "../services/calendarSyncService"
+import {
+  calendarErrorMessage,
+  isReconnectError,
+  listCalendarEvents,
+  type CalendarEvent,
+} from "../services/calendarSyncService"
 
 const CACHE_KEY = "deepblock_calendar_cache_v1"
 const CACHE_DAYS = 7
@@ -28,6 +33,8 @@ export type CalendarDayStatus =
   | "loading"
   | "ready"
   | "error"
+  /** Google no longer accepts the stored token; only reconnecting fixes it. */
+  | "reconnect"
 
 type Cache = Record<string, { at: number; events: CalendarEvent[] }>
 
@@ -60,7 +67,7 @@ export function useCalendarDay(date: string) {
   const connected = status?.connected === true
 
   const [events, setEvents] = useState<CalendarEvent[]>(() => readCache()[date]?.events ?? [])
-  const [loadState, setLoadState] = useState<"idle" | "ready" | "error">("idle")
+  const [loadState, setLoadState] = useState<"idle" | "ready" | "error" | "reconnect">("idle")
   const [error, setError] = useState<string | null>(null)
   /** Bumped to ask for a fresh fetch (after scheduling, for instance). */
   const [refreshTick, setRefreshTick] = useState(0)
@@ -87,10 +94,10 @@ export function useCalendarDay(date: string) {
           setLoadState("ready")
           writeCache(date, fresh)
         },
-        (e: Error) => {
+        (e: unknown) => {
           if (request !== latest) return
-          setError(e.message)
-          setLoadState("error")
+          setError(calendarErrorMessage(e))
+          setLoadState(isReconnectError(e) ? "reconnect" : "error")
         },
       )
     }
@@ -114,8 +121,8 @@ export function useCalendarDay(date: string) {
       ? "checking"
       : !connected
         ? "disconnected"
-        : loadState === "error"
-          ? "error"
+        : loadState === "error" || loadState === "reconnect"
+          ? loadState
           : loadState === "ready"
             ? "ready"
             : "loading"

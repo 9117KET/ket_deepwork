@@ -14,6 +14,8 @@ import { convexTest } from 'convex-test'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import schema from './schema'
 import { api } from './_generated/api'
+import { ConvexError } from 'convex/values'
+import { GOOGLE_RECONNECT } from './_shared/google'
 
 // Load every Convex module so convex-test can resolve internal.* references.
 const modules = import.meta.glob('./**/*.*s')
@@ -170,6 +172,15 @@ describe('list & select calendar', () => {
       { id: 'primary', summary: 'Personal', primary: true },
       { id: 'work@x.com', summary: 'Work', primary: false },
     ])
+  })
+
+  test('a revoked or expired refresh token surfaces as a reconnect ConvexError', async () => {
+    const t = convexTest(schema, modules)
+    const asUser = await connect(t)
+    vi.stubGlobal('fetch', vi.fn(async () => json({ error: 'invalid_grant' }, 400)))
+    const err = await asUser.action(api.calendar.listCalendars, {}).catch((e) => e)
+    expect(err).toBeInstanceOf(ConvexError)
+    expect((err as ConvexError<{ code: string }>).data.code).toBe(GOOGLE_RECONNECT)
   })
 
   test('selectCalendar persists the choice into connectionStatus', async () => {

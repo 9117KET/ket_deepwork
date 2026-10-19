@@ -7,6 +7,8 @@
 
 import { convex } from "../lib/convex"
 import { api } from "../../convex/_generated/api"
+import { ConvexError } from "convex/values"
+import { GOOGLE_RECONNECT } from "../../convex/_shared/google"
 
 export interface CalendarListItem {
   id: string
@@ -83,6 +85,23 @@ export async function completeGoogleOAuth(code: string, returnedState?: string):
   }
   const origin = window.location.origin
   await convex.action(api.calendar.googleOauthCallback, { code, origin })
+}
+
+/** True when Google has revoked or expired access and only reconnecting helps. */
+export function isReconnectError(e: unknown): boolean {
+  return (
+    e instanceof ConvexError &&
+    (e.data as { code?: string } | undefined)?.code === GOOGLE_RECONNECT
+  )
+}
+
+/** A readable message for any calendar action failure. */
+export function calendarErrorMessage(e: unknown): string {
+  if (e instanceof ConvexError) {
+    const data = e.data as { message?: string } | string
+    return typeof data === "string" ? data : data?.message ?? e.message
+  }
+  return (e as Error).message
 }
 
 export async function listGoogleCalendars(): Promise<CalendarListItem[]> {
