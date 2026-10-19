@@ -49,20 +49,22 @@ export function CalendarTimeline({ status, events, isToday, now }: CalendarTimel
 
   if (status === 'signedOut' || status === 'checking') return null
 
-  if (status === 'disconnected') {
+  if (status === 'disconnected' || status === 'reconnect') {
     return (
       <section
         aria-label="Calendar"
         className="flex items-center justify-between gap-3 rounded-2xl border border-dashed border-share-outlineVariant/40 px-4 py-3"
       >
         <p className="text-xs text-share-onSurfaceVariant">
-          See your day here and schedule tasks into it with reminders.
+          {status === 'reconnect'
+            ? 'Google Calendar access has expired. Reconnect to see your day.'
+            : 'See your day here and schedule tasks into it with reminders.'}
         </p>
         <Link
           to="/calendar"
           className="touch-target-coarse shrink-0 rounded-lg bg-share-primary/15 px-3 py-1.5 text-xs font-bold text-share-primary hover:bg-share-primary/25"
         >
-          Connect calendar
+          {status === 'reconnect' ? 'Reconnect' : 'Connect calendar'}
         </Link>
       </section>
     )
