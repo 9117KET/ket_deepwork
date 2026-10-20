@@ -121,7 +121,7 @@ export function ReviewPage() {
 
   if (loading || isHydrating) {
     return (
-      <AppChrome trailing={trailing}>
+      <AppChrome showCalendarLink={Boolean(user)} trailing={trailing}>
         <div className="flex min-h-[50vh] items-center justify-center text-share-onSurfaceVariant">
           <p className="text-sm">Loading your week…</p>
         </div>
@@ -130,7 +130,7 @@ export function ReviewPage() {
   }
 
   return (
-    <AppChrome trailing={trailing}>
+    <AppChrome showCalendarLink={Boolean(user)} trailing={trailing}>
       <div className="mx-auto max-w-xl px-4 py-5 pb-28 md:py-8 md:pb-10">
         {/* Week stepper */}
         <header className="flex items-center justify-between gap-2">
