@@ -454,6 +454,38 @@ export function useTaskHandlers(
   };
 
   /**
+   * Apply what changed in Google Tasks - a tick, an un-tick, a rename - to the
+   * planner's copy. Only the named fields move; everything else on the task
+   * (duration, schedule, logged work, subtasks) is the planner's alone. Done
+   * state is applied per task, not cascaded: Google already reports each
+   * subtask on its own.
+   */
+  const handleApplyRemoteTaskChanges = useCallback(
+    (date: string, changes: Array<{ taskId: string; title?: string; isDone?: boolean }>) => {
+      if (changes.length === 0) return;
+      updateAppState((prev) => {
+        const day = prev.days[date];
+        if (!day) return prev;
+        const byId = new Map(changes.map((c) => [c.taskId, c]));
+        let changed = false;
+        const nextTasks = day.tasks.map((task) => {
+          const change = byId.get(task.id);
+          if (!change) return task;
+          const title = change.title ?? task.title;
+          const isDone = change.isDone ?? task.isDone;
+          if (title === task.title && isDone === task.isDone) return task;
+          changed = true;
+          return { ...task, title, isDone };
+        });
+        if (!changed) return prev;
+        const nextDays = { ...prev.days, [date]: { ...day, tasks: nextTasks } };
+        return { ...prev, days: nextDays, activeDays: deriveActiveDaysFromDays(nextDays) };
+      });
+    },
+    [updateAppState],
+  );
+
+  /**
    * Record a completed deep work session into the current day. When the timer
    * was pointed at a task, `taskId` attributes the minutes to it - that is what
    * fills the task's progress boxes as earned rather than self-reported work.
@@ -767,6 +799,7 @@ export function useTaskHandlers(
     handleReorderTask,
     handleCopyFromDay,
     handleUpdateTask,
+    handleApplyRemoteTaskChanges,
     handleSessionComplete,
     handleRecordAwaySession,
     handleLogManualMinutes,

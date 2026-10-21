@@ -20,6 +20,8 @@ export interface CalendarConnectionStatus {
   connected: boolean
   selectedCalendarId?: string
   selectedCalendarSummary?: string
+  /** The grant covers Google Tasks. False on connections made before it was asked for. */
+  tasksEnabled?: boolean
 }
 
 const OAUTH_STATE_KEY = "deepblock_gcal_oauth_state"
@@ -168,6 +170,37 @@ export async function unscheduleTaskFromCalendar(params: {
   taskDate: string
 }): Promise<void> {
   await convex.action(api.calendar.unscheduleTask, params)
+}
+
+// ─── Tasks ↔ Google Tasks ──────────────────────────────────────────────────────
+
+export interface SyncTaskInput {
+  id: string
+  title: string
+  isDone: boolean
+  parentId?: string
+}
+
+/** A change made in Google that the planner should apply. */
+export interface RemoteTaskChange {
+  taskId: string
+  title?: string
+  isDone?: boolean
+}
+
+/**
+ * Mirror one day's tasks into Google Tasks and bring back what changed there.
+ * Never deletes anything; see `removeTaskFromGoogle`.
+ */
+export async function syncDayTasksWithGoogle(
+  taskDate: string,
+  tasks: SyncTaskInput[],
+): Promise<{ pulls: RemoteTaskChange[]; inserted: number; pushed: number }> {
+  return await convex.action(api.tasks.syncDayTasks, { taskDate, tasks })
+}
+
+export async function removeTaskFromGoogle(params: { taskId: string; taskDate: string }): Promise<void> {
+  await convex.action(api.tasks.removeTask, params)
 }
 
 export async function logWorkBlockToCalendar(params: {

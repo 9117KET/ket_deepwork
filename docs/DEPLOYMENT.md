@@ -123,6 +123,12 @@ site, so follow this order. Every step needs `npx convex login` first.
      describes exactly the calendar access the app uses. A personal app with
      the `calendar` scope shows an "unverified app" warning until Google
      verifies it — click through it for your own account.
+   - **Enable the Google Tasks API** (APIs & Services → Library) in the same
+     project. Task sync asks for the `tasks` scope; without the API enabled
+     every call returns 403 and the planner reports "reconnect". Connections
+     made before the scope was added show a *Reconnect for tasks* button on
+     `/calendar` (and a line under Today's timeline) until the user reconnects
+     once — `include_granted_scopes` keeps the calendar grant.
 5. **Later, optional — retire the legacy tables.** Once the backups in step 1
    are confirmed readable, the three legacy tables can be emptied in the
    Convex dashboard and their definitions removed from `convex/schema.ts`.

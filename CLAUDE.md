@@ -158,6 +158,23 @@ the last 36h to the "Deepblock log" calendar. It is driven by recorded sessions,
 not the timer callback, so away-block claims and other devices are covered too;
 the server derives the event id from the session id, so re-sending is a no-op.
 
+**Tasks are mirrored into Google Tasks, both ways.** Every task on the open day
+is a Google Task in a "Deepblock" list, due on its day — which is how it shows
+on Google Calendar with a checkbox. `useTaskSync` sends the day's tasks
+(`id`, `title`, `isDone`, `parentId` only) 1.2s after the last edit, on
+foreground and every 2 min, to `tasks.syncDayTasks`, which reads the same day
+from Google and reconciles with `planTaskSync` (`convex/_shared/taskSync.ts`,
+pure). Each `googleTaskLinks` row keeps the last state both sides agreed on;
+the side that differs from it is the side that changed, and the planner wins a
+tie. A pull is applied by `handleApplyRemoteTaskChanges` and only recorded as
+agreed once the planner echoes it back. Three rules: **a sync never deletes**
+(a planner delete calls `tasks.removeTask` once Undo has expired, exactly like
+`unscheduleTask`); **a Google delete leaves the planner task alone** (the link
+is marked `remoteGone` and the task is never re-sent); **sync is off while
+hydrating** (`isHydrating`), because a half-loaded day is not the day. The
+Tasks scope was added after the first connections, so `connectionStatus.tasksEnabled`
+is false until the user reconnects; `/calendar` and Today both say so.
+
 ### Responsive foundations
 
 Mobile-first, and "mobile" means the whole spread — 280px Fold cover screens up
@@ -225,7 +242,8 @@ stored data gets dropped, and that only happens after the export in
   log event id in `convex/_shared/freeSlot.ts` (pure, unit-tested).
 - **Public API:** `connectionStatus` (query), `googleOauthStart` / `googleOauthCallback`,
   `listCalendars`, `selectCalendar`, `listEvents`, `scheduleTask`, `unscheduleTask`,
-  `logWorkBlock`, `disconnectGoogle`.
+  `logWorkBlock`, `disconnectGoogle`; and in `convex/tasks.ts`, `syncDayTasks` and
+  `removeTask` (Google Tasks, see "Today and the calendar").
 - **Rules:** `listEvents` is read-only and writes nothing to the planner (the old
   import copied events in as tasks; it is gone). `scheduleTask` places a task in
   the first free gap between now/08:00 and 22:00 using freeBusy on the chosen
@@ -234,13 +252,17 @@ stored data gets dropped, and that only happens after the export in
   log" calendar (`googleCalendarConnections.logCalendarId`), recreates it if the
   user deleted it, and treats 409 as already logged. The calendar defaults to
   `primary` when none is selected.
-- **Tables:** `googleCalendarConnections` (encrypted refresh token, selected calendar,
-  log calendar) and `calendarEventLinks` (task ↔ event mapping). The client never
-  sees tokens — actions decrypt the refresh token and mint short-lived access tokens.
-- **Tests:** `npm run test:convex` runs `convex/calendar.test.ts` against a mocked
-  Google `fetch`.
+- **Tables:** `googleCalendarConnections` (encrypted refresh token, granted scopes,
+  selected calendar, log calendar, task list), `calendarEventLinks` (task ↔ event
+  mapping) and `googleTaskLinks` (task ↔ Google Task, with the last agreed title
+  and done state). The client never sees tokens — actions decrypt the refresh
+  token and mint short-lived access tokens.
+- **Tests:** `npm run test:convex` runs `convex/calendar.test.ts` and
+  `convex/tasks.test.ts` against a mocked Google `fetch`.
 - **Env vars** (Convex dashboard): `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
   `GOOGLE_TOKEN_ENCRYPTION_KEY_B64`. Prod still needs these copied over (DEPLOYMENT.md step 2).
+  The Google Cloud project must have the **Google Tasks API** enabled as well as
+  the Calendar API, or every task sync fails with a 403.
 - **OAuth app status:** while the Google consent screen is in *Testing*, refresh
   tokens expire after 7 days and the calendar silently disconnects weekly.
   Publishing it needs `/privacy`, which describes exactly this data use.

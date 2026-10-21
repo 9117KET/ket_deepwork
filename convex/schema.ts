@@ -104,8 +104,35 @@ export default defineSchema({
     selectedCalendarSummary: v.optional(v.string()),
     /** The "Deepblock log" calendar worked blocks are written to; created on first use. */
     logCalendarId: v.optional(v.string()),
+    /**
+     * Scopes Google reported granting at the last connect. Absent on
+     * connections made before Google Tasks was asked for, which is exactly
+     * what tells the client to offer a reconnect.
+     */
+    grantedScopes: v.optional(v.array(v.string())),
+    /** The "Deepblock" Google Tasks list planner tasks are mirrored into; created on first use. */
+    taskListId: v.optional(v.string()),
   })
     .index("by_user", ["userId"]),
+
+  /**
+   * Planner task ↔ Google Task. The `synced*` fields are the last state both
+   * sides agreed on, which is what lets a sync tell "ticked in Google" from
+   * "ticked in the planner" without trusting a timestamp from either side.
+   */
+  googleTaskLinks: defineTable({
+    userId: v.string(),
+    taskId: v.string(),
+    taskDate: v.string(),
+    googleTaskListId: v.string(),
+    googleTaskId: v.string(),
+    syncedTitle: v.string(),
+    syncedDone: v.boolean(),
+    /** Deleted in Google. The planner task is left alone and never re-sent. */
+    remoteGone: v.optional(v.boolean()),
+  })
+    .index("by_user_task", ["userId", "taskDate", "taskId"])
+    .index("by_user_date", ["userId", "taskDate"]),
 
   calendarEventLinks: defineTable({
     userId: v.string(),
