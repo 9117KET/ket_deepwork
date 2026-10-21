@@ -44,6 +44,8 @@ export function CalendarSyncPage() {
 
 
   const connected = status?.connected === true;
+  // False on a connection made before Google Tasks was asked for.
+  const tasksEnabled = status?.connected === true && status.tasksEnabled === true;
   const selectedCalendarId = status?.connected ? status.selectedCalendarId : undefined;
   const selectedCalendarSummary = status?.connected ? status.selectedCalendarSummary : undefined;
 
@@ -126,7 +128,8 @@ export function CalendarSyncPage() {
             Google Calendar
           </h1>
           <p className="mt-1 text-sm text-share-onSurfaceVariant">
-            Your calendar is the schedule. Today shows its events beside your tasks,{" "}
+            Your calendar is the schedule. Today shows its events beside your tasks,
+            every task you add appears there as a Google Task with a checkbox,{" "}
             <span className="font-semibold">Schedule</span> puts a task into the next free
             slot with a reminder, and finished focus blocks are logged to a separate{" "}
             <span className="font-semibold">Deepblock log</span> calendar.
@@ -171,7 +174,7 @@ export function CalendarSyncPage() {
             <h2 className="text-base font-bold text-share-onSurface">Not connected</h2>
             <p className="mt-1 text-sm text-share-onSurfaceVariant">
               Connect once and it stays connected. You will be asked to grant
-              calendar access; your primary calendar is used unless you pick another.
+              calendar and tasks access; your primary calendar is used unless you pick another.
             </p>
             <button
               type="button"
@@ -204,7 +207,7 @@ export function CalendarSyncPage() {
                 <div className="flex shrink-0 items-center gap-2">
                   {/* Reconnecting replaces only the stored token; the chosen
                       calendar and task ↔ event links survive it. */}
-                  {needsReconnect && (
+                  {(needsReconnect || !tasksEnabled) && (
                     <button
                       type="button"
                       onClick={handleConnect}
@@ -262,6 +265,37 @@ export function CalendarSyncPage() {
                 <p className="mt-3 text-sm text-share-onSurfaceVariant">
                   No calendars found. Try refreshing.
                 </p>
+              )}
+            </div>
+
+            {/* Tasks ↔ Google Tasks */}
+            <div className="rounded-2xl border border-share-outlineVariant/50 bg-share-surfaceContainerHigh p-6">
+              <div className="flex items-center gap-2">
+                <span className={`inline-block h-2 w-2 rounded-full ${tasksEnabled ? "bg-emerald-400" : "bg-amber-400"}`} />
+                <h2 className="text-base font-bold text-share-onSurface">Tasks</h2>
+              </div>
+              {tasksEnabled ? (
+                <p className="mt-2 text-sm text-share-onSurfaceVariant">
+                  Each task you add goes to a <span className="font-semibold text-share-onSurface">Deepblock</span> list
+                  in Google Tasks, due on its day, so it shows on your calendar with a checkbox. Tick or rename it
+                  in either place and the other follows. Deleting a task here removes it from Google; deleting it
+                  in Google leaves it here and just stops the mirroring.
+                </p>
+              ) : (
+                <>
+                  <p className="mt-2 text-sm text-share-onSurfaceVariant">
+                    This connection was made before task sync existed. Reconnect once to add Google Tasks
+                    access — your calendar choice and scheduled events are kept.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleConnect}
+                    disabled={busy === "connect"}
+                    className="mt-4 inline-flex items-center gap-2 rounded-lg bg-share-primary px-4 py-2 text-sm font-bold text-share-onPrimary hover:bg-share-primaryContainer disabled:opacity-60"
+                  >
+                    {busy === "connect" ? "Redirecting…" : "Reconnect for tasks"}
+                  </button>
+                </>
               )}
             </div>
 

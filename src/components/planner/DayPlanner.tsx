@@ -14,7 +14,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   DEFAULT_HABIT_DEFINITIONS,
   FIXED_SECTIONS,
@@ -39,9 +39,10 @@ import { useUndoableActions } from "../../hooks/useUndoableActions";
 import { useTaskHandlers } from "../../hooks/useTaskHandlers";
 import { useCalendarDay } from "../../hooks/useCalendarDay";
 import { useWorkLog } from "../../hooks/useWorkLog";
+import { useTaskSync } from "../../hooks/useTaskSync";
 import { usePersistentState, getOrCreateDay } from "../../storage/localStorageState";
 import { useAuth } from "../../contexts/AuthContext";
-import { scheduleTaskInCalendar, unscheduleTaskFromCalendar } from "../../services/calendarSyncService";
+import { removeTaskFromGoogle, scheduleTaskInCalendar, unscheduleTaskFromCalendar } from "../../services/calendarSyncService";
 import { playChime } from "../../audio/chimes";
 import { UndoToast } from "./UndoToast";
 import { TaskProgressSheet } from "./TaskProgressSheet";
@@ -166,6 +167,7 @@ export function DayPlanner() {
     handleReorderTask,
     handleCopyFromDay,
     handleUpdateTask,
+    handleApplyRemoteTaskChanges,
     handleSessionComplete,
     handleRecordAwaySession,
     handleLogManualMinutes,
@@ -175,6 +177,15 @@ export function DayPlanner() {
     handleReorderSubtask,
     handleMoveSubtask,
   } = useTaskHandlers(updateAppState, selectedDay);
+
+  // The day's tasks as Google Tasks, both ways. Off while hydrating: a
+  // half-loaded day is not the day, and must not be mirrored as if it were.
+  useTaskSync({
+    date: selectedDay,
+    tasks: dayState.tasks,
+    enabled: calendar.tasksEnabled && !isHydrating,
+    onPulled: handleApplyRemoteTaskChanges,
+  });
 
   // ── Habits ────────────────────────────────────────────────────────────────
   const habits = appState.habitDefinitions ?? DEFAULT_HABIT_DEFINITIONS;
@@ -397,6 +408,8 @@ export function DayPlanner() {
 
   /** Calendar events of deleted tasks, removed once the delete can no longer be undone. */
   const pendingUnschedules = useRef<{ taskId: string; taskDate: string }[]>([]);
+  /** Google Tasks of deleted tasks, likewise. A sync never deletes; only this does. */
+  const pendingGoogleRemovals = useRef<{ taskId: string; taskDate: string }[]>([]);
 
   /**
    * Delete a task, stopping first if it would destroy work that cannot be
@@ -416,8 +429,23 @@ export function DayPlanner() {
       if (task?.scheduledAt && calendar.connected) {
         pendingUnschedules.current.push({ taskId, taskDate: selectedDay });
       }
+      if (calendar.tasksEnabled) {
+        for (const id of ids) pendingGoogleRemovals.current.push({ taskId: id, taskDate: selectedDay });
+      }
     },
-    [dayState, handleDeleteTask, undoable, calendar.connected, selectedDay],
+    [dayState, handleDeleteTask, undoable, calendar.connected, calendar.tasksEnabled, selectedDay],
+  );
+
+  /** Abandoning is a delete with a note; its Google mirror goes the same way. */
+  const handleAbandonTaskGuarded = useCallback(
+    (taskId: string) => {
+      const ids = taskWithDescendantIds(dayState.tasks, taskId);
+      handleAbandonTask(taskId);
+      if (calendar.tasksEnabled) {
+        for (const id of ids) pendingGoogleRemovals.current.push({ taskId: id, taskDate: selectedDay });
+      }
+    },
+    [dayState.tasks, handleAbandonTask, calendar.tasksEnabled, selectedDay],
   );
 
   /**
@@ -427,12 +455,16 @@ export function DayPlanner() {
    * and then only removes the event if the task is in fact still gone.
    */
   useEffect(() => {
-    if (undoable.entry || pendingUnschedules.current.length === 0) return;
-    const pending = pendingUnschedules.current.splice(0);
-    for (const p of pending) {
-      const stillThere = appState.days[p.taskDate]?.tasks.some((t) => t.id === p.taskId);
-      if (stillThere) continue;
+    if (undoable.entry) return;
+    const stillThere = (p: { taskId: string; taskDate: string }) =>
+      appState.days[p.taskDate]?.tasks.some((t) => t.id === p.taskId) ?? false;
+    for (const p of pendingUnschedules.current.splice(0)) {
+      if (stillThere(p)) continue;
       unscheduleTaskFromCalendar(p).catch((e) => console.warn("[schedule] could not remove event", e));
+    }
+    for (const p of pendingGoogleRemovals.current.splice(0)) {
+      if (stillThere(p)) continue;
+      removeTaskFromGoogle(p).catch((e) => console.warn("[task-sync] could not remove the Google Task", e));
     }
   }, [undoable.entry, appState.days]);
 
@@ -545,7 +577,7 @@ export function DayPlanner() {
       onScheduleTask={setScheduleTaskId}
       onMoveTaskUp={(taskId) => handleReorderTask(taskId, section.id, "up")}
       onMoveTaskDown={(taskId) => handleReorderTask(taskId, section.id, "down")}
-      onAbandonTask={handleAbandonTask}
+      onAbandonTask={handleAbandonTaskGuarded}
       onReorderSubtask={handleReorderSubtask}
       onRequestMoveSubtask={setMoveSubtaskId}
       {...extra}
@@ -599,6 +631,16 @@ export function DayPlanner() {
           <ErrorBoundary fallback={null} resetKeys={[selectedDay]}>
             <CalendarTimeline status={calendar.status} events={calendar.events} isToday={isToday} now={now} />
           </ErrorBoundary>
+
+          {calendar.status === "ready" && !calendar.tasksEnabled && (
+            <p className="text-xs text-share-onSurfaceVariant">
+              Your tasks are not on Google Calendar yet.{" "}
+              <Link to="/calendar" className="font-semibold text-share-primary hover:underline">
+                Reconnect Google
+              </Link>{" "}
+              once to add Google Tasks, and ticks will follow both ways.
+            </p>
+          )}
 
           <ErrorBoundary
             resetKeys={[selectedDay]}

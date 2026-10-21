@@ -13,11 +13,13 @@ import type * as _shared_calendarTime from "../_shared/calendarTime.js";
 import type * as _shared_crypto from "../_shared/crypto.js";
 import type * as _shared_freeSlot from "../_shared/freeSlot.js";
 import type * as _shared_google from "../_shared/google.js";
+import type * as _shared_taskSync from "../_shared/taskSync.js";
 import type * as auth from "../auth.js";
 import type * as calendar from "../calendar.js";
 import type * as calendarInternal from "../calendarInternal.js";
 import type * as http from "../http.js";
 import type * as plannerDays from "../plannerDays.js";
+import type * as tasks from "../tasks.js";
 import type * as userSettings from "../userSettings.js";
 import type * as users from "../users.js";
 
@@ -33,11 +35,13 @@ declare const fullApi: ApiFromModules<{
   "_shared/crypto": typeof _shared_crypto;
   "_shared/freeSlot": typeof _shared_freeSlot;
   "_shared/google": typeof _shared_google;
+  "_shared/taskSync": typeof _shared_taskSync;
   auth: typeof auth;
   calendar: typeof calendar;
   calendarInternal: typeof calendarInternal;
   http: typeof http;
   plannerDays: typeof plannerDays;
+  tasks: typeof tasks;
   userSettings: typeof userSettings;
   users: typeof users;
 }>;

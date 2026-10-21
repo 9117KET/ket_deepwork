@@ -7,10 +7,19 @@ export const GOOGLE_AUTH_BASE = "https://accounts.google.com/o/oauth2/v2/auth"
 export const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 export const GOOGLE_REVOKE_URL = "https://oauth2.googleapis.com/revoke"
 export const GOOGLE_CALENDAR_BASE = "https://www.googleapis.com/calendar/v3"
+export const GOOGLE_TASKS_BASE = "https://tasks.googleapis.com/tasks/v1"
 
-export const GOOGLE_SCOPES = [
-  "https://www.googleapis.com/auth/calendar",
-]
+export const GOOGLE_CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar"
+/**
+ * Google Tasks, so a planner task can live on the calendar as a real Google
+ * Task — the kind with a checkbox — rather than as an event. Asked for after
+ * the first connections were made, so an older connection may hold only the
+ * calendar scope; `connectionStatus.tasksEnabled` says which, and reconnecting
+ * (with `include_granted_scopes`) adds this one without losing the other.
+ */
+export const GOOGLE_TASKS_SCOPE = "https://www.googleapis.com/auth/tasks"
+
+export const GOOGLE_SCOPES = [GOOGLE_CALENDAR_SCOPE, GOOGLE_TASKS_SCOPE]
 
 export function buildRedirectUri(origin: string): string {
   const base = origin.endsWith("/") ? origin.slice(0, -1) : origin
@@ -21,7 +30,7 @@ export async function getGoogleAccessToken(params: {
   refreshToken: string
   clientId: string
   clientSecret: string
-}): Promise<{ accessToken: string; expiresIn: number }> {
+}): Promise<{ accessToken: string; expiresIn: number; scope?: string }> {
   const body = new URLSearchParams({
     client_id: params.clientId,
     client_secret: params.clientSecret,
@@ -44,8 +53,8 @@ export async function getGoogleAccessToken(params: {
     }
     throw new Error(`Token refresh failed (${resp.status})`)
   }
-  const data = (await resp.json()) as { access_token: string; expires_in: number }
-  return { accessToken: data.access_token, expiresIn: data.expires_in }
+  const data = (await resp.json()) as { access_token: string; expires_in: number; scope?: string }
+  return { accessToken: data.access_token, expiresIn: data.expires_in, scope: data.scope }
 }
 
 export function jsonResponse(body: unknown, init?: ResponseInit): Response {

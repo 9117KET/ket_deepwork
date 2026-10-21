@@ -57,7 +57,7 @@ export function PrivacyPage() {
             <ul>
               <li>To sync your planner across devices when you are signed in.</li>
               <li>To display your tasks, habits, sleep, and deep work history.</li>
-              <li>To show your calendar and schedule tasks into it, if you connect Google Calendar.</li>
+              <li>To show your calendar, schedule tasks into it, and keep your tasks in step with Google Tasks, if you connect Google Calendar.</li>
             </ul>
             <p className="mt-3">We do not sell, rent, or share your data with third parties for marketing purposes.</p>
           </section>
@@ -70,6 +70,7 @@ export function PrivacyPage() {
               <li><strong className="text-share-onSurface">Read free/busy</strong> times when you ask it to find a slot for a task.</li>
               <li><strong className="text-share-onSurface">Create, move or delete</strong> an event when you schedule, reschedule or unschedule a task, with a reminder.</li>
               <li><strong className="text-share-onSurface">Create one calendar</strong> named &ldquo;Deepblock log&rdquo; and add an event for each focus block you finish on the timer.</li>
+              <li><strong className="text-share-onSurface">Create, update and delete Google Tasks</strong> in a task list named &ldquo;Deepblock&rdquo;: one per planner task, due on its day, with its title and done state kept the same in both directions. Deleting a task in the planner removes it from that list; deleting it in Google only stops the mirroring. No other task list is read or changed.</li>
             </ul>
             <p className="mt-3">
               Deepblock&apos;s use and transfer of information received from Google APIs adheres to the{" "}

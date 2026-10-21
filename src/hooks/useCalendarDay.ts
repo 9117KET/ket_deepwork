@@ -65,6 +65,7 @@ export function useCalendarDay(date: string) {
   const { user } = useAuth()
   const status = useQuery(api.calendar.connectionStatus, user ? {} : "skip")
   const connected = status?.connected === true
+  const tasksEnabled = status?.connected === true && status.tasksEnabled === true
 
   const [events, setEvents] = useState<CalendarEvent[]>(() => readCache()[date]?.events ?? [])
   const [loadState, setLoadState] = useState<"idle" | "ready" | "error" | "reconnect">("idle")
@@ -127,5 +128,5 @@ export function useCalendarDay(date: string) {
             ? "ready"
             : "loading"
 
-  return { status: dayStatus, connected, events, error, refresh }
+  return { status: dayStatus, connected, tasksEnabled, events, error, refresh }
 }

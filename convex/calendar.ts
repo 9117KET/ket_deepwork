@@ -10,6 +10,7 @@ import {
   GOOGLE_REVOKE_URL,
   GOOGLE_CALENDAR_BASE,
   GOOGLE_SCOPES,
+  GOOGLE_TASKS_SCOPE,
   buildRedirectUri,
   getGoogleAccessToken,
 } from "./_shared/google"
@@ -41,9 +42,16 @@ export const connectionStatus = query({
       connected: true as const,
       selectedCalendarId: conn.selectedCalendarId,
       selectedCalendarSummary: conn.selectedCalendarSummary,
+      /** False on a connection made before Google Tasks was asked for: reconnecting adds it. */
+      tasksEnabled: tasksGranted(conn),
     }
   },
 })
+
+/** Whether the stored grant covers Google Tasks. Older connections never recorded scopes. */
+export function tasksGranted(conn: { grantedScopes?: string[] }): boolean {
+  return (conn.grantedScopes ?? []).includes(GOOGLE_TASKS_SCOPE)
+}
 
 // ─── OAuth ────────────────────────────────────────────────────────────────────
 
@@ -98,7 +106,7 @@ export const googleOauthCallback = action({
       body,
     })
     if (!resp.ok) throw new Error(`Token exchange failed (${resp.status})`)
-    const data = (await resp.json()) as { refresh_token?: string }
+    const data = (await resp.json()) as { refresh_token?: string; scope?: string }
     if (!data.refresh_token) {
       throw new Error("No refresh token returned. Try disconnecting and reconnecting with consent.")
     }
@@ -107,6 +115,9 @@ export const googleOauthCallback = action({
     await ctx.runMutation(internal.calendarInternal.storeOAuthConnection, {
       userId,
       encryptedRefreshToken: encrypted,
+      // What Google actually granted, which can be less than what was asked
+      // for: the consent screen lets each scope be unticked.
+      grantedScopes: (data.scope ?? "").split(" ").filter(Boolean),
     })
   },
 })
@@ -171,7 +182,7 @@ export const selectCalendar = mutation({
  * calendar defaults to `primary`: a fresh connection works before anyone has
  * picked a calendar, which is the whole point of "connect and forget".
  */
-async function connectedCalendar(ctx: ActionCtx): Promise<{
+export async function connectedCalendar(ctx: ActionCtx): Promise<{
   userId: string
   conn: Doc<"googleCalendarConnections">
   accessToken: string
