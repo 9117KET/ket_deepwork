@@ -19,8 +19,8 @@ interface ChallengeDashboardProps {
   state: ChallengeState
 }
 
-const card = 'rounded-2xl border border-share-outlineVariant/25 bg-share-surfaceContainer p-4'
-const heading = 'text-xs font-semibold uppercase tracking-wide text-share-onSurfaceVariant'
+const card = 'rounded-2xl bg-share-surfaceContainerLow p-4'
+const heading = 'overline'
 
 export function ChallengeDashboard({ state }: ChallengeDashboardProps) {
   const { info, progress, mine, partnerCard, myDate, partnerDate } = state
@@ -74,9 +74,9 @@ export function ChallengeDashboard({ state }: ChallengeDashboardProps) {
         <p className={heading}>{challenge.name}</p>
         {progress.phase === 'active' ? (
           <>
-            <p className="mt-1 font-shareHeadline text-4xl font-black text-share-onBg">
+            <p className="stat-number mt-2 text-share-onBg">
               {progress.daysLeft}
-              <span className="text-base font-semibold text-share-onSurfaceVariant"> days left</span>
+              <span className="font-shareSans text-sm font-semibold text-share-onSurfaceVariant"> days left</span>
             </p>
             <p className="mt-1 text-sm text-share-onSurfaceVariant">
               Day {progress.dayNumber} of {progress.totalDays} · {challenge.startDate} → {challenge.endDate}
@@ -89,7 +89,7 @@ export function ChallengeDashboard({ state }: ChallengeDashboardProps) {
         ) : (
           <p className="mt-1 text-sm text-share-onSurfaceVariant">Ended {challenge.endDate}. Well fought.</p>
         )}
-        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-share-surfaceContainerHigh" role="progressbar" aria-valuenow={progress.dayNumber} aria-valuemin={0} aria-valuemax={progress.totalDays}>
+        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-share-hairline" role="progressbar" aria-valuenow={progress.dayNumber} aria-valuemin={0} aria-valuemax={progress.totalDays}>
           <div className="h-full rounded-full bg-share-primary" style={{ width: `${(progress.phase === 'ended' ? 1 : progress.phase === 'upcoming' ? 0 : progress.dayNumber / progress.totalDays) * 100}%` }} />
         </div>
       </section>
@@ -104,13 +104,13 @@ export function ChallengeDashboard({ state }: ChallengeDashboardProps) {
             <p className="text-sm font-semibold text-share-onBg">Invite your partner</p>
             <p className="mt-1 text-xs text-share-onSurfaceVariant">Send them this link. It works for seven days and seats one person.</p>
             {token && (
-              <p className="mt-2 select-all break-all rounded-lg bg-share-surfaceContainerHigh px-2 py-1.5 font-mono text-[11px] text-share-onSurface">{inviteUrl(token)}</p>
+              <p className="mt-2 select-all break-all rounded-lg bg-share-hairline px-2 py-1.5 font-mono text-xs text-share-onSurface">{inviteUrl(token)}</p>
             )}
             <button type="button" onClick={() => void copyLink()} className="touch-target mt-2 rounded-lg bg-share-primary px-3 py-2 text-sm font-bold text-share-onPrimary hover:bg-share-primaryContainer">
               {token ? 'Copy / share link' : 'Create invite link'}
             </button>
             {notice && (
-              <p className="mt-2 text-xs text-emerald-300" role="status">
+              <p className="mt-2 text-xs text-share-onSurfaceVariant" role="status">
                 {notice}
               </p>
             )}
@@ -140,7 +140,7 @@ export function ChallengeDashboard({ state }: ChallengeDashboardProps) {
               <ul className="mt-2 space-y-1">
                 {challenge.donts.map((d) => (
                   <li key={d.id} className="flex gap-2 text-sm text-share-onSurface">
-                    <span aria-hidden className="text-amber-400">✕</span>
+                    <span aria-hidden className="text-share-tertiary">✕</span>
                     <span className="min-w-0 break-words">{d.text}</span>
                   </li>
                 ))}
@@ -165,7 +165,7 @@ export function ChallengeDashboard({ state }: ChallengeDashboardProps) {
       )}
 
       <div className="flex justify-end">
-        <button type="button" onClick={() => void leave()} disabled={leaving} className="touch-target-coarse rounded-lg px-3 py-1.5 text-xs text-share-onSurfaceVariant hover:text-red-400 disabled:opacity-60">
+        <button type="button" onClick={() => void leave()} disabled={leaving} className="touch-target-coarse rounded-lg px-3 py-1.5 text-xs text-share-onSurfaceVariant hover:text-share-tertiary disabled:opacity-60">
           {partner ? 'Leave challenge' : 'End challenge'}
         </button>
       </div>

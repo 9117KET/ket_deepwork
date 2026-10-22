@@ -8,11 +8,13 @@
 
 import { dayCellState, type ChallengeDayLike, type DayCellState } from '../../domain/challenge'
 
+// One accent: a full day is the act-now cyan, half a day is the same cyan
+// faded, a skipped plan is the warning amber, a missed day is a hairline.
 const CELL: Record<DayCellState, string> = {
-  both: 'bg-emerald-500',
-  plan: 'bg-sky-500',
-  checkin: 'bg-amber-400',
-  none: 'bg-share-surfaceContainerHigh',
+  both: 'bg-share-primary',
+  plan: 'bg-share-primary/40',
+  checkin: 'bg-share-tertiary',
+  none: 'bg-share-hairline',
   future: 'bg-transparent border border-share-outlineVariant/30',
 }
 
@@ -49,7 +51,7 @@ export function HistoryGrid({ name, dates, rows, today }: HistoryGridProps) {
           <span
             key={d}
             title={`${d}: ${LABEL[states[i]!]}`}
-            className={`h-3.5 w-3.5 rounded-[3px] ${CELL[states[i]!]} ${d === today ? 'ring-1 ring-share-primary ring-offset-1 ring-offset-share-surfaceContainer' : ''}`}
+            className={`h-3.5 w-3.5 rounded-[3px] ${CELL[states[i]!]} ${d === today ? 'ring-1 ring-share-primary ring-offset-1 ring-offset-share-surfaceContainerLow' : ''}`}
           />
         ))}
       </div>

@@ -124,7 +124,7 @@ export function ReviewPage() {
   if (loading || isHydrating) {
     return (
       <AppChrome showCalendarLink={Boolean(user)} showChallengeLink={Boolean(user)} trailing={trailing}>
-        <div className="flex min-h-[50vh] items-center justify-center text-share-onSurfaceVariant">
+        <div className="flex min-h-[50dvh] items-center justify-center text-share-onSurfaceVariant">
           <p className="text-sm">Loading your week…</p>
         </div>
       </AppChrome>
@@ -145,10 +145,10 @@ export function ReviewPage() {
             <span className="material-symbols-outlined">chevron_left</span>
           </button>
           <div className="text-center">
-            <h1 className="font-shareHeadline text-lg font-black text-share-onBg">
+            <h1 className="page-title">
               {isCurrentWeek ? "This week" : "Week"}
             </h1>
-            <p className="text-xs text-share-onSurfaceVariant">{formatWeekRange(weekDates)}</p>
+            <p className="mt-0.5 text-xs text-share-onSurfaceVariant">{formatWeekRange(weekDates)}</p>
           </div>
           <button
             type="button"
@@ -162,12 +162,10 @@ export function ReviewPage() {
         </header>
 
         {/* Worked time against the goal */}
-        <section className="mt-5 rounded-2xl border border-share-outlineVariant/25 bg-share-surfaceContainer p-4">
-          <div className="flex items-baseline justify-between">
-            <p className="text-xs font-semibold uppercase tracking-wide text-share-onSurfaceVariant">
-              Deep work
-            </p>
-            <label className="flex items-center gap-1 text-xs text-share-onSurfaceVariant">
+        <section className="mt-5 rounded-2xl bg-share-surfaceContainerLow p-4">
+          <div className="flex items-center justify-between">
+            <p className="overline">Deep work</p>
+            <label className="flex items-center gap-1.5 text-xs text-share-onSurfaceVariant">
               Goal
               <input
                 type="number"
@@ -176,18 +174,18 @@ export function ReviewPage() {
                 inputMode="numeric"
                 value={goalHours}
                 onChange={(e) => setGoalHours(Number(e.target.value))}
-                className="w-12 rounded-md border border-share-outlineVariant/40 bg-transparent px-1 py-0.5 text-right text-share-onSurface"
+                className="min-h-[44px] w-14 rounded-lg border border-share-outlineVariant bg-transparent px-2 text-right text-base text-share-onSurface sm:text-sm"
                 aria-label="Weekly deep work goal in hours"
               />
               h
             </label>
           </div>
-          <p className="mt-1 font-shareHeadline text-3xl font-black text-share-onBg">
+          <p className="stat-number mt-1 text-share-onBg">
             {formatHours(earnedMinutes)}
-            <span className="text-base font-semibold text-share-onSurfaceVariant"> / {goalHours}h</span>
+            <span className="font-shareSans text-sm font-semibold text-share-onSurfaceVariant"> / {goalHours}h</span>
           </p>
           <div
-            className="mt-3 h-2 overflow-hidden rounded-full bg-share-surfaceContainerHigh"
+            className="mt-3 h-2 overflow-hidden rounded-full bg-share-hairline"
             role="progressbar"
             aria-valuenow={Math.round(goalRatio * 100)}
             aria-valuemin={0}
@@ -197,23 +195,23 @@ export function ReviewPage() {
           </div>
 
           {/* A bar per day */}
-          <div className="mt-5 flex h-28 items-end gap-2" aria-label="Deep work per day">
+          <div className="mt-5 flex items-end gap-2" aria-label="Deep work per day">
             {weekDates.map((iso, i) => {
               const minutes = earnedByDay[i]!;
               const isToday = iso === today;
               return (
                 <div key={iso} className="flex flex-1 flex-col items-center gap-1">
-                  <span className="text-[10px] text-share-onSurfaceVariant">
+                  <span className="min-h-[1rem] text-[11px] tabular-nums text-share-onSurfaceVariant">
                     {minutes > 0 ? formatHours(minutes) : ""}
                   </span>
                   <div className="flex h-20 w-full items-end">
                     <div
-                      className={`w-full rounded-md ${minutes > 0 ? "bg-share-primary/80" : "bg-share-surfaceContainerHigh"}`}
+                      className={`w-full rounded-md ${minutes > 0 ? "bg-share-primary/80" : "bg-share-hairline"}`}
                       style={{ height: `${Math.max(4, (minutes / maxDay) * 100)}%` }}
                       title={`${iso}: ${minutes} min`}
                     />
                   </div>
-                  <span className={`text-[11px] ${isToday ? "font-bold text-share-primary" : "text-share-onSurfaceVariant"}`}>
+                  <span className={`text-[11px] ${isToday ? "font-bold text-share-primary" : "text-share-onSurfaceDim"}`}>
                     {WEEKDAY_LETTERS[i]}
                   </span>
                 </div>
@@ -230,10 +228,8 @@ export function ReviewPage() {
 
         {/* Habits, seven days each */}
         {habits.length > 0 && (
-          <section className="mt-4 rounded-2xl border border-share-outlineVariant/25 bg-share-surfaceContainer p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-share-onSurfaceVariant">
-              Habits · last 7 days
-            </p>
+          <section className="mt-4 rounded-2xl bg-share-surfaceContainerLow p-4">
+            <p className="overline">Habits · last 7 days</p>
             <ul className="mt-3 space-y-3">
               {habits.map((habit) => {
                 const week = computeHabitWeek(appState.days, habit.id, habitUntil);
@@ -249,8 +245,8 @@ export function ReviewPage() {
                             d.state === "done"
                               ? "bg-share-primary"
                               : d.state === "broke"
-                                ? "bg-[#ffb77d]"
-                                : "bg-share-surfaceContainerHigh"
+                                ? "bg-share-tertiary"
+                                : "bg-share-hairline"
                           }`}
                         />
                       ))}

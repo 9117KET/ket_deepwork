@@ -165,8 +165,8 @@ the reference; the list below is how much of them the app has actually grown.
 | desktop `DesktopReview` | **done** | `ReviewPage` layout, `ReviewStatTiles.tsx`, `ReviewRail.tsx`, `reviewStats.ts` |
 | desktop `DesktopFocus` | **done** | `src/components/timer/FocusMode.tsx` |
 | mobile `Main` | **done** | the same NOW card; the Today tab is the day alone |
-| mobile `Focus` | **done** | `src/components/timer/MobileFocusPanel.tsx` |
-| mobile `Habits` | **done** | `src/components/habits/MobileHabitsPanel.tsx` + `habitWeek.ts` |
+| mobile `Focus` | **done** | `src/components/timer/MobileFocusPanel.tsx`; idle is its own phone layout (48px select, label, five preset pills, 62px digits, full-width 48px Start) and both states centre in a screen-tall column; gated by `e2e/mobile-panels.spec.ts` |
+| mobile `Habits` | **done** | `src/components/habits/MobileHabitsPanel.tsx` + `habitWeek.ts`; each row is one 56px button with 8px dots, and the editor is a bottom sheet on phones; gated by `e2e/mobile-panels.spec.ts` |
 | mobile `Review` | **done** | `src/components/tracking/MobileReviewPanel.tsx` |
 | `Diagnosis`, `IA` | reference boards, nothing to build | — |
 | `TimelineDay`, `OneThing` | alternates, not chosen | — |

@@ -436,7 +436,7 @@ Both `depthPhilosophy` and `deepWorkGoalHoursPerWeek` are global settings synced
 - **Never-miss-twice logic** — `getAtRiskHabitIds(days, habitIds, today)` in `stats.ts`: a habit is at-risk when `days[yesterday].habitCompletions[id] !== true` AND `days[dayBeforeYesterday].habitCompletions[id] === true`. Displayed as amber border + ⚠ icon; tooltip: "You missed yesterday — don't miss twice".
 - **Per-habit streaks** — `computePerHabitStreaks(days, habitIds, untilDate)` in `stats.ts`: walks backwards up to 365 days counting consecutive completed days.
 - **Habit completions** — `DayState.habitCompletions: Record<string, boolean>`. Toggled via `handleToggleHabit` in `DayPlanner`, persisted via the normal planner day upsert path.
-- **Week of habits** — `/review` shows the last seven days of each habit as dots (`computeHabitWeek` in `habitWeek.ts`); the monthly grid was removed.
+- **Week of habits** — `/review` shows the last seven days of each habit as dots (`computeHabitWeek` in `habitWeek.ts`); the monthly grid was removed. On a phone the Habits tab (`MobileHabitsPanel`) shows the same seven dots under each habit, and each row is one button that toggles it.
 - **Habit editor modal** (`src/components/habits/HabitEditorModal.tsx`) — opened via `setEditHabitsOpen(true)` in DayPlanner. Works on a local `draft` copy of `HabitDefinition[]`; saves on "Save" click only.
 
 <!-- convex-ai-start -->

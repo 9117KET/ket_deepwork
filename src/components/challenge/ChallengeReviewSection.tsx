@@ -39,10 +39,13 @@ export function ChallengeReviewSection({ weekDates, today }: ChallengeReviewSect
   for (const id of brokenIds) brokenCounts.set(id, (brokenCounts.get(id) ?? 0) + 1)
 
   return (
-    <section className="mt-4 rounded-2xl border border-share-outlineVariant/25 bg-share-surfaceContainer p-4">
-      <div className="flex items-baseline justify-between gap-2">
-        <p className="text-xs font-semibold uppercase tracking-wide text-share-onSurfaceVariant">{challenge.name}</p>
-        <Link to="/challenge" className="text-xs font-semibold text-share-primary hover:underline">
+    <section className="mt-4 rounded-2xl bg-share-surfaceContainerLow p-4">
+      <div className="flex items-center justify-between gap-2">
+        <p className="overline min-w-0 truncate">{challenge.name}</p>
+        <Link
+          to="/challenge"
+          className="touch-target-coarse -my-2 inline-flex shrink-0 items-center justify-center px-2 text-xs font-semibold text-share-primary hover:underline"
+        >
           Open
         </Link>
       </div>
@@ -67,14 +70,14 @@ export function ChallengeReviewSection({ weekDates, today }: ChallengeReviewSect
       {challenge.donts.length > 0 && (
         <p className="mt-3 text-xs text-share-onSurfaceVariant">
           {brokenCounts.size === 0 ? (
-            <span className="text-emerald-300">No don&rsquo;ts broken this week.</span>
+            <span>No don&rsquo;ts broken this week.</span>
           ) : (
             <>
               Broke:{' '}
               {[...brokenCounts.entries()].map(([id, n], i) => (
                 <span key={id}>
                   {i > 0 && ', '}
-                  <span className="text-amber-300">{challenge.donts.find((d) => d.id === id)?.text ?? 'a don’t'}</span>
+                  <span className="text-share-tertiary">{challenge.donts.find((d) => d.id === id)?.text ?? 'a don’t'}</span>
                   {n > 1 && ` ×${n}`}
                 </span>
               ))}
