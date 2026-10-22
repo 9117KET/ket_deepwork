@@ -13,6 +13,7 @@ import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { AppChrome } from "../components/layout/AppChrome";
 import { LoginForm } from "../components/auth/LoginForm";
+import { MobileTabBar } from "../components/planner/MobileTabBar";
 import { useAuth } from "../contexts/AuthContext";
 import { useChallenge } from "../hooks/useChallenge";
 import { acceptInvite, challengeErrorMessage } from "../services/challengeService";
@@ -159,7 +160,8 @@ export function ChallengeJoinPage() {
 
   return (
     <AppChrome showCalendarLink={Boolean(user)} showChallengeLink={Boolean(user)}>
-      <div className="flex min-h-[calc(100dvh-8rem)] items-center justify-center px-4 py-8">{body}</div>
+      <div className="flex min-h-[calc(100dvh-8rem)] items-center justify-center px-4 pt-8 pb-24 md:pb-8">{body}</div>
+      <MobileTabBar activeTab={null} onTabChange={(tab) => navigate(`/?tab=${tab}`)} />
     </AppChrome>
   );
 }

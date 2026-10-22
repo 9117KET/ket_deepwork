@@ -24,6 +24,39 @@
     line-height: 1;
   }
 
+  /* iOS Safari zooms the page when a focused field's text is under 16px, and
+     does not zoom back out. Gated on touch so desktop forms keep their size.
+     `!important` because this sits in the base layer and every `text-xs` /
+     `text-sm` utility on a field would otherwise win; `max` keeps a field at
+     least as large as the text around it.
+     The min-height gives text fields the same 44px thumb floor as buttons;
+     a field with its own `min-h-*` utility keeps that instead. */
+  @media (pointer: coarse) {
+    input,
+    select,
+    textarea {
+      font-size: max(16px, 1em) !important;
+    }
+
+    /* :where() keeps this at zero specificity, so a `min-h-*` utility wins. */
+    :where(input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='hidden']), select, textarea) {
+      min-height: 44px;
+    }
+  }
+
+  /* Respect the OS "reduce motion" setting: animations and transitions still
+     reach their end state, they just do not travel to get there. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
   /* Landing atmospheric glow (Stitch) */
   .sky-glow {
     pointer-events: none;
@@ -81,6 +114,57 @@
     .touch-target-coarse {
       min-height: 44px;
       min-width: 44px;
+    }
+  }
+
+  /*
+   * Type roles from the mobile artboards (docs/design/mobile/*.dc.html),
+   * shared so every screen says "section label", "page title" and "the big
+   * number" the same way.
+   */
+  /* Tailwind ships a core `overline` (text-decoration-line: overline) under
+     the same name; the `none` below cancels it so no line is drawn. */
+  .overline {
+    text-decoration-line: none;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: theme('colors.share.onSurfaceVariant');
+  }
+
+  .page-title {
+    font-family: theme('fontFamily.shareHeadline');
+    font-size: 21px;
+    font-weight: 800;
+    line-height: 1.15;
+    color: theme('colors.share.onBg');
+  }
+
+  .stat-number {
+    font-family: theme('fontFamily.shareHeadline');
+    font-size: 38px;
+    font-weight: 800;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Where transient toasts sit: above the phone tab bar (about 4.5rem with
+     its padding) and clear of the home indicator; bottom-right at lg, where
+     the tab bar is gone. z-70 is over the tab bar (60), under sheets (80). */
+  .toast-dock {
+    position: fixed;
+    left: 1rem;
+    right: 1rem;
+    z-index: 70;
+    bottom: calc(4.5rem + env(safe-area-inset-bottom));
+  }
+
+  @media (min-width: 1024px) {
+    .toast-dock {
+      left: auto;
+      right: 1.5rem;
+      bottom: 1.5rem;
     }
   }
 }

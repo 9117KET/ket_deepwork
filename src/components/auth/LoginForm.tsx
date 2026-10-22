@@ -82,7 +82,7 @@ export function LoginForm({
               autoComplete="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              className="w-full rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainer px-3 py-2 text-sm text-share-onSurface placeholder:text-share-onSurfaceVariant/60 focus:border-share-primary focus:outline-none focus:ring-1 focus:ring-share-primary"
+              className="min-h-12 w-full rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainer px-3 py-2 text-base text-share-onSurface placeholder:text-share-onSurfaceVariant/60 focus:border-share-primary focus:outline-none focus:ring-1 focus:ring-share-primary"
               placeholder="you@example.com"
               disabled={submitting}
             />
@@ -98,7 +98,7 @@ export function LoginForm({
               autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              className="w-full rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainer px-3 py-2 text-sm text-share-onSurface placeholder:text-share-onSurfaceVariant/60 focus:border-share-primary focus:outline-none focus:ring-1 focus:ring-share-primary"
+              className="min-h-12 w-full rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainer px-3 py-2 text-base text-share-onSurface placeholder:text-share-onSurfaceVariant/60 focus:border-share-primary focus:outline-none focus:ring-1 focus:ring-share-primary"
               placeholder="At least 6 characters"
               disabled={submitting}
             />
@@ -118,7 +118,7 @@ export function LoginForm({
           <button
             type="submit"
             disabled={submitting}
-            className="mt-2 inline-flex w-full items-center justify-center rounded-lg bg-share-primary px-3 py-2 text-sm font-bold text-share-onPrimary transition-colors hover:bg-share-primaryContainer disabled:opacity-60"
+            className="mt-2 inline-flex min-h-12 w-full items-center justify-center rounded-lg bg-share-primary px-3 py-2 text-sm font-bold text-share-onPrimary transition-colors hover:bg-share-primaryContainer disabled:opacity-60"
           >
             {submitting
               ? mode === 'signin'
@@ -137,11 +137,11 @@ export function LoginForm({
           </p>
         )}
 
-        <div className="mt-4 flex flex-col gap-3 text-xs text-share-onSurfaceVariant sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-4 flex flex-col gap-1 text-xs text-share-onSurfaceVariant sm:flex-row sm:items-center sm:justify-between">
           <button
             type="button"
             onClick={() => setMode(mode === 'signin' ? 'signup' : 'signin')}
-            className="text-left font-bold text-share-primary hover:text-share-primaryContainer"
+            className="touch-target -mx-2 rounded-lg px-2 py-2 text-left font-bold text-share-primary hover:text-share-primaryContainer"
           >
             {mode === 'signin' ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
           </button>
@@ -149,7 +149,7 @@ export function LoginForm({
             <button
               type="button"
               onClick={onContinueAsGuest}
-              className="text-left font-medium text-share-onSurfaceVariant hover:text-share-onSurface sm:text-right"
+              className="touch-target -mx-2 rounded-lg px-2 py-2 text-left font-medium text-share-onSurfaceVariant hover:text-share-onSurface sm:text-right"
             >
               Continue as guest
             </button>

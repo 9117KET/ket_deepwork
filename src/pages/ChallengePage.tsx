@@ -70,6 +70,7 @@ export function ChallengePage() {
         <div className="flex min-h-[50vh] items-center justify-center text-share-onSurfaceVariant">
           <p className="text-sm">Loading…</p>
         </div>
+        {tabBar}
       </AppChrome>
     );
   }

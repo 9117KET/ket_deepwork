@@ -10,8 +10,10 @@
  * grow back into a four-screen scroll. They are the ones that fail first if
  * someone reintroduces a month-scale card onto the day.
  *
- * The rest pin the shape of each screen: Today opens with the NOW card, Focus
- * is the countdown alone once a block runs, Habits shows seven days per row,
+ * The rest pin the shape of each screen: Today is one "Tasks" list with every
+ * open task one tap from the calendar (there is no NOW card since the minimal
+ * rewrite), Focus is the countdown alone once a block runs, Habits shows seven
+ * days per row,
  * Review summarises and keeps the heavy content behind a tap.
  */
 
