@@ -9,8 +9,8 @@
  * control. The chip that is running fills in real time, so the row is alive
  * while you work rather than jumping when the countdown ends.
  *
- * Two fills, two meanings. Solid teal is earned - minutes from a finished deep
- * work session attributed to this task. Faded teal is hand-logged. They are
+ * Two fills, two meanings. Solid cyan is earned - minutes from a finished deep
+ * work session attributed to this task. Faded cyan is hand-logged. They are
  * never merged into one bar, so a glance at a row always separates work done
  * from work claimed. Amber chips past the planned duration mean the estimate
  * was short, and are shown rather than clamped away.
@@ -138,18 +138,18 @@ function Chip({ slot, activeBlock, remainingMs, onStart, startMinutes }: ChipPro
     slot.widthRatio < 1 ? `${formatMinutes(slot.capacityMinutes)} block` : undefined
 
   const border = activeBlock
-    ? 'border-sky-400'
+    ? 'border-share-primary'
     : slot.isOverflow
-      ? 'border-amber-500/50'
+      ? 'border-share-tertiary/50'
       : slot.filledRatio > 0
-        ? 'border-teal-500/60'
+        ? 'border-share-primary/60'
         : 'border-share-outlineVariant/50'
 
   const body = (
     <span
       className={`relative block overflow-hidden rounded-[4px] border bg-share-surfaceContainer transition-colors ${border} ${
-        activeBlock ? 'shadow-[0_0_0_1px_rgba(56,189,248,0.35)]' : ''
-      } ${onStart ? 'group-hover:border-sky-400 group-hover:bg-share-surfaceContainerHigh' : ''}`}
+        activeBlock ? 'shadow-[0_0_0_1px_rgba(0,218,243,0.35)]' : ''
+      } ${onStart ? 'group-hover:border-share-primary group-hover:bg-share-surfaceContainerHigh' : ''}`}
       style={{
         height: 'var(--chip-h)',
         // Floored so a very short remainder is still a chip rather than a
@@ -159,11 +159,11 @@ function Chip({ slot, activeBlock, remainingMs, onStart, startMinutes }: ChipPro
       }}
     >
       <span
-        className={`absolute inset-y-0 left-0 ${slot.isOverflow ? 'bg-amber-400' : 'bg-teal-400'}`}
+        className={`absolute inset-y-0 left-0 ${slot.isOverflow ? 'bg-share-tertiary' : 'bg-share-primary'}`}
         style={{ width: `${timerWidth}%` }}
       />
       <span
-        className={`absolute inset-y-0 ${slot.isOverflow ? 'bg-amber-400/30' : 'bg-teal-400/30'}`}
+        className={`absolute inset-y-0 ${slot.isOverflow ? 'bg-share-tertiary/30' : 'bg-share-primary/30'}`}
         style={{ left: `${timerWidth}%`, width: `${manualWidth}%` }}
       />
       {activeBlock && (
@@ -174,7 +174,7 @@ function Chip({ slot, activeBlock, remainingMs, onStart, startMinutes }: ChipPro
           aria-hidden
           className="absolute inset-0 hidden items-center justify-center opacity-0 transition-opacity group-hover:opacity-100 sm:flex"
         >
-          <svg viewBox="0 0 8 10" className="h-2 w-2 fill-sky-300">
+          <svg viewBox="0 0 8 10" className="h-2 w-2 fill-share-primary">
             <path d="M0 0 L8 5 L0 10 Z" />
           </svg>
         </span>
@@ -230,11 +230,11 @@ function ActiveFill({
   return (
     <>
       <span
-        className={`absolute inset-y-0 left-0 bg-sky-400/60 ${isRunning ? 'transition-[width] duration-1000 ease-linear' : ''}`}
+        className={`absolute inset-y-0 left-0 bg-share-primary/60 ${isRunning ? 'transition-[width] duration-1000 ease-linear' : ''}`}
         style={{ width: `${pct}%` }}
       />
       {!isRunning && (
-        <span aria-hidden className="absolute inset-0 bg-sky-400/10" title="Paused" />
+        <span aria-hidden className="absolute inset-0 bg-share-primary/10" title="Paused" />
       )}
     </>
   )
@@ -266,15 +266,15 @@ function CollapsedBar({
     <span
       title={onStart ? undefined : summary}
       className={`relative block h-2.5 w-24 shrink-0 overflow-hidden rounded-full border bg-share-surfaceContainer ${
-        isActive ? 'border-sky-400' : 'border-share-outlineVariant/50'
-      } ${onStart ? 'group-hover:border-sky-400' : ''}`}
+        isActive ? 'border-share-primary' : 'border-share-outlineVariant/50'
+      } ${onStart ? 'group-hover:border-share-primary' : ''}`}
     >
       <span
-        className={`absolute inset-y-0 left-0 ${progress.isOverflowing ? 'bg-amber-400' : 'bg-teal-400'}`}
+        className={`absolute inset-y-0 left-0 ${progress.isOverflowing ? 'bg-share-tertiary' : 'bg-share-primary'}`}
         style={{ width: `${capped}%` }}
       />
       <span
-        className={`absolute inset-y-0 ${progress.isOverflowing ? 'bg-amber-400/30' : 'bg-teal-400/30'}`}
+        className={`absolute inset-y-0 ${progress.isOverflowing ? 'bg-share-tertiary/30' : 'bg-share-primary/30'}`}
         style={{ left: `${capped}%`, width: `${cappedClaimed}%` }}
       />
       {Array.from({ length: Math.max(0, plannedSlots - 1) }, (_, i) => (
@@ -324,11 +324,11 @@ function Total({
   // While a block is running the countdown is the more useful number, and it is
   // the only feedback a phone gets that the tap landed.
   const tone = countdown
-    ? 'text-sky-300'
+    ? 'text-share-primary'
     : progress.isOverflowing
-      ? 'text-amber-400'
+      ? 'text-share-tertiary'
       : progress.isComplete
-        ? 'text-teal-300'
+        ? 'text-share-primary'
         : 'text-share-onSurfaceVariant/70'
   const text = countdown ?? `${formatMinutes(progress.totalMinutes)}/${formatMinutes(progress.goalMinutes)}`
 
@@ -349,6 +349,96 @@ function Total({
       className={`-my-[15px] shrink-0 rounded px-1 py-[15px] text-[10px] sm:-my-2 sm:py-2 tabular-nums underline decoration-dotted underline-offset-2 hover:text-share-onSurface focus:outline-none focus-visible:ring-1 focus-visible:ring-share-primary ${tone}`}
     >
       {text}
+    </button>
+  )
+}
+
+/**
+ * The phone form of the row: one 8px segmented bar, a segment per block, and
+ * the total beside it. On a phone the chips were each a target too small to
+ * hit and a tap landed on the wrong one, so the whole bar is one button that
+ * opens the progress sheet, where the timer is offered first and hand-logging
+ * second. Without `onOpen` it is a plain readout (the sheet's own header).
+ *
+ * Same fills as the chips: solid is earned, half-strength is hand-logged,
+ * amber is past the estimate. A running block shows its countdown in place of
+ * the total, which is the only sign on the row that the timer is going.
+ */
+export function TaskProgressBar({
+  progress,
+  taskId,
+  onOpen,
+}: {
+  progress: TaskProgress
+  taskId: string
+  onOpen?: () => void
+}) {
+  const activeBlock = useActiveBlockForTask(taskId)
+  const now = useNow(activeBlock?.status === 'running')
+  const remainingMs = activeBlock
+    ? activeBlock.endsAt != null
+      ? Math.max(0, activeBlock.endsAt - now)
+      : activeBlock.remainingMs
+    : 0
+  const summary = describeTaskProgress(progress)
+  const caption = activeBlock
+    ? formatCountdown(remainingMs, activeBlock.status)
+    : `${formatMinutes(progress.totalMinutes)} / ${formatMinutes(progress.goalMinutes)}`
+  const captionTone = activeBlock
+    ? 'text-share-primary'
+    : progress.isOverflowing
+      ? 'text-share-tertiary'
+      : 'text-share-onSurfaceDim'
+
+  const bar = (
+    <>
+      <span className="flex h-2 min-w-0 flex-1 gap-1" aria-hidden>
+        {progress.slots.map((slot, index) => {
+          const earned = ratio(slot.timerMinutes, slot.capacityMinutes) * 100
+          const logged = ratio(slot.manualMinutes, slot.capacityMinutes) * 100
+          return (
+            <span
+              key={index}
+              className="relative h-2 overflow-hidden rounded-full bg-share-hairline"
+              style={{ flexGrow: Math.max(0.3, slot.widthRatio), flexBasis: 0 }}
+            >
+              <span
+                className={`absolute inset-y-0 left-0 ${slot.isOverflow ? 'bg-share-tertiary' : 'bg-share-primary'}`}
+                style={{ width: `${earned}%` }}
+              />
+              <span
+                className={`absolute inset-y-0 ${slot.isOverflow ? 'bg-share-tertiary/50' : 'bg-share-primary/50'}`}
+                style={{ left: `${earned}%`, width: `${logged}%` }}
+              />
+            </span>
+          )
+        })}
+      </span>
+      <span className={`shrink-0 text-xs tabular-nums ${captionTone}`}>{caption}</span>
+    </>
+  )
+
+  if (!onOpen) {
+    return (
+      <span className="flex w-full items-center gap-3" role="img" aria-label={summary}>
+        {bar}
+      </span>
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={(event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        onOpen()
+      }}
+      aria-label={`${summary}. Start a block or log time`}
+      data-testid="task-progress-bar"
+      className="flex min-h-11 w-full items-center gap-3 rounded-lg focus:outline-none focus-visible:ring-1 focus-visible:ring-share-primary"
+    >
+      {bar}
     </button>
   )
 }

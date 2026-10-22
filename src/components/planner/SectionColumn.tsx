@@ -180,20 +180,24 @@ export function SectionColumn({
 
   return (
     <section className="rounded-2xl border border-share-outlineVariant/25 bg-share-surfaceContainerLow p-3 sm:p-4">
-      <header className="mb-1 flex items-center gap-2">
+      {/* One 44px-tall target: the button is stretched under the whole header,
+          and the text on top lets taps fall through to it. The heading stays
+          outside the button so it keeps its own name ("Tasks"). */}
+      <header className="relative mb-1 flex min-h-11 items-center gap-2">
         <button
           type="button"
           onClick={() => setCollapsed((c) => { setSectionCollapsed(section.id, !c); return !c })}
-          className="touch-target-coarse -ml-2 flex shrink-0 items-center justify-center text-share-onSurfaceVariant hover:text-share-onSurface sm:ml-0"
+          className="absolute inset-0 flex w-full items-center rounded-lg text-share-onSurfaceVariant hover:text-share-onSurface focus:outline-none focus-visible:ring-1 focus-visible:ring-share-primary"
           aria-label={collapsed ? 'Expand section' : 'Collapse section'}
+          aria-expanded={!collapsed}
         >
           {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
         </button>
-        <h3 className="text-sm font-semibold text-share-onBg">{section.title}</h3>
-        {summary && <span className="text-xs text-share-onSurfaceVariant/70">{summary}</span>}
+        <h3 className="pointer-events-none relative pl-6 text-[15px] font-semibold text-share-onBg">{section.title}</h3>
+        {summary && <span className="pointer-events-none relative text-xs text-share-onSurfaceDim">{summary}</span>}
         {isOverloaded && (
           <span
-            className="ml-auto flex items-center gap-1 rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-medium text-amber-400"
+            className="pointer-events-none relative ml-auto flex items-center gap-1 rounded bg-share-tertiary/15 px-1.5 py-0.5 text-[11px] font-medium text-share-tertiary"
             title={`${incompleteRootCount} incomplete tasks - trim to stay focused`}
           >
             <AlertTriangle className="h-3 w-3" /> {incompleteRootCount} open

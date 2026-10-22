@@ -132,10 +132,18 @@ export function DayPlanner() {
    * the planner showing Today.
    */
   const [searchParams] = useSearchParams();
-  const [mobileTab, setMobileTab] = useState<MobileTab>(() => {
-    const requested = searchParams.get("tab");
-    return requested === "focus" || requested === "habits" ? requested : "today";
-  });
+  const tabParam = searchParams.get("tab");
+  const [mobileTab, setMobileTab] = useState<MobileTab>(() =>
+    tabParam === "focus" || tabParam === "habits" ? tabParam : "today",
+  );
+  // The URL can change while the planner stays mounted (a link to
+  // `/?tab=habits` from inside the app); follow it, as it changes. Adjusted
+  // during render rather than in an effect, so there is no frame of the old tab.
+  const [seenTabParam, setSeenTabParam] = useState(tabParam);
+  if (seenTabParam !== tabParam) {
+    setSeenTabParam(tabParam);
+    if (tabParam === "focus" || tabParam === "habits" || tabParam === "today") setMobileTab(tabParam);
+  }
 
   // A minute tick, so "Now" on the timeline moves without a reload.
   const [now, setNow] = useState(() => Date.now());
@@ -692,6 +700,7 @@ export function DayPlanner() {
               onToggle={handleToggleTask}
               onAdd={(title) => handleAddTask("mustDo", title)}
               onDelete={handleDeleteTaskGuarded}
+              onAbandon={handleAbandonTaskGuarded}
               onUpdate={(id, patch) => handleUpdateTask(id, patch)}
               deepWorkSessions={dayState.deepWorkSessions}
               onStartBlock={handleStartBlock}
@@ -766,14 +775,15 @@ export function DayPlanner() {
           onEditHabits={() => setEditHabitsOpen(true)}
         />
       )}
-      {/* Spacer so content doesn't hide behind the fixed MobileTabBar */}
-      <div className="h-16 pb-safe lg:hidden" />
+      {/* Spacer so content doesn't hide behind the fixed MobileTabBar (68px
+          plus the home-indicator inset; 4.5rem leaves a little air). */}
+      <div className="h-[calc(4.5rem+env(safe-area-inset-bottom))] lg:hidden" />
 
       {/* ── Transient prompts ─────────────────────────────────────────── */}
       {blockNotice && (
         <div
           role="status"
-          className="fixed inset-x-3 bottom-20 z-[70] mx-auto max-w-sm rounded-lg border border-amber-500/40 bg-share-surfaceContainerHigh px-3 py-2 text-center text-xs text-amber-200 shadow-lg lg:bottom-6"
+          className="toast-dock mx-auto max-w-sm rounded-lg border border-share-tertiary/40 bg-share-surfaceContainerHigh px-3 py-2 text-center text-xs text-share-tertiary shadow-lg"
         >
           {blockNotice}
         </div>
@@ -781,7 +791,7 @@ export function DayPlanner() {
       {doneOffer && (
         <div
           role="status"
-          className="fixed inset-x-3 bottom-20 z-[70] mx-auto max-w-sm rounded-lg border border-emerald-500/40 bg-share-surfaceContainerHigh px-3 py-2.5 shadow-lg lg:bottom-6"
+          className="toast-dock mx-auto max-w-sm rounded-lg border border-share-primary/40 bg-share-surfaceContainerHigh px-3 py-2.5 shadow-lg"
         >
           <p className="text-xs text-share-onSurface">
             <span className="font-medium">{doneOffer.title}</span> has all its blocks in. Mark it done?
@@ -794,14 +804,14 @@ export function DayPlanner() {
                 setDoneOffer(null);
                 handleToggleTask(id);
               }}
-              className="min-h-[32px] flex-1 rounded-md border border-emerald-500/50 bg-share-surfaceContainer px-2 py-1 text-xs text-emerald-400 hover:border-emerald-400 hover:bg-emerald-500/10"
+              className="min-h-11 flex-1 rounded-md border border-share-primary/50 bg-share-surfaceContainer px-2 py-1 text-xs text-share-primary hover:border-share-primary hover:bg-share-primary/10"
             >
               Mark done
             </button>
             <button
               type="button"
               onClick={() => setDoneOffer(null)}
-              className="min-h-[32px] rounded-md px-2 py-1 text-xs text-share-onSurfaceVariant hover:text-share-onSurface"
+              className="min-h-11 rounded-md px-3 py-1 text-xs text-share-onSurfaceVariant hover:text-share-onSurface"
             >
               Not yet
             </button>
@@ -867,12 +877,17 @@ export function DayPlanner() {
             (t) => !t.parentId && t.id !== moveSubtaskId && t.id !== subtask.parentId,
           );
           return (
+            // Over the tab bar (60), with the sheets (80); a bottom sheet on a
+            // phone, a dialog on a wide screen.
             <div
-              className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+              className="fixed inset-0 z-[80] flex items-end justify-center bg-black/60 sm:items-center"
               onClick={() => setMoveSubtaskId(null)}
             >
               <div
-                className="w-full max-w-sm rounded-lg border border-share-outlineVariant/50 bg-share-surfaceContainerHigh p-4 shadow-2xl"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Move subtask"
+                className="w-full max-w-sm rounded-t-2xl border border-share-outlineVariant/50 bg-share-surfaceContainerHigh p-4 pb-safe-nav shadow-2xl sm:rounded-lg sm:pb-4"
                 onClick={(e) => e.stopPropagation()}
               >
                 <h3 className="mb-3 text-sm font-semibold text-share-onBg">Move subtask to...</h3>
@@ -881,7 +896,7 @@ export function DayPlanner() {
                     <button
                       key={parent.id}
                       type="button"
-                      className="w-full rounded px-3 py-2 text-left text-sm text-share-onSurface hover:bg-share-surfaceContainerHighest"
+                      className="w-full rounded px-3 py-2 text-left text-sm text-share-onSurface hover:bg-share-surfaceContainerHighest touch:min-h-11"
                       onClick={() => {
                         handleMoveSubtask(moveSubtaskId, parent.id);
                         setMoveSubtaskId(null);
@@ -897,7 +912,7 @@ export function DayPlanner() {
                 <div className="mt-3 border-t border-share-outlineVariant/30 pt-3">
                   <button
                     type="button"
-                    className="w-full rounded px-3 py-2 text-left text-sm text-share-onSurfaceVariant hover:bg-share-surfaceContainerHighest"
+                    className="w-full rounded px-3 py-2 text-left text-sm text-share-onSurfaceVariant hover:bg-share-surfaceContainerHighest touch:min-h-11"
                     onClick={() => {
                       handleMoveSubtask(moveSubtaskId, null);
                       setMoveSubtaskId(null);
@@ -907,7 +922,7 @@ export function DayPlanner() {
                   </button>
                   <button
                     type="button"
-                    className="mt-1 w-full rounded px-3 py-1.5 text-center text-xs text-share-onSurfaceVariant/70 hover:bg-share-surfaceContainerHighest"
+                    className="mt-1 w-full rounded px-3 py-1.5 text-center text-xs text-share-onSurfaceVariant hover:bg-share-surfaceContainerHighest touch:min-h-11"
                     onClick={() => setMoveSubtaskId(null)}
                   >
                     Cancel
