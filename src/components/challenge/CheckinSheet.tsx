@@ -100,24 +100,44 @@ export function CheckinSheet({ challengeName, donts, displayName, progress, date
               onChange={(e) => setNote(e.target.value)}
               maxLength={1000}
               rows={3}
-              className="mt-1 w-full resize-y rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainer px-3 py-2 text-sm text-share-onSurface focus:border-share-primary focus:outline-none focus:ring-1 focus:ring-share-primary"
+              className="mt-1 min-h-[44px] w-full resize-y rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainer px-3 py-2 text-base text-share-onSurface sm:text-sm focus:border-share-primary focus:outline-none focus:ring-1 focus:ring-share-primary"
               placeholder="One honest line is plenty."
             />
             {donts.length > 0 && (
               <fieldset className="mt-3">
                 <legend className="text-xs font-medium text-share-onSurfaceVariant">Which did you break today?</legend>
                 <div className="mt-1 space-y-1">
-                  {donts.map((d) => (
-                    <label key={d.id} className="touch-target-coarse flex cursor-pointer items-center gap-2 rounded-lg px-1 py-1 text-sm text-share-onSurface hover:bg-share-surfaceContainer">
-                      <input
-                        type="checkbox"
-                        checked={broken.has(d.id)}
-                        onChange={() => toggle(d.id)}
-                        className="h-4 w-4 shrink-0 rounded border-share-outlineVariant/40 bg-share-surfaceContainer text-amber-400 focus:ring-amber-500"
-                      />
-                      <span className="min-w-0 break-words">{d.text}</span>
-                    </label>
-                  ))}
+                  {/* The whole row is the target. The native box is kept for
+                      keyboard and screen readers but drawn by the span. */}
+                  {donts.map((d) => {
+                    const isBroken = broken.has(d.id)
+                    return (
+                      <label
+                        key={d.id}
+                        className="relative flex min-h-[48px] cursor-pointer items-center gap-3 rounded-lg px-2 py-2 text-sm text-share-onSurface hover:bg-share-surfaceContainer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isBroken}
+                          onChange={() => toggle(d.id)}
+                          className="peer absolute h-0 w-0 opacity-0"
+                        />
+                        <span
+                          aria-hidden
+                          className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md peer-focus-visible:ring-2 peer-focus-visible:ring-share-tertiary ${
+                            isBroken ? 'bg-share-tertiary text-share-bg' : 'border-[1.5px] border-share-outlineVariant'
+                          }`}
+                        >
+                          {isBroken && (
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M20 6L9 17l-5-5" />
+                            </svg>
+                          )}
+                        </span>
+                        <span className="min-w-0 break-words">{d.text}</span>
+                      </label>
+                    )
+                  })}
                 </div>
               </fieldset>
             )}
@@ -148,12 +168,12 @@ export function CheckinSheet({ challengeName, donts, displayName, progress, date
           <>
             <p className="mt-3 text-sm text-share-onSurface">Your partner can see it now. Want to ping them too?</p>
             {shared === 'copied' && (
-              <p className="mt-2 text-xs text-emerald-300" role="status">
+              <p className="mt-2 text-xs text-share-onSurfaceVariant" role="status">
                 Copied — paste it into WhatsApp.
               </p>
             )}
             {shared === 'unsupported' && (
-              <p className="mt-2 text-xs text-amber-300" role="status">
+              <p className="mt-2 text-xs text-share-tertiary" role="status">
                 Sharing is not available here; open Deepblock on your phone to share.
               </p>
             )}

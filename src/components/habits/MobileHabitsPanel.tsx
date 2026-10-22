@@ -16,7 +16,10 @@
  * `domain/habitWeek.ts` separates those, and this row shows the difference:
  * amber for a chain just broken, grey for one that was never there.
  *
- * See `docs/design/mobile/Habits.dc.html`. The full month grid stays in Review.
+ * Each row is one button, so a thumb anywhere on it toggles the habit.
+ *
+ * See `docs/design/mobile/Habits.dc.html`. The monthly grid was removed in the
+ * minimal rewrite; Review shows the same seven days.
  */
 
 import { useState } from 'react'
@@ -42,7 +45,7 @@ interface MobileHabitsPanelProps {
 const DOT_CLASS: Record<string, string> = {
   done: 'bg-share-primary',
   broke: 'bg-share-tertiary',
-  missed: 'bg-share-outlineVariant/40',
+  missed: 'bg-share-hairline',
 }
 
 export function MobileHabitsPanel({
@@ -75,7 +78,7 @@ export function MobileHabitsPanel({
     <div className="mt-3 lg:hidden" data-testid="mobile-habits">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="font-shareHeadline text-xl font-extrabold text-share-onBg">Habits</h2>
+          <h2 className="page-title">Habits</h2>
           <p className="mt-1 text-xs text-share-onSurfaceVariant">
             {doneCount} of {habits.length} today
           </p>
@@ -83,7 +86,8 @@ export function MobileHabitsPanel({
         <button
           type="button"
           onClick={onEditHabits}
-          className="touch-target rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainer px-3 text-xs text-share-onSurfaceVariant"
+          aria-label="Edit habit list"
+          className="touch-target rounded-lg border border-share-outlineVariant bg-share-surfaceContainer px-3 text-xs text-share-onSurfaceVariant"
         >
           Edit
         </button>
@@ -91,10 +95,8 @@ export function MobileHabitsPanel({
 
       {/* Identity first, because in Atomic Habits the checks are evidence for
           it rather than the other way round. */}
-      <div className="mt-4 rounded-2xl border-l-2 border-share-primary bg-share-surfaceContainerLow p-4">
-        <p className="text-[10px] font-extrabold uppercase tracking-[0.09em] text-share-onSurfaceVariant">
-          I am
-        </p>
+      <div className="mt-4 rounded-2xl border-l-2 border-share-primary bg-share-surfaceContainerLow px-4 py-3">
+        <p className="overline">I am</p>
         {editingIdentity ? (
           <input
             autoFocus
@@ -104,7 +106,7 @@ export function MobileHabitsPanel({
             onKeyDown={onIdentityKey}
             placeholder="someone who does the hard thing first"
             aria-label="Identity statement"
-            className="mt-1.5 w-full rounded bg-transparent font-shareHeadline text-[15px] font-bold text-share-onBg outline-none placeholder:font-normal placeholder:text-share-onSurfaceVariant/50"
+            className="mt-0.5 min-h-[44px] w-full rounded bg-transparent font-shareHeadline text-base font-bold text-share-onBg outline-none placeholder:font-normal placeholder:text-share-onSurfaceDim"
           />
         ) : (
           <button
@@ -113,12 +115,10 @@ export function MobileHabitsPanel({
               setIdentityDraft(identityStatement)
               setEditingIdentity(true)
             }}
-            className="mt-1.5 w-full text-left font-shareHeadline text-[15px] font-bold leading-snug text-share-onBg"
+            className="mt-0.5 min-h-[44px] w-full text-left font-shareHeadline text-base font-bold leading-snug text-share-onBg"
           >
             {identityStatement || (
-              <span className="font-normal text-share-onSurfaceVariant/50">
-                someone who… (tap to set)
-              </span>
+              <span className="font-normal text-share-onSurfaceDim">someone who… (tap to set)</span>
             )}
           </button>
         )}
@@ -129,61 +129,62 @@ export function MobileHabitsPanel({
           const isDone = completions[habit.id] === true
           const atRisk = atRiskHabitIds.has(habit.id)
           const week = computeHabitWeek(days, habit.id, selectedDay)
+          const streak = streaks[habit.id] ?? 0
+          const metaId = `habit-meta-${habit.id}`
+          // The whole row is the control: a 24px box inside a tall row was the
+          // only thing a thumb could hit before.
           return (
-            <div
+            <button
               key={habit.id}
-              className={`flex items-center gap-3 rounded-xl bg-share-surfaceContainerLow p-3 ${
+              type="button"
+              onClick={() => onToggle(habit.id, !isDone)}
+              aria-label={`${isDone ? 'Uncheck' : 'Check'} ${habit.label}`}
+              aria-describedby={metaId}
+              aria-pressed={isDone}
+              className={`flex min-h-[56px] w-full items-center gap-3 rounded-xl bg-share-surfaceContainerLow px-3.5 py-3 text-left ${
                 atRisk ? 'border border-share-tertiary' : ''
               }`}
             >
-              <button
-                type="button"
-                onClick={() => onToggle(habit.id, !isDone)}
-                aria-label={`${isDone ? 'Uncheck' : 'Check'} ${habit.label}`}
-                aria-pressed={isDone}
-                className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg ${
+              <span
+                aria-hidden="true"
+                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${
                   isDone
                     ? 'bg-share-primary text-share-onPrimary'
                     : 'border-[1.5px] border-share-outlineVariant'
                 }`}
               >
                 {isDone && (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M20 6L9 17l-5-5" />
                   </svg>
                 )}
-              </button>
-
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-sm font-semibold text-share-onBg">{habit.label}</span>
-                  {atRisk && (
-                    <span className="text-[10px] font-bold text-share-tertiary">
-                      missed yesterday
-                    </span>
-                  )}
-                </div>
-                <div className="mt-1.5 flex gap-1" aria-hidden="true">
-                  {week.map((d) => (
-                    <span
-                      key={d.iso}
-                      className={`h-1.5 flex-1 rounded-full ${DOT_CLASS[d.state]}`}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              <span className="shrink-0 text-xs font-bold tabular-nums text-share-onSurfaceVariant">
-                {streaks[habit.id] ?? 0}
               </span>
-            </div>
+
+              <span className="min-w-0 flex-1">
+                <span className="flex flex-wrap items-center gap-x-1.5">
+                  <span className="text-[15px] font-semibold text-share-onBg">{habit.label}</span>
+                  {atRisk && (
+                    <span className="text-[11px] font-bold text-share-tertiary">missed yesterday</span>
+                  )}
+                </span>
+                <span className="mt-1.5 flex gap-1" aria-hidden="true">
+                  {week.map((d) => (
+                    <span key={d.iso} className={`h-2 w-2 rounded-full ${DOT_CLASS[d.state]}`} />
+                  ))}
+                </span>
+              </span>
+
+              <span id={metaId} className="shrink-0 text-xs font-bold tabular-nums text-share-onSurfaceVariant">
+                <span className="sr-only">{atRisk ? 'Missed yesterday. ' : ''}Streak </span>
+                {streak}
+              </span>
+            </button>
           )
         })}
       </div>
 
-      <p className="mt-4 text-[11px] text-share-onSurfaceVariant/70">
-        Last 7 days. The full month grid lives in Review.
-      </p>
+      <p className="mt-4 text-[11px] text-share-onSurfaceDim">Last 7 days.</p>
     </div>
   )
 }
+
