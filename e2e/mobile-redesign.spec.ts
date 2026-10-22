@@ -10,8 +10,10 @@
  * grow back into a four-screen scroll. They are the ones that fail first if
  * someone reintroduces a month-scale card onto the day.
  *
- * The rest pin the shape of each screen: Today opens with the NOW card, Focus
- * is the countdown alone once a block runs, Habits shows seven days per row,
+ * The rest pin the shape of each screen: Today is one "Tasks" list with every
+ * open task one tap from the calendar (there is no NOW card since the minimal
+ * rewrite), Focus is the countdown alone once a block runs, Habits shows seven
+ * days per row,
  * Review summarises and keeps the heavy content behind a tap.
  */
 
@@ -32,7 +34,7 @@ function seed(page: Page) {
     // swallows clicks) from 9 PM local time. Key must match todayIso().
     window.sessionStorage.setItem(`shutdown_reminder_shown_${today}`, '1')
 
-    // Put the clock inside the High Priority block so the NOW card has a task.
+    // Put the clock inside the High Priority block (legacy seed shape; the block schedule itself is gone).
     const now = d.getHours() * 60 + d.getMinutes()
     const wake = Math.max(0, now - 45)
     const wakeTime = `${String(Math.floor(wake / 60)).padStart(2, '0')}:${String(wake % 60).padStart(2, '0')}`

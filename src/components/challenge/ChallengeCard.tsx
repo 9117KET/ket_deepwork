@@ -23,8 +23,9 @@ interface ChallengeCardProps {
   compact?: boolean
 }
 
+// 44px tall everywhere: these are the card's acts, not inline links.
 const btn =
-  'touch-target-coarse inline-flex items-center justify-center rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-60'
+  'touch-target-coarse inline-flex min-h-11 items-center justify-center rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-60'
 const primary = `${btn} bg-share-primary text-share-onPrimary hover:bg-share-primaryContainer`
 const quiet = `${btn} border border-share-outlineVariant/40 text-share-onSurface hover:bg-share-surfaceContainerHigh`
 
@@ -76,7 +77,13 @@ export function ChallengeCard({ state, summary, date, onOpenCheckin, compact = f
   const partnerOwes = partner ? !(partnerCard?.checkinAt || (partnerCard?.planSetAt && !isEvening())) : false
 
   return (
-    <section className="rounded-xl border border-share-primary/30 bg-share-primary/5 p-3" aria-label="Accountability challenge">
+    // Three lines: the challenge and where today stands; the two acts as a
+    // pair; the partner, with Nudge. The quoted-card shape from the artboards
+    // (a 2px cyan rule on the left) instead of a tinted fill.
+    <section
+      className="rounded-xl border-l-2 border-share-primary bg-share-surfaceContainerLow p-3"
+      aria-label="Accountability challenge"
+    >
       <div className="flex items-center justify-between gap-2">
         <p className="flex min-w-0 items-center gap-1.5 text-xs text-share-onSurfaceVariant">
           <Flag className="h-3.5 w-3.5 shrink-0 text-share-primary" />
@@ -84,6 +91,11 @@ export function ChallengeCard({ state, summary, date, onOpenCheckin, compact = f
           {progress.phase === 'active' ? (
             <span className="shrink-0">
               · Day {progress.dayNumber}/{progress.totalDays} · {progress.daysLeft} left
+              {checkinAt ? (
+                <span className="font-semibold text-share-primary"> · ✓ in {formatClock(checkinAt)}</span>
+              ) : planSetAt ? (
+                <span className="font-semibold text-share-primary"> · ✓ plan {formatClock(planSetAt)}</span>
+              ) : null}
             </span>
           ) : progress.phase === 'upcoming' ? (
             <span className="shrink-0">· starts {info.challenge.startDate}</span>
@@ -92,55 +104,55 @@ export function ChallengeCard({ state, summary, date, onOpenCheckin, compact = f
           )}
         </p>
         {!compact && (
-          <Link to="/challenge" className="shrink-0 text-xs font-semibold text-share-primary hover:underline">
+          <Link
+            to="/challenge"
+            className="touch-target-coarse inline-flex shrink-0 items-center justify-center text-xs font-semibold text-share-primary hover:underline"
+          >
             Open
           </Link>
         )}
       </div>
 
       {progress.phase === 'active' && (
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          {planSetAt ? (
-            <span className="inline-flex items-center rounded-full bg-emerald-500/15 px-2 py-1 text-xs font-semibold text-emerald-300">
-              ✓ Plan locked {formatClock(planSetAt)}
-            </span>
-          ) : (
-            <button type="button" onClick={() => void lock()} disabled={busy === 'lock'} className={primary}>
-              {busy === 'lock' ? 'Locking…' : "Lock in today's plan"}
-            </button>
-          )}
-          {planSetAt && !checkinAt && (
-            <button type="button" onClick={() => void share('plan')} className={quiet}>
-              Share plan
-            </button>
-          )}
-          {checkinAt ? (
+        <div className="mt-2 flex items-center gap-2">
+          {!planSetAt ? (
             <>
-              <span className="inline-flex items-center rounded-full bg-emerald-500/15 px-2 py-1 text-xs font-semibold text-emerald-300">
-                ✓ Checked in {formatClock(checkinAt)}
-              </span>
-              <button type="button" onClick={onOpenCheckin} className={quiet}>
-                Edit
+              <button type="button" onClick={() => void lock()} disabled={busy === 'lock'} className={`${primary} flex-1`}>
+                {busy === 'lock' ? 'Locking…' : "Lock in today's plan"}
               </button>
-              <button type="button" onClick={() => void share('checkin')} className={quiet}>
-                Share
+              <button type="button" onClick={onOpenCheckin} className={`${quiet} flex-1`}>
+                Check in
+              </button>
+            </>
+          ) : !checkinAt ? (
+            <>
+              <button type="button" onClick={() => void share('plan')} className={`${quiet} flex-1`}>
+                Share plan
+              </button>
+              <button type="button" onClick={onOpenCheckin} className={`${primary} flex-1`}>
+                Check in
               </button>
             </>
           ) : (
-            <button type="button" onClick={onOpenCheckin} className={planSetAt ? primary : quiet}>
-              Check in
-            </button>
+            <>
+              <button type="button" onClick={onOpenCheckin} className={`${quiet} flex-1`}>
+                Edit check-in
+              </button>
+              <button type="button" onClick={() => void share('checkin')} className={`${quiet} flex-1`}>
+                Share
+              </button>
+            </>
           )}
         </div>
       )}
 
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-share-onSurfaceVariant">
+      <div className="mt-2 flex items-center justify-between gap-2 text-xs text-share-onSurfaceVariant">
         {partner ? (
           <p className="min-w-0">
             <span className="font-semibold text-share-onSurface">{partner.displayName}</span>
             {partnerDate !== myDate && <span> ({partnerDate})</span>}: plan{' '}
-            {partnerCard?.planSetAt ? <span className="text-emerald-300">✓ {formatClock(partnerCard.planSetAt)}</span> : '—'} · check-in{' '}
-            {partnerCard?.checkinAt ? <span className="text-emerald-300">✓ {formatClock(partnerCard.checkinAt)}</span> : '—'}
+            {partnerCard?.planSetAt ? <span className="text-share-primary">✓ {formatClock(partnerCard.planSetAt)}</span> : '—'} · check-in{' '}
+            {partnerCard?.checkinAt ? <span className="text-share-primary">✓ {formatClock(partnerCard.checkinAt)}</span> : '—'}
           </p>
         ) : (
           <p>
@@ -151,19 +163,19 @@ export function ChallengeCard({ state, summary, date, onOpenCheckin, compact = f
           </p>
         )}
         {partner && partnerOwes && progress.phase === 'active' && (
-          <button type="button" onClick={() => void nudge()} disabled={busy === 'nudge'} className={`${quiet} py-1`}>
+          <button type="button" onClick={() => void nudge()} disabled={busy === 'nudge'} className={`${quiet} shrink-0`}>
             {busy === 'nudge' ? 'Sending…' : 'Nudge'}
           </button>
         )}
       </div>
 
       {error && (
-        <p className="mt-2 text-xs text-red-400" role="alert">
+        <p className="mt-2 text-xs text-share-tertiary" role="alert">
           {error}
         </p>
       )}
       {notice && (
-        <p className="mt-2 text-xs text-emerald-300" role="status">
+        <p className="mt-2 text-xs text-share-onSurfaceVariant" role="status">
           {notice}
         </p>
       )}

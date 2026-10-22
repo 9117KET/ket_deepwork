@@ -15,6 +15,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { checkOAuthState, completeGoogleOAuth } from "../services/calendarSyncService";
 import { AppChrome } from "../components/layout/AppChrome";
+import { MobileTabBar } from "../components/planner/MobileTabBar";
 import { useAuth } from "../contexts/AuthContext";
 
 export function CalendarCallbackPage() {
@@ -81,6 +82,7 @@ export function CalendarCallbackPage() {
           </Link>
         </div>
       </div>
+      <MobileTabBar activeTab={null} onTabChange={(tab) => navigate(`/?tab=${tab}`)} />
     </AppChrome>
   );
 }

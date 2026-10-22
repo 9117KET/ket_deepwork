@@ -19,9 +19,9 @@
  */
 
 import { useState, type FormEvent } from 'react'
-import { CheckCircle, Volume2, VolumeX } from 'lucide-react'
-import { isSoundEnabled, playChime, setSoundEnabled } from '../../audio/chimes'
+import { CheckCircle } from 'lucide-react'
 import { FOCUS_BLOCK_PRESETS, suggestedBreakMinutes } from '../../domain/focusBlocks'
+import { BlockLengthLine, SoundToggle } from './BlockLengthLine'
 import type { DeepWorkTimerController } from './useDeepWorkTimer'
 
 export type { TimerTaskOption } from './useDeepWorkTimer'
@@ -149,13 +149,13 @@ export function DeepWorkTimer({ timer, breakMinutes, onSetBlockLength }: DeepWor
                 title={`${preset.name} - ${preset.blurb}${isConfigured ? '\nThis is your block length' : ''}`}
                 className={`flex min-h-[36px] items-center gap-1 rounded-full border px-3 py-1 transition-colors ${
                   isSelected
-                    ? 'border-sky-500 bg-sky-500/10 text-sky-400'
+                    ? 'border-share-primary bg-share-primary text-share-onPrimary'
                     : 'border-share-outlineVariant/40 bg-share-surfaceContainer text-share-onSurfaceVariant hover:border-share-primary/60 hover:text-share-primary'
                 } ${isRunning ? 'opacity-60' : ''}`}
               >
                 {isConfigured && (
                   <span
-                    className="h-1.5 w-1.5 shrink-0 rounded-full bg-teal-400"
+                    className={`h-1.5 w-1.5 shrink-0 rounded-full ${isSelected ? 'bg-share-onPrimary' : 'bg-share-primary'}`}
                     aria-label="Your block length"
                   />
                 )}
@@ -173,9 +173,9 @@ export function DeepWorkTimer({ timer, breakMinutes, onSetBlockLength }: DeepWor
             onChange={(event) => setCustom(event.target.value)}
             placeholder="?? min"
             aria-label="Custom duration in minutes"
-            className={`min-h-[36px] w-16 rounded-full border px-2 py-1 text-center transition-colors focus:outline-none focus:ring-1 focus:ring-sky-500 ${
+            className={`min-h-[36px] w-16 rounded-full border px-2 py-1 text-center transition-colors focus:outline-none focus:ring-1 focus:ring-share-primary ${
               isCustom
-                ? 'border-sky-500 bg-sky-500/10 text-sky-400'
+                ? 'border-share-primary bg-share-primary text-share-onPrimary'
                 : 'border-share-outlineVariant/40 bg-share-surfaceContainer text-share-onSurfaceVariant placeholder:text-share-onSurfaceVariant/40 focus:border-share-primary focus:text-share-primary'
             } ${isRunning ? 'opacity-60' : ''}`}
           />
@@ -187,15 +187,16 @@ export function DeepWorkTimer({ timer, breakMinutes, onSetBlockLength }: DeepWor
           breakMinutes={breakMinutes ?? suggestedBreakMinutes(blockMinutes)}
           disabled={isRunning}
           onSetBlockLength={onSetBlockLength}
+          trailing={<SoundToggle className="ml-auto" />}
         />
 
         {status === 'finished' ? (
-          <div className="rounded-md border border-teal-500/40 bg-teal-500/10 px-3 py-2.5">
-            <div className="flex items-center gap-2 text-teal-300">
+          <div className="rounded-md border border-share-primaryContainer/40 bg-share-primary/10 px-3 py-2.5">
+            <div className="flex items-center gap-2 text-share-primary">
               <CheckCircle className="h-4 w-4 shrink-0" />
               <span className="text-sm font-medium">Block complete</span>
             </div>
-            <p className="mt-0.5 text-xs text-teal-400/70">
+            <p className="mt-0.5 text-xs text-share-primaryContainer">
               {durationMinutes} min - {label}
             </p>
             <p className="mt-1 text-xs text-share-onSurfaceVariant">Block logged. Start another or call it done.</p>
@@ -221,7 +222,7 @@ export function DeepWorkTimer({ timer, breakMinutes, onSetBlockLength }: DeepWor
           {isIdleOrFinished ? (
             <button
               type="submit"
-              className="min-h-[44px] rounded-md border border-sky-500 bg-sky-500 px-4 py-1.5 text-sm font-medium text-slate-950 hover:bg-sky-400"
+              className="min-h-[44px] rounded-md border border-share-primary bg-share-primary px-4 py-1.5 text-sm font-medium text-share-onPrimary hover:bg-share-primaryContainer"
             >
               Start
             </button>
@@ -265,10 +266,10 @@ export function DeepWorkTimer({ timer, breakMinutes, onSetBlockLength }: DeepWor
           Keeping them is the default because they were really worked.
         */}
         {confirmStop && !isIdleOrFinished ? (
-          <div className="mt-3 rounded-md border border-amber-500/40 bg-amber-500/10 p-3">
+          <div className="mt-3 rounded-md border border-share-tertiary/40 bg-share-tertiary/10 p-3">
             <p className="text-sm text-share-onBg">
               This block has run for{' '}
-              <span className="font-semibold text-amber-200">{formatBlockMinutes(elapsedMinutes)}</span>.
+              <span className="font-semibold text-share-tertiary">{formatBlockMinutes(elapsedMinutes)}</span>.
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               <button
@@ -303,90 +304,6 @@ export function DeepWorkTimer({ timer, breakMinutes, onSetBlockLength }: DeepWor
         ) : null}
       </form>
     </section>
-  )
-}
-
-/**
- * What your block is, and the one-tap way to change it to whatever you just
- * picked.
- *
- * The offer only appears when the two disagree, because that is the only
- * moment the question is live - you have reached for 60m twice in a row and
- * the planner is still drawing your tasks in 45s. The warning is not
- * decoration: the block length is the unit every progress row is drawn in, so
- * changing it re-buckets work already logged. Nothing is lost, but the shape of
- * every row changes, and that is worth saying before the tap rather than after.
- */
-function BlockLengthLine({
-  durationMinutes,
-  blockMinutes,
-  breakMinutes,
-  disabled,
-  onSetBlockLength,
-}: {
-  durationMinutes: number
-  blockMinutes: number
-  breakMinutes: number
-  disabled: boolean
-  onSetBlockLength?: (minutes: number, breakMinutes: number) => void
-}) {
-  const differs = durationMinutes !== blockMinutes
-
-  return (
-    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-share-onSurfaceVariant/70">
-      <span className="flex items-center gap-1">
-        <span
-          aria-hidden
-          className="h-1.5 w-1.5 shrink-0 rounded-full bg-teal-400"
-        />
-        Your block: {blockMinutes}m on · {breakMinutes}m off
-      </span>
-      {onSetBlockLength && differs && (
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={() => onSetBlockLength(durationMinutes, suggestedBreakMinutes(durationMinutes))}
-          title="Draw every task's progress row in blocks of this length. Work already logged re-buckets; nothing is lost."
-          className={`rounded-full border border-share-outlineVariant/40 px-2 py-0.5 transition-colors ${
-            disabled
-              ? 'cursor-not-allowed opacity-50'
-              : 'hover:border-teal-500/60 hover:text-teal-300'
-          }`}
-        >
-          Make {durationMinutes}m my block
-        </button>
-      )}
-      <SoundToggle />
-    </div>
-  )
-}
-
-/**
- * Mute for this device.
- *
- * Turning it on plays the sound it turns on, which is both the obvious preview
- * and the only way iOS ever hears any of them: a browser unlocks audio on a
- * user gesture, and this button is one.
- */
-function SoundToggle() {
-  const [enabled, setEnabled] = useState(() => isSoundEnabled())
-
-  return (
-    <button
-      type="button"
-      onClick={() => {
-        const next = !enabled
-        setSoundEnabled(next)
-        setEnabled(next)
-        if (next) playChime('taskTicked')
-      }}
-      title={enabled ? 'Sounds on — mute this device' : 'Sounds muted — turn them on'}
-      aria-label={enabled ? 'Mute sounds on this device' : 'Turn sounds on'}
-      aria-pressed={enabled}
-      className="touch-target-coarse ml-auto rounded-full border border-share-outlineVariant/40 p-1 transition-colors hover:border-teal-500/60 hover:text-teal-300"
-    >
-      {enabled ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
-    </button>
   )
 }
 

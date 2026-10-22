@@ -69,7 +69,7 @@ export function CompletionClaimPrompt({
   return (
     <div
       role="status"
-      className="fixed inset-x-3 bottom-20 z-[70] mx-auto max-w-sm rounded-lg border border-share-outlineVariant/50 bg-share-surfaceContainerHigh px-3 py-2.5 shadow-lg lg:bottom-6"
+      className="toast-dock mx-auto max-w-sm rounded-lg border border-share-outlineVariant/50 bg-share-surfaceContainerHigh px-3 py-2.5 shadow-lg"
     >
       <p className="text-xs text-share-onSurface">
         <span className="font-medium">{title}</span> done with{' '}
@@ -96,14 +96,14 @@ export function CompletionClaimPrompt({
         <button
           type="button"
           onClick={() => onLog(selected.minutes)}
-          className="min-h-[32px] flex-1 rounded-md border border-share-outlineVariant/60 bg-share-surfaceContainer px-2 py-1 text-xs text-share-onSurface hover:border-share-primary/60 hover:text-share-primary"
+          className="touch-target-coarse flex-1 rounded-md border border-share-outlineVariant/60 bg-share-surfaceContainer px-2 py-1 text-xs text-share-onSurface hover:border-share-primary/60 hover:text-share-primary"
         >
           Log {formatMinutes(selected.minutes)} by hand
         </button>
         <button
           type="button"
           onClick={onDismiss}
-          className="min-h-[32px] rounded-md px-2 py-1 text-xs text-share-onSurfaceVariant hover:text-share-onSurface"
+          className="touch-target-coarse rounded-md px-2 py-1 text-xs text-share-onSurfaceVariant hover:text-share-onSurface"
         >
           None
         </button>

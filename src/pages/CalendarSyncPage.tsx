@@ -12,9 +12,11 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { AppChrome } from "../components/layout/AppChrome";
+import { MobileTabBar } from "../components/planner/MobileTabBar";
 import { useAuth } from "../contexts/AuthContext";
 import {
   type CalendarListItem,
@@ -30,6 +32,7 @@ type Banner = { kind: "ok" | "error" | "info"; text: string } | null;
 
 export function CalendarSyncPage() {
   const { user, loading } = useAuth();
+  const navigate = useNavigate();
   const isAuthenticated = Boolean(user);
 
   const status = useQuery(
@@ -302,6 +305,7 @@ export function CalendarSyncPage() {
           </div>
         )}
       </div>
+      <MobileTabBar activeTab={null} onTabChange={(tab) => navigate(`/?tab=${tab}`)} />
     </AppChrome>
   );
 }

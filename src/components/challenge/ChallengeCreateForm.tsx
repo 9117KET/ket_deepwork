@@ -15,7 +15,7 @@ interface ChallengeCreateFormProps {
 }
 
 const input =
-  'w-full rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainer px-3 py-2 text-sm text-share-onSurface placeholder:text-share-onSurfaceVariant/60 focus:border-share-primary focus:outline-none focus:ring-1 focus:ring-share-primary'
+  'min-h-[44px] w-full rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainer px-3 py-2 text-base text-share-onSurface sm:text-sm placeholder:text-share-onSurfaceVariant/60 focus:border-share-primary focus:outline-none focus:ring-1 focus:ring-share-primary'
 const label = 'block text-xs font-medium text-share-onSurfaceVariant'
 
 function ListEditor({ items, onChange, placeholder, idPrefix }: { items: string[]; onChange: (items: string[]) => void; placeholder: string; idPrefix: string }) {
@@ -29,12 +29,12 @@ function ListEditor({ items, onChange, placeholder, idPrefix }: { items: string[
   return (
     <div className="mt-1 space-y-1">
       {items.map((item, i) => (
-        <div key={`${idPrefix}-${i}`} className="flex items-center gap-2 rounded-lg bg-share-surfaceContainer px-3 py-1.5 text-sm text-share-onSurface">
+        <div key={`${idPrefix}-${i}`} className="flex items-center gap-2 rounded-lg bg-share-surfaceContainer py-0.5 pl-3 pr-0.5 text-sm text-share-onSurface">
           <span className="min-w-0 flex-1 break-words">{item}</span>
           <button
             type="button"
             onClick={() => onChange(items.filter((_, j) => j !== i))}
-            className="touch-target-coarse shrink-0 rounded p-0.5 text-share-onSurfaceVariant hover:text-red-400"
+            className="touch-target-coarse flex shrink-0 items-center justify-center rounded p-1.5 text-share-onSurfaceVariant hover:text-share-tertiary"
             aria-label={`Remove "${item}"`}
           >
             <X className="h-3.5 w-3.5" />
@@ -92,7 +92,7 @@ export function ChallengeCreateForm({ defaultDisplayName }: ChallengeCreateFormP
   }
 
   return (
-    <form onSubmit={(e) => void submit(e)} className="space-y-4 rounded-2xl border border-share-outlineVariant/25 bg-share-surfaceContainer p-4">
+    <form onSubmit={(e) => void submit(e)} className="space-y-4 rounded-2xl bg-share-surfaceContainerLow p-4">
       <div>
         <h2 className="font-shareHeadline text-lg font-black text-share-onBg">Start a challenge</h2>
         <p className="mt-0.5 text-xs text-share-onSurfaceVariant">

@@ -67,9 +67,10 @@ export function ChallengePage() {
   if (loading) {
     return (
       <AppChrome showCalendarLink={Boolean(user)} showChallengeLink={Boolean(user)} trailing={trailing}>
-        <div className="flex min-h-[50vh] items-center justify-center text-share-onSurfaceVariant">
+        <div className="flex min-h-[50dvh] items-center justify-center text-share-onSurfaceVariant">
           <p className="text-sm">Loading…</p>
         </div>
+        {tabBar}
       </AppChrome>
     );
   }
@@ -91,8 +92,8 @@ export function ChallengePage() {
     <AppChrome showCalendarLink showChallengeLink trailing={trailing}>
       <div className="mx-auto max-w-xl px-4 py-5 pb-28 md:py-8 md:pb-10">
         <header>
-          <h1 className="font-shareHeadline text-lg font-black text-share-onBg">Challenge</h1>
-          <p className="text-xs text-share-onSurfaceVariant">Two people, one season, a plan every morning and a check-in every night.</p>
+          <h1 className="page-title">Challenge</h1>
+          <p className="mt-0.5 text-xs text-share-onSurfaceVariant">Two people, one season, a plan every morning and a check-in every night.</p>
         </header>
         <div className="mt-5">
           {state.status === "loading" || isHydrating ? (

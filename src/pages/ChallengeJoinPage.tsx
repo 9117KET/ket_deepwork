@@ -13,6 +13,7 @@ import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { AppChrome } from "../components/layout/AppChrome";
 import { LoginForm } from "../components/auth/LoginForm";
+import { MobileTabBar } from "../components/planner/MobileTabBar";
 import { useAuth } from "../contexts/AuthContext";
 import { useChallenge } from "../hooks/useChallenge";
 import { acceptInvite, challengeErrorMessage } from "../services/challengeService";
@@ -68,15 +69,16 @@ export function ChallengeJoinPage() {
     }
   };
 
-  const card = "mx-auto w-full max-w-md rounded-2xl border border-share-outlineVariant/25 bg-share-surfaceContainer p-5";
+  const card = "mx-auto w-full max-w-md rounded-2xl bg-share-surfaceContainerLow p-5";
+  const link = "touch-target mt-3 inline-flex items-center text-sm font-semibold text-share-primary hover:underline";
 
   let body: React.ReactNode;
   if (!token) {
     body = (
       <div className={card}>
-        <h1 className="font-shareHeadline text-lg font-black text-share-onBg">No invite here</h1>
+        <h1 className="page-title">No invite here</h1>
         <p className="mt-1 text-sm text-share-onSurfaceVariant">The link is missing its invite code. Ask your partner to send it again.</p>
-        <Link to="/challenge" className="mt-3 inline-block text-sm font-semibold text-share-primary hover:underline">
+        <Link to="/challenge" className={link}>
           Go to Challenge
         </Link>
       </div>
@@ -93,9 +95,9 @@ export function ChallengeJoinPage() {
     }[preview.status];
     body = (
       <div className={card}>
-        <h1 className="font-shareHeadline text-lg font-black text-share-onBg">{preview.challenge?.name ?? "Invite"}</h1>
+        <h1 className="page-title">{preview.challenge?.name ?? "Invite"}</h1>
         <p className="mt-1 text-sm text-share-onSurfaceVariant">{reason}</p>
-        <Link to="/challenge" className="mt-3 inline-block text-sm font-semibold text-share-primary hover:underline">
+        <Link to="/challenge" className={link}>
           Go to Challenge
         </Link>
       </div>
@@ -103,10 +105,10 @@ export function ChallengeJoinPage() {
   } else {
     const header = (
       <div className="mb-4 text-center">
-        <p className="text-xs font-semibold uppercase tracking-wide text-share-onSurfaceVariant">
+        <p className="overline">
           {preview.inviterName ? `${preview.inviterName} invited you` : "You are invited"}
         </p>
-        <h1 className="mt-1 font-shareHeadline text-xl font-black text-share-onBg">{preview.challenge!.name}</h1>
+        <h1 className="page-title mt-1">{preview.challenge!.name}</h1>
         <p className="mt-0.5 text-xs text-share-onSurfaceVariant">
           {preview.challenge!.startDate} → {preview.challenge!.endDate}
         </p>
@@ -124,7 +126,7 @@ export function ChallengeJoinPage() {
         <div className={card}>
           {header}
           <p className="text-sm text-share-onSurfaceVariant">You are already in a challenge. Leave it first if you want to join this one.</p>
-          <Link to="/challenge" className="mt-3 inline-block text-sm font-semibold text-share-primary hover:underline">
+          <Link to="/challenge" className={link}>
             Open my challenge
           </Link>
         </div>
@@ -142,7 +144,7 @@ export function ChallengeJoinPage() {
             onChange={(e) => setTypedName(e.target.value)}
             maxLength={40}
             required
-            className="mt-1 w-full rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-3 py-2 text-sm text-share-onSurface focus:border-share-primary focus:outline-none focus:ring-1 focus:ring-share-primary"
+            className="mt-1 min-h-[44px] w-full rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-3 py-2 text-base text-share-onSurface sm:text-sm focus:border-share-primary focus:outline-none focus:ring-1 focus:ring-share-primary"
           />
           {error && (
             <p className="mt-2 text-sm text-red-400" role="alert">
@@ -159,7 +161,8 @@ export function ChallengeJoinPage() {
 
   return (
     <AppChrome showCalendarLink={Boolean(user)} showChallengeLink={Boolean(user)}>
-      <div className="flex min-h-[calc(100dvh-8rem)] items-center justify-center px-4 py-8">{body}</div>
+      <div className="flex min-h-[calc(100dvh-8rem)] items-center justify-center px-4 pt-8 pb-24 md:pb-8">{body}</div>
+      <MobileTabBar activeTab={null} onTabChange={(tab) => navigate(`/?tab=${tab}`)} />
     </AppChrome>
   );
 }

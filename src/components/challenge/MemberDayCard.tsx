@@ -5,6 +5,9 @@
  * Top 3 with ticks, counts for the rest, earned minutes, habits, and the
  * evening's note and confession. The same card renders the viewer's own
  * row, so what you see of yourself is exactly what your partner sees.
+ *
+ * Emerald appears only on the two "✓" stamps (the README's one exception for
+ * a completed state); a broken don't is the warning colour, `share.tertiary`.
  */
 
 import type { ChallengeSummary } from '../../domain/challenge'
@@ -34,7 +37,7 @@ function Stamp({ label, at }: { label: string; at: number | null | undefined }) 
       ✓ {label} {formatClock(at)}
     </span>
   ) : (
-    <span className="inline-flex items-center gap-1 rounded-full bg-share-surfaceContainerHigh px-2 py-0.5 text-[11px] text-share-onSurfaceVariant">
+    <span className="inline-flex items-center gap-1 rounded-full bg-share-hairline px-2 py-0.5 text-[11px] text-share-onSurfaceVariant">
       {label} —
     </span>
   )
@@ -44,7 +47,7 @@ export function MemberDayCard({ name, isMe, day, donts, caption }: MemberDayCard
   const s = day?.summary
   const broke = (day?.dontsBroken ?? []).map((id) => donts.find((d) => d.id === id)?.text ?? 'a don’t')
   return (
-    <div className="rounded-xl border border-share-outlineVariant/25 bg-share-surfaceContainer p-3">
+    <div className="rounded-2xl bg-share-surfaceContainerLow p-4">
       <div className="flex items-baseline justify-between gap-2">
         <p className="min-w-0 truncate text-sm font-semibold text-share-onBg">
           {name}
@@ -97,11 +100,11 @@ export function MemberDayCard({ name, isMe, day, donts, caption }: MemberDayCard
         </p>
       )}
       {day?.checkinAt && (
-        <div className="mt-2 border-t border-share-outlineVariant/20 pt-2 text-xs">
+        <div className="mt-2 border-t border-share-hairline pt-2 text-xs">
           {broke.length > 0 ? (
-            <p className="text-amber-300">Broke: {broke.join(', ')}</p>
+            <p className="text-share-tertiary">Broke: {broke.join(', ')}</p>
           ) : (
-            <p className="text-emerald-300">Kept every don&rsquo;t.</p>
+            <p className="text-share-onSurfaceVariant">Kept every don&rsquo;t.</p>
           )}
           {day.note && <p className="mt-1 whitespace-pre-wrap text-share-onSurface">{day.note}</p>}
         </div>

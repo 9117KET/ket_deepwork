@@ -30,7 +30,8 @@ import {
 import type { DeepWorkSession } from '../../domain/types'
 import { BlockAmountPicker } from './BlockAmountPicker'
 import { SessionAttributionPanel, type AttributionTarget } from './SessionAttributionPanel'
-import { TaskProgressBoxes } from './TaskProgressBoxes'
+import { TaskProgressBar, TaskProgressBoxes } from './TaskProgressBoxes'
+import { useCoarsePointer } from '../../hooks/useCoarsePointer'
 import { useFocusBlocks } from './focusBlockContext'
 
 interface TaskProgressSheetProps {
@@ -71,6 +72,7 @@ export function TaskProgressSheet({
   onClose,
 }: TaskProgressSheetProps) {
   const { activeBlock } = useFocusBlocks()
+  const isCoarse = useCoarsePointer()
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -95,7 +97,7 @@ export function TaskProgressSheet({
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-end justify-center bg-share-bg/80 sm:items-center sm:px-4"
+      className="fixed inset-0 z-[80] flex items-end justify-center bg-share-bg/80 sm:items-center sm:px-4"
       onClick={onClose}
       role="presentation"
     >
@@ -104,25 +106,32 @@ export function TaskProgressSheet({
         aria-modal="true"
         aria-label={`Log time on ${taskTitle}`}
         onClick={(event) => event.stopPropagation()}
-        className="w-full rounded-t-2xl border border-share-outlineVariant/40 bg-share-surfaceContainerHigh p-4 pb-6 shadow-2xl sm:max-w-sm sm:rounded-xl sm:pb-4"
+        className="max-h-[85dvh] w-full overflow-y-auto rounded-t-2xl border border-share-outlineVariant/40 bg-share-surfaceContainerHigh p-4 pb-safe-nav shadow-2xl sm:max-w-sm sm:rounded-xl sm:pb-4"
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h3 className="truncate text-sm font-semibold text-share-onBg">{taskTitle}</h3>
+            <h3 className="break-words text-sm font-semibold text-share-onBg touch:text-[15px]">{taskTitle}</h3>
             <p className="mt-0.5 text-xs text-share-onSurfaceVariant">{describeTaskProgress(progress)}</p>
           </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="-m-1 shrink-0 rounded p-1 text-share-onSurfaceVariant hover:bg-share-surfaceContainerHighest hover:text-share-onSurface"
+            className="-m-1 flex shrink-0 items-center justify-center rounded p-1 text-share-onSurfaceVariant hover:bg-share-surfaceContainerHighest hover:text-share-onSurface touch:-m-2 touch:h-11 touch:w-11"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
         <div className="mt-3 flex justify-center rounded-lg border border-share-outlineVariant/25 bg-share-surfaceContainerLow py-3">
-          <TaskProgressBoxes progress={progress} taskId={taskId} />
+          {/* On a phone, the same bar as the row, so the two read alike. */}
+          {isCoarse ? (
+            <span className="w-full px-3">
+              <TaskProgressBar progress={progress} taskId={taskId} />
+            </span>
+          ) : (
+            <TaskProgressBoxes progress={progress} taskId={taskId} />
+          )}
         </div>
 
         <div className="mt-4 space-y-2">
@@ -137,15 +146,15 @@ export function TaskProgressSheet({
               className={`flex min-h-[44px] w-full items-center gap-3 rounded-lg border px-3 py-2 text-left ${
                 isTimerBusy
                   ? 'cursor-not-allowed border-share-outlineVariant/40 bg-share-surfaceContainer opacity-60'
-                  : 'border-teal-500/50 bg-teal-500/10 hover:bg-teal-500/20'
+                  : 'border-share-primary/50 bg-share-primary/10 hover:bg-share-primary/20'
               }`}
             >
-              <Timer className={`h-4 w-4 shrink-0 ${isTimerBusy ? 'text-share-onSurfaceVariant' : 'text-teal-300'}`} />
+              <Timer className={`h-4 w-4 shrink-0 ${isTimerBusy ? 'text-share-onSurfaceVariant' : 'text-share-primary'}`} />
               <span className="min-w-0">
-                <span className={`block text-sm font-medium ${isTimerBusy ? 'text-share-onSurface' : 'text-teal-200'}`}>
+                <span className={`block text-sm font-medium ${isTimerBusy ? 'text-share-onSurface' : 'text-share-primary'}`}>
                   Start a {formatMinutes(logMinutes)} block
                 </span>
-                <span className={`block text-xs ${isTimerBusy ? 'text-share-onSurfaceVariant/70' : 'text-teal-400/70'}`}>
+                <span className={`block text-xs ${isTimerBusy ? 'text-share-onSurfaceVariant/70' : 'text-share-onSurfaceVariant'}`}>
                   {isTimerBusy ? 'A block is already running' : 'Finished blocks fill in solid'}
                 </span>
               </span>
@@ -256,7 +265,7 @@ function ManualLogPanel({
       <div className="flex items-center gap-2">
         <Clock className="h-4 w-4 shrink-0 text-share-onSurfaceVariant" />
         <span className="text-sm text-share-onSurface">Log time by hand</span>
-        <span className="ml-auto text-[10px] text-share-onSurfaceVariant/60">fills faded</span>
+        <span className="ml-auto text-[11px] text-share-onSurfaceVariant">fills faded</span>
       </div>
 
       <div className="mt-2 flex gap-1 text-xs">
@@ -265,7 +274,7 @@ function ManualLogPanel({
             key={option}
             type="button"
             onClick={() => setMode(option)}
-            className={`min-h-[32px] rounded-full border px-3 py-1 transition-colors ${
+            className={`min-h-[32px] rounded-full border px-3 py-1 transition-colors touch:min-h-11 ${
               mode === option
                 ? 'border-share-primary/60 bg-share-primary/10 text-share-primary'
                 : 'border-share-outlineVariant/40 text-share-onSurfaceVariant hover:text-share-onSurface'
@@ -291,7 +300,7 @@ function ManualLogPanel({
             value={from}
             onChange={(event) => setFrom(event.target.value)}
             aria-label="Started at"
-            className="min-h-[36px] min-w-0 flex-1 rounded-md border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-2 py-1 text-sm tabular-nums text-share-onBg focus:border-share-primary focus:outline-none"
+            className="min-h-[36px] min-w-0 flex-1 rounded-md touch:min-h-11 border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-2 py-1 text-sm tabular-nums text-share-onBg focus:border-share-primary focus:outline-none"
           />
           <span className="shrink-0 text-xs text-share-onSurfaceVariant">to</span>
           <input
@@ -299,7 +308,7 @@ function ManualLogPanel({
             value={to}
             onChange={(event) => setTo(event.target.value)}
             aria-label="Finished at"
-            className="min-h-[36px] min-w-0 flex-1 rounded-md border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-2 py-1 text-sm tabular-nums text-share-onBg focus:border-share-primary focus:outline-none"
+            className="min-h-[36px] min-w-0 flex-1 rounded-md touch:min-h-11 border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-2 py-1 text-sm tabular-nums text-share-onBg focus:border-share-primary focus:outline-none"
           />
         </div>
       )}
@@ -314,7 +323,7 @@ function ManualLogPanel({
           setTo('')
           setBlocks(1)
         }}
-        className={`mt-3 flex min-h-[40px] w-full items-center justify-center rounded-md border px-3 py-1.5 text-sm transition-colors ${
+        className={`mt-3 flex min-h-[40px] w-full touch:min-h-11 items-center justify-center rounded-md border px-3 py-1.5 text-sm transition-colors ${
           canLog
             ? 'border-share-outlineVariant/60 bg-share-surfaceContainerHigh text-share-onSurface hover:border-share-primary/60 hover:text-share-primary'
             : 'cursor-not-allowed border-share-outlineVariant/30 text-share-onSurfaceVariant/50'

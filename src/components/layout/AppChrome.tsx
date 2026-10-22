@@ -51,10 +51,11 @@ export function AppChrome({
 
       {/* Main area — offset by sidebar width on desktop; full-width on mobile */}
       <div className="flex flex-col md:ml-[240px] md:h-dvh md:overflow-hidden">
-        {/* Mobile-only header: app name + account menu */}
+        {/* Mobile-only header: app name + account menu, kept slim so the day
+            starts high on a phone. */}
         {trailing && (
-          <div className="flex items-center justify-between px-4 py-2.5 border-b border-share-outlineVariant/20 flex-shrink-0 md:hidden">
-            <span className="font-shareHeadline font-black text-base text-share-onBg">Deepblock</span>
+          <div className="flex items-center justify-between px-4 py-1 border-b border-share-outlineVariant/20 flex-shrink-0 md:hidden">
+            <span className="font-shareHeadline font-black text-sm text-share-onBg">Deepblock</span>
             <div className="flex items-center gap-1">{trailing}</div>
           </div>
         )}
