@@ -14,6 +14,8 @@ import { CalendarSyncPage } from "./pages/CalendarSyncPage";
 import { CalendarCallbackPage } from "./pages/CalendarCallbackPage";
 import { PrivacyPage } from "./pages/PrivacyPage";
 import { RestorePage } from "./pages/RestorePage";
+import { ChallengePage } from "./pages/ChallengePage";
+import { ChallengeJoinPage } from "./pages/ChallengeJoinPage";
 
 function App() {
   const location = useLocation();
@@ -31,6 +33,8 @@ function App() {
         <Route path="/calendar/callback" element={<CalendarCallbackPage />} />
         <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/restore" element={<RestorePage />} />
+        <Route path="/challenge" element={<ChallengePage />} />
+        <Route path="/challenge/join" element={<ChallengeJoinPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </ErrorBoundary>

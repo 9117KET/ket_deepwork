@@ -7,7 +7,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { DeepWorkSession, Task } from '../../domain/types'
+import type { DeepWorkSession, Task, TaskPatch } from '../../domain/types'
 import { computeTaskProgress } from '../../domain/taskProgress'
 import { ArrowUp, ArrowDown, MoreVertical } from 'lucide-react'
 import { TaskProgressBoxes } from './TaskProgressBoxes'
@@ -26,7 +26,9 @@ interface TaskItemProps {
   onAddTaskAbove?: () => void
   onAddTaskBelow?: () => void
   onAddSubtask?: () => void
-  onUpdateTask?: (patch: { scheduledAt?: string; durationMinutes?: number; title?: string; isShallow?: boolean }) => void
+  onUpdateTask?: (patch: TaskPatch) => void
+  /** An accountability challenge is running: offer "hide from partner" in the menu. */
+  partnerVisible?: boolean
   /** Consciously abandon this task (Drucker: abandonment as a success). */
   onAbandon?: () => void
   /** Subtask only: open the parent picker to move to a different parent or promote. */
@@ -94,6 +96,7 @@ export function TaskItem({
   onStartBlock,
   onOpenProgressSheet,
   onSchedule,
+  partnerVisible = false,
 }: TaskItemProps) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
   const [isEditing, setIsEditing] = useState(false)
@@ -372,6 +375,14 @@ export function TaskItem({
               shallow
             </span>
           )}
+          {task.isPrivate && partnerVisible && (
+            <span
+              className="ml-0.5 shrink-0 rounded border border-share-outlineVariant/50 bg-share-surfaceContainerHigh px-1 py-0.5 text-[10px] text-share-onSurfaceVariant"
+              title="Hidden from your challenge partner (counted, never titled)"
+            >
+              private
+            </span>
+          )}
         </label>
         {canEditTime && (
           <span className="flex shrink-0 items-center gap-1">
@@ -419,6 +430,17 @@ export function TaskItem({
               onClick={() => closeAnd(() => onUpdateTask?.({ isShallow: !task.isShallow }))}
             >
               {task.isShallow ? 'Mark as deep work' : 'Mark as shallow'}
+            </button>
+          )}
+          {onUpdateTask && partnerVisible && (
+            <button
+              type="button"
+              role="menuitem"
+              className="w-full px-3 py-1.5 text-left text-sm text-share-onSurface hover:bg-share-surfaceContainerHighest"
+              onClick={() => closeAnd(() => onUpdateTask?.({ isPrivate: !task.isPrivate }))}
+              title="Only the challenge partner's view is affected"
+            >
+              {task.isPrivate ? 'Show to partner' : 'Hide from partner'}
             </button>
           )}
           {onSchedule && !isSubtask && (

@@ -470,7 +470,7 @@ test.describe('Legal/support pages', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 test.describe('Cross-route navigation', () => {
-  const routes = ['/', '/review', '/calendar', '/privacy']
+  const routes = ['/', '/review', '/calendar', '/privacy', '/challenge', '/challenge/join']
 
   test('all defined routes load without blank body or React crash', async ({ page }) => {
     await page.addInitScript(() => {

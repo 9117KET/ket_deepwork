@@ -40,6 +40,11 @@ import { useTaskHandlers } from "../../hooks/useTaskHandlers";
 import { useCalendarDay } from "../../hooks/useCalendarDay";
 import { useWorkLog } from "../../hooks/useWorkLog";
 import { useTaskSync } from "../../hooks/useTaskSync";
+import { useChallenge } from "../../hooks/useChallenge";
+import { useChallengeSync } from "../../hooks/useChallengeSync";
+import { buildChallengeSummary } from "../../domain/challenge";
+import { ChallengeCard } from "../challenge/ChallengeCard";
+import { CheckinSheet } from "../challenge/CheckinSheet";
 import { usePersistentState, getOrCreateDay } from "../../storage/localStorageState";
 import { useAuth } from "../../contexts/AuthContext";
 import { removeTaskFromGoogle, scheduleTaskInCalendar, unscheduleTaskFromCalendar } from "../../services/calendarSyncService";
@@ -199,6 +204,22 @@ export function DayPlanner() {
     [appState.days, habitIds, selectedDay],
   );
   const [editHabitsOpen, setEditHabitsOpen] = useState(false);
+
+  // ── Accountability challenge ──────────────────────────────────────────────
+  // The partner never reads this planner; they read the summary published
+  // here after every edit. Off while hydrating, like the Google mirror.
+  const challenge = useChallenge(now);
+  const challengeActive = challenge.status === "active";
+  const challengeSummary = useMemo(
+    () => (challengeActive ? buildChallengeSummary(dayState, habits) : null),
+    [challengeActive, dayState, habits],
+  );
+  useChallengeSync({ date: selectedDay, summary: challengeSummary, enabled: challengeActive && !isHydrating });
+  const [checkinOpen, setCheckinOpen] = useState(false);
+  const challengeDayLabel =
+    challengeActive && challenge.progress?.phase === "active"
+      ? `Day ${challenge.progress.dayNumber}/${challenge.progress.totalDays} · ${challenge.progress.daysLeft} left`
+      : undefined;
 
   const handleToggleHabit = useCallback(
     (habitId: string, value: boolean) => {
@@ -580,6 +601,7 @@ export function DayPlanner() {
       onAbandonTask={handleAbandonTaskGuarded}
       onReorderSubtask={handleReorderSubtask}
       onRequestMoveSubtask={setMoveSubtaskId}
+      partnerVisible={challengeActive}
       {...extra}
     />
   );
@@ -625,8 +647,15 @@ export function DayPlanner() {
               onNextDay={() => setSelectedDay((current) => addDays(current, 1))}
               onToday={() => setSelectedDay(todayIso())}
               deepWorkMinutesToday={deepWorkMinutesToday}
+              challengeDayLabel={challengeDayLabel}
             />
           </div>
+
+          {isToday && challengeActive && challengeSummary && (
+            <ErrorBoundary fallback={null} resetKeys={[selectedDay]}>
+              <ChallengeCard state={challenge} summary={challengeSummary} date={selectedDay} onOpenCheckin={() => setCheckinOpen(true)} />
+            </ErrorBoundary>
+          )}
 
           <ErrorBoundary fallback={null} resetKeys={[selectedDay]}>
             <CalendarTimeline status={calendar.status} events={calendar.events} isToday={isToday} now={now} />
@@ -674,6 +703,7 @@ export function DayPlanner() {
               onMoveUp={(taskId) => handleReorderTask(taskId, "mustDo", "up")}
               onMoveDown={(taskId) => handleReorderTask(taskId, "mustDo", "down")}
               draggedTaskId={draggedTask?.sectionId === "mustDo" ? draggedTask.taskId : null}
+              partnerVisible={challengeActive}
             />
 
             {copySource && (
@@ -800,6 +830,19 @@ export function DayPlanner() {
           completedBlocksToday={completedBlocksToday}
           deepMinutesToday={deepWorkMinutesToday}
           onLeave={() => setFocusDismissed(true)}
+        />
+      )}
+
+      {checkinOpen && challenge.info && challenge.progress && challengeSummary && (
+        <CheckinSheet
+          challengeName={challenge.info.challenge.name}
+          donts={challenge.info.challenge.donts}
+          displayName={challenge.info.me.displayName}
+          progress={challenge.progress}
+          date={selectedDay}
+          summary={challengeSummary}
+          existing={challenge.mine}
+          onClose={() => setCheckinOpen(false)}
         />
       )}
 

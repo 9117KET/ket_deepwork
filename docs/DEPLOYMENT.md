@@ -61,7 +61,28 @@ _Last updated: 2026-10-11_
    mirroring the dev entry) to the Google Cloud OAuth client's authorized
    redirect URIs.
 
-3. **Reclaim `deepblock.vercel.app`** (optional) — log into the old Vercel
+3. **Challenge reminder emails** — the accountability challenge
+   (`convex/challenges.ts`, `convex/reminders.ts`, cron in `convex/crons.ts`)
+   sends reminders through Gmail SMTP, because there is no verified domain for
+   a transactional provider yet. On **both** Convex deployments set:
+   - `GMAIL_SMTP_USER` — the Gmail address every reminder is sent *from*
+     (to its owner and to the partner alike; personal Gmail caps at 500
+     recipients/day, far above two people).
+   - `GMAIL_SMTP_APP_PASSWORD` — a 16-character app password. Needs 2-Step
+     Verification on the Google account (Google Account → Security → App
+     passwords). Set it with `--from-file` on Windows, as for the JWT keys.
+
+   `SITE_URL` (already set) is what the email links to. Smoke-test before
+   trusting the cron:
+   ```bash
+   npx convex run email:sendTestEmail '{"to":"you@example.com"}'          # dev
+   npx convex run --prod email:sendTestEmail '{"to":"you@example.com"}'   # prod
+   ```
+   Then watch Logs → `challenge reminders` through one plan deadline (10:00
+   local + up to 15 min) and one 21:30 check-in window. When a domain exists,
+   swapping to Resend is a change to `send()` in `convex/email.ts` only.
+
+4. **Reclaim `deepblock.vercel.app`** (optional) — log into the old Vercel
    account that owns it, delete that project (or detach the domain), then attach
    it to `ket-deepwork`:
    ```bash
@@ -69,7 +90,7 @@ _Last updated: 2026-10-11_
    ```
    If done, update `SITE_URL` on Convex prod to the new domain.
 
-4. ~~**Data migration note**~~ — corrected 2026-09-02. There is **no** blanket
+5. ~~**Data migration note**~~ — corrected 2026-09-02. There is **no** blanket
    "uploads everything on first sync": the write path only sends days marked
    dirty by a local edit (that is what keeps read/write I/O bounded). Two things
    cover the rest:

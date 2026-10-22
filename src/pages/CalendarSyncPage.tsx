@@ -121,7 +121,7 @@ export function CalendarSyncPage() {
   };
 
   return (
-    <AppChrome showCalendarLink={isAuthenticated}>
+    <AppChrome showCalendarLink={isAuthenticated} showChallengeLink={isAuthenticated}>
       <div className="mx-auto max-w-3xl px-4 py-6 md:px-8 pb-28 md:pb-10">
         <header className="mb-6">
           <h1 className="font-shareHeadline text-2xl font-black text-share-onSurface">

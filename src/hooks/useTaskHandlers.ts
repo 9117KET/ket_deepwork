@@ -13,6 +13,7 @@ import {
   type DeepWorkSession,
   type Task,
   type TaskSectionId,
+  type TaskPatch,
 } from "../domain/types";
 import { deriveActiveDaysFromDays } from "../domain/dateUtils";
 import {
@@ -429,15 +430,7 @@ export function useTaskHandlers(
     [selectedDay, updateAppState],
   );
 
-  const handleUpdateTask = (
-    taskId: string,
-    patch: {
-      scheduledAt?: string;
-      durationMinutes?: number;
-      title?: string;
-      isShallow?: boolean;
-    },
-  ) => {
+  const handleUpdateTask = (taskId: string, patch: TaskPatch) => {
     updateAppState((prev) => {
       const existingDay = getOrCreateDay(prev, selectedDay);
       const nextTasks = existingDay.tasks.map((task) =>

@@ -11,6 +11,7 @@ import { MaterialIcon } from "../ui/MaterialIcon";
 
 export interface AppSidebarProps {
   showCalendarLink?: boolean;
+  showChallengeLink?: boolean;
   trailing?: ReactNode;
 }
 
@@ -34,6 +35,13 @@ const CALENDAR_ITEM: NavItem = {
   to: "/calendar",
 };
 
+const CHALLENGE_ITEM: NavItem = {
+  key: "challenge",
+  label: "Challenge",
+  icon: "handshake",
+  to: "/challenge",
+};
+
 function navItemClass(isActive: boolean) {
   return [
     "flex w-full touch-target-coarse items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors",
@@ -43,8 +51,8 @@ function navItemClass(isActive: boolean) {
   ].join(" ");
 }
 
-export function AppSidebar({ showCalendarLink = false, trailing }: AppSidebarProps) {
-  const items = showCalendarLink ? [...NAV_ITEMS, CALENDAR_ITEM] : NAV_ITEMS;
+export function AppSidebar({ showCalendarLink = false, showChallengeLink = false, trailing }: AppSidebarProps) {
+  const items = [...NAV_ITEMS, ...(showChallengeLink ? [CHALLENGE_ITEM] : []), ...(showCalendarLink ? [CALENDAR_ITEM] : [])];
 
   return (
     <aside className="fixed left-0 top-0 z-40 hidden h-dvh w-[240px] shrink-0 flex-col border-r border-share-outlineVariant/25 bg-[#161a1d] md:flex">

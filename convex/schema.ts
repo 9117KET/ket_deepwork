@@ -1,6 +1,12 @@
 import { defineSchema, defineTable } from "convex/server"
 import { v } from "convex/values"
 import { authTables } from "@convex-dev/auth/server"
+import {
+  challengeStatusValidator,
+  dontValidator,
+  remindersSentValidator,
+  summaryValidator,
+} from "./_shared/challengeValidators"
 
 export default defineSchema({
   ...authTables,
@@ -144,4 +150,65 @@ export default defineSchema({
   })
     .index("by_user_task", ["userId", "taskDate", "taskId"])
     .index("by_user_event", ["userId", "googleCalendarId", "googleEventId"]),
+
+  // ── Accountability challenge ──────────────────────────────────────────────
+  // Two people, one shared object. Each member's planner stays private: what
+  // the partner sees is the `summary` the member's own client publishes into
+  // `challengeDays`, never a `plannerDays` row. Index names follow the repo's
+  // `by_user_date` style rather than the generated guidelines' `by_a_and_b`.
+  challenges: defineTable({
+    name: v.string(),
+    startDate: v.string(),
+    endDate: v.string(),
+    goals: v.array(v.string()),
+    donts: v.array(dontValidator),
+    /** Local wall-clock deadlines, applied in each member's own timezone. */
+    planDeadline: v.string(),
+    checkinDeadline: v.string(),
+    createdBy: v.string(),
+    createdAt: v.number(),
+    /** The one switch the reminder cron reads; "ended" once everyone has left or the end date has passed. */
+    status: challengeStatusValidator,
+  }).index("by_status", ["status"]),
+
+  challengeMembers: defineTable({
+    challengeId: v.id("challenges"),
+    userId: v.string(),
+    /** IANA zone, refreshed on every summary sync, so deadlines follow the member. */
+    timezone: v.string(),
+    displayName: v.string(),
+    joinedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_challenge", ["challengeId"]),
+
+  challengeInvites: defineTable({
+    challengeId: v.id("challenges"),
+    token: v.string(),
+    createdBy: v.string(),
+    expiresAt: v.number(),
+    acceptedBy: v.optional(v.string()),
+    acceptedAt: v.optional(v.number()),
+  })
+    .index("by_token", ["token"])
+    .index("by_challenge", ["challengeId"]),
+
+  challengeDays: defineTable({
+    challengeId: v.id("challenges"),
+    userId: v.string(),
+    date: v.string(),
+    summary: summaryValidator,
+    summaryUpdatedAt: v.number(),
+    /** The two explicit daily acts. Set once; never cleared by a sync. */
+    planSetAt: v.optional(v.number()),
+    checkinAt: v.optional(v.number()),
+    note: v.optional(v.string()),
+    /** Ids from `challenges.donts` the member owned up to at check-in. */
+    dontsBroken: v.array(v.string()),
+    /** Reminder bookkeeping for this local day; never shown to the partner. */
+    remindersSent: remindersSentValidator,
+    nudgeSentAt: v.optional(v.number()),
+  })
+    .index("by_challenge_user_date", ["challengeId", "userId", "date"])
+    .index("by_user_date", ["userId", "date"]),
 })

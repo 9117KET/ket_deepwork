@@ -22,6 +22,7 @@ import { AppSidebar } from "./AppSidebar";
 export interface AppChromeProps {
   children: ReactNode;
   showCalendarLink?: boolean;
+  showChallengeLink?: boolean;
   /** AccountMenu slot - rendered in sidebar bottom on desktop, top-right on mobile. */
   trailing?: ReactNode;
   /** When true, render a plain full-width layout with no sidebar (e.g. the privacy page). */
@@ -31,6 +32,7 @@ export interface AppChromeProps {
 export function AppChrome({
   children,
   showCalendarLink = false,
+  showChallengeLink = false,
   trailing,
   hideSidebar = false,
 }: AppChromeProps) {
@@ -45,7 +47,7 @@ export function AppChrome({
   return (
     <div className="min-h-dvh bg-share-bg px-safe font-shareSans text-share-onBg selection:bg-share-primary/30 md:h-dvh md:overflow-hidden">
       {/* Fixed sidebar — AppSidebar already has `hidden md:flex` so it is CSS-hidden on mobile */}
-      <AppSidebar showCalendarLink={showCalendarLink} trailing={trailing} />
+      <AppSidebar showCalendarLink={showCalendarLink} showChallengeLink={showChallengeLink} trailing={trailing} />
 
       {/* Main area — offset by sidebar width on desktop; full-width on mobile */}
       <div className="flex flex-col md:ml-[240px] md:h-dvh md:overflow-hidden">

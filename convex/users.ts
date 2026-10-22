@@ -6,9 +6,14 @@ export const currentUser = query({
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) return null
+    const userId = getUserId(identity.subject)
+    // The Password provider's JWT carries no email claim, so `identity.email`
+    // is empty; the `users` row (whose id the subject is built from) has it.
+    const id = ctx.db.normalizeId("users", userId)
+    const user = id ? await ctx.db.get(id) : null
     return {
-      id: getUserId(identity.subject),
-      email: identity.email,
+      id: userId,
+      email: user?.email ?? identity.email ?? null,
     }
   },
 })
