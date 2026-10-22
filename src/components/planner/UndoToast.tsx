@@ -21,7 +21,7 @@ export function UndoToast({ entry, onUndo, onDismiss }: UndoToastProps) {
 
   return (
     <div
-      className="pointer-events-none fixed inset-x-0 bottom-20 z-[70] flex justify-center px-4 lg:bottom-6"
+      className="toast-dock pointer-events-none flex justify-center"
       role="status"
       aria-live="polite"
     >

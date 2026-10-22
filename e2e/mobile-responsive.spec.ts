@@ -10,11 +10,12 @@
  */
 
 import { test, expect, type Page } from '@playwright/test'
+import { PHONE, seedRichDay, undersizedTouchTargets } from './helpers/mobile'
 
-const MOBILE = { width: 390, height: 844 } // iPhone 14/15
+const MOBILE = PHONE.viewport // iPhone 14/15
 const ROUTES = ['/', '/review', '/calendar'] as const
 
-test.use({ viewport: MOBILE, isMobile: true, hasTouch: true })
+test.use(PHONE)
 
 async function injectGuestState(page: Page) {
   await page.addInitScript(() => {
@@ -254,58 +255,8 @@ for (const device of DEVICE_MATRIX) {
   }
 }
 
-/**
- * Controls that are too small to hit reliably with a thumb (WCAG 2.5.8 /
- * Apple HIG both land on 44px).
- *
- * Two exceptions are deliberate and are skipped here, because both are carved
- * out by WCAG 2.5.8 itself:
- *  - "inline": a button sitting inside a sentence (the editable "20h" weekly
- *    goal, the "Friday" review day). Padding these to 44px would tear the
- *    prose apart.
- *  - the 31-column month grid, which cannot give every cell 44px on a phone
- *    (that is 1364px of row) and instead lives in a horizontal scroller. Its
- *    cells were still lifted from 24px to 32px on touch.
- */
-async function undersizedTouchTargets(page: Page) {
-  return page.evaluate(() => {
-    const MIN = 44
-    const out: { label: string; size: string; html: string }[] = []
-    const selector = 'button, a, [role=button], input[type=checkbox], select'
-    for (const el of Array.from(document.querySelectorAll(selector))) {
-      const box = el.getBoundingClientRect()
-      if (box.width === 0 || box.height === 0) continue
-      if (getComputedStyle(el).visibility === 'hidden') continue
-      if (box.height >= MIN && box.width >= MIN) continue
-
-      // Exception: inside a deliberate horizontal scroller (the month grid).
-      let parent: Element | null = el.parentElement
-      let inScroller = false
-      while (parent && parent !== document.body) {
-        const overflowX = getComputedStyle(parent).overflowX
-        if (overflowX === 'auto' || overflowX === 'scroll') { inScroller = true; break }
-        parent = parent.parentElement
-      }
-      if (inScroller) continue
-
-      // Exception: inline in prose — the parent holds its own text around it.
-      const siblingText = Array.from(el.parentElement?.childNodes ?? []).some(
-        (n) => n.nodeType === Node.TEXT_NODE && (n.textContent ?? '').trim().length > 0,
-      )
-      if (siblingText) continue
-
-      out.push({
-        label:
-          (el as HTMLElement).innerText?.trim().split('\n')[0] ||
-          el.getAttribute('aria-label') ||
-          el.tagName,
-        size: `${Math.round(box.width)}x${Math.round(box.height)}`,
-        html: el.outerHTML.slice(0, 140),
-      })
-    }
-    return out
-  })
-}
+// undersizedTouchTargets lives in ./helpers/mobile (shared with the other
+// mobile specs); see its doc comment for the two deliberate exceptions.
 
 for (const route of ['/', '/review'] as const) {
   test(`${route} controls are thumb-sized on touch devices`, async ({ page }) => {
@@ -374,4 +325,129 @@ test('a landscape phone still shows content, not just chrome', async ({ page }) 
     chrome.fixedHeight,
     `fixed chrome eats ${Math.round(chrome.fixedHeight)}px of a ${chrome.vh}px-tall screen`,
   ).toBeLessThan(chrome.vh * 0.3)
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mobile foundations (run 2026-10-22, spec 01)
+//
+// The shared base every phone screen stands on: the tab bar reaches every
+// route, fields never trigger iOS zoom, motion respects the OS setting, the
+// bar wears the artboard colours, and toasts sit above it rather than under.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const OFF_PLANNER_ROUTES = ['/calendar', '/calendar/callback', '/challenge/join?invite=x', '/challenge'] as const
+
+for (const route of OFF_PLANNER_ROUTES) {
+  test(`${route} shows the fixed bottom tab bar on a phone`, async ({ page }) => {
+    await injectGuestState(page)
+    await page.goto(route)
+    await settle(page)
+
+    const bar = page.getByTestId('mobile-tab-bar')
+    await expect(bar, `${route} has no tab bar`).toBeVisible()
+    const geom = await bar.evaluate((el) => {
+      const r = el.getBoundingClientRect()
+      return { position: getComputedStyle(el).position, bottom: r.bottom, vh: window.innerHeight }
+    })
+    expect(geom.position, `${route} tab bar is not fixed`).toBe('fixed')
+    expect(Math.abs(geom.bottom - geom.vh), `${route} tab bar is not on the bottom edge`).toBeLessThanOrEqual(2)
+  })
+}
+
+test('no field on a busy Today is under 16px, so iOS never zooms on focus', async ({ page }) => {
+  await seedRichDay(page)
+  await page.goto('/')
+  await settle(page)
+
+  const add = page.getByPlaceholder(/add a task/i).first()
+  await expect(add).toBeVisible()
+  await add.focus()
+
+  const small = await page.evaluate(() =>
+    Array.from(document.querySelectorAll('input, select, textarea'))
+      .filter((el) => el.getBoundingClientRect().width > 0)
+      .map((el) => ({
+        html: el.outerHTML.slice(0, 120),
+        px: parseFloat(getComputedStyle(el).fontSize),
+      }))
+      .filter((f) => f.px < 16),
+  )
+  expect(small, `fields under 16px:\n${JSON.stringify(small, null, 2)}`).toEqual([])
+})
+
+test('the stylesheet honours prefers-reduced-motion', async ({ page }) => {
+  await injectGuestState(page)
+  await page.goto('/')
+  await settle(page)
+
+  const hasRule = await page.evaluate(() =>
+    Array.from(document.styleSheets).some((sheet) => {
+      try {
+        return Array.from(sheet.cssRules).some((rule) => rule.cssText.includes('prefers-reduced-motion'))
+      } catch {
+        return false // cross-origin sheet (fonts)
+      }
+    }),
+  )
+  expect(hasRule, 'no prefers-reduced-motion rule in any stylesheet').toBe(true)
+})
+
+test('the tab bar wears the artboard ground (#131518)', async ({ page }) => {
+  await injectGuestState(page)
+  await page.goto('/')
+  await settle(page)
+
+  const bg = await page
+    .getByTestId('mobile-tab-bar')
+    .evaluate((el) => getComputedStyle(el).backgroundColor)
+  expect(bg).toBe('rgb(19, 21, 24)')
+})
+
+test('the undo toast sits above the tab bar, not under it', async ({ page }) => {
+  await seedRichDay(page)
+  await page.goto('/')
+  await settle(page)
+
+  // A task with no worked minutes, so deleting it is a plain delete.
+  const row = page.locator('div.group').filter({ hasText: 'Buy groceries' }).last()
+  await row.getByRole('button', { name: 'Task options' }).click()
+  await page.getByRole('menuitem', { name: /^Delete/i }).click()
+
+  const undo = page.getByRole('status').filter({ has: page.getByRole('button', { name: 'Undo' }) })
+  await expect(undo).toBeVisible()
+
+  const geom = await page.evaluate(() => {
+    const bar = document.querySelector('[data-testid="mobile-tab-bar"]')!.getBoundingClientRect()
+    const button = Array.from(document.querySelectorAll('[role="status"] button')).find(
+      (b) => b.textContent?.trim() === 'Undo',
+    )!
+    const toast = button.closest('[role="status"]')!
+    // The visible card, not the full-width pointer-events-none dock around it.
+    const card = (toast.firstElementChild ?? toast).getBoundingClientRect()
+    const buttons = Array.from(toast.querySelectorAll('button')).map((b) => Math.round(b.getBoundingClientRect().height))
+    return { toastBottom: card.bottom, barTop: bar.top, buttons }
+  })
+
+  expect(
+    geom.toastBottom,
+    `toast ends at ${Math.round(geom.toastBottom)}px, under the tab bar starting at ${Math.round(geom.barTop)}px`,
+  ).toBeLessThanOrEqual(geom.barTop)
+  for (const h of geom.buttons) expect(h, 'undo toast button under 44px').toBeGreaterThanOrEqual(44)
+})
+
+test('the sign-in form on /challenge is thumb-sized', async ({ page }) => {
+  await injectGuestState(page)
+  await page.goto('/challenge')
+  await settle(page)
+
+  await expect(page.locator('#email')).toBeVisible()
+  const heights = await page.evaluate(() =>
+    ['#email', '#password', 'button[type="submit"]'].map((sel) =>
+      Math.round(document.querySelector(sel)!.getBoundingClientRect().height),
+    ),
+  )
+  for (const h of heights) expect(h, 'sign-in field or submit under 48px').toBeGreaterThanOrEqual(48)
+
+  const tiny = await undersizedTouchTargets(page)
+  expect(tiny, `/challenge controls under 44px:\n${JSON.stringify(tiny, null, 2)}`).toEqual([])
 })

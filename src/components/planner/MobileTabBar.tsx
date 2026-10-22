@@ -70,7 +70,11 @@ const TABS: { id: MobileTab; label: string; icon: React.ReactNode }[] = [
 ]
 
 const itemClass =
-  'touch-target flex flex-1 flex-col items-center justify-center gap-1 py-2 text-[10px] transition-colors short:py-1'
+  'touch-target flex flex-1 flex-col items-center justify-center gap-[5px] py-2 text-[11px] transition-colors short:py-1'
+
+// Artboard: active cyan 700, resting #7d8a8f 600.
+const ACTIVE = 'font-bold text-share-primary'
+const INACTIVE = 'font-semibold text-share-onSurfaceDim hover:text-share-onSurface'
 
 export function MobileTabBar({ activeTab, onTabChange, reviewActive }: MobileTabBarProps) {
   return (
@@ -80,7 +84,13 @@ export function MobileTabBar({ activeTab, onTabChange, reviewActive }: MobileTab
     // sidebar's account menu.
     <div
       data-testid="mobile-tab-bar"
-      className="fixed bottom-0 left-0 right-0 z-[60] border-t border-share-outlineVariant/30 bg-share-bg/95 pb-safe-nav backdrop-blur-sm md:left-[240px] lg:hidden"
+      className="fixed bottom-0 left-0 right-0 z-[60] border-t border-share-hairline bg-share-barBg pb-safe-nav md:left-[240px] lg:hidden"
+      // A fixed bar cannot inherit the shell's px-safe, so it clears a
+      // landscape notch itself.
+      style={{
+        paddingLeft: 'env(safe-area-inset-left)',
+        paddingRight: 'env(safe-area-inset-right)',
+      }}
     >
       <div className="flex">
         {TABS.map((tab) => {
@@ -93,8 +103,8 @@ export function MobileTabBar({ activeTab, onTabChange, reviewActive }: MobileTab
               aria-current={isActive ? 'page' : undefined}
               className={`${itemClass} ${
                 isActive
-                  ? 'font-bold text-share-primary'
-                  : 'font-medium text-share-onSurfaceVariant/60 hover:text-share-onSurface'
+                  ? ACTIVE
+                  : INACTIVE
               }`}
             >
               {tab.icon}
@@ -107,8 +117,8 @@ export function MobileTabBar({ activeTab, onTabChange, reviewActive }: MobileTab
           aria-current={reviewActive ? 'page' : undefined}
           className={`${itemClass} ${
             reviewActive
-              ? 'font-bold text-share-primary'
-              : 'font-medium text-share-onSurfaceVariant/60 hover:text-share-onSurface'
+              ? ACTIVE
+              : INACTIVE
           }`}
         >
           <svg {...ICON_PROPS} strokeLinecap="round">

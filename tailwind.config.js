@@ -38,6 +38,12 @@ export default {
           outlineVariant: '#3d494d',
           secondary: '#a1cddd',
           tertiary: '#ffb77d',
+          /** Artboard hairlines, tracks and chip fills (docs/design/mobile). */
+          hairline: '#23262a',
+          /** Tertiary text: resting tab labels, quiet meta. */
+          onSurfaceDim: '#7d8a8f',
+          /** Ground of the fixed phone tab bar. */
+          barBg: '#131518',
         },
       },
       fontFamily: {
