@@ -1,7 +1,8 @@
 /**
  * components/planner/AddTaskInput.tsx
  *
- * Compact input used to add a new task within a section.
+ * The add field under a list: 48px tall, so it is a thumb-sized target, and
+ * 16px text on phones, so focusing it never zooms iOS.
  */
 
 import { useState } from 'react'
@@ -30,7 +31,7 @@ export function AddTaskInput({ placeholder, onAdd }: AddTaskInputProps) {
         value={value}
         onChange={(event) => setValue(event.target.value)}
         placeholder={placeholder ?? 'Add task'}
-        className="w-full rounded-md border border-share-outlineVariant/40 bg-share-surfaceContainer px-3 py-1.5 text-base sm:text-sm text-share-onBg placeholder:text-share-onSurfaceVariant/50 focus:border-share-primary focus:outline-none focus:ring-1 focus:ring-share-primary"
+        className="min-h-12 w-full rounded-xl border border-share-outlineVariant/40 bg-share-surfaceContainer px-3 py-1.5 text-base sm:text-sm text-share-onBg placeholder:text-share-onSurfaceDim focus:border-share-primary focus:outline-none focus:ring-1 focus:ring-share-primary"
       />
     </form>
   )

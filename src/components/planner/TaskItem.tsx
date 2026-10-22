@@ -4,16 +4,27 @@
  * Single task row with checkbox, optional drag handle for reorder.
  * Right-click on grip opens context menu: Edit, Add task below, Add subtask, Delete.
  * Delete is only via this menu (no ✕ button) to avoid accidental removal.
+ *
+ * Two anatomies, chosen by the primary pointer rather than the width:
+ *  - a finger (`useCoarsePointer`): checkbox, title, one chip, ⋮. The ⋮ opens
+ *    `TaskActionSheet`, which holds every other action, and the progress row is
+ *    one button under the title that opens the progress sheet. Nothing depends
+ *    on hover, right-click, double-tap or drag, none of which a phone has.
+ *  - a cursor: the desktop row, unchanged: grip, popup menu, inline duration
+ *    picker, progress chips, drag-and-drop.
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { DeepWorkSession, Task, TaskPatch } from '../../domain/types'
-import { computeTaskProgress } from '../../domain/taskProgress'
+import { computeTaskProgress, formatMinutes } from '../../domain/taskProgress'
 import { ArrowUp, ArrowDown, MoreVertical } from 'lucide-react'
-import { TaskProgressBoxes } from './TaskProgressBoxes'
+import { TaskProgressBar, TaskProgressBoxes } from './TaskProgressBoxes'
 import { TaskDurationPicker } from './TaskDurationPicker'
 import { ScheduleChip } from './ScheduleChip'
+import { TaskActionSheet } from './TaskActionSheet'
+import { TouchCheckbox } from './TouchCheckbox'
 import { useFocusBlocks } from './focusBlockContext'
+import { useCoarsePointer } from '../../hooks/useCoarsePointer'
 
 interface TaskItemProps {
   task: Task
@@ -99,6 +110,8 @@ export function TaskItem({
   partnerVisible = false,
 }: TaskItemProps) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
+  const [sheetOpen, setSheetOpen] = useState(false)
+  const isCoarse = useCoarsePointer()
   const [isEditing, setIsEditing] = useState(false)
   const [draftTitle, setDraftTitle] = useState(task.title)
   const gripRef = useRef<HTMLDivElement | null>(null)
@@ -256,11 +269,145 @@ export function TaskItem({
     fn?.()
   }
 
+  const badgeSize = isCoarse ? 'text-[11px]' : 'text-[10px]'
+  const badges = (
+    <>
+      {task.isShallow && (
+        <span className={`ml-0.5 shrink-0 rounded border border-share-tertiary/40 bg-share-tertiary/10 px-1 py-0.5 ${badgeSize} text-share-tertiary`}>
+          shallow
+        </span>
+      )}
+      {task.isPrivate && partnerVisible && (
+        <span
+          className={`ml-0.5 shrink-0 rounded border border-share-outlineVariant/50 bg-share-surfaceContainerHigh px-1 py-0.5 ${badgeSize} text-share-onSurfaceVariant`}
+          title="Hidden from your challenge partner (counted, never titled)"
+        >
+          private
+        </span>
+      )}
+    </>
+  )
+
+  const editInput = (
+    <input
+      ref={editInputRef}
+      type="text"
+      value={draftTitle}
+      onChange={(e) => setDraftTitle(e.target.value)}
+      onBlur={commitEditing}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault()
+          commitEditing()
+        } else if (e.key === 'Escape') {
+          e.preventDefault()
+          cancelEditing()
+        }
+      }}
+      onClick={(e) => e.preventDefault()}
+      className="min-w-0 flex-1 rounded border border-share-outlineVariant/40 bg-share-surfaceContainer px-1.5 py-0.5 text-sm text-share-onSurface focus:border-share-primary focus:outline-none focus:ring-1 focus:ring-share-primary"
+      aria-label="Edit task title"
+    />
+  )
+
+  // ── Phone: checkbox, title, one chip, ⋮ ─────────────────────────────────
+  if (isCoarse) {
+    const chipText = task.scheduledAt ?? (task.durationMinutes ? formatMinutes(task.durationMinutes) : null)
+    const chipOpensSchedule = Boolean(onSchedule) && !isSubtask && !task.isDone
+    const chipPill = chipText ? (
+      <span
+        className={`inline-flex h-8 items-center rounded-lg bg-share-hairline px-2 text-xs tabular-nums ${
+          task.scheduledAt ? 'text-share-primary' : 'text-share-onSurfaceVariant'
+        }`}
+      >
+        {chipText}
+      </span>
+    ) : null
+    const titleTone = task.isDone
+      ? 'text-share-onSurfaceDim line-through decoration-share-outlineVariant/60'
+      : 'text-share-onSurface'
+
+    return (
+      <div data-task-id={task.id} className={isSubtask ? 'ml-6 border-l-2 border-share-hairline pl-1' : ''}>
+        <div className="group flex items-center gap-1">
+          <TouchCheckbox checked={task.isDone} onChange={onToggle} label={task.title} />
+          <div className="flex min-w-0 flex-1 flex-col justify-center py-1.5">
+            {isEditing ? (
+              editInput
+            ) : isUrl ? (
+              <a
+                href={trimmedTitle}
+                target="_blank"
+                rel="noreferrer"
+                className={`line-clamp-2 flex min-h-11 items-center break-all text-[15px] leading-snug underline decoration-share-primary/60 underline-offset-2 ${titleTone}`}
+              >
+                {trimmedTitle}
+              </a>
+            ) : (
+              <span className={`line-clamp-2 break-words text-[15px] leading-snug ${titleTone}`}>{task.title}</span>
+            )}
+            {(task.isShallow || (task.isPrivate && partnerVisible)) && (
+              <span className="mt-0.5 flex items-center gap-1">{badges}</span>
+            )}
+          </div>
+          {chipPill &&
+            (chipOpensSchedule ? (
+              <button
+                type="button"
+                onClick={onSchedule}
+                className="touch-target inline-flex shrink-0 items-center justify-center"
+                aria-label={task.scheduledAt ? `Scheduled at ${task.scheduledAt}. Change` : `${chipText}. Schedule`}
+              >
+                {chipPill}
+              </button>
+            ) : (
+              <span className="shrink-0">{chipPill}</span>
+            ))}
+          {showContextMenu && (
+            <button
+              type="button"
+              onClick={() => setSheetOpen(true)}
+              className="touch-target flex shrink-0 items-center justify-center rounded-lg text-share-onSurfaceVariant hover:bg-share-surfaceContainerHigh"
+              aria-label="Task options"
+              aria-haspopup="dialog"
+            >
+              <MoreVertical className="h-5 w-5" />
+            </button>
+          )}
+        </div>
+        {progress && (
+          <div className="pl-11 pr-2">
+            <TaskProgressBar progress={progress} taskId={task.id} onOpen={onOpenProgressSheet} />
+          </div>
+        )}
+        {sheetOpen && (
+          <TaskActionSheet
+            task={task}
+            onClose={() => setSheetOpen(false)}
+            onEdit={onUpdateTask ? startEditing : undefined}
+            onSchedule={onSchedule && !isSubtask ? onSchedule : undefined}
+            onOpenProgress={progress ? onOpenProgressSheet : undefined}
+            showReorder={!isSubtask && (onMoveUp !== undefined || onMoveDown !== undefined)}
+            onMoveUp={onMoveUp}
+            onMoveDown={onMoveDown}
+            onAddSubtask={isSubtask ? undefined : onAddSubtask}
+            onMoveToAnotherParent={isSubtask ? onMoveToAnotherParent : undefined}
+            onUpdateTask={onUpdateTask}
+            partnerVisible={partnerVisible}
+            onAbandon={onAbandon}
+            onDelete={onDelete}
+          />
+        )}
+      </div>
+    )
+  }
+
+  // ── Desktop (fine pointer): grip, popup menu, chips, drag ────────────────
   return (
-    <div className={`relative ${isSubtask ? 'ml-6 border-l-2 border-share-outlineVariant/40 pl-2' : ''}`}>
+    <div className={`relative ${isSubtask ? 'ml-6 border-l-2 border-share-hairline pl-2' : ''}`}>
       {showDropAbove && (
         <div
-          className="absolute left-0 right-0 top-0 h-0.5 rounded-full bg-sky-500"
+          className="absolute left-0 right-0 top-0 h-0.5 rounded-full bg-share-primary"
           aria-hidden
         />
       )}
@@ -286,6 +433,8 @@ export function TaskItem({
             <GripIcon />
           </div>
         ) : null}
+        {/* Fine pointer only (this branch never renders under a finger): the
+            hover reveal below needs a cursor to work. */}
         {showContextMenu && (
           <button
             ref={menuBtnRef}
@@ -327,31 +476,13 @@ export function TaskItem({
             className="h-5 w-5 shrink-0 rounded border-share-outlineVariant/50 bg-share-surfaceContainer text-share-primary focus:ring-share-primary sm:h-4 sm:w-4"
           />
           {isEditing ? (
-            <input
-              ref={editInputRef}
-              type="text"
-              value={draftTitle}
-              onChange={(e) => setDraftTitle(e.target.value)}
-              onBlur={commitEditing}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault()
-                  commitEditing()
-                } else if (e.key === 'Escape') {
-                  e.preventDefault()
-                  cancelEditing()
-                }
-              }}
-              onClick={(e) => e.preventDefault()}
-              className="min-w-0 flex-1 rounded border border-share-outlineVariant/40 bg-share-surfaceContainer px-1.5 py-0.5 text-sm text-share-onSurface focus:border-share-primary focus:outline-none focus:ring-1 focus:ring-share-primary"
-              aria-label="Edit task title"
-            />
+            editInput
           ) : isUrl ? (
             <a
               href={trimmedTitle}
               target="_blank"
               rel="noreferrer"
-              className={`${textClasses} break-words underline decoration-sky-500/60 underline-offset-2 hover:text-sky-300`}
+              className={`${textClasses} break-words underline decoration-share-primary/60 underline-offset-2 hover:text-share-primary`}
               onClick={(event) => event.stopPropagation()}
               onDoubleClick={(event) => {
                 if (!onUpdateTask) return
@@ -370,19 +501,7 @@ export function TaskItem({
               {task.title}
             </span>
           )}
-          {task.isShallow && (
-            <span className="ml-0.5 shrink-0 rounded border border-amber-500/40 bg-amber-500/10 px-1 py-0.5 text-[10px] text-amber-400">
-              shallow
-            </span>
-          )}
-          {task.isPrivate && partnerVisible && (
-            <span
-              className="ml-0.5 shrink-0 rounded border border-share-outlineVariant/50 bg-share-surfaceContainerHigh px-1 py-0.5 text-[10px] text-share-onSurfaceVariant"
-              title="Hidden from your challenge partner (counted, never titled)"
-            >
-              private
-            </span>
-          )}
+          {badges}
         </label>
         {canEditTime && (
           <span className="flex shrink-0 items-center gap-1">
@@ -408,7 +527,7 @@ export function TaskItem({
       {menu && (
         <div
           ref={menuRef}
-          className="fixed z-50 min-w-[10rem] rounded-md border border-share-outlineVariant/50 bg-share-surfaceContainerHigh py-1 shadow-xl shadow-black/30"
+          className="fixed z-[70] min-w-[10rem] rounded-md border border-share-outlineVariant/50 bg-share-surfaceContainerHigh py-1 shadow-xl shadow-black/30"
           style={{ left: menu.x, top: menu.y }}
           role="menu"
         >
@@ -426,7 +545,7 @@ export function TaskItem({
             <button
               type="button"
               role="menuitem"
-              className="w-full px-3 py-1.5 text-left text-sm text-amber-300 hover:bg-share-surfaceContainerHighest"
+              className="w-full px-3 py-1.5 text-left text-sm text-share-tertiary hover:bg-share-surfaceContainerHighest"
               onClick={() => closeAnd(() => onUpdateTask?.({ isShallow: !task.isShallow }))}
             >
               {task.isShallow ? 'Mark as deep work' : 'Mark as shallow'}
@@ -517,7 +636,7 @@ export function TaskItem({
       )}
       {showDropBelow && (
         <div
-          className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-sky-500"
+          className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full bg-share-primary"
           aria-hidden
         />
       )}

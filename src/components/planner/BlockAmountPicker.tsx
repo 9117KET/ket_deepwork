@@ -52,8 +52,8 @@ export function BlockAmountPicker({
           const isSelected = option.blocks === value
           const tone = option.isOverflow
             ? isSelected
-              ? 'border-amber-500/60 bg-amber-500/15 text-amber-200'
-              : 'border-amber-500/30 text-amber-300/70 hover:text-amber-200'
+              ? 'border-share-tertiary/60 bg-share-tertiary/15 text-share-tertiary'
+              : 'border-share-tertiary/30 text-share-tertiary/70 hover:text-share-tertiary'
             : isSelected
               ? 'border-share-primary/60 bg-share-primary/15 text-share-primary'
               : 'border-share-outlineVariant/40 text-share-onSurfaceVariant hover:border-share-primary/40 hover:text-share-onSurface'

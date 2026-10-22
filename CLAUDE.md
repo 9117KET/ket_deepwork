@@ -354,8 +354,10 @@ Features built around the *Deep Work* philosophy:
    logged past the estimate. Timer
    minutes always fill from the left, so earned work is one contiguous run and can
    never be confused with self-reported time. Only manual minutes can be undone.
-   On phones the row is one button opening `TaskProgressSheet`, which offers the
-   timer first and hand-logging second. Rendered by `TaskItem` (via
+   On a coarse pointer the row is one full-width button under the title
+   (`TaskProgressBar`: an 8px bar with a segment per block and a "1h15 / 1h30"
+   caption) opening `TaskProgressSheet`, which offers the timer first and
+   hand-logging second. Rendered by `TaskItem` (via
    `SectionColumn`) and `MustDoPinnedHeader`.
 
 7. **Time comes from the calendar** — a task's time is set by scheduling it into

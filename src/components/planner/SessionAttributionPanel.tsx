@@ -81,7 +81,7 @@ export function SessionAttributionPanel({
                 aria-label={`Move ${formatMinutes(session.durationMinutes)} to another task`}
                 value={session.taskId ?? ''}
                 onChange={(event) => onReattribute(session.id, event.target.value || undefined)}
-                className="min-h-[36px] min-w-0 max-w-[60%] flex-1 rounded-md border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-2 py-1 text-xs text-share-onBg focus:border-share-primary focus:outline-none"
+                className="min-h-[36px] min-w-0 max-w-[60%] flex-1 rounded-md touch:min-h-11 border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-2 py-1 text-xs text-share-onBg focus:border-share-primary focus:outline-none"
               >
                 {targets.map((target) => (
                   <option key={target.id} value={target.id}>
@@ -92,7 +92,7 @@ export function SessionAttributionPanel({
               </select>
             </div>
           ))}
-          <p className="text-[11px] text-share-onSurfaceVariant/60">
+          <p className="text-[11px] text-share-onSurfaceVariant">
             Moving a block keeps its minutes exactly as they were recorded.
           </p>
         </div>

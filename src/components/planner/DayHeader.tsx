@@ -50,11 +50,11 @@ export function DayHeader({
   return (
     <div className="flex items-start justify-between gap-3">
       <div className="min-w-0">
-        <h2 className="truncate text-xl font-semibold tracking-tight sm:text-2xl">{dateLabel}</h2>
+        <h2 className="page-title truncate">{dateLabel}</h2>
         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-share-onSurfaceVariant">
           {streak != null && streak > 0 && (
             <span className="flex items-center gap-1" title="Consecutive active days">
-              <Flame className="h-3.5 w-3.5 shrink-0 text-amber-400" />
+              <Flame className="h-3.5 w-3.5 shrink-0 text-share-tertiary" />
               <span className="font-medium text-share-onBg">{streak}</span>
               day streak
             </span>
@@ -75,7 +75,11 @@ export function DayHeader({
             </span>
           )}
           {challengeDayLabel && (
-            <Link to="/challenge" className="flex items-center gap-1 hover:text-share-primary" title="Accountability challenge">
+            <Link
+              to="/challenge"
+              className="flex items-center gap-1 text-xs hover:text-share-primary touch:-my-[14px] touch:py-[14px]"
+              title="Accountability challenge"
+            >
               <Flag className="h-3.5 w-3.5 shrink-0 text-share-primary" />
               <span className="font-medium text-share-onBg">{challengeDayLabel}</span>
             </Link>
@@ -83,7 +87,7 @@ export function DayHeader({
         </div>
       </div>
 
-      <div className="flex shrink-0 items-center gap-0.5 rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainer p-0.5">
+      <div className="flex shrink-0 items-center gap-0.5 rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainer p-0.5 touch:border-0 touch:bg-transparent touch:p-0">
         <button type="button" onClick={onPrevDay} aria-label="Previous day" className={navButton}>
           <ChevronLeft className="h-4 w-4" />
         </button>
