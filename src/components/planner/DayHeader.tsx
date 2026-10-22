@@ -9,7 +9,8 @@
  * height before the first task, and none of it changed what you do next.
  */
 
-import { Flame, Timer, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Flame, Timer, Flag, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Link } from 'react-router-dom'
 
 interface DayHeaderProps {
   dateLabel: string
@@ -21,6 +22,8 @@ interface DayHeaderProps {
   onNextDay: () => void
   onToday: () => void
   deepWorkMinutesToday?: number
+  /** "Day 22/92 · 70 left" while an accountability challenge is running. */
+  challengeDayLabel?: string
 }
 
 function formatMinutes(minutes: number): string {
@@ -39,6 +42,7 @@ export function DayHeader({
   onNextDay,
   onToday,
   deepWorkMinutesToday,
+  challengeDayLabel,
 }: DayHeaderProps) {
   const navButton =
     'touch-target flex items-center justify-center rounded-md text-share-onSurface transition-colors hover:bg-share-surfaceContainerHigh hover:text-share-primary'
@@ -69,6 +73,12 @@ export function DayHeader({
               </span>{' '}
               done
             </span>
+          )}
+          {challengeDayLabel && (
+            <Link to="/challenge" className="flex items-center gap-1 hover:text-share-primary" title="Accountability challenge">
+              <Flag className="h-3.5 w-3.5 shrink-0 text-share-primary" />
+              <span className="font-medium text-share-onBg">{challengeDayLabel}</span>
+            </Link>
           )}
         </div>
       </div>

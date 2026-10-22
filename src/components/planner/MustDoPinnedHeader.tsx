@@ -11,9 +11,9 @@
  */
 
 import { useState } from 'react'
-import type { DeepWorkSession, Task } from '../../domain/types'
+import type { DeepWorkSession, Task, TaskPatch } from '../../domain/types'
 import { computeTaskProgress } from '../../domain/taskProgress'
-import { ArrowDown, ArrowUp, CheckCircle2, ChevronUp, ChevronDown, GripVertical, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, CheckCircle2, ChevronUp, ChevronDown, Eye, EyeOff, GripVertical, X } from 'lucide-react'
 import { TaskProgressBoxes } from './TaskProgressBoxes'
 import { TaskDurationPicker } from './TaskDurationPicker'
 import { ScheduleChip } from './ScheduleChip'
@@ -30,7 +30,9 @@ interface MustDoPinnedHeaderProps {
   onToggle: (taskId: string) => void
   onAdd: (title: string) => void
   onDelete: (taskId: string) => void
-  onUpdate: (taskId: string, patch: { scheduledAt?: string; durationMinutes?: number; title?: string }) => void
+  onUpdate: (taskId: string, patch: TaskPatch) => void
+  /** An accountability challenge is running: offer "hide from partner" on each MUST. */
+  partnerVisible?: boolean
   /** Reorder: the three are ranked, so first really means first. */
   onDragStart?: (taskId: string) => void
   onDragEnd?: () => void
@@ -63,6 +65,7 @@ export function MustDoPinnedHeader({
   onMoveDown,
   draggedTaskId,
   onSchedule,
+  partnerVisible = false,
 }: MustDoPinnedHeaderProps) {
   const { blockMinutes } = useFocusBlocks()
 
@@ -371,6 +374,21 @@ export function MustDoPinnedHeader({
               />
             </span>
             {renderProgress(task)}
+            {partnerVisible && (
+              <button
+                type="button"
+                onClick={() => onUpdate(task.id, { isPrivate: !task.isPrivate })}
+                className={`shrink-0 rounded p-0.5 transition-colors ${
+                  task.isPrivate
+                    ? 'text-share-onSurfaceVariant hover:text-share-onSurface'
+                    : 'text-transparent group-hover:text-share-onSurfaceVariant/50 hover:!text-share-onSurface'
+                }`}
+                aria-label={task.isPrivate ? 'Show to partner' : 'Hide from partner'}
+                title={task.isPrivate ? 'Hidden from your challenge partner — show it' : 'Hide from your challenge partner (counted, never titled)'}
+              >
+                {task.isPrivate ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+              </button>
+            )}
             <button
               type="button"
               onClick={() => onDelete(task.id)}

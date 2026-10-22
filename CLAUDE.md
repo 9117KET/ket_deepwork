@@ -52,6 +52,8 @@ In the Convex dashboard (Project Settings -> Environment Variables) set:
 - `GOOGLE_CLIENT_SECRET`
 - `GOOGLE_TOKEN_ENCRYPTION_KEY_B64` (32-byte AES key, base64)
 - `SITE_URL` (your deployed URL, e.g. `https://ket-deepwork.vercel.app`)
+- `GMAIL_SMTP_USER` / `GMAIL_SMTP_APP_PASSWORD` (challenge reminder emails; see
+  `docs/DEPLOYMENT.md` step 3)
 
 ## Architecture
 
@@ -175,6 +177,62 @@ hydrating** (`isHydrating`), because a half-loaded day is not the day. The
 Tasks scope was added after the first connections, so `connectionStatus.tasksEnabled`
 is false until the user reconnects; `/calendar` and Today both say so.
 
+### Accountability challenge
+
+Two people, one season (e.g. 1 Oct → 31 Dec), goals, "don'ts", and two
+explicit acts a day: **Lock in today's plan** before a morning deadline and
+**Check in** before midnight. It replaces a WhatsApp thread; WhatsApp stays
+the ping (the Share button hands a prefilled line to the Web Share sheet, or
+copies it), the app is the record.
+
+**The planner stays private.** The partner never reads `plannerDays`. What
+they see is the `summary` the member's own client publishes into
+`challengeDays` — Top 3 titles with done state, done/total for the rest, a
+count of private tasks, earned deep-work minutes, habits done/total — built by
+`buildChallengeSummary` in `src/domain/challenge.ts` and sent by
+`useChallengeSync` (the `useTaskSync` shape: 1.2s debounce, foreground
+refresh, off while hydrating). `Task.isPrivate` keeps a task out of the
+summary: counted, never titled, still mirrored to the user's own Google Tasks.
+Every function in `convex/challenges.ts` derives the caller from the identity
+and checks membership; the partner view (`dayView`) never carries reminder
+bookkeeping or a `userId`.
+
+**Tables** (`convex/schema.ts`, validators shared via
+`convex/_shared/challengeValidators.ts` so arg and table cannot drift):
+`challenges` (span, goals, donts, local deadlines, `status` — the cron's one
+switch), `challengeMembers` (one per user, with an IANA `timezone` refreshed
+on every sync, because the two are in different zones), `challengeInvites`
+(7-day token, one seat), `challengeDays` (one row per member per day:
+summary, `planSetAt`, `checkinAt`, note, `dontsBroken`, `remindersSent`).
+Legacy `shareTokens` is untouched. A user is in at most one active challenge.
+
+**Reads are split hot/cold here too.** `myChallenge` and `dayCards` are small
+and live; `history` returns the whole season and callers pass
+`toDate = yesterday`, so today's debounced writes never invalidate it.
+
+**Reminders are email from the user's own Gmail** (`convex/email.ts`, a
+`"use node"` nodemailer action; swap to Resend in `send()` once a domain
+exists). `convex/crons.ts` runs `reminders.sweep` every 15 minutes:
+`challengesInternal.claimDueReminders` decides *and records* in one
+transaction (a failed send costs one email, never doubles one), then the
+action sends. The rules are pure in `convex/_shared/challengeReminders.ts`:
+after the plan deadline every 120 min, four at most; from 21:30 local every
+90 min for the check-in, two at most; each judged on the member's own clock.
+`nudgePartner` schedules one email a day from inside the mutation.
+
+**Routes and entry points:** `/challenge` (create / join / dashboard with the
+countdown, both members' cards, the season grid, invite link),
+`/challenge/join?invite=TOKEN` (`?invite=`, not `?code=`, which Convex Auth
+intercepts; the token survives sign-up in sessionStorage). On Today:
+`ChallengeCard` under the header, a "Day 22/92 · 70 left" pill in
+`DayHeader`, and "Hide from partner" in the task menu. Review gets a
+challenge section. The mobile tab bar is unchanged. Guests cannot take part.
+
+**Tests:** `npm test` covers `src/domain/challenge.test.ts`;
+`npm run test:convex` covers `convex/challenges.test.ts`,
+`convex/reminders.test.ts` (mocked nodemailer) and the reminder rules. A
+two-account flow cannot run in e2e (guest-only seeding).
+
 ### Responsive foundations
 
 Mobile-first, and "mobile" means the whole spread — 280px Fold cover screens up
@@ -209,8 +267,9 @@ Utilities live in `src/index.css` under `@layer utilities`; breakpoints in
 `main.tsx` wraps the app in `<BrowserRouter>` + `<AuthProvider>`. `App.tsx` routes:
 `/` (the planner — there is no landing page), `/review` (this week's worked
 time + habits), `/calendar`, `/calendar/callback`, `/privacy` (needed for the
-Google OAuth consent screen) and `/restore`. `/planner`, `/planner/review` and
-any unknown path redirect, so old bookmarks still land.
+Google OAuth consent screen), `/restore`, `/challenge` and `/challenge/join`.
+`/planner`, `/planner/review` and any unknown path redirect, so old bookmarks
+still land.
 
 The landing page, travel, finance, sharing, goals/reviews, journal, shutdown
 ritual, side quests and onboarding tour were removed in the minimal rewrite.
@@ -230,9 +289,11 @@ stored data gets dropped, and that only happens after the export in
 | `src/components/planner/` | Today: header, calendar timeline, Top 3, task list, schedule sheet |
 | `src/components/timer/` | Deep work timer, phone Focus panel, desktop Focus mode |
 | `src/components/habits/` | Habit checklist, phone Habits panel, habit editor |
-| `src/hooks/` | `useTaskHandlers`, `useCalendarDay`, `useWorkLog`, undo |
+| `src/components/challenge/` | Challenge card on Today, check-in sheet, create/join, dashboard, season grid |
+| `src/hooks/` | `useTaskHandlers`, `useCalendarDay`, `useWorkLog`, `useChallenge`, `useChallengeSync`, undo |
 | `src/pages/` | Route-level page components |
 | `src/services/calendarSyncService.ts` | Client wrappers for the Convex calendar actions |
+| `src/services/challengeService.ts` | Client wrappers for the challenge functions, device timezone, Web Share |
 
 ### Google Calendar (Convex)
 

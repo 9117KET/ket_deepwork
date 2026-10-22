@@ -1,0 +1,508 @@
+/**
+ * convex/challenges.ts — the two-person accountability challenge.
+ *
+ * Two people agree on a span of days, a few goals and a few "don'ts", and
+ * then each day has two explicit acts: lock in the plan (before a morning
+ * deadline) and check in (before midnight). The planner itself stays private.
+ * What a partner sees is the `summary` each member's own client publishes —
+ * Top 3 titles, counts, earned minutes, habits — never a `plannerDays` row.
+ * A task marked private is counted in that summary, never titled.
+ *
+ * Membership is checked on every read and write, and every function derives
+ * the caller from the identity, never from an argument. The partner's
+ * `userId` is never returned to the client; the member view is a display
+ * name and a timezone.
+ */
+
+import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server"
+import { internal } from "./_generated/api"
+import { v } from "convex/values"
+import type { Doc, Id } from "./_generated/dataModel"
+import { getUserId } from "./_shared/auth"
+import { HHMM, ISO_DATE, emptySummary, summaryValidator, type ChallengeSummary } from "./_shared/challengeValidators"
+import { isValidTimezone, localDateAndMinutes, CHECKIN_START, hhmmToMinutes } from "./_shared/challengeReminders"
+
+type Ctx = QueryCtx | MutationCtx
+
+const MAX_MEMBERS = 2
+const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000
+const MAX_NAME = 80
+const MAX_LIST = 10
+const MAX_ITEM = 200
+const MAX_DISPLAY_NAME = 40
+const MAX_NOTE = 1000
+/** A challenge is a season, not a lifetime: 200 rows per member is five times the one being run. */
+const HISTORY_CAP = 200
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+async function requireUser(ctx: Ctx): Promise<string> {
+  const identity = await ctx.auth.getUserIdentity()
+  if (!identity) throw new Error("Not authenticated")
+  return getUserId(identity.subject)
+}
+
+interface Membership {
+  challenge: Doc<"challenges">
+  me: Doc<"challengeMembers">
+}
+
+/** A person has at most a handful of memberships ever; the newest active one wins. */
+async function activeMembership(ctx: Ctx, userId: string): Promise<Membership | null> {
+  const rows = await ctx.db
+    .query("challengeMembers")
+    .withIndex("by_user", (q) => q.eq("userId", userId))
+    .order("desc")
+    .take(5)
+  for (const me of rows) {
+    const challenge = await ctx.db.get(me.challengeId)
+    if (challenge && challenge.status === "active") return { challenge, me }
+  }
+  return null
+}
+
+async function requireMembership(ctx: Ctx, userId: string): Promise<Membership> {
+  const membership = await activeMembership(ctx, userId)
+  if (!membership) throw new Error("You are not in a challenge")
+  return membership
+}
+
+async function membersOf(ctx: Ctx, challengeId: Id<"challenges">): Promise<Doc<"challengeMembers">[]> {
+  return await ctx.db
+    .query("challengeMembers")
+    .withIndex("by_challenge", (q) => q.eq("challengeId", challengeId))
+    .take(MAX_MEMBERS + 1)
+}
+
+async function partnerOf(ctx: Ctx, challengeId: Id<"challenges">, userId: string) {
+  const members = await membersOf(ctx, challengeId)
+  return members.find((m) => m.userId !== userId) ?? null
+}
+
+async function getDayRow(ctx: Ctx, challengeId: Id<"challenges">, userId: string, date: string) {
+  return await ctx.db
+    .query("challengeDays")
+    .withIndex("by_challenge_user_date", (q) => q.eq("challengeId", challengeId).eq("userId", userId).eq("date", date))
+    .unique()
+}
+
+/** The newest invite that is still open, if any. */
+async function openInvite(ctx: Ctx, challengeId: Id<"challenges">, now: number) {
+  const invites = await ctx.db
+    .query("challengeInvites")
+    .withIndex("by_challenge", (q) => q.eq("challengeId", challengeId))
+    .order("desc")
+    .take(10)
+  return invites.find((i) => !i.acceptedBy && i.expiresAt > now) ?? null
+}
+
+function challengeView(c: Doc<"challenges">) {
+  return {
+    id: c._id,
+    name: c.name,
+    startDate: c.startDate,
+    endDate: c.endDate,
+    goals: c.goals,
+    donts: c.donts,
+    planDeadline: c.planDeadline,
+    checkinDeadline: c.checkinDeadline,
+    createdAt: c.createdAt,
+    status: c.status,
+  }
+}
+
+function memberView(m: Doc<"challengeMembers">) {
+  return { displayName: m.displayName, timezone: m.timezone, joinedAt: m.joinedAt }
+}
+
+/** What the partner may see of a day. Reminder bookkeeping stays out. */
+function dayView(row: Doc<"challengeDays">) {
+  return {
+    date: row.date,
+    summary: row.summary,
+    summaryUpdatedAt: row.summaryUpdatedAt,
+    planSetAt: row.planSetAt ?? null,
+    checkinAt: row.checkinAt ?? null,
+    note: row.note ?? null,
+    dontsBroken: row.dontsBroken,
+  }
+}
+export type ChallengeDayView = ReturnType<typeof dayView>
+
+function assertIsoDate(value: string, label: string): void {
+  if (!ISO_DATE.test(value)) throw new Error(`${label} must be YYYY-MM-DD`)
+}
+
+function assertHhmm(value: string, label: string): void {
+  if (!HHMM.test(value)) throw new Error(`${label} must be HH:MM`)
+}
+
+function inRange(challenge: Doc<"challenges">, date: string): boolean {
+  return date >= challenge.startDate && date <= challenge.endDate
+}
+
+function cleanList(items: string[], label: string): string[] {
+  if (items.length > MAX_LIST) throw new Error(`At most ${MAX_LIST} ${label}`)
+  const cleaned = items.map((s) => s.trim()).filter((s) => s.length > 0)
+  for (const item of cleaned) {
+    if (item.length > MAX_ITEM) throw new Error(`Each of the ${label} must be ${MAX_ITEM} characters or fewer`)
+  }
+  return cleaned
+}
+
+function cleanDisplayName(name: string): string {
+  const trimmed = name.trim()
+  if (!trimmed) throw new Error("A display name is required")
+  if (trimmed.length > MAX_DISPLAY_NAME) throw new Error(`Display name must be ${MAX_DISPLAY_NAME} characters or fewer`)
+  return trimmed
+}
+
+function cleanTimezone(timezone: string): string {
+  if (!isValidTimezone(timezone)) throw new Error("Unknown timezone")
+  return timezone
+}
+
+async function upsertDay(
+  ctx: MutationCtx,
+  challengeId: Id<"challenges">,
+  userId: string,
+  date: string,
+  summary: ChallengeSummary,
+  extra: Partial<Pick<Doc<"challengeDays">, "planSetAt" | "checkinAt" | "note" | "dontsBroken">> = {},
+): Promise<Doc<"challengeDays">> {
+  const now = Date.now()
+  const existing = await getDayRow(ctx, challengeId, userId, date)
+  if (existing) {
+    await ctx.db.patch(existing._id, { summary, summaryUpdatedAt: now, ...extra })
+    return (await ctx.db.get(existing._id))!
+  }
+  const id = await ctx.db.insert("challengeDays", {
+    challengeId,
+    userId,
+    date,
+    summary,
+    summaryUpdatedAt: now,
+    dontsBroken: [],
+    remindersSent: { plan: 0, checkin: 0 },
+    ...extra,
+  })
+  return (await ctx.db.get(id))!
+}
+
+// ─── Reads ────────────────────────────────────────────────────────────────────
+
+/** The caller's active challenge, or null. */
+export const myChallenge = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) return null
+    const userId = getUserId(identity.subject)
+    const membership = await activeMembership(ctx, userId)
+    if (!membership) return null
+    const { challenge, me } = membership
+    const partner = await partnerOf(ctx, challenge._id, userId)
+    const invite = partner ? null : await openInvite(ctx, challenge._id, Date.now())
+    return {
+      challenge: challengeView(challenge),
+      me: memberView(me),
+      partner: partner ? memberView(partner) : null,
+      invite: invite ? { token: invite.token, expiresAt: invite.expiresAt } : null,
+    }
+  },
+})
+
+/**
+ * Today for both members. Each lives on their own local date, so the client
+ * passes both; a query cannot watch a wall clock.
+ */
+export const dayCards = query({
+  args: { myDate: v.string(), partnerDate: v.string() },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) return null
+    const userId = getUserId(identity.subject)
+    const membership = await activeMembership(ctx, userId)
+    if (!membership) return null
+    assertIsoDate(args.myDate, "myDate")
+    assertIsoDate(args.partnerDate, "partnerDate")
+    const { challenge } = membership
+    const mine = await getDayRow(ctx, challenge._id, userId, args.myDate)
+    const partner = await partnerOf(ctx, challenge._id, userId)
+    const partnerRow = partner ? await getDayRow(ctx, challenge._id, partner.userId, args.partnerDate) : null
+    return {
+      mine: mine ?? null,
+      partner: partnerRow ? dayView(partnerRow) : null,
+    }
+  },
+})
+
+/**
+ * Every day from the start up to `toDate`, for both members. Callers pass
+ * yesterday, not today: today's row is rewritten on every planner edit, and
+ * keeping it out of this read set is what stops each keystroke from
+ * re-reading a whole season (the same hot/cold rule as `plannerDays`).
+ */
+export const history = query({
+  args: { toDate: v.string() },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) return null
+    const userId = getUserId(identity.subject)
+    const membership = await activeMembership(ctx, userId)
+    if (!membership) return null
+    assertIsoDate(args.toDate, "toDate")
+    const { challenge } = membership
+    const partner = await partnerOf(ctx, challenge._id, userId)
+    const rowsFor = async (memberId: string) =>
+      (
+        await ctx.db
+          .query("challengeDays")
+          .withIndex("by_challenge_user_date", (q) =>
+            q.eq("challengeId", challenge._id).eq("userId", memberId).gte("date", challenge.startDate).lte("date", args.toDate),
+          )
+          .take(HISTORY_CAP)
+      ).map(dayView)
+    return {
+      mine: await rowsFor(userId),
+      partner: partner ? await rowsFor(partner.userId) : [],
+    }
+  },
+})
+
+/** What an invite link opens onto. No auth: the visitor may not have an account yet. */
+export const invitePreview = query({
+  args: { token: v.string() },
+  handler: async (ctx, args) => {
+    const none = { challenge: null, inviterName: null }
+    const invite = await ctx.db
+      .query("challengeInvites")
+      .withIndex("by_token", (q) => q.eq("token", args.token))
+      .unique()
+    if (!invite) return { status: "notFound" as const, ...none }
+    const challenge = await ctx.db.get(invite.challengeId)
+    if (!challenge || challenge.status !== "active") return { status: "ended" as const, ...none }
+    const preview = { name: challenge.name, startDate: challenge.startDate, endDate: challenge.endDate }
+    if (invite.acceptedBy) return { status: "used" as const, challenge: preview, inviterName: null }
+    if (invite.expiresAt <= Date.now()) return { status: "expired" as const, challenge: preview, inviterName: null }
+    const members = await membersOf(ctx, challenge._id)
+    const inviterName = members.find((m) => m.userId === invite.createdBy)?.displayName ?? null
+    if (members.length >= MAX_MEMBERS) return { status: "full" as const, challenge: preview, inviterName }
+    return { status: "ok" as const, challenge: preview, inviterName }
+  },
+})
+
+// ─── Setup ────────────────────────────────────────────────────────────────────
+
+export const createChallenge = mutation({
+  args: {
+    name: v.string(),
+    startDate: v.string(),
+    endDate: v.string(),
+    goals: v.array(v.string()),
+    donts: v.array(v.string()),
+    planDeadline: v.string(),
+    checkinDeadline: v.string(),
+    timezone: v.string(),
+    displayName: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const userId = await requireUser(ctx)
+    if (await activeMembership(ctx, userId)) throw new Error("You are already in a challenge")
+    const name = args.name.trim()
+    if (!name) throw new Error("A name is required")
+    if (name.length > MAX_NAME) throw new Error(`Name must be ${MAX_NAME} characters or fewer`)
+    assertIsoDate(args.startDate, "startDate")
+    assertIsoDate(args.endDate, "endDate")
+    if (args.startDate > args.endDate) throw new Error("The challenge must end on or after it starts")
+    assertHhmm(args.planDeadline, "planDeadline")
+    assertHhmm(args.checkinDeadline, "checkinDeadline")
+    if (hhmmToMinutes(args.planDeadline) >= hhmmToMinutes(CHECKIN_START)) {
+      throw new Error(`The plan deadline must be before ${CHECKIN_START}`)
+    }
+    const timezone = cleanTimezone(args.timezone)
+    const displayName = cleanDisplayName(args.displayName)
+    const goals = cleanList(args.goals, "goals")
+    const dontTexts = cleanList(args.donts, "don'ts")
+    const now = Date.now()
+    const donts = dontTexts.map((text, i) => ({ id: `dont-${now}-${i + 1}`, text }))
+    const challengeId = await ctx.db.insert("challenges", {
+      name,
+      startDate: args.startDate,
+      endDate: args.endDate,
+      goals,
+      donts,
+      planDeadline: args.planDeadline,
+      checkinDeadline: args.checkinDeadline,
+      createdBy: userId,
+      createdAt: now,
+      status: "active",
+    })
+    await ctx.db.insert("challengeMembers", { challengeId, userId, timezone, displayName, joinedAt: now })
+    return { challengeId }
+  },
+})
+
+/** A link to paste to the friend. One open invite at a time; asking again returns it. */
+export const createInvite = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await requireUser(ctx)
+    const { challenge } = await requireMembership(ctx, userId)
+    const members = await membersOf(ctx, challenge._id)
+    if (members.length >= MAX_MEMBERS) throw new Error("The challenge already has two members")
+    const now = Date.now()
+    const open = await openInvite(ctx, challenge._id, now)
+    if (open) return { token: open.token, expiresAt: open.expiresAt }
+    const token = crypto.randomUUID()
+    const expiresAt = now + INVITE_TTL_MS
+    await ctx.db.insert("challengeInvites", { challengeId: challenge._id, token, createdBy: userId, expiresAt })
+    return { token, expiresAt }
+  },
+})
+
+export const acceptInvite = mutation({
+  args: { token: v.string(), timezone: v.string(), displayName: v.string() },
+  handler: async (ctx, args) => {
+    const userId = await requireUser(ctx)
+    const now = Date.now()
+    const invite = await ctx.db
+      .query("challengeInvites")
+      .withIndex("by_token", (q) => q.eq("token", args.token))
+      .unique()
+    if (!invite) throw new Error("This invite link is not valid")
+    const challenge = await ctx.db.get(invite.challengeId)
+    if (!challenge || challenge.status !== "active") throw new Error("This challenge has ended")
+    const members = await membersOf(ctx, challenge._id)
+    if (members.some((m) => m.userId === userId)) return { challengeId: challenge._id }
+    if (invite.acceptedBy) throw new Error("This invite has already been used")
+    if (invite.expiresAt <= now) throw new Error("This invite has expired")
+    if (members.length >= MAX_MEMBERS) throw new Error("The challenge already has two members")
+    if (await activeMembership(ctx, userId)) throw new Error("You are already in a challenge")
+    const timezone = cleanTimezone(args.timezone)
+    const displayName = cleanDisplayName(args.displayName)
+    await ctx.db.insert("challengeMembers", { challengeId: challenge._id, userId, timezone, displayName, joinedAt: now })
+    await ctx.db.patch(invite._id, { acceptedBy: userId, acceptedAt: now })
+    return { challengeId: challenge._id }
+  },
+})
+
+export const leaveChallenge = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await requireUser(ctx)
+    const { challenge, me } = await requireMembership(ctx, userId)
+    await ctx.db.delete(me._id)
+    const remaining = await membersOf(ctx, challenge._id)
+    if (remaining.length === 0) await ctx.db.patch(challenge._id, { status: "ended" })
+    return null
+  },
+})
+
+// ─── The day ──────────────────────────────────────────────────────────────────
+
+/**
+ * The planner publishes the day's summary after every edit (debounced on the
+ * client). Outside the challenge's span it is a no-op: the planner can be
+ * open on any day, and a day before the start is nobody's business.
+ */
+export const syncDaySummary = mutation({
+  args: { date: v.string(), summary: summaryValidator, timezone: v.string() },
+  handler: async (ctx, args) => {
+    const userId = await requireUser(ctx)
+    const { challenge, me } = await requireMembership(ctx, userId)
+    assertIsoDate(args.date, "date")
+    if (!inRange(challenge, args.date)) return null
+    await upsertDay(ctx, challenge._id, userId, args.date, args.summary)
+    if (args.timezone !== me.timezone && isValidTimezone(args.timezone)) {
+      await ctx.db.patch(me._id, { timezone: args.timezone })
+    }
+    return null
+  },
+})
+
+/** The morning act. Idempotent: the first lock-in is the one that counts. */
+export const lockInPlan = mutation({
+  args: { date: v.string(), summary: summaryValidator },
+  handler: async (ctx, args) => {
+    const userId = await requireUser(ctx)
+    const { challenge } = await requireMembership(ctx, userId)
+    assertIsoDate(args.date, "date")
+    if (!inRange(challenge, args.date)) throw new Error("That day is outside the challenge")
+    const row = await upsertDay(ctx, challenge._id, userId, args.date, args.summary)
+    if (row.planSetAt) return { planSetAt: row.planSetAt }
+    const planSetAt = Date.now()
+    await ctx.db.patch(row._id, { planSetAt })
+    return { planSetAt }
+  },
+})
+
+/** The evening act. Checking in again updates the note and confession, not the time. */
+export const checkIn = mutation({
+  args: {
+    date: v.string(),
+    summary: summaryValidator,
+    note: v.optional(v.string()),
+    dontsBroken: v.array(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const userId = await requireUser(ctx)
+    const { challenge } = await requireMembership(ctx, userId)
+    assertIsoDate(args.date, "date")
+    if (!inRange(challenge, args.date)) throw new Error("That day is outside the challenge")
+    const note = args.note?.trim() ?? ""
+    if (note.length > MAX_NOTE) throw new Error(`Note must be ${MAX_NOTE} characters or fewer`)
+    const known = new Set(challenge.donts.map((d) => d.id))
+    for (const id of args.dontsBroken) {
+      if (!known.has(id)) throw new Error("Unknown don't")
+    }
+    const dontsBroken = [...new Set(args.dontsBroken)]
+    const existing = await getDayRow(ctx, challenge._id, userId, args.date)
+    const checkinAt = existing?.checkinAt ?? Date.now()
+    await upsertDay(ctx, challenge._id, userId, args.date, args.summary, {
+      checkinAt,
+      dontsBroken,
+      ...(note ? { note } : {}),
+    })
+    if (!note && existing?.note) {
+      await ctx.db.patch(existing._id, { note: undefined })
+    }
+    return { checkinAt }
+  },
+})
+
+/**
+ * One email to the partner, once a day, and only while they still owe the
+ * day something. The send is scheduled from inside the transaction, so a
+ * nudge that fails to record never goes out.
+ */
+export const nudgePartner = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await requireUser(ctx)
+    const { challenge, me } = await requireMembership(ctx, userId)
+    const partner = await partnerOf(ctx, challenge._id, userId)
+    if (!partner) throw new Error("Nobody has joined yet")
+    const now = Date.now()
+    const partnerLocal = localDateAndMinutes(now, partner.timezone)
+    const partnerRow = await getDayRow(ctx, challenge._id, partner.userId, partnerLocal.date)
+    const evening = partnerLocal.minutes >= hhmmToMinutes(CHECKIN_START)
+    const owes = evening ? !partnerRow?.checkinAt : !partnerRow?.planSetAt
+    if (!owes) throw new Error(evening ? "They have already checked in" : "They have already locked in their plan")
+    const myLocal = localDateAndMinutes(now, me.timezone)
+    const myRow = await getDayRow(ctx, challenge._id, userId, myLocal.date)
+    if (myRow?.nudgeSentAt) throw new Error("You have already nudged them today")
+    const partnerDoc = ctx.db.normalizeId("users", partner.userId)
+    const email = partnerDoc ? ((await ctx.db.get(partnerDoc))?.email ?? null) : null
+    if (!email) throw new Error("Your partner has no email address on file")
+    const mine = myRow ?? (await upsertDay(ctx, challenge._id, userId, myLocal.date, emptySummary()))
+    await ctx.db.patch(mine._id, { nudgeSentAt: now })
+    const what = evening ? "check in" : "lock in today's plan"
+    await ctx.scheduler.runAfter(0, internal.email.sendEmail, {
+      to: email,
+      subject: `${me.displayName} is nudging you to ${what} — ${challenge.name}`,
+      text: `${me.displayName} noticed you have not yet ${evening ? "checked in" : "locked in your plan"} today in "${challenge.name}".\n\nOpen Deepblock: ${process.env.SITE_URL ?? ""}/challenge\n`,
+    })
+    return null
+  },
+})

@@ -11,10 +11,17 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 
 interface LoginFormProps {
-  onContinueAsGuest: () => void
+  /** Omit it and the "Continue as guest" option is not offered (a challenge needs an account). */
+  onContinueAsGuest?: () => void
+  title?: string
+  subtitle?: string
 }
 
-export function LoginForm({ onContinueAsGuest }: LoginFormProps) {
+export function LoginForm({
+  onContinueAsGuest,
+  title = 'Life Planner',
+  subtitle = 'Sign in to sync your planner across devices, or continue as a guest.',
+}: LoginFormProps) {
   const { signIn, signUp } = useAuth()
   const [mode, setMode] = useState<'signin' | 'signup'>('signin')
   const [email, setEmail] = useState('')
@@ -60,10 +67,8 @@ export function LoginForm({ onContinueAsGuest }: LoginFormProps) {
   return (
     <div className="w-full max-w-md rounded-xl border border-share-outlineVariant/30 bg-share-surfaceContainerLow p-6 shadow-2xl shadow-black/40">
         <div className="mb-6 text-center">
-          <h1 className="font-shareHeadline text-2xl font-black tracking-tight text-share-onSurface">Life Planner</h1>
-          <p className="mt-1 text-sm text-share-onSurfaceVariant">
-            Sign in to sync your planner across devices, or continue as a guest.
-          </p>
+          <h1 className="font-shareHeadline text-2xl font-black tracking-tight text-share-onSurface">{title}</h1>
+          <p className="mt-1 text-sm text-share-onSurfaceVariant">{subtitle}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -140,13 +145,15 @@ export function LoginForm({ onContinueAsGuest }: LoginFormProps) {
           >
             {mode === 'signin' ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
           </button>
-          <button
-            type="button"
-            onClick={onContinueAsGuest}
-            className="text-left font-medium text-share-onSurfaceVariant hover:text-share-onSurface sm:text-right"
-          >
-            Continue as guest
-          </button>
+          {onContinueAsGuest && (
+            <button
+              type="button"
+              onClick={onContinueAsGuest}
+              className="text-left font-medium text-share-onSurfaceVariant hover:text-share-onSurface sm:text-right"
+            >
+              Continue as guest
+            </button>
+          )}
         </div>
     </div>
   )

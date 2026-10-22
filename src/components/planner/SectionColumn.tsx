@@ -8,7 +8,7 @@
  */
 
 import { useState, useRef, useCallback } from 'react'
-import type { DeepWorkSession, Task, TaskSection, TaskSectionId } from '../../domain/types'
+import type { DeepWorkSession, Task, TaskPatch, TaskSection, TaskSectionId } from '../../domain/types'
 import { AddTaskInput } from './AddTaskInput'
 import { TaskItem } from './TaskItem'
 import { ChevronRight, ChevronDown, AlertTriangle } from 'lucide-react'
@@ -31,10 +31,9 @@ interface SectionColumnProps {
   onAddSubtask?: (parentTaskId: string) => void
   onToggleTask: (taskId: string) => void
   onDeleteTask: (taskId: string) => void
-  onUpdateTask: (
-    taskId: string,
-    patch: { scheduledAt?: string; durationMinutes?: number; title?: string; isShallow?: boolean },
-  ) => void
+  onUpdateTask: (taskId: string, patch: TaskPatch) => void
+  /** An accountability challenge is running: offer "hide from partner" on each task. */
+  partnerVisible?: boolean
   /** Mobile reorder: move a root task up within this section. */
   onMoveTaskUp?: (taskId: string) => void
   /** Mobile reorder: move a root task down within this section. */
@@ -90,6 +89,7 @@ export function SectionColumn({
   onOpenProgressSheet,
   onScheduleTask,
   addPlaceholder = 'Add task',
+  partnerVisible = false,
 }: SectionColumnProps) {
   const [dropTarget, setDropTarget] = useState<{ index: number; position: DropPosition } | null>(
     null,
@@ -253,6 +253,7 @@ export function SectionColumn({
                 onAddTaskBelow={onAddTaskBelow ? () => onAddTaskBelow(task.id) : undefined}
                 onAddSubtask={!task.parentId && onAddSubtask ? () => onAddSubtask(task.id) : undefined}
                 onUpdateTask={(patch) => onUpdateTask(task.id, patch)}
+                partnerVisible={partnerVisible}
                 deepWorkSessions={deepWorkSessions}
                 onStartBlock={
                   onStartBlock ? (minutes) => onStartBlock(task.id, minutes) : undefined

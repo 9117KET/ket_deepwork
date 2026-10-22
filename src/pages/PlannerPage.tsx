@@ -70,6 +70,7 @@ export function PlannerPage() {
   return (
     <AppChrome
       showCalendarLink={isAuthenticated}
+      showChallengeLink={isAuthenticated}
       trailing={
         <AccountMenu
           dropUp
@@ -81,6 +82,13 @@ export function PlannerPage() {
               key: "review",
               label: "Review",
               onSelect: () => navigate("/review"),
+            },
+            {
+              kind: "action",
+              key: "challenge",
+              label: "Challenge",
+              onSelect: () => navigate("/challenge"),
+              hidden: !isAuthenticated,
             },
             {
               kind: "action",

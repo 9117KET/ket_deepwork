@@ -54,7 +54,16 @@ export interface Task {
   manualLoggedMinutes?: number;
   /** True when this task is shallow work (logistical, non-cognitively demanding). */
   isShallow?: boolean;
+  /**
+   * Kept out of the accountability challenge partner's view: counted as "a
+   * private task", never titled. Planner-only; the task still syncs to the
+   * user's own Google Tasks like any other.
+   */
+  isPrivate?: boolean;
 }
+
+/** The fields a task row lets you change in place. */
+export type TaskPatch = Partial<Pick<Task, "scheduledAt" | "durationMinutes" | "title" | "isShallow" | "isPrivate">>;
 
 /** A conscious commitment to NOT do something (Drucker's not-to-do list). */
 export interface NotDoingItem {

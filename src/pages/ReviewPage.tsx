@@ -16,6 +16,7 @@ import { useNavigate } from "react-router-dom";
 import { AppChrome } from "../components/layout/AppChrome";
 import { AccountMenu } from "../components/nav/AccountMenu";
 import { MobileTabBar } from "../components/planner/MobileTabBar";
+import { ChallengeReviewSection } from "../components/challenge/ChallengeReviewSection";
 import { useAuth } from "../contexts/AuthContext";
 import { markGuestSession } from "../storage/guestSession";
 import { addDays, todayIso, weekForDay } from "../domain/dateUtils";
@@ -106,6 +107,7 @@ export function ReviewPage() {
       userEmail={user?.email}
       items={[
         { kind: "action", key: "planner", label: "Back to today", onSelect: () => navigate("/") },
+        { kind: "action", key: "challenge", label: "Challenge", onSelect: () => navigate("/challenge"), hidden: !user },
         { kind: "separator", key: "sep-1", hidden: !user },
         {
           kind: "action",
@@ -121,7 +123,7 @@ export function ReviewPage() {
 
   if (loading || isHydrating) {
     return (
-      <AppChrome showCalendarLink={Boolean(user)} trailing={trailing}>
+      <AppChrome showCalendarLink={Boolean(user)} showChallengeLink={Boolean(user)} trailing={trailing}>
         <div className="flex min-h-[50vh] items-center justify-center text-share-onSurfaceVariant">
           <p className="text-sm">Loading your week…</p>
         </div>
@@ -130,7 +132,7 @@ export function ReviewPage() {
   }
 
   return (
-    <AppChrome showCalendarLink={Boolean(user)} trailing={trailing}>
+    <AppChrome showCalendarLink={Boolean(user)} showChallengeLink={Boolean(user)} trailing={trailing}>
       <div className="mx-auto max-w-xl px-4 py-5 pb-28 md:py-8 md:pb-10">
         {/* Week stepper */}
         <header className="flex items-center justify-between gap-2">
@@ -259,6 +261,8 @@ export function ReviewPage() {
             </ul>
           </section>
         )}
+
+        {user && <ChallengeReviewSection weekDates={weekDates} today={today} />}
       </div>
       <MobileTabBar activeTab={null} reviewActive onTabChange={(tab) => navigate(`/?tab=${tab}`)} />
     </AppChrome>
