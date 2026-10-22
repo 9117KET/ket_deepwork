@@ -50,11 +50,14 @@ const COLUMN = 'flex min-h-[calc(100dvh-7.5rem)] flex-col lg:hidden'
 
 /**
  * The idle column is shorter: below it sit `PlannerPage`'s `pb-20` and
- * `DayPlanner`'s `h-16` spacer, both clearing the tab bar, so a 7.5rem column
- * made the tab scroll about 93px of nothing. 13.5rem is the header, its top
- * padding and both clearances, measured at 390x844.
+ * `DayPlanner`'s `h-[calc(4.5rem+env(safe-area-inset-bottom))]` spacer, both
+ * clearing the tab bar, so a 7.5rem column made the tab scroll about 100px of
+ * nothing. 14rem is the header, its top padding and both clearances, measured
+ * at 390x844. On a notched phone the spacer grows by the inset, so subtract it
+ * here too.
  */
-const IDLE_COLUMN = 'flex min-h-[calc(100dvh-13.5rem)] flex-col lg:hidden'
+const IDLE_COLUMN =
+  'flex min-h-[calc(100dvh-14rem-env(safe-area-inset-bottom))] flex-col lg:hidden'
 
 export function MobileFocusPanel({
   timer,
