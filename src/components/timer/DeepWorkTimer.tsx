@@ -266,10 +266,10 @@ export function DeepWorkTimer({ timer, breakMinutes, onSetBlockLength }: DeepWor
           Keeping them is the default because they were really worked.
         */}
         {confirmStop && !isIdleOrFinished ? (
-          <div className="mt-3 rounded-md border border-amber-500/40 bg-amber-500/10 p-3">
+          <div className="mt-3 rounded-md border border-share-tertiary/40 bg-share-tertiary/10 p-3">
             <p className="text-sm text-share-onBg">
               This block has run for{' '}
-              <span className="font-semibold text-amber-200">{formatBlockMinutes(elapsedMinutes)}</span>.
+              <span className="font-semibold text-share-tertiary">{formatBlockMinutes(elapsedMinutes)}</span>.
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               <button
