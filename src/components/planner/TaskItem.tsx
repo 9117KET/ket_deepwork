@@ -331,6 +331,21 @@ export function TaskItem({
       <div data-task-id={task.id} className={isSubtask ? 'ml-6 border-l-2 border-share-hairline pl-1' : ''}>
         <div className="group flex items-center gap-1">
           <TouchCheckbox checked={task.isDone} onChange={onToggle} label={task.title} />
+          {/* Tapping the title opens the action sheet: the title is the
+              biggest thing on the row, and the sheet shows it in full. */}
+          {!isEditing && !isUrl && showContextMenu ? (
+            <button
+              type="button"
+              onClick={() => setSheetOpen(true)}
+              aria-haspopup="dialog"
+              className="flex min-h-11 min-w-0 flex-1 flex-col justify-center py-1.5 text-left focus:outline-none focus-visible:ring-1 focus-visible:ring-share-primary"
+            >
+              <span className={`line-clamp-2 break-words text-[15px] leading-snug ${titleTone}`}>{task.title}</span>
+              {(task.isShallow || (task.isPrivate && partnerVisible)) && (
+                <span className="mt-0.5 flex items-center gap-1">{badges}</span>
+              )}
+            </button>
+          ) : (
           <div className="flex min-w-0 flex-1 flex-col justify-center py-1.5">
             {isEditing ? (
               editInput
@@ -350,6 +365,7 @@ export function TaskItem({
               <span className="mt-0.5 flex items-center gap-1">{badges}</span>
             )}
           </div>
+          )}
           {chipPill &&
             (chipOpensSchedule ? (
               <button
@@ -386,6 +402,9 @@ export function TaskItem({
             onClose={() => setSheetOpen(false)}
             onEdit={onUpdateTask ? startEditing : undefined}
             onSchedule={onSchedule && !isSubtask ? onSchedule : undefined}
+            // A subtask is never scheduled, but its length is still set in
+            // the schedule sheet ("Save length only").
+            onSetDuration={onSchedule && isSubtask ? onSchedule : undefined}
             onOpenProgress={progress ? onOpenProgressSheet : undefined}
             showReorder={!isSubtask && (onMoveUp !== undefined || onMoveDown !== undefined)}
             onMoveUp={onMoveUp}

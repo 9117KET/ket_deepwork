@@ -21,6 +21,7 @@ import {
   ArrowUp,
   Ban,
   CalendarClock,
+  Clock,
   CornerUpRight,
   Eye,
   EyeOff,
@@ -39,6 +40,8 @@ interface TaskActionSheetProps {
   onEdit?: () => void
   /** Open the schedule sheet (which on phones also carries the duration). */
   onSchedule?: () => void
+  /** Subtasks: open the schedule sheet only to set how long the task takes. */
+  onSetDuration?: () => void
   /** Open the progress sheet. Pass only for a task big enough to track. */
   onOpenProgress?: () => void
   /** Show Move up / Move down. Each is disabled when its callback is missing. */
@@ -73,6 +76,7 @@ export function TaskActionSheet({
   onClose,
   onEdit,
   onSchedule,
+  onSetDuration,
   onOpenProgress,
   showReorder = false,
   onMoveUp,
@@ -108,6 +112,9 @@ export function TaskActionSheet({
       icon: <CalendarClock className={ICON} />,
       run: onSchedule,
     })
+  }
+  if (onSetDuration) {
+    actions.push({ key: 'duration', label: 'Set duration…', icon: <Clock className={ICON} />, run: onSetDuration })
   }
   if (onOpenProgress) {
     actions.push({ key: 'progress', label: 'Start a block / Log time', icon: <Timer className={ICON} />, run: onOpenProgress })

@@ -177,6 +177,24 @@ test('Move down in the sheet puts the first task below the second', async ({ pag
   expect(after.indexOf(RICH_IDS.listLong)).toBeGreaterThan(after.indexOf(RICH_IDS.listParent))
 })
 
+test('a subtask can set its duration from its sheet', async ({ page }) => {
+  await openToday(page)
+  const sheet = await openActions(page, RICH_IDS.listSubtask)
+  // Subtasks are never scheduled, so the sheet offers the length on its own.
+  await expect(sheet.getByRole('menuitem', { name: /schedule/i })).toHaveCount(0)
+  await sheet.getByRole('menuitem', { name: 'Set duration…' }).click()
+  await expect(page.getByRole('dialog', { name: 'Pack the bag' })).toBeVisible()
+  await expect(page.getByText('How long')).toBeVisible()
+})
+
+test('tapping a title opens its action sheet with the title in full', async ({ page }) => {
+  await openToday(page)
+  await taskList(page).getByText(LONG_TITLE_LIST, { exact: true }).click()
+  const sheet = page.getByTestId('task-action-sheet')
+  await expect(sheet).toBeVisible()
+  await expect(sheet.getByRole('heading')).toHaveText(LONG_TITLE_LIST)
+})
+
 test('?tab=habits switches the panel while the planner is mounted', async ({ page }) => {
   await openToday(page)
   await expect(page.getByTestId('mobile-habits')).toHaveCount(0)

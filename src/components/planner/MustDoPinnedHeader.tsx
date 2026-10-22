@@ -215,10 +215,16 @@ export function MustDoPinnedHeader({
       <div key={task.id} data-task-id={task.id}>
         <div className="group flex items-center gap-1">
           <TouchCheckbox checked={task.isDone} onChange={() => onToggle(task.id)} label={task.title} />
-          <div className="flex min-w-0 flex-1 items-center py-1.5">
-            {editingId === task.id ? (
-              renderTitleEditor(task)
-            ) : (
+          {editingId === task.id ? (
+            <div className="flex min-w-0 flex-1 items-center py-1.5">{renderTitleEditor(task)}</div>
+          ) : (
+            // Tapping the title opens the action sheet, which shows it in full.
+            <button
+              type="button"
+              onClick={() => setSheetTaskId(task.id)}
+              aria-haspopup="dialog"
+              className="flex min-h-11 min-w-0 flex-1 items-center py-1.5 text-left focus:outline-none focus-visible:ring-1 focus-visible:ring-share-primary"
+            >
               <span
                 className={`line-clamp-2 break-words text-[15px] leading-snug ${
                   task.isDone
@@ -232,8 +238,8 @@ export function MustDoPinnedHeader({
                 </span>
                 {task.title}
               </span>
-            )}
-          </div>
+            </button>
+          )}
           {chipPill &&
             (onSchedule && !task.isDone ? (
               <button
