@@ -44,6 +44,15 @@ test.describe('Focus on a phone', () => {
     expect(startBox.height, 'Start is under 48px tall').toBeGreaterThanOrEqual(48)
     expect(startBox.width / panelBox.width, 'Start spans less than 90% of the panel').toBeGreaterThanOrEqual(0.9)
 
+    // Idle is one screen: nothing to scroll, and Start sits above the tab bar.
+    const fit = await page.evaluate(() => ({
+      scroll: document.documentElement.scrollHeight,
+      inner: window.innerHeight,
+      barTop: document.querySelector('[data-testid="mobile-tab-bar"]')!.getBoundingClientRect().top,
+    }))
+    expect(fit.scroll, `idle Focus scrolls: ${fit.scroll}px in a ${fit.inner}px screen`).toBeLessThanOrEqual(fit.inner + 1)
+    expect(startBox.y + startBox.height, 'Start runs under the tab bar').toBeLessThanOrEqual(fit.barTop)
+
     // The custom slot reads "Custom" until tapped, then takes digits.
     await idle.getByRole('button', { name: 'Custom length' }).click()
     await expect(idle.getByLabel('Custom duration in minutes')).toBeVisible()

@@ -48,6 +48,14 @@ const CIRCUMFERENCE = 2 * Math.PI * RADIUS
 /** Fills the space between the app header and the tab bar. */
 const COLUMN = 'flex min-h-[calc(100dvh-7.5rem)] flex-col lg:hidden'
 
+/**
+ * The idle column is shorter: below it sit `PlannerPage`'s `pb-20` and
+ * `DayPlanner`'s `h-16` spacer, both clearing the tab bar, so a 7.5rem column
+ * made the tab scroll about 93px of nothing. 13.5rem is the header, its top
+ * padding and both clearances, measured at 390x844.
+ */
+const IDLE_COLUMN = 'flex min-h-[calc(100dvh-13.5rem)] flex-col lg:hidden'
+
 export function MobileFocusPanel({
   timer,
   breakMinutes,
@@ -171,10 +179,10 @@ export function MobileFocusPanel({
       {/* Only the restart button can cost minutes that were really worked, so
           it is the only one that asks. Keeping them is the default. */}
       {confirmDiscard && (
-        <div className="mx-5 mt-5 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3">
+        <div className="mx-5 mt-5 rounded-xl border border-share-tertiary bg-share-tertiary/10 p-3">
           <p className="text-sm text-share-onBg">
             This block has run for{' '}
-            <span className="font-semibold text-amber-200">{formatMinutes(elapsedMinutes)}</span>.
+            <span className="font-semibold text-share-tertiary">{formatMinutes(elapsedMinutes)}</span>.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <button
@@ -271,7 +279,7 @@ function IdleFocus({
     }`
 
   return (
-    <div className={`${COLUMN} relative pb-6`} data-testid="mobile-focus-idle">
+    <div className={`${IDLE_COLUMN} relative pb-6`} data-testid="mobile-focus-idle">
       {/* Top-right, out of the flow, so it does not push the middle down. */}
       <SoundToggle size="phone" className="absolute right-0 top-0" />
 
