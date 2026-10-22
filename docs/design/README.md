@@ -161,13 +161,13 @@ the reference; the list below is how much of them the app has actually grown.
 
 | Artboard | State | Where |
 |---|---|---|
-| desktop `Main` | **done** | `NowCard.tsx` + `nowFocus.ts`, collapsed sections, reordered rail |
+| desktop `Main` | **superseded** | the NOW card left with the minimal rewrite (time comes from the calendar); the rail and collapsed sections remain |
 | desktop `DesktopReview` | **done** | `ReviewPage` layout, `ReviewStatTiles.tsx`, `ReviewRail.tsx`, `reviewStats.ts` |
 | desktop `DesktopFocus` | **done** | `src/components/timer/FocusMode.tsx` |
-| mobile `Main` | **done** | the same NOW card; the Today tab is the day alone |
+| mobile `Main` | **row language applied, hero not built** | no NOW/THEN/REST OF DAY (their time blocks are gone); the artboard's row anatomy is live on a coarse pointer: 24px checkbox in a 44px area, 15px two-line title, one chip, ⋮ → `TaskActionSheet`; tokens `share.hairline`/`onSurfaceDim`/`barBg` and `.overline`/`.page-title`/`.stat-number` added (2026-10-22); gated by `e2e/mobile-today.spec.ts` |
 | mobile `Focus` | **done** | `src/components/timer/MobileFocusPanel.tsx`; idle is its own phone layout (48px select, label, five preset pills, 62px digits, full-width 48px Start) and both states centre in a screen-tall column; gated by `e2e/mobile-panels.spec.ts` |
 | mobile `Habits` | **done** | `src/components/habits/MobileHabitsPanel.tsx` + `habitWeek.ts`; each row is one 56px button with 8px dots, and the editor is a bottom sheet on phones; gated by `e2e/mobile-panels.spec.ts` |
-| mobile `Review` | **done** | `src/components/tracking/MobileReviewPanel.tsx` |
+| mobile `Review` | **done, reduced** | `src/pages/ReviewPage.tsx` (the week scoreboard and habit week only; month-scale views were cut in the minimal rewrite); page title, overline and stat number follow the artboard type roles |
 | `Diagnosis`, `IA` | reference boards, nothing to build | — |
 | `TimelineDay`, `OneThing` | alternates, not chosen | — |
 

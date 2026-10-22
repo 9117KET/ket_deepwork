@@ -34,7 +34,7 @@ function seed(page: Page) {
     // swallows clicks) from 9 PM local time. Key must match todayIso().
     window.sessionStorage.setItem(`shutdown_reminder_shown_${today}`, '1')
 
-    // Put the clock inside the High Priority block so the NOW card has a task.
+    // Put the clock inside the High Priority block (legacy seed shape; the block schedule itself is gone).
     const now = d.getHours() * 60 + d.getMinutes()
     const wake = Math.max(0, now - 45)
     const wakeTime = `${String(Math.floor(wake / 60)).padStart(2, '0')}:${String(wake % 60).padStart(2, '0')}`

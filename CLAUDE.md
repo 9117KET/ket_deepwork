@@ -244,8 +244,14 @@ gate in `e2e/mobile-responsive.spec.ts`:
    silently resolves to 0 and the padding below does nothing. Bottom-fixed
    chrome uses `.pb-safe-nav` (`max(0.5rem, inset)`) so it keeps its ordinary
    padding on flat screens and only grows to clear a home indicator. Fixed
-   elements cannot inherit the shell's `px-safe`, so `AppMobileNav` sets its own
-   left/right insets inline for landscape notches.
+   elements cannot inherit the shell's `px-safe`, so `MobileTabBar` sets its own
+   left/right insets inline for landscape notches. Sheets are `z-[80]`, toasts
+   dock at `z-70` via `.toast-dock`, the tab bar is `z-[60]`. On a coarse
+   pointer every `input`, `select` and `textarea` is 16px (iOS zoom) and at
+   least 44px tall (`src/index.css`), and the task rows switch to the phone
+   anatomy (checkbox, title, one chip, ⋮ → `TaskActionSheet`) via
+   `useCoarsePointer()`; the gates live in `e2e/mobile-today.spec.ts` and
+   `e2e/mobile-panels.spec.ts`, with shared fixtures in `e2e/helpers/mobile.ts`.
 2. **`dvh`, never `vh`.** `100vh` on a phone includes the URL bar that is about
    to collapse, so the bottom of a `h-screen` layout is cut off. `#root` sets
    `100vh` then `100dvh` (older browsers keep the first).
