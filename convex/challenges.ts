@@ -1,17 +1,23 @@
 /**
  * convex/challenges.ts — the two-person accountability challenge.
  *
- * Two people agree on a span of days, a few goals and a few "don'ts", and
- * then each day has two explicit acts: lock in the plan (before a morning
- * deadline) and check in (before midnight). The planner itself stays private.
- * What a partner sees is the `summary` each member's own client publishes —
- * Top 3 titles, counts, earned minutes, habits — never a `plannerDays` row.
- * A task marked private is counted in that summary, never titled.
+ * Two people agree on a span of days. Each member sets their own goals and
+ * "don'ts" (on their `challengeMembers` row, editable any time, readable by
+ * the partner), and each day has two explicit acts: lock in the plan (before
+ * a morning deadline) and check in (before midnight). The planner itself
+ * stays private. What a partner sees is the `summary` each member's own
+ * client publishes — Top 3 titles, counts, earned minutes, habits — never a
+ * `plannerDays` row. A task marked private is counted in that summary, never
+ * titled.
+ *
+ * A removed don't is archived, never deleted, so a confession that named it
+ * still resolves. Challenges created before per-member lists keep theirs on
+ * the `challenges` row; `memberCommitments` hands them to the creator.
  *
  * Membership is checked on every read and write, and every function derives
  * the caller from the identity, never from an argument. The partner's
  * `userId` is never returned to the client; the member view is a display
- * name and a timezone.
+ * name, a timezone and the member's lists.
  */
 
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server"
@@ -19,7 +25,7 @@ import { internal } from "./_generated/api"
 import { v } from "convex/values"
 import type { Doc, Id } from "./_generated/dataModel"
 import { getUserId } from "./_shared/auth"
-import { HHMM, ISO_DATE, emptySummary, summaryValidator, type ChallengeSummary } from "./_shared/challengeValidators"
+import { HHMM, ISO_DATE, emptySummary, summaryValidator, type ChallengeSummary, type Dont } from "./_shared/challengeValidators"
 import { isValidTimezone, localDateAndMinutes, CHECKIN_START, hhmmToMinutes } from "./_shared/challengeReminders"
 
 type Ctx = QueryCtx | MutationCtx
@@ -102,8 +108,6 @@ function challengeView(c: Doc<"challenges">) {
     name: c.name,
     startDate: c.startDate,
     endDate: c.endDate,
-    goals: c.goals,
-    donts: c.donts,
     planDeadline: c.planDeadline,
     checkinDeadline: c.checkinDeadline,
     createdAt: c.createdAt,
@@ -111,8 +115,22 @@ function challengeView(c: Doc<"challenges">) {
   }
 }
 
-function memberView(m: Doc<"challengeMembers">) {
-  return { displayName: m.displayName, timezone: m.timezone, joinedAt: m.joinedAt }
+/**
+ * A member's own goals and don'ts. Rows written before per-member lists have
+ * none; the creator's then come from the challenge row, where they used to
+ * live, and anyone else starts empty. This is the whole migration.
+ */
+function memberCommitments(challenge: Doc<"challenges">, member: Doc<"challengeMembers">): { goals: string[]; donts: Dont[] } {
+  const legacy = member.userId === challenge.createdBy
+  return {
+    goals: member.goals ?? (legacy ? challenge.goals : []),
+    donts: member.donts ?? (legacy ? challenge.donts : []),
+  }
+}
+
+function memberView(challenge: Doc<"challenges">, m: Doc<"challengeMembers">) {
+  const { goals, donts } = memberCommitments(challenge, m)
+  return { displayName: m.displayName, timezone: m.timezone, joinedAt: m.joinedAt, goals, donts }
 }
 
 /** What the partner may see of a day. Reminder bookkeeping stays out. */
@@ -148,6 +166,11 @@ function cleanList(items: string[], label: string): string[] {
     if (item.length > MAX_ITEM) throw new Error(`Each of the ${label} must be ${MAX_ITEM} characters or fewer`)
   }
   return cleaned
+}
+
+/** New don'ts from cleaned texts. `offset` keeps ids unique beside a member's existing ones. */
+function mintDonts(texts: string[], now: number, offset = 0): Dont[] {
+  return texts.map((text, i) => ({ id: `dont-${now}-${offset + i + 1}`, text }))
 }
 
 function cleanDisplayName(name: string): string {
@@ -205,8 +228,8 @@ export const myChallenge = query({
     const invite = partner ? null : await openInvite(ctx, challenge._id, Date.now())
     return {
       challenge: challengeView(challenge),
-      me: memberView(me),
-      partner: partner ? memberView(partner) : null,
+      me: memberView(challenge, me),
+      partner: partner ? memberView(challenge, partner) : null,
       invite: invite ? { token: invite.token, expiresAt: invite.expiresAt } : null,
     }
   },
@@ -274,7 +297,8 @@ export const history = query({
 export const invitePreview = query({
   args: { token: v.string() },
   handler: async (ctx, args) => {
-    const none = { challenge: null, inviterName: null }
+    const none = { challenge: null, inviterName: null, inviterGoals: [] as string[], inviterDonts: [] as string[] }
+    const noLists = { inviterGoals: [] as string[], inviterDonts: [] as string[] }
     const invite = await ctx.db
       .query("challengeInvites")
       .withIndex("by_token", (q) => q.eq("token", args.token))
@@ -283,12 +307,18 @@ export const invitePreview = query({
     const challenge = await ctx.db.get(invite.challengeId)
     if (!challenge || challenge.status !== "active") return { status: "ended" as const, ...none }
     const preview = { name: challenge.name, startDate: challenge.startDate, endDate: challenge.endDate }
-    if (invite.acceptedBy) return { status: "used" as const, challenge: preview, inviterName: null }
-    if (invite.expiresAt <= Date.now()) return { status: "expired" as const, challenge: preview, inviterName: null }
+    if (invite.acceptedBy) return { status: "used" as const, challenge: preview, inviterName: null, ...noLists }
+    if (invite.expiresAt <= Date.now()) return { status: "expired" as const, challenge: preview, inviterName: null, ...noLists }
     const members = await membersOf(ctx, challenge._id)
-    const inviterName = members.find((m) => m.userId === invite.createdBy)?.displayName ?? null
-    if (members.length >= MAX_MEMBERS) return { status: "full" as const, challenge: preview, inviterName }
-    return { status: "ok" as const, challenge: preview, inviterName }
+    const inviter = members.find((m) => m.userId === invite.createdBy) ?? null
+    const inviterName = inviter?.displayName ?? null
+    // What the friend is signing up next to: the inviter's active lists, texts only.
+    const lists = inviter ? memberCommitments(challenge, inviter) : null
+    const inviterLists = lists
+      ? { inviterGoals: lists.goals, inviterDonts: lists.donts.filter((d) => d.archivedAt === undefined).map((d) => d.text) }
+      : noLists
+    if (members.length >= MAX_MEMBERS) return { status: "full" as const, challenge: preview, inviterName, ...inviterLists }
+    return { status: "ok" as const, challenge: preview, inviterName, ...inviterLists }
   },
 })
 
@@ -325,20 +355,30 @@ export const createChallenge = mutation({
     const goals = cleanList(args.goals, "goals")
     const dontTexts = cleanList(args.donts, "don'ts")
     const now = Date.now()
-    const donts = dontTexts.map((text, i) => ({ id: `dont-${now}-${i + 1}`, text }))
+    const donts = mintDonts(dontTexts, now)
+    // The lists are the creator's own; the challenge row keeps empty legacy fields.
     const challengeId = await ctx.db.insert("challenges", {
       name,
       startDate: args.startDate,
       endDate: args.endDate,
-      goals,
-      donts,
+      goals: [],
+      donts: [],
       planDeadline: args.planDeadline,
       checkinDeadline: args.checkinDeadline,
       createdBy: userId,
       createdAt: now,
       status: "active",
     })
-    await ctx.db.insert("challengeMembers", { challengeId, userId, timezone, displayName, joinedAt: now })
+    await ctx.db.insert("challengeMembers", {
+      challengeId,
+      userId,
+      timezone,
+      displayName,
+      joinedAt: now,
+      goals,
+      donts,
+      commitmentsUpdatedAt: now,
+    })
     return { challengeId }
   },
 })
@@ -361,8 +401,15 @@ export const createInvite = mutation({
   },
 })
 
+/** Joining. The joiner may bring their own lists; without them they start empty. */
 export const acceptInvite = mutation({
-  args: { token: v.string(), timezone: v.string(), displayName: v.string() },
+  args: {
+    token: v.string(),
+    timezone: v.string(),
+    displayName: v.string(),
+    goals: v.optional(v.array(v.string())),
+    donts: v.optional(v.array(v.string())),
+  },
   handler: async (ctx, args) => {
     const userId = await requireUser(ctx)
     const now = Date.now()
@@ -381,9 +428,66 @@ export const acceptInvite = mutation({
     if (await activeMembership(ctx, userId)) throw new Error("You are already in a challenge")
     const timezone = cleanTimezone(args.timezone)
     const displayName = cleanDisplayName(args.displayName)
-    await ctx.db.insert("challengeMembers", { challengeId: challenge._id, userId, timezone, displayName, joinedAt: now })
+    const goals = cleanList(args.goals ?? [], "goals")
+    const donts = mintDonts(cleanList(args.donts ?? [], "don'ts"), now)
+    await ctx.db.insert("challengeMembers", {
+      challengeId: challenge._id,
+      userId,
+      timezone,
+      displayName,
+      joinedAt: now,
+      goals,
+      donts,
+      commitmentsUpdatedAt: now,
+    })
     await ctx.db.patch(invite._id, { acceptedBy: userId, acceptedAt: now })
     return { challengeId: challenge._id }
+  },
+})
+
+/**
+ * Replace the caller's own goals and don'ts. Goals are replaced wholesale.
+ * A don't sent with its id keeps that id (its text may change); a current
+ * don't left out is archived, not deleted, because a check-in may name it;
+ * a don't sent without an id is new. Archived ones stay archived and do not
+ * count against the cap.
+ */
+export const updateMyCommitments = mutation({
+  args: {
+    goals: v.array(v.string()),
+    donts: v.array(v.object({ id: v.optional(v.string()), text: v.string() })),
+  },
+  handler: async (ctx, args) => {
+    const userId = await requireUser(ctx)
+    const { challenge, me } = await requireMembership(ctx, userId)
+    const goals = cleanList(args.goals, "goals")
+    if (args.donts.length > MAX_LIST) throw new Error(`At most ${MAX_LIST} don'ts`)
+    const current = memberCommitments(challenge, me).donts
+    const active = new Map(current.filter((d) => d.archivedAt === undefined).map((d) => [d.id, d]))
+    const now = Date.now()
+    const kept = new Set<string>()
+    const next: Dont[] = []
+    let minted = 0
+    for (const row of args.donts) {
+      const text = row.text.trim()
+      if (text.length > MAX_ITEM) throw new Error(`Each of the don'ts must be ${MAX_ITEM} characters or fewer`)
+      if (row.id !== undefined) {
+        if (!active.has(row.id) || kept.has(row.id)) throw new Error("Unknown don't")
+        // A blank text for a known id is a removal; it is archived below.
+        if (!text) continue
+        kept.add(row.id)
+        next.push({ id: row.id, text })
+      } else if (text) {
+        minted += 1
+        next.push(mintDonts([text], now, current.length + minted - 1)[0]!)
+      }
+    }
+    const archived = current.map((d) =>
+      d.archivedAt !== undefined || kept.has(d.id) ? d : { ...d, archivedAt: now },
+    ).filter((d) => d.archivedAt !== undefined)
+    const donts = [...next, ...archived]
+    await ctx.db.patch(me._id, { goals, donts, commitmentsUpdatedAt: now })
+    return { goals, donts }
   },
 })
 
@@ -447,12 +551,13 @@ export const checkIn = mutation({
   },
   handler: async (ctx, args) => {
     const userId = await requireUser(ctx)
-    const { challenge } = await requireMembership(ctx, userId)
+    const { challenge, me } = await requireMembership(ctx, userId)
     assertIsoDate(args.date, "date")
     if (!inRange(challenge, args.date)) throw new Error("That day is outside the challenge")
     const note = args.note?.trim() ?? ""
     if (note.length > MAX_NOTE) throw new Error(`Note must be ${MAX_NOTE} characters or fewer`)
-    const known = new Set(challenge.donts.map((d) => d.id))
+    // Archived ones count: a check-in edited later may name a don't removed since.
+    const known = new Set(memberCommitments(challenge, me).donts.map((d) => d.id))
     for (const id of args.dontsBroken) {
       if (!known.has(id)) throw new Error("Unknown don't")
     }

@@ -60,8 +60,8 @@ describe('setup', () => {
     await a.as.mutation(api.challenges.createChallenge, { ...setup, timezone: BERLIN, displayName: ' Kin ' })
     const mine = await a.as.query(api.challenges.myChallenge, {})
     expect(mine?.challenge).toMatchObject({ name: 'Q4 push', startDate: '2026-10-01', endDate: '2026-12-31', status: 'active' })
-    expect(mine?.challenge.goals).toEqual(['Ship the thesis draft', 'Run 3x a week'])
-    expect(mine?.challenge.donts.map((d) => d.text)).toEqual(['No doomscrolling past 30 min', 'No alcohol'])
+    expect(mine?.me.goals).toEqual(['Ship the thesis draft', 'Run 3x a week'])
+    expect(mine?.me.donts.map((d) => d.text)).toEqual(['No doomscrolling past 30 min', 'No alcohol'])
     expect(mine?.me).toMatchObject({ displayName: 'Kin', timezone: BERLIN })
     expect(mine?.partner).toBeNull()
 
@@ -101,6 +101,8 @@ describe('invites', () => {
       status: 'ok',
       challenge: { name: 'Q4 push', startDate: '2026-10-01', endDate: '2026-12-31' },
       inviterName: 'Kin',
+      inviterGoals: ['Ship the thesis draft', 'Run 3x a week'],
+      inviterDonts: ['No doomscrolling past 30 min', 'No alcohol'],
     })
     expect(await t.query(api.challenges.invitePreview, { token: 'nope' })).toMatchObject({ status: 'notFound' })
 
@@ -184,7 +186,7 @@ describe('the day', () => {
   test('check-in stores the note and confession, rejects unknown don\'ts, keeps the first time', async () => {
     const t = convexTest(schema, modules)
     const { a, b } = await pair(t)
-    const donts = (await a.as.query(api.challenges.myChallenge, {}))!.challenge.donts
+    const donts = (await a.as.query(api.challenges.myChallenge, {}))!.me.donts
     await expect(
       a.as.mutation(api.challenges.checkIn, { date: '2026-10-22', summary: summary(), note: 'ok', dontsBroken: ['made-up'] }),
     ).rejects.toThrow(/unknown don't/i)
