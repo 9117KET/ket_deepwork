@@ -218,7 +218,10 @@ transaction (a failed send costs one email, never doubles one), then the
 action sends. The rules are pure in `convex/_shared/challengeReminders.ts`:
 after the plan deadline every 120 min, four at most; from 21:30 local every
 90 min for the check-in, two at most; each judged on the member's own clock.
-`nudgePartner` schedules one email a day from inside the mutation.
+`nudgePartner` schedules one email from inside the mutation: up to three per
+nudger-local day, at least an hour apart, only while the partner owes the day
+something (pure rules in `convex/_shared/challengeNudges.ts`, shared with the
+button; `challengeDays.nudgesSentAt`, legacy `nudgeSentAt` read as one).
 
 **Routes and entry points:** `/challenge` (create / join / dashboard with the
 countdown, both members' cards, the season grid, invite link),

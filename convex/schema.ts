@@ -207,7 +207,10 @@ export default defineSchema({
     dontsBroken: v.array(v.string()),
     /** Reminder bookkeeping for this local day; never shown to the partner. */
     remindersSent: remindersSentValidator,
+    /** Legacy once-a-day nudge stamp: read as one entry of `nudgesSentAt`, never written again. */
     nudgeSentAt: v.optional(v.number()),
+    /** Nudges sent on this (the nudger's) local day; rules in `_shared/challengeNudges.ts`. */
+    nudgesSentAt: v.optional(v.array(v.number())),
   })
     .index("by_challenge_user_date", ["challengeId", "userId", "date"])
     .index("by_user_date", ["userId", "date"]),
