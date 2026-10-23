@@ -2,16 +2,19 @@
  * components/challenge/ChallengeDashboard.tsx
  *
  * The challenge page once you are in one: the countdown, today for both
- * members, the goals and don'ts, the season so far, and the invite link
- * while the second seat is empty.
+ * members, each member's own goals and don'ts (yours editable, theirs
+ * read-only), the season so far, and the invite link while the second seat
+ * is empty.
  */
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { challengeDates } from '../../domain/challenge'
+import { activeDonts, type DontLike } from '../../domain/challengeCommitments'
 import type { ChallengeState } from '../../hooks/useChallenge'
 import { useChallengeHistory } from '../../hooks/useChallenge'
 import { addDays } from '../../domain/dateUtils'
 import { challengeErrorMessage, createInvite, inviteUrl, leaveChallenge, shareText } from '../../services/challengeService'
+import { CommitmentsSheet } from './CommitmentsSheet'
 import { HistoryGrid, HistoryLegend } from './HistoryGrid'
 import { MemberDayCard } from './MemberDayCard'
 
@@ -22,6 +25,51 @@ interface ChallengeDashboardProps {
 const card = 'rounded-2xl bg-share-surfaceContainerLow p-4'
 const heading = 'overline'
 
+/** One member's lists. Archived don'ts are history, not commitments, so they are not listed. */
+function CommitmentsColumn({ title, goals, donts, empty, action }: { title: string; goals: string[]; donts: DontLike[]; empty: string; action?: ReactNode }) {
+  const current = activeDonts(donts)
+  return (
+    <div className="min-w-0">
+      <div className="flex items-center justify-between gap-2">
+        <p className={`${heading} min-w-0 truncate`}>{title}</p>
+        {action}
+      </div>
+      {goals.length === 0 && current.length === 0 ? (
+        <p className="mt-2 text-sm text-share-onSurfaceVariant">{empty}</p>
+      ) : (
+        <>
+          {goals.length > 0 && (
+            <>
+              <p className="mt-2 text-[11px] text-share-onSurfaceVariant">Goals</p>
+              <ul className="mt-1 space-y-1">
+                {goals.map((g, i) => (
+                  <li key={i} className="flex gap-2 text-sm text-share-onSurface">
+                    <span aria-hidden className="text-share-primary">◆</span>
+                    <span className="min-w-0 break-words">{g}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+          {current.length > 0 && (
+            <>
+              <p className="mt-2 text-[11px] text-share-onSurfaceVariant">Don&rsquo;ts</p>
+              <ul className="mt-1 space-y-1">
+                {current.map((d) => (
+                  <li key={d.id} className="flex gap-2 text-sm text-share-onSurface">
+                    <span aria-hidden className="text-share-tertiary">✕</span>
+                    <span className="min-w-0 break-words">{d.text}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
 export function ChallengeDashboard({ state }: ChallengeDashboardProps) {
   const { info, progress, mine, partnerCard, myDate, partnerDate } = state
   const history = useChallengeHistory(Boolean(info), addDays(myDate, -1))
@@ -29,6 +77,7 @@ export function ChallengeDashboard({ state }: ChallengeDashboardProps) {
   const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [leaving, setLeaving] = useState(false)
+  const [editing, setEditing] = useState(false)
 
   const dates = useMemo(() => (info ? challengeDates(info.challenge) : []), [info])
   if (!info || !progress) return null
@@ -96,9 +145,9 @@ export function ChallengeDashboard({ state }: ChallengeDashboardProps) {
 
       {/* Today, both */}
       <section className="grid gap-3 sm:grid-cols-2">
-        <MemberDayCard name={me.displayName} isMe day={mine} donts={challenge.donts} />
+        <MemberDayCard name={me.displayName} isMe day={mine} donts={me.donts} />
         {partner ? (
-          <MemberDayCard name={partner.displayName} isMe={false} day={partnerCard} donts={challenge.donts} caption={partnerDate !== myDate ? partnerDate : undefined} />
+          <MemberDayCard name={partner.displayName} isMe={false} day={partnerCard} donts={partner.donts} caption={partnerDate !== myDate ? partnerDate : undefined} />
         ) : (
           <div className={`${card} flex flex-col justify-center`}>
             <p className="text-sm font-semibold text-share-onBg">Invite your partner</p>
@@ -118,37 +167,27 @@ export function ChallengeDashboard({ state }: ChallengeDashboardProps) {
         )}
       </section>
 
-      {/* Goals and don'ts */}
-      {(challenge.goals.length > 0 || challenge.donts.length > 0) && (
-        <section className={`${card} grid gap-4 sm:grid-cols-2`}>
-          {challenge.goals.length > 0 && (
-            <div>
-              <p className={heading}>Goals</p>
-              <ul className="mt-2 space-y-1">
-                {challenge.goals.map((g, i) => (
-                  <li key={i} className="flex gap-2 text-sm text-share-onSurface">
-                    <span aria-hidden className="text-share-primary">◆</span>
-                    <span className="min-w-0 break-words">{g}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {challenge.donts.length > 0 && (
-            <div>
-              <p className={heading}>Don&rsquo;ts</p>
-              <ul className="mt-2 space-y-1">
-                {challenge.donts.map((d) => (
-                  <li key={d.id} className="flex gap-2 text-sm text-share-onSurface">
-                    <span aria-hidden className="text-share-tertiary">✕</span>
-                    <span className="min-w-0 break-words">{d.text}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </section>
-      )}
+      {/* Goals and don'ts: each member's own */}
+      <section className={`${card} grid gap-4 ${partner ? 'sm:grid-cols-2' : ''}`} aria-label="Goals and don'ts">
+        <CommitmentsColumn
+          title="Yours"
+          goals={me.goals}
+          donts={me.donts}
+          empty="Set your goals and don’ts."
+          action={
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="touch-target-coarse -my-2 inline-flex shrink-0 items-center justify-center px-2 text-xs font-semibold text-share-primary hover:underline"
+            >
+              Edit
+            </button>
+          }
+        />
+        {partner && (
+          <CommitmentsColumn title={partner.displayName} goals={partner.goals} donts={partner.donts} empty={`${partner.displayName} hasn’t set theirs yet.`} />
+        )}
+      </section>
 
       {/* The season so far */}
       <section className={`${card} space-y-4`}>
@@ -169,6 +208,8 @@ export function ChallengeDashboard({ state }: ChallengeDashboardProps) {
           {partner ? 'Leave challenge' : 'End challenge'}
         </button>
       </div>
+
+      {editing && <CommitmentsSheet goals={me.goals} donts={me.donts} onClose={() => setEditing(false)} />}
     </div>
   )
 }

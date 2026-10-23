@@ -11,6 +11,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Flag } from 'lucide-react'
 import { buildShareText, formatClock, type ChallengeSummary } from '../../domain/challenge'
+import { resolveDontTexts } from '../../domain/challengeCommitments'
 import type { ChallengeState } from '../../hooks/useChallenge'
 import { challengeErrorMessage, lockInPlan, nudgePartner, shareText, type ShareOutcome } from '../../services/challengeService'
 
@@ -67,7 +68,7 @@ export function ChallengeCard({ state, summary, date, onOpenCheckin, compact = f
         progress,
         summary,
         note: mine?.note,
-        dontsBroken: (mine?.dontsBroken ?? []).map((id) => info.challenge.donts.find((d) => d.id === id)?.text ?? ''),
+        dontsBroken: resolveDontTexts(mine?.dontsBroken ?? [], info.me.donts),
       }),
     )
     if (outcome === 'copied') setNotice('Copied — paste it into WhatsApp.')

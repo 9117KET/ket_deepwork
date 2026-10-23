@@ -49,8 +49,16 @@ export async function createInvite(): Promise<{ token: string; expiresAt: number
   return await convex.mutation(api.challenges.createInvite, {})
 }
 
-export async function acceptInvite(token: string, displayName: string): Promise<void> {
-  await convex.mutation(api.challenges.acceptInvite, { token, timezone: deviceTimezone(), displayName })
+export async function acceptInvite(token: string, displayName: string, goals: string[] = [], donts: string[] = []): Promise<void> {
+  await convex.mutation(api.challenges.acceptInvite, { token, timezone: deviceTimezone(), displayName, goals, donts })
+}
+
+/** Replace your own lists. A don't sent with its id stays that don't; one left out is archived. */
+export async function updateMyCommitments(input: {
+  goals: string[]
+  donts: { id?: string; text: string }[]
+}): Promise<{ goals: string[]; donts: { id: string; text: string; archivedAt?: number }[] }> {
+  return await convex.mutation(api.challenges.updateMyCommitments, input)
 }
 
 export async function leaveChallenge(): Promise<void> {

@@ -48,6 +48,18 @@ async function pair(t: T, joinLists: { goals?: string[]; donts?: string[] } = {}
   return { a, b, token }
 }
 
+/**
+ * Ids are `dont-<ms>-<n>` and scoped to their member, so two members who set
+ * lists in the same millisecond share one. Harmless in use; a test about one
+ * member naming the other's id needs them apart.
+ */
+async function giveSamDistinctDont(t: T) {
+  await t.run(async (ctx) => {
+    const sam = (await ctx.db.query('challengeMembers').collect()).find((m) => m.displayName === 'Sam')!
+    await ctx.db.patch(sam._id, { donts: [{ id: 'dont-sam-1', text: 'No sugar' }] })
+  })
+}
+
 const me = async (u: { as: ReturnType<T['withIdentity']> }) => (await u.as.query(api.challenges.myChallenge, {}))!
 
 describe('where the lists live', () => {
@@ -146,6 +158,7 @@ describe('updateMyCommitments', () => {
   test('rejects unknown ids, including the partner\'s', async () => {
     const t = convexTest(schema, modules)
     const { a, b } = await pair(t, { donts: ['No sugar'] })
+    await giveSamDistinctDont(t)
     await expect(a.as.mutation(api.challenges.updateMyCommitments, { goals: [], donts: [{ id: 'made-up', text: 'x' }] })).rejects.toThrow(/unknown don't/i)
     const sams = (await me(b)).me.donts[0]!.id
     await expect(a.as.mutation(api.challenges.updateMyCommitments, { goals: [], donts: [{ id: sams, text: 'Hijack' }] })).rejects.toThrow(/unknown don't/i)
@@ -178,6 +191,7 @@ describe('checkIn against your own don\'ts', () => {
   test('a partner\'s don\'t is unknown; your own archived one still counts', async () => {
     const t = convexTest(schema, modules)
     const { a, b } = await pair(t, { donts: ['No sugar'] })
+    await giveSamDistinctDont(t)
     const kins = (await me(a)).me.donts
     const sams = (await me(b)).me.donts
     await expect(
