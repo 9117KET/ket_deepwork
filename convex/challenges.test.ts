@@ -5,12 +5,20 @@
  * side is allowed to see of the other. Run with: npm run test:convex
  */
 import { convexTest } from 'convex-test'
-import { describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import schema from './schema'
 import { api } from './_generated/api'
 import { emptySummary } from './_shared/challengeValidators'
 
 const modules = import.meta.glob('./**/*.*s')
+
+// The day's acts only take the member's own today: pin the clock to 22 Oct, 12:00 Berlin.
+beforeEach(() => {
+  vi.useFakeTimers({ now: Date.UTC(2026, 9, 22, 10, 0), toFake: ['Date'] })
+})
+afterEach(() => {
+  vi.useRealTimers()
+})
 
 const BERLIN = 'Europe/Berlin'
 const NY = 'America/New_York'
@@ -229,8 +237,9 @@ describe('the day', () => {
   test('history covers both members from the start date up to toDate', async () => {
     const t = convexTest(schema, modules)
     const { a, b } = await pair(t)
-    for (const date of ['2026-10-20', '2026-10-21', '2026-10-22']) {
-      await a.as.mutation(api.challenges.lockInPlan, { date, summary: summary() })
+    for (const day of [20, 21, 22]) {
+      vi.setSystemTime(Date.UTC(2026, 9, day, 10, 0))
+      await a.as.mutation(api.challenges.lockInPlan, { date: `2026-10-${day}`, summary: summary() })
     }
     await b.as.mutation(api.challenges.checkIn, { date: '2026-10-21', summary: summary(), dontsBroken: [] })
     const hist = await a.as.query(api.challenges.history, { toDate: '2026-10-21' })

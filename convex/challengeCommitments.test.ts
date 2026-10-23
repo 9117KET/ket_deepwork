@@ -7,12 +7,20 @@
  * Run with: npm run test:convex
  */
 import { convexTest } from 'convex-test'
-import { describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import schema from './schema'
 import { api } from './_generated/api'
 import { emptySummary } from './_shared/challengeValidators'
 
 const modules = import.meta.glob('./**/*.*s')
+
+// The day's acts only take the member's own today: pin the clock to 22 Oct, 12:00 Berlin.
+beforeEach(() => {
+  vi.useFakeTimers({ now: Date.UTC(2026, 9, 22, 10, 0), toFake: ['Date'] })
+})
+afterEach(() => {
+  vi.useRealTimers()
+})
 
 const BERLIN = 'Europe/Berlin'
 const NY = 'America/New_York'

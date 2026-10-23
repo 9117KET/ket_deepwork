@@ -83,6 +83,8 @@ describe('claimDueReminders', () => {
 
   test('a locked-in plan is left alone; the evening chases the check-in', async () => {
     const t = convexTest(schema, modules)
+    // Lock-in takes only the member's own today.
+    vi.useFakeTimers({ now: at('2026-10-22', '09:00', BERLIN), toFake: ['Date'] })
     const { a } = await pair(t)
     await a.as.mutation(api.challenges.lockInPlan, { date: '2026-10-22', summary: emptySummary() })
     expect(await t.mutation(internal.challengesInternal.claimDueReminders, { nowMs: at('2026-10-22', '10:05', BERLIN) })).toEqual([])

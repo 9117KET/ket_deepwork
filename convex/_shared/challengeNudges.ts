@@ -84,5 +84,12 @@ export function nudgeRefusal(a: NudgeAvailability, nowMs: number): string | null
   return null
 }
 
-/** Rule refusals the client shows as a quiet status line rather than an error. */
+/** The `ConvexError` code on a nudge refused by the rules above (or "not owed"). */
+export const NUDGE_RULE_CODE = "nudgeRule"
+
+/**
+ * Rule refusals the client shows as a quiet status line rather than an error.
+ * The client keys on `NUDGE_RULE_CODE`; this matches the same sentences from a
+ * backend deployed before the code existed.
+ */
 export const NUDGE_RULE_REFUSAL = /nudged them \d+ times today|nudge again in|already checked in|already locked in|not running today/i
