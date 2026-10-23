@@ -160,6 +160,11 @@ export default defineSchema({
     name: v.string(),
     startDate: v.string(),
     endDate: v.string(),
+    /**
+     * Legacy. Lists now live on each `challengeMembers` row; these are never
+     * written again (`createChallenge` stores `[]`). A creator whose member row
+     * has no lists still resolves to them (`memberCommitments`).
+     */
     goals: v.array(v.string()),
     donts: v.array(dontValidator),
     /** Local wall-clock deadlines, applied in each member's own timezone. */
@@ -178,6 +183,11 @@ export default defineSchema({
     timezone: v.string(),
     displayName: v.string(),
     joinedAt: v.number(),
+    /** This member's own lists. The partner reads them; only the member writes them. */
+    goals: v.optional(v.array(v.string())),
+    /** Removed don'ts stay here with `archivedAt`, so old confessions still resolve. */
+    donts: v.optional(v.array(dontValidator)),
+    commitmentsUpdatedAt: v.optional(v.number()),
   })
     .index("by_user", ["userId"])
     .index("by_challenge", ["challengeId"]),
@@ -203,11 +213,14 @@ export default defineSchema({
     planSetAt: v.optional(v.number()),
     checkinAt: v.optional(v.number()),
     note: v.optional(v.string()),
-    /** Ids from `challenges.donts` the member owned up to at check-in. */
+    /** Ids from the member's own don'ts (active or archived) owned up to at check-in. */
     dontsBroken: v.array(v.string()),
     /** Reminder bookkeeping for this local day; never shown to the partner. */
     remindersSent: remindersSentValidator,
+    /** Legacy once-a-day nudge stamp: read as one entry of `nudgesSentAt`, never written again. */
     nudgeSentAt: v.optional(v.number()),
+    /** Nudges sent on this (the nudger's) local day; rules in `_shared/challengeNudges.ts`. */
+    nudgesSentAt: v.optional(v.array(v.number())),
   })
     .index("by_challenge_user_date", ["challengeId", "userId", "date"])
     .index("by_user_date", ["userId", "date"]),

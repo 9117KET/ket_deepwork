@@ -7,9 +7,10 @@
  * a phone, the clipboard everywhere else).
  */
 
+import { ConvexError } from "convex/values"
 import { convex } from "../lib/convex"
 import { api } from "../../convex/_generated/api"
-import { localDateAndMinutes } from "../../convex/_shared/challengeReminders"
+import { CHECKIN_START, hhmmToMinutes, localDateAndMinutes } from "../../convex/_shared/challengeReminders"
 import type { ChallengeSummary } from "../domain/challenge"
 import { todayIso } from "../domain/dateUtils"
 
@@ -27,6 +28,19 @@ export function localDateIn(timezone: string, nowMs: number = Date.now()): strin
     return localDateAndMinutes(nowMs, timezone).date
   } catch {
     return todayIso()
+  }
+}
+
+/**
+ * Is it past the check-in hour on `timezone`'s clock? The server judges a
+ * nudge on the partner's clock, so the card has to as well.
+ */
+export function isEveningIn(timezone: string, nowMs: number = Date.now()): boolean {
+  try {
+    return localDateAndMinutes(nowMs, timezone).minutes >= hhmmToMinutes(CHECKIN_START)
+  } catch {
+    const d = new Date(nowMs)
+    return d.getHours() * 60 + d.getMinutes() >= hhmmToMinutes(CHECKIN_START)
   }
 }
 
@@ -49,8 +63,16 @@ export async function createInvite(): Promise<{ token: string; expiresAt: number
   return await convex.mutation(api.challenges.createInvite, {})
 }
 
-export async function acceptInvite(token: string, displayName: string): Promise<void> {
-  await convex.mutation(api.challenges.acceptInvite, { token, timezone: deviceTimezone(), displayName })
+export async function acceptInvite(token: string, displayName: string, goals: string[] = [], donts: string[] = []): Promise<void> {
+  await convex.mutation(api.challenges.acceptInvite, { token, timezone: deviceTimezone(), displayName, goals, donts })
+}
+
+/** Replace your own lists. A don't sent with its id stays that don't; one left out is archived. */
+export async function updateMyCommitments(input: {
+  goals: string[]
+  donts: { id?: string; text: string }[]
+}): Promise<{ goals: string[]; donts: { id: string; text: string; archivedAt?: number }[] }> {
+  return await convex.mutation(api.challenges.updateMyCommitments, input)
 }
 
 export async function leaveChallenge(): Promise<void> {
@@ -74,8 +96,9 @@ export async function checkIn(args: {
   return await convex.mutation(api.challenges.checkIn, args)
 }
 
-export async function nudgePartner(): Promise<void> {
-  await convex.mutation(api.challenges.nudgePartner, {})
+/** `left` nudges remain today; `nextAt` is when the next one opens (null once spent). */
+export async function nudgePartner(): Promise<{ left: number; nextAt: number | null }> {
+  return await convex.mutation(api.challenges.nudgePartner, {})
 }
 
 export function inviteUrl(token: string): string {
@@ -103,8 +126,41 @@ export async function shareText(text: string): Promise<ShareOutcome> {
   }
 }
 
-/** Convex wraps thrown errors; show the sentence, not the stack. */
+interface RefusalData {
+  code?: unknown
+  message?: unknown
+}
+
+/** The object a `ConvexError` carries, when it is one. */
+function refusalData(e: unknown): RefusalData | null {
+  if (!(e instanceof ConvexError)) return null
+  const data: unknown = e.data
+  return data && typeof data === "object" ? (data as RefusalData) : null
+}
+
+/**
+ * The sentence to show for a failed call. Expected states arrive as a
+ * `ConvexError` whose data carries the sentence, and that survives
+ * production redaction. Anything else is cleaned of Convex's wrapping: in
+ * dev the message is "[CONVEX M(…)] [Request ID: …] Server Error", a
+ * newline, then "Uncaught Error: <sentence>" and a stack; in production only
+ * the redacted first part arrives, and there is no sentence to show.
+ */
 export function challengeErrorMessage(e: unknown): string {
+  if (e instanceof ConvexError) {
+    const message = refusalData(e)?.message
+    return typeof message === "string" ? message : String(e.data)
+  }
   const raw = e instanceof Error ? e.message : String(e)
-  return raw.replace(/^.*Uncaught Error: /, "").replace(/\s+at .*$/s, "").trim() || "Something went wrong"
+  if (/Uncaught Error: /.test(raw)) {
+    return raw.replace(/^.*Uncaught Error: /s, "").replace(/\s+at .*$/s, "").trim() || "Something went wrong"
+  }
+  if (/Server Error/.test(raw)) return "Something went wrong"
+  return raw.trim() || "Something went wrong"
+}
+
+/** The `code` of a server refusal ("challenge", or `NUDGE_RULE_CODE` for a nudge the rules refused), else null. */
+export function challengeErrorCode(e: unknown): string | null {
+  const code = refusalData(e)?.code
+  return typeof code === "string" ? code : null
 }

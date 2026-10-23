@@ -1,26 +1,33 @@
 /**
  * convex/challenges.ts — the two-person accountability challenge.
  *
- * Two people agree on a span of days, a few goals and a few "don'ts", and
- * then each day has two explicit acts: lock in the plan (before a morning
- * deadline) and check in (before midnight). The planner itself stays private.
- * What a partner sees is the `summary` each member's own client publishes —
- * Top 3 titles, counts, earned minutes, habits — never a `plannerDays` row.
- * A task marked private is counted in that summary, never titled.
+ * Two people agree on a span of days. Each member sets their own goals and
+ * "don'ts" (on their `challengeMembers` row, editable any time, readable by
+ * the partner), and each day has two explicit acts: lock in the plan (before
+ * a morning deadline) and check in (before midnight). The planner itself
+ * stays private. What a partner sees is the `summary` each member's own
+ * client publishes — Top 3 titles, counts, earned minutes, habits — never a
+ * `plannerDays` row. A task marked private is counted in that summary, never
+ * titled.
+ *
+ * A removed don't is archived, never deleted, so a confession that named it
+ * still resolves. Challenges created before per-member lists keep theirs on
+ * the `challenges` row; `memberCommitments` hands them to the creator.
  *
  * Membership is checked on every read and write, and every function derives
  * the caller from the identity, never from an argument. The partner's
  * `userId` is never returned to the client; the member view is a display
- * name and a timezone.
+ * name, a timezone and the member's lists.
  */
 
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server"
 import { internal } from "./_generated/api"
-import { v } from "convex/values"
+import { v, ConvexError } from "convex/values"
 import type { Doc, Id } from "./_generated/dataModel"
 import { getUserId } from "./_shared/auth"
-import { HHMM, ISO_DATE, emptySummary, summaryValidator, type ChallengeSummary } from "./_shared/challengeValidators"
+import { HHMM, ISO_DATE, emptySummary, summaryValidator, type ChallengeSummary, type Dont } from "./_shared/challengeValidators"
 import { isValidTimezone, localDateAndMinutes, CHECKIN_START, hhmmToMinutes } from "./_shared/challengeReminders"
+import { NUDGE_DAILY_CAP, NUDGE_MIN_GAP_MS, NUDGE_RULE_CODE, nudgeAvailability, nudgeRefusal, nudgeTimes, partnerOwesToday } from "./_shared/challengeNudges"
 
 type Ctx = QueryCtx | MutationCtx
 
@@ -31,10 +38,35 @@ const MAX_LIST = 10
 const MAX_ITEM = 200
 const MAX_DISPLAY_NAME = 40
 const MAX_NOTE = 1000
-/** A challenge is a season, not a lifetime: 200 rows per member is five times the one being run. */
-const HISTORY_CAP = 200
+/** A challenge is a season, not a lifetime: at most a year. */
+const MAX_SPAN_DAYS = 366
+/** Rows per member `history` returns: a full-length season, with room. */
+const HISTORY_CAP = 400
+const DAY_MS = 24 * 60 * 60 * 1000
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/** The code every expected-state refusal carries; the client shows `message` as is. */
+export const CHALLENGE_ERROR_CODE = "challenge"
+
+/**
+ * A refusal the user should read as a sentence. Convex redacts a plain
+ * `Error` in production ("Server Error"); a `ConvexError`'s data survives.
+ */
+function fail(message: string, code: string = CHALLENGE_ERROR_CODE): never {
+  throw new ConvexError({ code, message })
+}
+
+/** Whole days from `a` to `b`, both ISO dates; UTC arithmetic so DST cannot skew it. */
+function daysBetween(a: string, b: string): number {
+  return Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / DAY_MS)
+}
+
+/** The member's local date now: the timezone given when valid, else the one on file. */
+function memberToday(me: Doc<"challengeMembers">, timezone?: string): string {
+  const tz = timezone && isValidTimezone(timezone) ? timezone : me.timezone
+  return localDateAndMinutes(Date.now(), tz).date
+}
 
 async function requireUser(ctx: Ctx): Promise<string> {
   const identity = await ctx.auth.getUserIdentity()
@@ -61,9 +93,31 @@ async function activeMembership(ctx: Ctx, userId: string): Promise<Membership | 
   return null
 }
 
+/**
+ * What the reads show: the active challenge if there is one, else the most
+ * recent one that ended, so a finished season stays readable. Writes keep
+ * `activeMembership`, so an ended season can never be written to or block a
+ * new one.
+ */
+async function currentMembership(ctx: Ctx, userId: string): Promise<Membership | null> {
+  const rows = await ctx.db
+    .query("challengeMembers")
+    .withIndex("by_user", (q) => q.eq("userId", userId))
+    .order("desc")
+    .take(5)
+  let ended: Membership | null = null
+  for (const me of rows) {
+    const challenge = await ctx.db.get(me.challengeId)
+    if (!challenge) continue
+    if (challenge.status === "active") return { challenge, me }
+    if (!ended && challenge.status === "ended") ended = { challenge, me }
+  }
+  return ended
+}
+
 async function requireMembership(ctx: Ctx, userId: string): Promise<Membership> {
   const membership = await activeMembership(ctx, userId)
-  if (!membership) throw new Error("You are not in a challenge")
+  if (!membership) fail("You are not in a challenge")
   return membership
 }
 
@@ -102,8 +156,6 @@ function challengeView(c: Doc<"challenges">) {
     name: c.name,
     startDate: c.startDate,
     endDate: c.endDate,
-    goals: c.goals,
-    donts: c.donts,
     planDeadline: c.planDeadline,
     checkinDeadline: c.checkinDeadline,
     createdAt: c.createdAt,
@@ -111,8 +163,22 @@ function challengeView(c: Doc<"challenges">) {
   }
 }
 
-function memberView(m: Doc<"challengeMembers">) {
-  return { displayName: m.displayName, timezone: m.timezone, joinedAt: m.joinedAt }
+/**
+ * A member's own goals and don'ts. Rows written before per-member lists have
+ * none; the creator's then come from the challenge row, where they used to
+ * live, and anyone else starts empty. This is the whole migration.
+ */
+function memberCommitments(challenge: Doc<"challenges">, member: Doc<"challengeMembers">): { goals: string[]; donts: Dont[] } {
+  const legacy = member.userId === challenge.createdBy
+  return {
+    goals: member.goals ?? (legacy ? challenge.goals : []),
+    donts: member.donts ?? (legacy ? challenge.donts : []),
+  }
+}
+
+function memberView(challenge: Doc<"challenges">, m: Doc<"challengeMembers">) {
+  const { goals, donts } = memberCommitments(challenge, m)
+  return { displayName: m.displayName, timezone: m.timezone, joinedAt: m.joinedAt, goals, donts }
 }
 
 /** What the partner may see of a day. Reminder bookkeeping stays out. */
@@ -130,11 +196,11 @@ function dayView(row: Doc<"challengeDays">) {
 export type ChallengeDayView = ReturnType<typeof dayView>
 
 function assertIsoDate(value: string, label: string): void {
-  if (!ISO_DATE.test(value)) throw new Error(`${label} must be YYYY-MM-DD`)
+  if (!ISO_DATE.test(value)) fail(`${label} must be YYYY-MM-DD`)
 }
 
 function assertHhmm(value: string, label: string): void {
-  if (!HHMM.test(value)) throw new Error(`${label} must be HH:MM`)
+  if (!HHMM.test(value)) fail(`${label} must be HH:MM`)
 }
 
 function inRange(challenge: Doc<"challenges">, date: string): boolean {
@@ -142,23 +208,28 @@ function inRange(challenge: Doc<"challenges">, date: string): boolean {
 }
 
 function cleanList(items: string[], label: string): string[] {
-  if (items.length > MAX_LIST) throw new Error(`At most ${MAX_LIST} ${label}`)
+  if (items.length > MAX_LIST) fail(`At most ${MAX_LIST} ${label}`)
   const cleaned = items.map((s) => s.trim()).filter((s) => s.length > 0)
   for (const item of cleaned) {
-    if (item.length > MAX_ITEM) throw new Error(`Each of the ${label} must be ${MAX_ITEM} characters or fewer`)
+    if (item.length > MAX_ITEM) fail(`Each of the ${label} must be ${MAX_ITEM} characters or fewer`)
   }
   return cleaned
 }
 
+/** New don'ts from cleaned texts. `offset` keeps ids unique beside a member's existing ones. */
+function mintDonts(texts: string[], now: number, offset = 0): Dont[] {
+  return texts.map((text, i) => ({ id: `dont-${now}-${offset + i + 1}`, text }))
+}
+
 function cleanDisplayName(name: string): string {
   const trimmed = name.trim()
-  if (!trimmed) throw new Error("A display name is required")
-  if (trimmed.length > MAX_DISPLAY_NAME) throw new Error(`Display name must be ${MAX_DISPLAY_NAME} characters or fewer`)
+  if (!trimmed) fail("A display name is required")
+  if (trimmed.length > MAX_DISPLAY_NAME) fail(`Display name must be ${MAX_DISPLAY_NAME} characters or fewer`)
   return trimmed
 }
 
 function cleanTimezone(timezone: string): string {
-  if (!isValidTimezone(timezone)) throw new Error("Unknown timezone")
+  if (!isValidTimezone(timezone)) fail("Unknown timezone")
   return timezone
 }
 
@@ -198,15 +269,15 @@ export const myChallenge = query({
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) return null
     const userId = getUserId(identity.subject)
-    const membership = await activeMembership(ctx, userId)
+    const membership = await currentMembership(ctx, userId)
     if (!membership) return null
     const { challenge, me } = membership
     const partner = await partnerOf(ctx, challenge._id, userId)
-    const invite = partner ? null : await openInvite(ctx, challenge._id, Date.now())
+    const invite = partner || challenge.status !== "active" ? null : await openInvite(ctx, challenge._id, Date.now())
     return {
       challenge: challengeView(challenge),
-      me: memberView(me),
-      partner: partner ? memberView(partner) : null,
+      me: memberView(challenge, me),
+      partner: partner ? memberView(challenge, partner) : null,
       invite: invite ? { token: invite.token, expiresAt: invite.expiresAt } : null,
     }
   },
@@ -222,7 +293,7 @@ export const dayCards = query({
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) return null
     const userId = getUserId(identity.subject)
-    const membership = await activeMembership(ctx, userId)
+    const membership = await currentMembership(ctx, userId)
     if (!membership) return null
     assertIsoDate(args.myDate, "myDate")
     assertIsoDate(args.partnerDate, "partnerDate")
@@ -242,30 +313,34 @@ export const dayCards = query({
  * yesterday, not today: today's row is rewritten on every planner edit, and
  * keeping it out of this read set is what stops each keystroke from
  * re-reading a whole season (the same hot/cold rule as `plannerDays`).
+ * The partner's rows run to `partnerToDate` (default `toDate`): their
+ * yesterday, which is not the viewer's when they are a day ahead.
  */
 export const history = query({
-  args: { toDate: v.string() },
+  args: { toDate: v.string(), partnerToDate: v.optional(v.string()) },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) return null
     const userId = getUserId(identity.subject)
-    const membership = await activeMembership(ctx, userId)
+    const membership = await currentMembership(ctx, userId)
     if (!membership) return null
     assertIsoDate(args.toDate, "toDate")
+    const partnerToDate = args.partnerToDate ?? args.toDate
+    assertIsoDate(partnerToDate, "partnerToDate")
     const { challenge } = membership
     const partner = await partnerOf(ctx, challenge._id, userId)
-    const rowsFor = async (memberId: string) =>
+    const rowsFor = async (memberId: string, toDate: string) =>
       (
         await ctx.db
           .query("challengeDays")
           .withIndex("by_challenge_user_date", (q) =>
-            q.eq("challengeId", challenge._id).eq("userId", memberId).gte("date", challenge.startDate).lte("date", args.toDate),
+            q.eq("challengeId", challenge._id).eq("userId", memberId).gte("date", challenge.startDate).lte("date", toDate),
           )
           .take(HISTORY_CAP)
       ).map(dayView)
     return {
-      mine: await rowsFor(userId),
-      partner: partner ? await rowsFor(partner.userId) : [],
+      mine: await rowsFor(userId, args.toDate),
+      partner: partner ? await rowsFor(partner.userId, partnerToDate) : [],
     }
   },
 })
@@ -274,7 +349,8 @@ export const history = query({
 export const invitePreview = query({
   args: { token: v.string() },
   handler: async (ctx, args) => {
-    const none = { challenge: null, inviterName: null }
+    const none = { challenge: null, inviterName: null, inviterGoals: [] as string[], inviterDonts: [] as string[] }
+    const noLists = { inviterGoals: [] as string[], inviterDonts: [] as string[] }
     const invite = await ctx.db
       .query("challengeInvites")
       .withIndex("by_token", (q) => q.eq("token", args.token))
@@ -283,12 +359,23 @@ export const invitePreview = query({
     const challenge = await ctx.db.get(invite.challengeId)
     if (!challenge || challenge.status !== "active") return { status: "ended" as const, ...none }
     const preview = { name: challenge.name, startDate: challenge.startDate, endDate: challenge.endDate }
-    if (invite.acceptedBy) return { status: "used" as const, challenge: preview, inviterName: null }
-    if (invite.expiresAt <= Date.now()) return { status: "expired" as const, challenge: preview, inviterName: null }
     const members = await membersOf(ctx, challenge._id)
-    const inviterName = members.find((m) => m.userId === invite.createdBy)?.displayName ?? null
-    if (members.length >= MAX_MEMBERS) return { status: "full" as const, challenge: preview, inviterName }
-    return { status: "ok" as const, challenge: preview, inviterName }
+    // Auth is optional here: a signed-in member revisiting the link is told they are in.
+    const identity = await ctx.auth.getUserIdentity()
+    if (identity && members.some((m) => m.userId === getUserId(identity.subject))) {
+      return { status: "member" as const, challenge: preview, inviterName: null, ...noLists }
+    }
+    if (invite.acceptedBy) return { status: "used" as const, challenge: preview, inviterName: null, ...noLists }
+    if (invite.expiresAt <= Date.now()) return { status: "expired" as const, challenge: preview, inviterName: null, ...noLists }
+    const inviter = members.find((m) => m.userId === invite.createdBy) ?? null
+    const inviterName = inviter?.displayName ?? null
+    // What the friend is signing up next to: the inviter's active lists, texts only.
+    const lists = inviter ? memberCommitments(challenge, inviter) : null
+    const inviterLists = lists
+      ? { inviterGoals: lists.goals, inviterDonts: lists.donts.filter((d) => d.archivedAt === undefined).map((d) => d.text) }
+      : noLists
+    if (members.length >= MAX_MEMBERS) return { status: "full" as const, challenge: preview, inviterName, ...inviterLists }
+    return { status: "ok" as const, challenge: preview, inviterName, ...inviterLists }
   },
 })
 
@@ -308,37 +395,51 @@ export const createChallenge = mutation({
   },
   handler: async (ctx, args) => {
     const userId = await requireUser(ctx)
-    if (await activeMembership(ctx, userId)) throw new Error("You are already in a challenge")
+    if (await activeMembership(ctx, userId)) fail("You are already in a challenge")
     const name = args.name.trim()
-    if (!name) throw new Error("A name is required")
-    if (name.length > MAX_NAME) throw new Error(`Name must be ${MAX_NAME} characters or fewer`)
+    if (!name) fail("A name is required")
+    if (name.length > MAX_NAME) fail(`Name must be ${MAX_NAME} characters or fewer`)
     assertIsoDate(args.startDate, "startDate")
     assertIsoDate(args.endDate, "endDate")
-    if (args.startDate > args.endDate) throw new Error("The challenge must end on or after it starts")
+    if (args.startDate > args.endDate) fail("The challenge must end on or after it starts")
+    if (daysBetween(args.startDate, args.endDate) + 1 > MAX_SPAN_DAYS) fail("A challenge can run for at most a year")
     assertHhmm(args.planDeadline, "planDeadline")
     assertHhmm(args.checkinDeadline, "checkinDeadline")
     if (hhmmToMinutes(args.planDeadline) >= hhmmToMinutes(CHECKIN_START)) {
-      throw new Error(`The plan deadline must be before ${CHECKIN_START}`)
+      fail(`The plan deadline must be before ${CHECKIN_START}`)
+    }
+    if (hhmmToMinutes(args.checkinDeadline) <= hhmmToMinutes(CHECKIN_START)) {
+      fail(`The check-in deadline must be after ${CHECKIN_START}`)
     }
     const timezone = cleanTimezone(args.timezone)
     const displayName = cleanDisplayName(args.displayName)
     const goals = cleanList(args.goals, "goals")
     const dontTexts = cleanList(args.donts, "don'ts")
     const now = Date.now()
-    const donts = dontTexts.map((text, i) => ({ id: `dont-${now}-${i + 1}`, text }))
+    const donts = mintDonts(dontTexts, now)
+    // The lists are the creator's own; the challenge row keeps empty legacy fields.
     const challengeId = await ctx.db.insert("challenges", {
       name,
       startDate: args.startDate,
       endDate: args.endDate,
-      goals,
-      donts,
+      goals: [],
+      donts: [],
       planDeadline: args.planDeadline,
       checkinDeadline: args.checkinDeadline,
       createdBy: userId,
       createdAt: now,
       status: "active",
     })
-    await ctx.db.insert("challengeMembers", { challengeId, userId, timezone, displayName, joinedAt: now })
+    await ctx.db.insert("challengeMembers", {
+      challengeId,
+      userId,
+      timezone,
+      displayName,
+      joinedAt: now,
+      goals,
+      donts,
+      commitmentsUpdatedAt: now,
+    })
     return { challengeId }
   },
 })
@@ -350,7 +451,7 @@ export const createInvite = mutation({
     const userId = await requireUser(ctx)
     const { challenge } = await requireMembership(ctx, userId)
     const members = await membersOf(ctx, challenge._id)
-    if (members.length >= MAX_MEMBERS) throw new Error("The challenge already has two members")
+    if (members.length >= MAX_MEMBERS) fail("The challenge already has two members")
     const now = Date.now()
     const open = await openInvite(ctx, challenge._id, now)
     if (open) return { token: open.token, expiresAt: open.expiresAt }
@@ -361,8 +462,15 @@ export const createInvite = mutation({
   },
 })
 
+/** Joining. The joiner may bring their own lists; without them they start empty. */
 export const acceptInvite = mutation({
-  args: { token: v.string(), timezone: v.string(), displayName: v.string() },
+  args: {
+    token: v.string(),
+    timezone: v.string(),
+    displayName: v.string(),
+    goals: v.optional(v.array(v.string())),
+    donts: v.optional(v.array(v.string())),
+  },
   handler: async (ctx, args) => {
     const userId = await requireUser(ctx)
     const now = Date.now()
@@ -370,20 +478,78 @@ export const acceptInvite = mutation({
       .query("challengeInvites")
       .withIndex("by_token", (q) => q.eq("token", args.token))
       .unique()
-    if (!invite) throw new Error("This invite link is not valid")
+    if (!invite) fail("This invite link is not valid")
     const challenge = await ctx.db.get(invite.challengeId)
-    if (!challenge || challenge.status !== "active") throw new Error("This challenge has ended")
+    if (!challenge || challenge.status !== "active") fail("This challenge has ended")
     const members = await membersOf(ctx, challenge._id)
     if (members.some((m) => m.userId === userId)) return { challengeId: challenge._id }
-    if (invite.acceptedBy) throw new Error("This invite has already been used")
-    if (invite.expiresAt <= now) throw new Error("This invite has expired")
-    if (members.length >= MAX_MEMBERS) throw new Error("The challenge already has two members")
-    if (await activeMembership(ctx, userId)) throw new Error("You are already in a challenge")
+    if (invite.acceptedBy) fail("This invite has already been used")
+    if (invite.expiresAt <= now) fail("This invite has expired")
+    if (members.length >= MAX_MEMBERS) fail("The challenge already has two members")
+    if (await activeMembership(ctx, userId)) fail("You are already in a challenge")
     const timezone = cleanTimezone(args.timezone)
     const displayName = cleanDisplayName(args.displayName)
-    await ctx.db.insert("challengeMembers", { challengeId: challenge._id, userId, timezone, displayName, joinedAt: now })
+    const goals = cleanList(args.goals ?? [], "goals")
+    const donts = mintDonts(cleanList(args.donts ?? [], "don'ts"), now)
+    await ctx.db.insert("challengeMembers", {
+      challengeId: challenge._id,
+      userId,
+      timezone,
+      displayName,
+      joinedAt: now,
+      goals,
+      donts,
+      commitmentsUpdatedAt: now,
+    })
     await ctx.db.patch(invite._id, { acceptedBy: userId, acceptedAt: now })
     return { challengeId: challenge._id }
+  },
+})
+
+/**
+ * Replace the caller's own goals and don'ts. Goals are replaced wholesale.
+ * A don't sent with its id keeps that id (its text may change); a current
+ * don't left out is archived, not deleted, because a check-in may name it;
+ * a don't sent without an id is new. Archived ones stay archived and do not
+ * count against the cap.
+ */
+export const updateMyCommitments = mutation({
+  args: {
+    goals: v.array(v.string()),
+    donts: v.array(v.object({ id: v.optional(v.string()), text: v.string() })),
+  },
+  handler: async (ctx, args) => {
+    const userId = await requireUser(ctx)
+    const { challenge, me } = await requireMembership(ctx, userId)
+    const goals = cleanList(args.goals, "goals")
+    // Blank rows are dropped below, so they do not count against the cap (as with goals).
+    if (args.donts.filter((d) => d.text.trim().length > 0).length > MAX_LIST) fail(`At most ${MAX_LIST} don'ts`)
+    const current = memberCommitments(challenge, me).donts
+    const active = new Map(current.filter((d) => d.archivedAt === undefined).map((d) => [d.id, d]))
+    const now = Date.now()
+    const kept = new Set<string>()
+    const next: Dont[] = []
+    let minted = 0
+    for (const row of args.donts) {
+      const text = row.text.trim()
+      if (text.length > MAX_ITEM) fail(`Each of the don'ts must be ${MAX_ITEM} characters or fewer`)
+      if (row.id !== undefined) {
+        if (!active.has(row.id) || kept.has(row.id)) fail("Unknown don't")
+        // A blank text for a known id is a removal; it is archived below.
+        if (!text) continue
+        kept.add(row.id)
+        next.push({ id: row.id, text })
+      } else if (text) {
+        minted += 1
+        next.push(mintDonts([text], now, current.length + minted - 1)[0]!)
+      }
+    }
+    const archived = current.map((d) =>
+      d.archivedAt !== undefined || kept.has(d.id) ? d : { ...d, archivedAt: now },
+    ).filter((d) => d.archivedAt !== undefined)
+    const donts = [...next, ...archived]
+    await ctx.db.patch(me._id, { goals, donts, commitmentsUpdatedAt: now })
+    return { goals, donts }
   },
 })
 
@@ -413,6 +579,9 @@ export const syncDaySummary = mutation({
     const { challenge, me } = await requireMembership(ctx, userId)
     assertIsoDate(args.date, "date")
     if (!inRange(challenge, args.date)) return null
+    // Only the member's own today (± a day for the date line) is published:
+    // browsing another day in the planner must not rewrite what the partner saw.
+    if (Math.abs(daysBetween(memberToday(me, args.timezone), args.date)) > 1) return null
     await upsertDay(ctx, challenge._id, userId, args.date, args.summary)
     if (args.timezone !== me.timezone && isValidTimezone(args.timezone)) {
       await ctx.db.patch(me._id, { timezone: args.timezone })
@@ -426,9 +595,10 @@ export const lockInPlan = mutation({
   args: { date: v.string(), summary: summaryValidator },
   handler: async (ctx, args) => {
     const userId = await requireUser(ctx)
-    const { challenge } = await requireMembership(ctx, userId)
+    const { challenge, me } = await requireMembership(ctx, userId)
     assertIsoDate(args.date, "date")
-    if (!inRange(challenge, args.date)) throw new Error("That day is outside the challenge")
+    if (!inRange(challenge, args.date)) fail("That day is outside the challenge")
+    if (args.date !== memberToday(me)) fail("You can only lock in today")
     const row = await upsertDay(ctx, challenge._id, userId, args.date, args.summary)
     if (row.planSetAt) return { planSetAt: row.planSetAt }
     const planSetAt = Date.now()
@@ -447,14 +617,17 @@ export const checkIn = mutation({
   },
   handler: async (ctx, args) => {
     const userId = await requireUser(ctx)
-    const { challenge } = await requireMembership(ctx, userId)
+    const { challenge, me } = await requireMembership(ctx, userId)
     assertIsoDate(args.date, "date")
-    if (!inRange(challenge, args.date)) throw new Error("That day is outside the challenge")
+    if (!inRange(challenge, args.date)) fail("That day is outside the challenge")
+    const back = daysBetween(args.date, memberToday(me))
+    if (back !== 0 && back !== 1) fail("You can only check in for today or yesterday")
     const note = args.note?.trim() ?? ""
-    if (note.length > MAX_NOTE) throw new Error(`Note must be ${MAX_NOTE} characters or fewer`)
-    const known = new Set(challenge.donts.map((d) => d.id))
+    if (note.length > MAX_NOTE) fail(`Note must be ${MAX_NOTE} characters or fewer`)
+    // Archived ones count: a check-in edited later may name a don't removed since.
+    const known = new Set(memberCommitments(challenge, me).donts.map((d) => d.id))
     for (const id of args.dontsBroken) {
-      if (!known.has(id)) throw new Error("Unknown don't")
+      if (!known.has(id)) fail("Unknown don't")
     }
     const dontsBroken = [...new Set(args.dontsBroken)]
     const existing = await getDayRow(ctx, challenge._id, userId, args.date)
@@ -472,37 +645,45 @@ export const checkIn = mutation({
 })
 
 /**
- * One email to the partner, once a day, and only while they still owe the
- * day something. The send is scheduled from inside the transaction, so a
- * nudge that fails to record never goes out.
+ * An email to the partner while they still owe the day something: up to
+ * three on the nudger's own local day, at least an hour apart. The rules
+ * live in `_shared/challengeNudges.ts`, shared with the card's button. The
+ * send is scheduled from inside the transaction, so a nudge that fails to
+ * record never goes out; "sent" means queued, not delivered.
  */
 export const nudgePartner = mutation({
   args: {},
-  handler: async (ctx) => {
+  handler: async (ctx): Promise<{ left: number; nextAt: number | null }> => {
     const userId = await requireUser(ctx)
     const { challenge, me } = await requireMembership(ctx, userId)
     const partner = await partnerOf(ctx, challenge._id, userId)
-    if (!partner) throw new Error("Nobody has joined yet")
+    if (!partner) fail("Nobody has joined yet")
     const now = Date.now()
     const partnerLocal = localDateAndMinutes(now, partner.timezone)
+    if (!inRange(challenge, partnerLocal.date)) fail("The challenge is not running today", NUDGE_RULE_CODE)
     const partnerRow = await getDayRow(ctx, challenge._id, partner.userId, partnerLocal.date)
     const evening = partnerLocal.minutes >= hhmmToMinutes(CHECKIN_START)
-    const owes = evening ? !partnerRow?.checkinAt : !partnerRow?.planSetAt
-    if (!owes) throw new Error(evening ? "They have already checked in" : "They have already locked in their plan")
+    const owes = partnerOwesToday({ evening, planSetAt: partnerRow?.planSetAt, checkinAt: partnerRow?.checkinAt })
+    if (!owes) fail(evening ? "They have already checked in" : "They have already locked in their plan", NUDGE_RULE_CODE)
     const myLocal = localDateAndMinutes(now, me.timezone)
     const myRow = await getDayRow(ctx, challenge._id, userId, myLocal.date)
-    if (myRow?.nudgeSentAt) throw new Error("You have already nudged them today")
+    const times = nudgeTimes(myRow)
+    const refusal = nudgeRefusal(nudgeAvailability({ nowMs: now, times, partnerOwes: owes }), now)
+    if (refusal) fail(refusal, NUDGE_RULE_CODE)
     const partnerDoc = ctx.db.normalizeId("users", partner.userId)
     const email = partnerDoc ? ((await ctx.db.get(partnerDoc))?.email ?? null) : null
-    if (!email) throw new Error("Your partner has no email address on file")
+    if (!email) fail("Your partner has no email address on file")
     const mine = myRow ?? (await upsertDay(ctx, challenge._id, userId, myLocal.date, emptySummary()))
-    await ctx.db.patch(mine._id, { nudgeSentAt: now })
+    // A legacy `nudgeSentAt` is carried into the array on the first write; the old field is left as it was.
+    const sent = [...times, now]
+    await ctx.db.patch(mine._id, { nudgesSentAt: sent })
     const what = evening ? "check in" : "lock in today's plan"
     await ctx.scheduler.runAfter(0, internal.email.sendEmail, {
       to: email,
       subject: `${me.displayName} is nudging you to ${what} — ${challenge.name}`,
       text: `${me.displayName} noticed you have not yet ${evening ? "checked in" : "locked in your plan"} today in "${challenge.name}".\n\nOpen Deepblock: ${process.env.SITE_URL ?? ""}/challenge\n`,
     })
-    return null
+    const left = NUDGE_DAILY_CAP - sent.length
+    return { left, nextAt: left > 0 ? now + NUDGE_MIN_GAP_MS : null }
   },
 })

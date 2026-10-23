@@ -179,8 +179,8 @@ is false until the user reconnects; `/calendar` and Today both say so.
 
 ### Accountability challenge
 
-Two people, one season (e.g. 1 Oct → 31 Dec), goals, "don'ts", and two
-explicit acts a day: **Lock in today's plan** before a morning deadline and
+Two people, one season (e.g. 1 Oct → 31 Dec), each with their own goals and
+"don'ts", and two explicit acts a day: **Lock in today's plan** before a morning deadline and
 **Check in** before midnight. It replaces a WhatsApp thread; WhatsApp stays
 the ping (the Share button hands a prefilled line to the Web Share sheet, or
 copies it), the app is the record.
@@ -195,20 +195,49 @@ refresh, off while hydrating). `Task.isPrivate` keeps a task out of the
 summary: counted, never titled, still mirrored to the user's own Google Tasks.
 Every function in `convex/challenges.ts` derives the caller from the identity
 and checks membership; the partner view (`dayView`) never carries reminder
-bookkeeping or a `userId`.
+bookkeeping or a `userId`. Only the member's own today is published:
+`syncDaySummary` drops any date more than a day from their local today,
+`lockInPlan` takes today only and `checkIn` today or yesterday, and the
+planner syncs only while it shows today, so browsing another day never
+rewrites what the partner saw.
+
+**Refusals are sentences.** Every expected state (validation, invite states,
+"not in a challenge", nudge rules) throws `ConvexError({ code, message })`
+through `fail()`, because Convex redacts a plain `Error` to "Server Error" in
+production. `challengeErrorMessage` shows `data.message`; nudge rule refusals
+carry `code: "nudgeRule"`, which the card shows as a quiet status. Only
+"Not authenticated" stays a plain `Error`.
 
 **Tables** (`convex/schema.ts`, validators shared via
 `convex/_shared/challengeValidators.ts` so arg and table cannot drift):
-`challenges` (span, goals, donts, local deadlines, `status` — the cron's one
-switch), `challengeMembers` (one per user, with an IANA `timezone` refreshed
-on every sync, because the two are in different zones), `challengeInvites`
-(7-day token, one seat), `challengeDays` (one row per member per day:
-summary, `planSetAt`, `checkinAt`, note, `dontsBroken`, `remindersSent`).
+`challenges` (span, local deadlines, `status` — the cron's one switch),
+`challengeMembers` (one per user, with an IANA `timezone` refreshed on every
+sync, because the two are in different zones, and the member's own `goals`
+and `donts`), `challengeInvites` (7-day token, one seat), `challengeDays` (one
+row per member per day: summary, `planSetAt`, `checkinAt`, note,
+`dontsBroken`, `remindersSent`).
 Legacy `shareTokens` is untouched. A user is in at most one active challenge.
+A season runs at most 366 days, and the check-in deadline must fall after
+21:30, where the check-in reminders start.
+
+**Goals and don'ts are per member.** Each member sets theirs on create or
+join and edits them any time (`updateMyCommitments`); the partner reads them
+via `memberView` and cannot change them. A removed don't is archived
+(`archivedAt`), never deleted, and an edited one keeps its id, so every
+`dontsBroken` id resolves forever (`resolveDontTexts` in
+`src/domain/challengeCommitments.ts`). `challenges.goals`/`donts` are legacy,
+never written again: a creator whose member row has no lists falls back to
+them (`memberCommitments`), which is the whole migration.
 
 **Reads are split hot/cold here too.** `myChallenge` and `dayCards` are small
 and live; `history` returns the whole season and callers pass
 `toDate = yesterday`, so today's debounced writes never invalidate it.
+`history` takes two dates, `toDate` for the viewer and `partnerToDate` for the
+partner, because each one's yesterday is on their own clock; with one date a
+partner a day ahead leaves a hole in the grid. Reads fall back to the last
+ended season (`currentMembership`), so a finished challenge stays readable on
+`/challenge`, read-only, with "Start a new challenge"; writes see only an
+active one, so an ended season never blocks the next.
 
 **Reminders are email from the user's own Gmail** (`convex/email.ts`, a
 `"use node"` nodemailer action; swap to Resend in `send()` once a domain
@@ -218,7 +247,10 @@ transaction (a failed send costs one email, never doubles one), then the
 action sends. The rules are pure in `convex/_shared/challengeReminders.ts`:
 after the plan deadline every 120 min, four at most; from 21:30 local every
 90 min for the check-in, two at most; each judged on the member's own clock.
-`nudgePartner` schedules one email a day from inside the mutation.
+`nudgePartner` schedules one email from inside the mutation: up to three per
+nudger-local day, at least an hour apart, only while the partner owes the day
+something (pure rules in `convex/_shared/challengeNudges.ts`, shared with the
+button; `challengeDays.nudgesSentAt`, legacy `nudgeSentAt` read as one).
 
 **Routes and entry points:** `/challenge` (create / join / dashboard with the
 countdown, both members' cards, the season grid, invite link),

@@ -43,6 +43,7 @@ import { useTaskSync } from "../../hooks/useTaskSync";
 import { useChallenge } from "../../hooks/useChallenge";
 import { useChallengeSync } from "../../hooks/useChallengeSync";
 import { buildChallengeSummary } from "../../domain/challenge";
+import { activeDonts } from "../../domain/challengeCommitments";
 import { ChallengeCard } from "../challenge/ChallengeCard";
 import { CheckinSheet } from "../challenge/CheckinSheet";
 import { usePersistentState, getOrCreateDay } from "../../storage/localStorageState";
@@ -222,7 +223,7 @@ export function DayPlanner() {
     () => (challengeActive ? buildChallengeSummary(dayState, habits) : null),
     [challengeActive, dayState, habits],
   );
-  useChallengeSync({ date: selectedDay, summary: challengeSummary, enabled: challengeActive && !isHydrating });
+  useChallengeSync({ date: selectedDay, summary: challengeSummary, enabled: challengeActive && !isHydrating && isToday });
   const [checkinOpen, setCheckinOpen] = useState(false);
   const challengeDayLabel =
     challengeActive && challenge.progress?.phase === "active"
@@ -846,7 +847,7 @@ export function DayPlanner() {
       {checkinOpen && challenge.info && challenge.progress && challengeSummary && (
         <CheckinSheet
           challengeName={challenge.info.challenge.name}
-          donts={challenge.info.challenge.donts}
+          donts={activeDonts(challenge.info.me.donts)}
           displayName={challenge.info.me.displayName}
           progress={challenge.progress}
           date={selectedDay}

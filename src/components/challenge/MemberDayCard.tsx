@@ -12,6 +12,7 @@
 
 import type { ChallengeSummary } from '../../domain/challenge'
 import { formatClock, formatDeepMinutes } from '../../domain/challenge'
+import { resolveDontTexts, type DontLike } from '../../domain/challengeCommitments'
 
 export interface MemberDayView {
   date: string
@@ -26,7 +27,8 @@ interface MemberDayCardProps {
   name: string
   isMe: boolean
   day: MemberDayView | null
-  donts: { id: string; text: string }[]
+  /** This member's own don'ts, archived ones included. */
+  donts: DontLike[]
   /** Shown under the name, e.g. the member's local date when it differs. */
   caption?: string
 }
@@ -45,7 +47,8 @@ function Stamp({ label, at }: { label: string; at: number | null | undefined }) 
 
 export function MemberDayCard({ name, isMe, day, donts, caption }: MemberDayCardProps) {
   const s = day?.summary
-  const broke = (day?.dontsBroken ?? []).map((id) => donts.find((d) => d.id === id)?.text ?? 'a don’t')
+  // The member's full list, archived included: a don't removed since still reads as itself.
+  const broke = resolveDontTexts(day?.dontsBroken ?? [], donts)
   return (
     <div className="rounded-2xl bg-share-surfaceContainerLow p-4">
       <div className="flex items-baseline justify-between gap-2">

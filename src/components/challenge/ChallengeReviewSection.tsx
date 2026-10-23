@@ -5,11 +5,12 @@
  * joint streak, and which don'ts you owned up to.
  */
 
-import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { bothLockedDays, jointStreak, type ChallengeDayLike } from '../../domain/challenge'
+import { bothLockedDays, jointStreak, reviewWeekElapsed, type ChallengeDayLike } from '../../domain/challenge'
+import { resolveDontTexts } from '../../domain/challengeCommitments'
 import { addDays } from '../../domain/dateUtils'
 import { useChallenge, useChallengeHistory } from '../../hooks/useChallenge'
+import { useMinuteTick } from '../../hooks/useMinuteTick'
 
 interface ChallengeReviewSectionProps {
   weekDates: string[]
@@ -17,23 +18,27 @@ interface ChallengeReviewSectionProps {
 }
 
 export function ChallengeReviewSection({ weekDates, today }: ChallengeReviewSectionProps) {
-  const [openedAt] = useState(() => Date.now())
-  const state = useChallenge(openedAt)
+  const now = useMinuteTick()
+  const state = useChallenge(now)
   const active = state.status === 'active'
   const weekEnd = weekDates[6]!
   const until = weekEnd < today ? weekEnd : addDays(today, -1)
   const history = useChallengeHistory(active, until)
   if (!active || !state.info) return null
   const { challenge, partner } = state.info
+  // The viewer's own list, archived included, so a don't removed since still reads as itself.
+  const myDonts = state.info.me.donts
 
   const includeToday = weekDates.includes(today)
   const mine: ChallengeDayLike[] = [...(history?.mine ?? []), ...(includeToday && state.mine ? [state.mine] : [])]
   const theirs: ChallengeDayLike[] = [...(history?.partner ?? []), ...(includeToday && state.partnerCard ? [state.partnerCard] : [])]
   const inWeek = (rows: ChallengeDayLike[]) => rows.filter((r) => weekDates.includes(r.date))
   const myWeek = inWeek(mine)
-  const elapsed = weekDates.filter((d) => d <= today).length
+  const elapsed = reviewWeekElapsed(weekDates, today, challenge)
   const lockedBoth = partner ? bothLockedDays(myWeek, inWeek(theirs), weekDates) : myWeek.filter((r) => r.planSetAt).length
-  const streak = partner ? jointStreak(mine, theirs, today, challenge.startDate) : 0
+  // A past week's streak ends at that week's end; this week's at today, whose
+  // rows are in when it is part of the week (an unfinished today is skipped).
+  const streak = partner ? jointStreak(mine, theirs, includeToday ? today : until, challenge.startDate) : 0
   const brokenIds = myWeek.flatMap((r) => r.dontsBroken ?? [])
   const brokenCounts = new Map<string, number>()
   for (const id of brokenIds) brokenCounts.set(id, (brokenCounts.get(id) ?? 0) + 1)
@@ -67,7 +72,7 @@ export function ChallengeReviewSection({ weekDates, today }: ChallengeReviewSect
           </div>
         )}
       </dl>
-      {challenge.donts.length > 0 && (
+      {myDonts.length > 0 && (
         <p className="mt-3 text-xs text-share-onSurfaceVariant">
           {brokenCounts.size === 0 ? (
             <span>No don&rsquo;ts broken this week.</span>
@@ -77,7 +82,7 @@ export function ChallengeReviewSection({ weekDates, today }: ChallengeReviewSect
               {[...brokenCounts.entries()].map(([id, n], i) => (
                 <span key={id}>
                   {i > 0 && ', '}
-                  <span className="text-share-tertiary">{challenge.donts.find((d) => d.id === id)?.text ?? 'a don’t'}</span>
+                  <span className="text-share-tertiary">{resolveDontTexts([id], myDonts)[0]}</span>
                   {n > 1 && ` ×${n}`}
                 </span>
               ))}

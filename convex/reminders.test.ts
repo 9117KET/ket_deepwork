@@ -83,6 +83,8 @@ describe('claimDueReminders', () => {
 
   test('a locked-in plan is left alone; the evening chases the check-in', async () => {
     const t = convexTest(schema, modules)
+    // Lock-in takes only the member's own today.
+    vi.useFakeTimers({ now: at('2026-10-22', '09:00', BERLIN), toFake: ['Date'] })
     const { a } = await pair(t)
     await a.as.mutation(api.challenges.lockInPlan, { date: '2026-10-22', summary: emptySummary() })
     expect(await t.mutation(internal.challengesInternal.claimDueReminders, { nowMs: at('2026-10-22', '10:05', BERLIN) })).toEqual([])
@@ -148,7 +150,7 @@ describe('sweep', () => {
 })
 
 describe('nudgePartner', () => {
-  test('emails the partner once a day while they still owe the day something', async () => {
+  test('emails the partner, an hour apart, while they still owe the day something', async () => {
     const t = convexTest(schema, modules)
     const { a, b } = await pair(t)
     vi.useFakeTimers({ now: at('2026-10-22', '11:00', BERLIN) })
@@ -159,7 +161,8 @@ describe('nudgePartner', () => {
     expect(mail.to).toBe('b@example.com')
     expect(mail.subject).toMatch(/Kin is nudging you/)
 
-    await expect(a.as.mutation(api.challenges.nudgePartner, {})).rejects.toThrow(/already nudged/i)
+    vi.setSystemTime(at('2026-10-22', '11:10', BERLIN))
+    await expect(a.as.mutation(api.challenges.nudgePartner, {})).rejects.toThrow(/again in/i)
 
     // Sam locks in (on Sam's own date); a nudge from Kin tomorrow is refused for a different reason.
     await b.as.mutation(api.challenges.lockInPlan, { date: '2026-10-22', summary: emptySummary() })

@@ -3,16 +3,31 @@
  *
  * Today's two acts and where the partner stands, in one short card. Lock in
  * is one tap (the plan is whatever the day holds); check-in opens a sheet;
- * Share hands the same words to WhatsApp. "Nudge" sends the partner one
- * email a day, and only while they still owe the day something.
+ * Share hands the same words to WhatsApp. "Nudge" emails the partner while
+ * they still owe the day something: up to three a day, an hour apart. The
+ * button always says what it can do next instead of failing on a tap; the
+ * rules are shared with the server (convex/_shared/challengeNudges.ts).
  */
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Flag } from 'lucide-react'
 import { buildShareText, formatClock, type ChallengeSummary } from '../../domain/challenge'
+import { resolveDontTexts } from '../../domain/challengeCommitments'
 import type { ChallengeState } from '../../hooks/useChallenge'
-import { challengeErrorMessage, lockInPlan, nudgePartner, shareText, type ShareOutcome } from '../../services/challengeService'
+import { useMinuteTick } from '../../hooks/useMinuteTick'
+import { challengeErrorCode, challengeErrorMessage, isEveningIn, lockInPlan, nudgePartner, shareText, type ShareOutcome } from '../../services/challengeService'
+import {
+  NUDGE_MIN_GAP_MS,
+  NUDGE_RULE_CODE,
+  NUDGE_RULE_REFUSAL,
+  nudgeAvailability,
+  nudgeLabel,
+  nudgeLeftCaption,
+  nudgeTimes,
+  partnerOwesToday,
+  type NudgeAvailability,
+} from '../../../convex/_shared/challengeNudges'
 
 interface ChallengeCardProps {
   state: ChallengeState
@@ -34,6 +49,27 @@ export function ChallengeCard({ state, summary, date, onOpenCheckin, compact = f
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const { info, progress, mine, partnerCard, partnerDate, myDate } = state
+
+  // The nudge allowance, judged the way the server judges it: cap and gap on
+  // my own day row, "owes" on the partner's clock and the partner's day.
+  const times = nudgeTimes(mine)
+  const now = useMinuteTick(times.length > 0 ? Math.max(...times) + NUDGE_MIN_GAP_MS : null)
+  const partnerInfo = info?.partner ?? null
+  const partnerInSpan = !!info && partnerDate >= info.challenge.startDate && partnerDate <= info.challenge.endDate
+  const partnerOwes =
+    !!partnerInfo &&
+    partnerInSpan &&
+    partnerOwesToday({
+      evening: isEveningIn(partnerInfo.timezone, now),
+      planSetAt: partnerCard?.planSetAt,
+      checkinAt: partnerCard?.checkinAt,
+    })
+  const availability = nudgeAvailability({ nowMs: now, times, partnerOwes })
+  const availabilityRef = useRef<NudgeAvailability>(availability)
+  useEffect(() => {
+    availabilityRef.current = availability
+  })
+
   if (!info || !progress) return null
 
   const planSetAt = mine?.planSetAt ?? null
@@ -54,11 +90,25 @@ export function ChallengeCard({ state, summary, date, onOpenCheckin, compact = f
   }
 
   const lock = () => run('lock', async () => void (await lockInPlan(date, summary)))
-  const nudge = () =>
-    run('nudge', async () => {
-      await nudgePartner()
-      setNotice(`Nudged ${partner?.displayName ?? 'your partner'} by email.`)
-    })
+  const nudge = async () => {
+    setBusy('nudge')
+    setError(null)
+    setNotice(null)
+    try {
+      // "Sent" means queued: the mutation schedules the email, it does not deliver it.
+      const { left } = await nudgePartner()
+      const name = partner?.displayName ?? 'your partner'
+      setNotice(`Nudge sent to ${name} · ${left > 0 ? `${left} left today` : 'that was the last one today'}`)
+    } catch (e) {
+      const message = challengeErrorMessage(e)
+      // A rule refusal (another device nudged, the partner just locked in) is
+      // a state, not a failure: say it quietly, or let the button say it.
+      if (challengeErrorCode(e) === NUDGE_RULE_CODE || NUDGE_RULE_REFUSAL.test(message)) setNotice(message)
+      else if (availabilityRef.current.state === 'ready') setError(message)
+    } finally {
+      setBusy(null)
+    }
+  }
   const share = async (kind: 'plan' | 'checkin') => {
     const outcome: ShareOutcome = await shareText(
       buildShareText({
@@ -67,14 +117,17 @@ export function ChallengeCard({ state, summary, date, onOpenCheckin, compact = f
         progress,
         summary,
         note: mine?.note,
-        dontsBroken: (mine?.dontsBroken ?? []).map((id) => info.challenge.donts.find((d) => d.id === id)?.text ?? ''),
+        dontsBroken: resolveDontTexts(mine?.dontsBroken ?? [], info.me.donts),
       }),
     )
     if (outcome === 'copied') setNotice('Copied — paste it into WhatsApp.')
     if (outcome === 'unsupported') setNotice('Sharing is not available here.')
   }
 
-  const partnerOwes = partner ? !(partnerCard?.checkinAt || (partnerCard?.planSetAt && !isEvening())) : false
+  const nudgeText = nudgeLabel(availability, now)
+  const nudgeCaption =
+    availability.state === 'ready' || availability.state === 'cooling' ? nudgeLeftCaption(availability.left) : ''
+  const nudgeBlocked = availability.state !== 'ready'
 
   return (
     // Three lines: the challenge and where today stands; the two acts as a
@@ -162,10 +215,23 @@ export function ChallengeCard({ state, summary, date, onOpenCheckin, compact = f
             </Link>
           </p>
         )}
-        {partner && partnerOwes && progress.phase === 'active' && (
-          <button type="button" onClick={() => void nudge()} disabled={busy === 'nudge'} className={`${quiet} shrink-0`}>
-            {busy === 'nudge' ? 'Sending…' : 'Nudge'}
-          </button>
+        {partner && nudgeText && progress.phase === 'active' && (
+          <div className="flex shrink-0 items-center gap-2">
+            {nudgeCaption && (
+              <span className="text-share-onSurfaceVariant" role="status">
+                {nudgeCaption}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => void nudge()}
+              disabled={busy === 'nudge' || nudgeBlocked}
+              aria-disabled={busy === 'nudge' || nudgeBlocked}
+              className={`${quiet} shrink-0`}
+            >
+              {busy === 'nudge' ? 'Sending…' : nudgeText}
+            </button>
+          </div>
         )}
       </div>
 
@@ -181,10 +247,4 @@ export function ChallengeCard({ state, summary, date, onOpenCheckin, compact = f
       )}
     </section>
   )
-}
-
-/** Past 21:30 on this device: the partner's evening is judged on their own clock by the server. */
-function isEvening(): boolean {
-  const d = new Date()
-  return d.getHours() * 60 + d.getMinutes() >= 21 * 60 + 30
 }

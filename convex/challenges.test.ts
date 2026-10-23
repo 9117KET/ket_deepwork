@@ -5,12 +5,20 @@
  * side is allowed to see of the other. Run with: npm run test:convex
  */
 import { convexTest } from 'convex-test'
-import { describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import schema from './schema'
 import { api } from './_generated/api'
 import { emptySummary } from './_shared/challengeValidators'
 
 const modules = import.meta.glob('./**/*.*s')
+
+// The day's acts only take the member's own today: pin the clock to 22 Oct, 12:00 Berlin.
+beforeEach(() => {
+  vi.useFakeTimers({ now: Date.UTC(2026, 9, 22, 10, 0), toFake: ['Date'] })
+})
+afterEach(() => {
+  vi.useRealTimers()
+})
 
 const BERLIN = 'Europe/Berlin'
 const NY = 'America/New_York'
@@ -60,8 +68,8 @@ describe('setup', () => {
     await a.as.mutation(api.challenges.createChallenge, { ...setup, timezone: BERLIN, displayName: ' Kin ' })
     const mine = await a.as.query(api.challenges.myChallenge, {})
     expect(mine?.challenge).toMatchObject({ name: 'Q4 push', startDate: '2026-10-01', endDate: '2026-12-31', status: 'active' })
-    expect(mine?.challenge.goals).toEqual(['Ship the thesis draft', 'Run 3x a week'])
-    expect(mine?.challenge.donts.map((d) => d.text)).toEqual(['No doomscrolling past 30 min', 'No alcohol'])
+    expect(mine?.me.goals).toEqual(['Ship the thesis draft', 'Run 3x a week'])
+    expect(mine?.me.donts.map((d) => d.text)).toEqual(['No doomscrolling past 30 min', 'No alcohol'])
     expect(mine?.me).toMatchObject({ displayName: 'Kin', timezone: BERLIN })
     expect(mine?.partner).toBeNull()
 
@@ -101,6 +109,8 @@ describe('invites', () => {
       status: 'ok',
       challenge: { name: 'Q4 push', startDate: '2026-10-01', endDate: '2026-12-31' },
       inviterName: 'Kin',
+      inviterGoals: ['Ship the thesis draft', 'Run 3x a week'],
+      inviterDonts: ['No doomscrolling past 30 min', 'No alcohol'],
     })
     expect(await t.query(api.challenges.invitePreview, { token: 'nope' })).toMatchObject({ status: 'notFound' })
 
@@ -184,7 +194,7 @@ describe('the day', () => {
   test('check-in stores the note and confession, rejects unknown don\'ts, keeps the first time', async () => {
     const t = convexTest(schema, modules)
     const { a, b } = await pair(t)
-    const donts = (await a.as.query(api.challenges.myChallenge, {}))!.challenge.donts
+    const donts = (await a.as.query(api.challenges.myChallenge, {}))!.me.donts
     await expect(
       a.as.mutation(api.challenges.checkIn, { date: '2026-10-22', summary: summary(), note: 'ok', dontsBroken: ['made-up'] }),
     ).rejects.toThrow(/unknown don't/i)
@@ -217,6 +227,7 @@ describe('the day', () => {
     const seen = await b.as.query(api.challenges.dayCards, { myDate: '2026-10-22', partnerDate: '2026-10-22' })
     expect(seen?.partner).not.toHaveProperty('remindersSent')
     expect(seen?.partner).not.toHaveProperty('nudgeSentAt')
+    expect(seen?.partner).not.toHaveProperty('nudgesSentAt')
     expect(seen?.partner).not.toHaveProperty('userId')
     const hist = await b.as.query(api.challenges.history, { toDate: '2026-10-22' })
     expect(hist?.partner).toHaveLength(1)
@@ -226,8 +237,9 @@ describe('the day', () => {
   test('history covers both members from the start date up to toDate', async () => {
     const t = convexTest(schema, modules)
     const { a, b } = await pair(t)
-    for (const date of ['2026-10-20', '2026-10-21', '2026-10-22']) {
-      await a.as.mutation(api.challenges.lockInPlan, { date, summary: summary() })
+    for (const day of [20, 21, 22]) {
+      vi.setSystemTime(Date.UTC(2026, 9, day, 10, 0))
+      await a.as.mutation(api.challenges.lockInPlan, { date: `2026-10-${day}`, summary: summary() })
     }
     await b.as.mutation(api.challenges.checkIn, { date: '2026-10-21', summary: summary(), dontsBroken: [] })
     const hist = await a.as.query(api.challenges.history, { toDate: '2026-10-21' })

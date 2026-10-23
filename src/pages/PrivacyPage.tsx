@@ -45,7 +45,7 @@ export function PrivacyPage() {
               <li><strong className="text-share-onSurface">Account data</strong> — email address and hashed password, stored via Convex Auth.</li>
               <li><strong className="text-share-onSurface">Planner data</strong> — tasks, deep work sessions, sleep hours, wake/sleep times, mood entries, and habit completions you enter into the app.</li>
               <li><strong className="text-share-onSurface">Settings</strong> — habit definitions, focus block length, weekly goal, and streak history.</li>
-              <li><strong className="text-share-onSurface">Challenge data</strong> — if you start or join an accountability challenge: its name, dates, goals and don&rsquo;ts, your display name and timezone, and for each day a summary of your planner (your Top 3 titles and done state, counts of other and private tasks, deep work minutes, habits done), your lock-in and check-in times, your note and which don&rsquo;ts you reported breaking. Your challenge partner sees this summary; they never see your planner itself, and a task you mark private is counted but never shown.</li>
+              <li><strong className="text-share-onSurface">Challenge data</strong> — if you start or join an accountability challenge: its name and dates, the goals and don&rsquo;ts you set for yourself (your partner can read them; only you can change them, and a don&rsquo;t you remove is kept, marked as removed, so past check-ins still name it), your display name and timezone, and for each day a summary of your planner (your Top 3 titles and done state, counts of other and private tasks, deep work minutes, habits done), your lock-in and check-in times, your note and which don&rsquo;ts you reported breaking. Your challenge partner sees this summary; they never see your planner itself, and a task you mark private is counted but never shown.</li>
               <li><strong className="text-share-onSurface">Google Calendar tokens</strong> — if you connect Google Calendar, OAuth tokens are stored server-side in our database and are never exposed to the browser. They are encrypted at rest and used only as described in "Google user data" below.</li>
             </ul>
             <p className="mt-3">
@@ -59,7 +59,7 @@ export function PrivacyPage() {
               <li>To sync your planner across devices when you are signed in.</li>
               <li>To display your tasks, habits, sleep, and deep work history.</li>
               <li>To show your calendar, schedule tasks into it, and keep your tasks in step with Google Tasks, if you connect Google Calendar.</li>
-              <li>To email you reminders while you are in an accountability challenge: after the plan deadline until you lock in, and in the evening until you check in, plus a nudge your partner may send once a day. These stop as soon as the day&rsquo;s act is done, and end with the challenge.</li>
+              <li>To email you reminders while you are in an accountability challenge: after the plan deadline until you lock in, and in the evening until you check in, plus nudges your partner may send, up to three a day and at least an hour apart. These stop as soon as the day&rsquo;s act is done, and end with the challenge.</li>
             </ul>
             <p className="mt-3">We do not sell, rent, or share your data with third parties for marketing purposes.</p>
           </section>

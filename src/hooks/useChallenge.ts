@@ -21,7 +21,8 @@ export type ChallengeInfo = NonNullable<FunctionReturnType<typeof api.challenges
 export type ChallengeDayCards = NonNullable<FunctionReturnType<typeof api.challenges.dayCards>>
 export type ChallengeHistory = NonNullable<FunctionReturnType<typeof api.challenges.history>>
 
-export type ChallengeStatus = "signedOut" | "loading" | "none" | "active"
+/** "ended": the last challenge has finished and no new one has started; it is shown read-only. */
+export type ChallengeStatus = "signedOut" | "loading" | "none" | "active" | "ended"
 
 export interface ChallengeState {
   status: ChallengeStatus
@@ -46,7 +47,8 @@ export function useChallenge(now?: number): ChallengeState {
   const partnerDate = info?.partner && now != null ? localDateIn(info.partner.timezone, now) : myDate
   const cards = useQuery(api.challenges.dayCards, info ? { myDate, partnerDate } : "skip")
 
-  const status: ChallengeStatus = !user ? "signedOut" : info === undefined ? "loading" : info === null ? "none" : "active"
+  const status: ChallengeStatus =
+    !user ? "signedOut" : info === undefined ? "loading" : info === null ? "none" : info.challenge.status === "ended" ? "ended" : "active"
   return {
     status,
     info: info ?? null,
@@ -60,8 +62,15 @@ export function useChallenge(now?: number): ChallengeState {
 
 /**
  * Every recorded day up to yesterday. Today is deliberately left out: it is
- * rewritten on every edit, and this read set should not be.
+ * rewritten on every edit, and this read set should not be. The partner's
+ * rows run to `partnerUntilIso` (their own yesterday) when given, so a
+ * partner a day ahead leaves no hole between history and their card.
  */
-export function useChallengeHistory(enabled: boolean, untilIso: string = addDays(todayIso(), -1)): ChallengeHistory | null | undefined {
-  return useQuery(api.challenges.history, enabled ? { toDate: untilIso } : "skip")
+export function useChallengeHistory(
+  enabled: boolean,
+  untilIso: string = addDays(todayIso(), -1),
+  partnerUntilIso?: string,
+): ChallengeHistory | null | undefined {
+  const args = partnerUntilIso && partnerUntilIso !== untilIso ? { toDate: untilIso, partnerToDate: partnerUntilIso } : { toDate: untilIso }
+  return useQuery(api.challenges.history, enabled ? args : "skip")
 }

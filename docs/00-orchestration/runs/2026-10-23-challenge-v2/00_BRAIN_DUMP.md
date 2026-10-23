@@ -1,0 +1,8 @@
+# Brain dump (verbatim, 2026-10-23)
+
+Now regarding this project, I want us to use the loop or the orchestration to one, verify any bug that exists in the challenge section, and also propose what are the best ways, because I noticed that once the challenge is created, it cannot be updated. Like when I created a challenge, there were goals and there was don'ts. Now I cannot edit the goals or the don'ts, and also the person I shared the challenge with, I should be able to give them the right to also either edit, view or comment or something like that on the challenge themselves, so that when I set a challenge, I can set what my goals are, what my don'ts are, and when I invite someone, they can choose to view my goals and my don'ts, and they can decide to create their own goals and the don'ts, so that it should be imposed by one person, and also they should be editable. Secondly, when I nudge my partner, I noticed that the first time it went through by email, the second time it was an error. So I want to be able to nudge a maximum of 3 times, or let's say the best number of times you can nudge your partner to avoid any spamming. And also yeah, let's just update this for now.
+
+## Design proposed in chat before the run (not objected to)
+
+- Goals and don'ts: each member owns their own list and can edit it at any time. The partner can see the other person's list but cannot edit it. Commenting could come later as a note on the partner's day card.
+- Nudges: up to 3 a day per pair, at least an hour apart. Once the limit is reached the button shows "Nudged 3/3 today" instead of throwing an error.

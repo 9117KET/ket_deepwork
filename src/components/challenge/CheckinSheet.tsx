@@ -11,9 +11,11 @@ import { useEffect, useState } from 'react'
 import { buildShareText, type ChallengeProgress, type ChallengeSummary } from '../../domain/challenge'
 import { challengeErrorMessage, checkIn, shareText, type ShareOutcome } from '../../services/challengeService'
 import type { MemberDayView } from './MemberDayCard'
+import { resolveDontTexts } from '../../domain/challengeCommitments'
 
 interface CheckinSheetProps {
   challengeName: string
+  /** The viewer's active don'ts: the ones offered to own up to. */
   donts: { id: string; text: string }[]
   displayName: string
   progress: ChallengeProgress
@@ -67,7 +69,7 @@ export function CheckinSheet({ challengeName, donts, displayName, progress, date
       progress,
       summary,
       note,
-      dontsBroken: [...broken].map((id) => donts.find((d) => d.id === id)?.text ?? ''),
+      dontsBroken: resolveDontTexts([...broken], donts),
     })
     setShared(await shareText(text))
   }
