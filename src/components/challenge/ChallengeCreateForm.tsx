@@ -98,7 +98,7 @@ export function ChallengeCreateForm({ defaultDisplayName }: ChallengeCreateFormP
           <label className={label} htmlFor="ch-checkin">
             Check in by
           </label>
-          <input id="ch-checkin" type="time" value={checkinDeadline} onChange={(e) => setCheckinDeadline(e.target.value)} required className={`${input} mt-1`} />
+          <input id="ch-checkin" type="time" min="21:31" value={checkinDeadline} onChange={(e) => setCheckinDeadline(e.target.value)} required className={`${input} mt-1`} />
         </div>
       </div>
       <p className="-mt-2 text-[11px] text-share-onSurfaceVariant">

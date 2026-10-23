@@ -204,3 +204,11 @@ export function jointStreak(
   }
   return streak
 }
+
+/**
+ * Days of a Review week that count toward its denominators: those already
+ * reached (today included) and inside the challenge's span.
+ */
+export function reviewWeekElapsed(weekDates: string[], todayIso: string, span: ChallengeSpan): number {
+  return weekDates.filter((d) => d <= todayIso && d >= span.startDate && d <= span.endDate).length
+}

@@ -223,7 +223,7 @@ export function DayPlanner() {
     () => (challengeActive ? buildChallengeSummary(dayState, habits) : null),
     [challengeActive, dayState, habits],
   );
-  useChallengeSync({ date: selectedDay, summary: challengeSummary, enabled: challengeActive && !isHydrating });
+  useChallengeSync({ date: selectedDay, summary: challengeSummary, enabled: challengeActive && !isHydrating && isToday });
   const [checkinOpen, setCheckinOpen] = useState(false);
   const challengeDayLabel =
     challengeActive && challenge.progress?.phase === "active"

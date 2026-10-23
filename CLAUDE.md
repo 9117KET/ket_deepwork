@@ -195,7 +195,18 @@ refresh, off while hydrating). `Task.isPrivate` keeps a task out of the
 summary: counted, never titled, still mirrored to the user's own Google Tasks.
 Every function in `convex/challenges.ts` derives the caller from the identity
 and checks membership; the partner view (`dayView`) never carries reminder
-bookkeeping or a `userId`.
+bookkeeping or a `userId`. Only the member's own today is published:
+`syncDaySummary` drops any date more than a day from their local today,
+`lockInPlan` takes today only and `checkIn` today or yesterday, and the
+planner syncs only while it shows today, so browsing another day never
+rewrites what the partner saw.
+
+**Refusals are sentences.** Every expected state (validation, invite states,
+"not in a challenge", nudge rules) throws `ConvexError({ code, message })`
+through `fail()`, because Convex redacts a plain `Error` to "Server Error" in
+production. `challengeErrorMessage` shows `data.message`; nudge rule refusals
+carry `code: "nudgeRule"`, which the card shows as a quiet status. Only
+"Not authenticated" stays a plain `Error`.
 
 **Tables** (`convex/schema.ts`, validators shared via
 `convex/_shared/challengeValidators.ts` so arg and table cannot drift):
@@ -206,6 +217,8 @@ and `donts`), `challengeInvites` (7-day token, one seat), `challengeDays` (one
 row per member per day: summary, `planSetAt`, `checkinAt`, note,
 `dontsBroken`, `remindersSent`).
 Legacy `shareTokens` is untouched. A user is in at most one active challenge.
+A season runs at most 366 days, and the check-in deadline must fall after
+21:30, where the check-in reminders start.
 
 **Goals and don'ts are per member.** Each member sets theirs on create or
 join and edits them any time (`updateMyCommitments`); the partner reads them
@@ -219,6 +232,12 @@ them (`memberCommitments`), which is the whole migration.
 **Reads are split hot/cold here too.** `myChallenge` and `dayCards` are small
 and live; `history` returns the whole season and callers pass
 `toDate = yesterday`, so today's debounced writes never invalidate it.
+`history` takes two dates, `toDate` for the viewer and `partnerToDate` for the
+partner, because each one's yesterday is on their own clock; with one date a
+partner a day ahead leaves a hole in the grid. Reads fall back to the last
+ended season (`currentMembership`), so a finished challenge stays readable on
+`/challenge`, read-only, with "Start a new challenge"; writes see only an
+active one, so an ended season never blocks the next.
 
 **Reminders are email from the user's own Gmail** (`convex/email.ts`, a
 `"use node"` nodemailer action; swap to Resend in `send()` once a domain

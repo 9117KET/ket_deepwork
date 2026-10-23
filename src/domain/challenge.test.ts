@@ -10,6 +10,7 @@ import {
   extractInviteToken,
   formatDeepMinutes,
   jointStreak,
+  reviewWeekElapsed,
 } from './challenge'
 
 const span = { startDate: '2026-10-01', endDate: '2026-12-31' }
@@ -183,5 +184,34 @@ describe('week tallies', () => {
     expect(jointStreak([...mine, both('2026-10-17')], [...partner, both('2026-10-17')], '2026-10-22', '2026-10-01')).toBe(3)
     // The span's first day is the floor.
     expect(jointStreak(mine, partner, '2026-10-22', '2026-10-21')).toBe(1)
+  })
+})
+
+describe('reviewWeekElapsed', () => {
+  const week = ['2026-09-28', '2026-09-29', '2026-09-30', '2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04']
+  const span = { startDate: '2026-10-01', endDate: '2026-12-31' }
+
+  it('counts only reached days inside the span', () => {
+    // The season starts on Thursday the 1st; today is Saturday the 3rd.
+    expect(reviewWeekElapsed(week, '2026-10-03', span)).toBe(3)
+  })
+
+  it('stops at the end date', () => {
+    expect(reviewWeekElapsed(week, '2026-10-10', { startDate: '2026-09-01', endDate: '2026-09-29' })).toBe(2)
+  })
+
+  it('a week before the start, or not yet reached, has none', () => {
+    expect(reviewWeekElapsed(week, '2026-10-10', { startDate: '2026-10-05', endDate: '2026-12-31' })).toBe(0)
+    expect(reviewWeekElapsed(week, '2026-09-27', span)).toBe(0)
+  })
+})
+
+describe('the Review streak for a past week', () => {
+  it('counts back from the week\'s end, not from today', () => {
+    const done = (date: string) => ({ date, planSetAt: 1, checkinAt: 2, dontsBroken: [] })
+    const rows = ['2026-10-02', '2026-10-03', '2026-10-04'].map(done)
+    // From the week's end the streak is three; from a later today with nothing logged it would be 0.
+    expect(jointStreak(rows, rows, '2026-10-04', '2026-10-01')).toBe(3)
+    expect(jointStreak(rows, rows, '2026-10-20', '2026-10-01')).toBe(0)
   })
 })

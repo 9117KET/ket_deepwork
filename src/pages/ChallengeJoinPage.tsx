@@ -50,9 +50,16 @@ export function ChallengeJoinPage() {
   }, [searchParams]);
 
   const preview = useQuery(api.challenges.invitePreview, token ? { token } : "skip");
+  // A preview that can never become a join (or already is one) ends the
+  // token's life; otherwise it resurfaces on a bare /challenge/join later.
+  const previewStatus = preview?.status;
+  useEffect(() => {
+    if (previewStatus && previewStatus !== "ok") storeToken(null);
+  }, [previewStatus]);
   const mine = useChallenge();
   const [typedName, setTypedName] = useState<string | null>(null);
-  const displayName = typedName ?? (user?.email?.split("@")[0] ?? "");
+  // The server allows 40 characters; a long email prefix must not exceed it.
+  const displayName = typedName ?? (user?.email?.split("@")[0] ?? "").slice(0, 40);
   const [goals, setGoals] = useState<CommitmentRow[]>([]);
   const [donts, setDonts] = useState<CommitmentRow[]>([]);
   const [goalDraft, setGoalDraft] = useState("");
@@ -89,8 +96,18 @@ export function ChallengeJoinPage() {
         </Link>
       </div>
     );
-  } else if (preview === undefined || loading) {
+  } else if (preview === undefined || loading || mine.status === "loading") {
     body = <p className="text-center text-sm text-share-onSurfaceVariant">Checking the invite…</p>;
+  } else if (preview.status === "member") {
+    body = (
+      <div className={card}>
+        <h1 className="page-title">{preview.challenge?.name ?? "Challenge"}</h1>
+        <p className="mt-1 text-sm text-share-onSurfaceVariant">You&rsquo;re in. This is your challenge.</p>
+        <Link to="/challenge" className={link}>
+          Open my challenge
+        </Link>
+      </div>
+    );
   } else if (preview.status !== "ok") {
     const reason = {
       notFound: "This invite link is not valid.",

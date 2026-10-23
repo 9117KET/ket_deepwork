@@ -15,9 +15,11 @@ import { Flag } from 'lucide-react'
 import { buildShareText, formatClock, type ChallengeSummary } from '../../domain/challenge'
 import { resolveDontTexts } from '../../domain/challengeCommitments'
 import type { ChallengeState } from '../../hooks/useChallenge'
-import { challengeErrorMessage, isEveningIn, lockInPlan, nudgePartner, shareText, type ShareOutcome } from '../../services/challengeService'
+import { useMinuteTick } from '../../hooks/useMinuteTick'
+import { challengeErrorCode, challengeErrorMessage, isEveningIn, lockInPlan, nudgePartner, shareText, type ShareOutcome } from '../../services/challengeService'
 import {
   NUDGE_MIN_GAP_MS,
+  NUDGE_RULE_CODE,
   NUDGE_RULE_REFUSAL,
   nudgeAvailability,
   nudgeLabel,
@@ -101,7 +103,7 @@ export function ChallengeCard({ state, summary, date, onOpenCheckin, compact = f
       const message = challengeErrorMessage(e)
       // A rule refusal (another device nudged, the partner just locked in) is
       // a state, not a failure: say it quietly, or let the button say it.
-      if (NUDGE_RULE_REFUSAL.test(message)) setNotice(message)
+      if (challengeErrorCode(e) === NUDGE_RULE_CODE || NUDGE_RULE_REFUSAL.test(message)) setNotice(message)
       else if (availabilityRef.current.state === 'ready') setError(message)
     } finally {
       setBusy(null)
@@ -245,24 +247,4 @@ export function ChallengeCard({ state, summary, date, onOpenCheckin, compact = f
       )}
     </section>
   )
-}
-
-/**
- * A clock that moves once a minute while the card is mounted, and once more
- * at `wakeAt` (when the nudge cool-down ends) so the button reopens on time.
- */
-function useMinuteTick(wakeAt: number | null): number {
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    const id = window.setInterval(() => setNow(Date.now()), 60_000)
-    return () => window.clearInterval(id)
-  }, [])
-  useEffect(() => {
-    if (wakeAt == null) return
-    const wait = wakeAt - Date.now()
-    if (wait <= 0) return
-    const id = window.setTimeout(() => setNow(Date.now()), wait + 50)
-    return () => window.clearTimeout(id)
-  }, [wakeAt])
-  return now
 }

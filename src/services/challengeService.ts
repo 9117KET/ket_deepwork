@@ -7,6 +7,7 @@
  * a phone, the clipboard everywhere else).
  */
 
+import { ConvexError } from "convex/values"
 import { convex } from "../lib/convex"
 import { api } from "../../convex/_generated/api"
 import { CHECKIN_START, hhmmToMinutes, localDateAndMinutes } from "../../convex/_shared/challengeReminders"
@@ -125,8 +126,41 @@ export async function shareText(text: string): Promise<ShareOutcome> {
   }
 }
 
-/** Convex wraps thrown errors; show the sentence, not the stack. */
+interface RefusalData {
+  code?: unknown
+  message?: unknown
+}
+
+/** The object a `ConvexError` carries, when it is one. */
+function refusalData(e: unknown): RefusalData | null {
+  if (!(e instanceof ConvexError)) return null
+  const data: unknown = e.data
+  return data && typeof data === "object" ? (data as RefusalData) : null
+}
+
+/**
+ * The sentence to show for a failed call. Expected states arrive as a
+ * `ConvexError` whose data carries the sentence, and that survives
+ * production redaction. Anything else is cleaned of Convex's wrapping: in
+ * dev the message is "[CONVEX M(…)] [Request ID: …] Server Error", a
+ * newline, then "Uncaught Error: <sentence>" and a stack; in production only
+ * the redacted first part arrives, and there is no sentence to show.
+ */
 export function challengeErrorMessage(e: unknown): string {
+  if (e instanceof ConvexError) {
+    const message = refusalData(e)?.message
+    return typeof message === "string" ? message : String(e.data)
+  }
   const raw = e instanceof Error ? e.message : String(e)
-  return raw.replace(/^.*Uncaught Error: /, "").replace(/\s+at .*$/s, "").trim() || "Something went wrong"
+  if (/Uncaught Error: /.test(raw)) {
+    return raw.replace(/^.*Uncaught Error: /s, "").replace(/\s+at .*$/s, "").trim() || "Something went wrong"
+  }
+  if (/Server Error/.test(raw)) return "Something went wrong"
+  return raw.trim() || "Something went wrong"
+}
+
+/** The `code` of a server refusal ("challenge", or `NUDGE_RULE_CODE` for a nudge the rules refused), else null. */
+export function challengeErrorCode(e: unknown): string | null {
+  const code = refusalData(e)?.code
+  return typeof code === "string" ? code : null
 }

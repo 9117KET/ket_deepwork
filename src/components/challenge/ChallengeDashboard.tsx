@@ -4,7 +4,8 @@
  * The challenge page once you are in one: the countdown, today for both
  * members, each member's own goals and don'ts (yours editable, theirs
  * read-only), the season so far, and the invite link while the second seat
- * is empty.
+ * is empty. A season that has ended is shown read-only: no invite, no edits,
+ * no leaving; `afterCountdown` is where the page offers a new one.
  */
 
 import { useMemo, useState, type ReactNode } from 'react'
@@ -20,6 +21,8 @@ import { MemberDayCard } from './MemberDayCard'
 
 interface ChallengeDashboardProps {
   state: ChallengeState
+  /** Shown under the countdown; the page puts "Start a new challenge" here for an ended season. */
+  afterCountdown?: ReactNode
 }
 
 const card = 'rounded-2xl bg-share-surfaceContainerLow p-4'
@@ -70,9 +73,11 @@ function CommitmentsColumn({ title, goals, donts, empty, action }: { title: stri
   )
 }
 
-export function ChallengeDashboard({ state }: ChallengeDashboardProps) {
+export function ChallengeDashboard({ state, afterCountdown }: ChallengeDashboardProps) {
   const { info, progress, mine, partnerCard, myDate, partnerDate } = state
-  const history = useChallengeHistory(Boolean(info), addDays(myDate, -1))
+  const readOnly = state.status === 'ended'
+  // Each member's history runs to their own yesterday; their card is their today.
+  const history = useChallengeHistory(Boolean(info), addDays(myDate, -1), addDays(partnerDate, -1))
   const [inviteToken, setInviteToken] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -141,6 +146,7 @@ export function ChallengeDashboard({ state }: ChallengeDashboardProps) {
         <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-share-hairline" role="progressbar" aria-valuenow={progress.dayNumber} aria-valuemin={0} aria-valuemax={progress.totalDays}>
           <div className="h-full rounded-full bg-share-primary" style={{ width: `${(progress.phase === 'ended' ? 1 : progress.phase === 'upcoming' ? 0 : progress.dayNumber / progress.totalDays) * 100}%` }} />
         </div>
+        {afterCountdown}
       </section>
 
       {/* Today, both */}
@@ -148,7 +154,7 @@ export function ChallengeDashboard({ state }: ChallengeDashboardProps) {
         <MemberDayCard name={me.displayName} isMe day={mine} donts={me.donts} />
         {partner ? (
           <MemberDayCard name={partner.displayName} isMe={false} day={partnerCard} donts={partner.donts} caption={partnerDate !== myDate ? partnerDate : undefined} />
-        ) : (
+        ) : readOnly ? null : (
           <div className={`${card} flex flex-col justify-center`}>
             <p className="text-sm font-semibold text-share-onBg">Invite your partner</p>
             <p className="mt-1 text-xs text-share-onSurfaceVariant">Send them this link. It works for seven days and seats one person.</p>
@@ -175,13 +181,15 @@ export function ChallengeDashboard({ state }: ChallengeDashboardProps) {
           donts={me.donts}
           empty="Set your goals and don’ts."
           action={
-            <button
-              type="button"
-              onClick={() => setEditing(true)}
-              className="touch-target-coarse -my-2 inline-flex shrink-0 items-center justify-center px-2 text-xs font-semibold text-share-primary hover:underline"
-            >
-              Edit
-            </button>
+            readOnly ? undefined : (
+              <button
+                type="button"
+                onClick={() => setEditing(true)}
+                className="touch-target-coarse -my-2 inline-flex shrink-0 items-center justify-center px-2 text-xs font-semibold text-share-primary hover:underline"
+              >
+                Edit
+              </button>
+            )
           }
         />
         {partner && (
@@ -203,13 +211,15 @@ export function ChallengeDashboard({ state }: ChallengeDashboardProps) {
         </p>
       )}
 
-      <div className="flex justify-end">
-        <button type="button" onClick={() => void leave()} disabled={leaving} className="touch-target-coarse rounded-lg px-3 py-1.5 text-xs text-share-onSurfaceVariant hover:text-share-tertiary disabled:opacity-60">
-          {partner ? 'Leave challenge' : 'End challenge'}
-        </button>
-      </div>
+      {!readOnly && (
+        <div className="flex justify-end">
+          <button type="button" onClick={() => void leave()} disabled={leaving} className="touch-target-coarse rounded-lg px-3 py-1.5 text-xs text-share-onSurfaceVariant hover:text-share-tertiary disabled:opacity-60">
+            {partner ? 'Leave challenge' : 'End challenge'}
+          </button>
+        </div>
+      )}
 
-      {editing && <CommitmentsSheet goals={me.goals} donts={me.donts} onClose={() => setEditing(false)} />}
+      {editing && !readOnly && <CommitmentsSheet goals={me.goals} donts={me.donts} onClose={() => setEditing(false)} />}
     </div>
   )
 }
