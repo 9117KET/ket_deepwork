@@ -9,7 +9,7 @@
 
 import { convex } from "../lib/convex"
 import { api } from "../../convex/_generated/api"
-import { localDateAndMinutes } from "../../convex/_shared/challengeReminders"
+import { CHECKIN_START, hhmmToMinutes, localDateAndMinutes } from "../../convex/_shared/challengeReminders"
 import type { ChallengeSummary } from "../domain/challenge"
 import { todayIso } from "../domain/dateUtils"
 
@@ -27,6 +27,19 @@ export function localDateIn(timezone: string, nowMs: number = Date.now()): strin
     return localDateAndMinutes(nowMs, timezone).date
   } catch {
     return todayIso()
+  }
+}
+
+/**
+ * Is it past the check-in hour on `timezone`'s clock? The server judges a
+ * nudge on the partner's clock, so the card has to as well.
+ */
+export function isEveningIn(timezone: string, nowMs: number = Date.now()): boolean {
+  try {
+    return localDateAndMinutes(nowMs, timezone).minutes >= hhmmToMinutes(CHECKIN_START)
+  } catch {
+    const d = new Date(nowMs)
+    return d.getHours() * 60 + d.getMinutes() >= hhmmToMinutes(CHECKIN_START)
   }
 }
 
@@ -74,8 +87,9 @@ export async function checkIn(args: {
   return await convex.mutation(api.challenges.checkIn, args)
 }
 
-export async function nudgePartner(): Promise<void> {
-  await convex.mutation(api.challenges.nudgePartner, {})
+/** `left` nudges remain today; `nextAt` is when the next one opens (null once spent). */
+export async function nudgePartner(): Promise<{ left: number; nextAt: number | null }> {
+  return await convex.mutation(api.challenges.nudgePartner, {})
 }
 
 export function inviteUrl(token: string): string {

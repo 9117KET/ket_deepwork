@@ -59,7 +59,7 @@ export function PrivacyPage() {
               <li>To sync your planner across devices when you are signed in.</li>
               <li>To display your tasks, habits, sleep, and deep work history.</li>
               <li>To show your calendar, schedule tasks into it, and keep your tasks in step with Google Tasks, if you connect Google Calendar.</li>
-              <li>To email you reminders while you are in an accountability challenge: after the plan deadline until you lock in, and in the evening until you check in, plus a nudge your partner may send once a day. These stop as soon as the day&rsquo;s act is done, and end with the challenge.</li>
+              <li>To email you reminders while you are in an accountability challenge: after the plan deadline until you lock in, and in the evening until you check in, plus nudges your partner may send, up to three a day and at least an hour apart. These stop as soon as the day&rsquo;s act is done, and end with the challenge.</li>
             </ul>
             <p className="mt-3">We do not sell, rent, or share your data with third parties for marketing purposes.</p>
           </section>

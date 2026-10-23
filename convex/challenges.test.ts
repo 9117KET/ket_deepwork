@@ -217,6 +217,7 @@ describe('the day', () => {
     const seen = await b.as.query(api.challenges.dayCards, { myDate: '2026-10-22', partnerDate: '2026-10-22' })
     expect(seen?.partner).not.toHaveProperty('remindersSent')
     expect(seen?.partner).not.toHaveProperty('nudgeSentAt')
+    expect(seen?.partner).not.toHaveProperty('nudgesSentAt')
     expect(seen?.partner).not.toHaveProperty('userId')
     const hist = await b.as.query(api.challenges.history, { toDate: '2026-10-22' })
     expect(hist?.partner).toHaveLength(1)

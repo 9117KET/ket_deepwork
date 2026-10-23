@@ -21,6 +21,7 @@ import type { Doc, Id } from "./_generated/dataModel"
 import { getUserId } from "./_shared/auth"
 import { HHMM, ISO_DATE, emptySummary, summaryValidator, type ChallengeSummary } from "./_shared/challengeValidators"
 import { isValidTimezone, localDateAndMinutes, CHECKIN_START, hhmmToMinutes } from "./_shared/challengeReminders"
+import { NUDGE_DAILY_CAP, NUDGE_MIN_GAP_MS, nudgeAvailability, nudgeRefusal, nudgeTimes, partnerOwesToday } from "./_shared/challengeNudges"
 
 type Ctx = QueryCtx | MutationCtx
 
@@ -472,37 +473,45 @@ export const checkIn = mutation({
 })
 
 /**
- * One email to the partner, once a day, and only while they still owe the
- * day something. The send is scheduled from inside the transaction, so a
- * nudge that fails to record never goes out.
+ * An email to the partner while they still owe the day something: up to
+ * three on the nudger's own local day, at least an hour apart. The rules
+ * live in `_shared/challengeNudges.ts`, shared with the card's button. The
+ * send is scheduled from inside the transaction, so a nudge that fails to
+ * record never goes out; "sent" means queued, not delivered.
  */
 export const nudgePartner = mutation({
   args: {},
-  handler: async (ctx) => {
+  handler: async (ctx): Promise<{ left: number; nextAt: number | null }> => {
     const userId = await requireUser(ctx)
     const { challenge, me } = await requireMembership(ctx, userId)
     const partner = await partnerOf(ctx, challenge._id, userId)
     if (!partner) throw new Error("Nobody has joined yet")
     const now = Date.now()
     const partnerLocal = localDateAndMinutes(now, partner.timezone)
+    if (!inRange(challenge, partnerLocal.date)) throw new Error("The challenge is not running today")
     const partnerRow = await getDayRow(ctx, challenge._id, partner.userId, partnerLocal.date)
     const evening = partnerLocal.minutes >= hhmmToMinutes(CHECKIN_START)
-    const owes = evening ? !partnerRow?.checkinAt : !partnerRow?.planSetAt
+    const owes = partnerOwesToday({ evening, planSetAt: partnerRow?.planSetAt, checkinAt: partnerRow?.checkinAt })
     if (!owes) throw new Error(evening ? "They have already checked in" : "They have already locked in their plan")
     const myLocal = localDateAndMinutes(now, me.timezone)
     const myRow = await getDayRow(ctx, challenge._id, userId, myLocal.date)
-    if (myRow?.nudgeSentAt) throw new Error("You have already nudged them today")
+    const times = nudgeTimes(myRow)
+    const refusal = nudgeRefusal(nudgeAvailability({ nowMs: now, times, partnerOwes: owes }), now)
+    if (refusal) throw new Error(refusal)
     const partnerDoc = ctx.db.normalizeId("users", partner.userId)
     const email = partnerDoc ? ((await ctx.db.get(partnerDoc))?.email ?? null) : null
     if (!email) throw new Error("Your partner has no email address on file")
     const mine = myRow ?? (await upsertDay(ctx, challenge._id, userId, myLocal.date, emptySummary()))
-    await ctx.db.patch(mine._id, { nudgeSentAt: now })
+    // A legacy `nudgeSentAt` is carried into the array on the first write; the old field is left as it was.
+    const sent = [...times, now]
+    await ctx.db.patch(mine._id, { nudgesSentAt: sent })
     const what = evening ? "check in" : "lock in today's plan"
     await ctx.scheduler.runAfter(0, internal.email.sendEmail, {
       to: email,
       subject: `${me.displayName} is nudging you to ${what} — ${challenge.name}`,
       text: `${me.displayName} noticed you have not yet ${evening ? "checked in" : "locked in your plan"} today in "${challenge.name}".\n\nOpen Deepblock: ${process.env.SITE_URL ?? ""}/challenge\n`,
     })
-    return null
+    const left = NUDGE_DAILY_CAP - sent.length
+    return { left, nextAt: left > 0 ? now + NUDGE_MIN_GAP_MS : null }
   },
 })
