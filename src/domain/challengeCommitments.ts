@@ -40,6 +40,26 @@ export function textsToRows(texts: readonly string[]): CommitmentRow[] {
   return texts.map((text) => ({ text }))
 }
 
+/**
+ * The editor's "Add" step: the list with the draft appended, or null when the
+ * draft is blank or the list is full. Called on Enter, on Add and on blur, so
+ * text left in the box is never dropped; a second call after the draft was
+ * cleared is a no-op, which is what stops a blur-then-click double add.
+ */
+export function commitDraft(items: readonly CommitmentRow[], draft: string, max: number): CommitmentRow[] | null {
+  const text = draft.trim()
+  if (!text || items.length >= max) return null
+  return [...items, { text }]
+}
+
+/** The server's cap on each list (`MAX_LIST` in convex/challenges.ts). */
+export const MAX_COMMITMENTS = 10
+
+/** The list a Save / Create / Join sends: with any text still in the Add box, never without it. */
+export function withDraft(items: readonly CommitmentRow[], draft: string): CommitmentRow[] {
+  return commitDraft(items, draft, MAX_COMMITMENTS) ?? [...items]
+}
+
 /** Trimmed texts, blanks dropped. */
 export function rowsToTexts(rows: readonly CommitmentRow[]): string[] {
   return rows.map((r) => r.text.trim()).filter((t) => t.length > 0)

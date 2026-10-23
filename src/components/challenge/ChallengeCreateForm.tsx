@@ -7,7 +7,7 @@
 
 import { useState, type FormEvent } from 'react'
 import { ListEditor } from './ListEditor'
-import { rowsToTexts, type CommitmentRow } from '../../domain/challengeCommitments'
+import { rowsToTexts, withDraft, type CommitmentRow } from '../../domain/challengeCommitments'
 import { addDays, todayIso } from '../../domain/dateUtils'
 import { challengeErrorMessage, createChallenge } from '../../services/challengeService'
 
@@ -26,6 +26,8 @@ export function ChallengeCreateForm({ defaultDisplayName }: ChallengeCreateFormP
   const [endDate, setEndDate] = useState(addDays(today, 89))
   const [goals, setGoals] = useState<CommitmentRow[]>([])
   const [donts, setDonts] = useState<CommitmentRow[]>([])
+  const [goalDraft, setGoalDraft] = useState('')
+  const [dontDraft, setDontDraft] = useState('')
   const [planDeadline, setPlanDeadline] = useState('10:00')
   const [checkinDeadline, setCheckinDeadline] = useState('23:59')
   const [displayName, setDisplayName] = useState(defaultDisplayName)
@@ -37,7 +39,7 @@ export function ChallengeCreateForm({ defaultDisplayName }: ChallengeCreateFormP
     setBusy(true)
     setError(null)
     try {
-      await createChallenge({ name, startDate, endDate, goals: rowsToTexts(goals), donts: rowsToTexts(donts), planDeadline, checkinDeadline, displayName })
+      await createChallenge({ name, startDate, endDate, goals: rowsToTexts(withDraft(goals, goalDraft)), donts: rowsToTexts(withDraft(donts, dontDraft)), planDeadline, checkinDeadline, displayName })
     } catch (err) {
       setError(challengeErrorMessage(err))
       setBusy(false)
@@ -77,12 +79,12 @@ export function ChallengeCreateForm({ defaultDisplayName }: ChallengeCreateFormP
 
       <div>
         <p className={label}>Goals</p>
-        <ListEditor items={goals} onChange={setGoals} placeholder="What you are aiming at" idPrefix="goal" />
+        <ListEditor items={goals} onChange={setGoals} placeholder="What you are aiming at" idPrefix="goal" onDraftChange={setGoalDraft} />
       </div>
 
       <div>
         <p className={label}>Don&rsquo;ts</p>
-        <ListEditor items={donts} onChange={setDonts} placeholder="No doomscrolling past 30 min" idPrefix="dont" />
+        <ListEditor items={donts} onChange={setDonts} placeholder="No doomscrolling past 30 min" idPrefix="dont" onDraftChange={setDontDraft} />
       </div>
 
       <div className="grid grid-cols-2 gap-3">

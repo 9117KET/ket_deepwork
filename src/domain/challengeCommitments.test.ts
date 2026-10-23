@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { activeDonts, dontsToRows, resolveDontTexts, rowsToDontPayload, rowsToTexts, textsToRows } from './challengeCommitments'
+import { activeDonts, commitDraft, dontsToRows, resolveDontTexts, rowsToDontPayload, rowsToTexts, textsToRows, withDraft } from './challengeCommitments'
 
 const list = [
   { id: 'd1', text: 'No doomscrolling' },
@@ -40,6 +40,31 @@ describe('rows', () => {
         { text: '' },
       ]),
     ).toEqual([{ id: 'd1', text: 'No doomscrolling after 22:00' }, { text: 'No sugar' }])
+  })
+  test('commitDraft appends a trimmed draft; blank or full is a no-op', () => {
+    const rows = [{ id: 'd1', text: 'A' }]
+    expect(commitDraft(rows, '  B ', 10)).toEqual([{ id: 'd1', text: 'A' }, { text: 'B' }])
+    expect(commitDraft(rows, '   ', 10)).toBeNull()
+    expect(commitDraft(rows, 'B', 1)).toBeNull()
+  })
+  test('blur then Add commits the draft once', () => {
+    // The ListEditor sequence: blur commits and clears the draft, then the Add click sees ''.
+    let items: { id?: string; text: string }[] = []
+    let draft = 'No sugar'
+    for (let i = 0; i < 2; i++) {
+      const next = commitDraft(items, draft, 10)
+      if (next) {
+        items = next
+        draft = ''
+      }
+    }
+    expect(items).toEqual([{ text: 'No sugar' }])
+  })
+  test('withDraft folds a pending draft into what is sent', () => {
+    expect(withDraft([{ text: 'A' }], ' B ')).toEqual([{ text: 'A' }, { text: 'B' }])
+    expect(withDraft([{ text: 'A' }], '')).toEqual([{ text: 'A' }])
+    const full = Array.from({ length: 10 }, (_, i) => ({ text: `${i}` }))
+    expect(withDraft(full, 'extra')).toHaveLength(10)
   })
   test('texts round-trip through rows', () => {
     expect(rowsToTexts(textsToRows(['A', ' ', ' B ']))).toEqual(['A', 'B'])

@@ -8,15 +8,24 @@
  * in place and keeps its id, so editing a don't stays the same don't (its
  * past confessions keep pointing at it). Without it, rows are read-only text,
  * as on the create form.
+ *
+ * Text left in the Add box is never dropped. Leaving the box commits it as a
+ * row, except when the box is left by pressing a button: inserting a row at
+ * that moment moves the button before the press ends and swallows the tap.
+ * For those presses the parent folds the draft in itself (`onDraftChange` +
+ * `withDraft`), so one tap on Save, Create or Join sends it, and a tap on
+ * Add adds it once.
  */
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { X } from 'lucide-react'
-import type { CommitmentRow } from '../../domain/challengeCommitments'
+import { MAX_COMMITMENTS, commitDraft, type CommitmentRow } from '../../domain/challengeCommitments'
 
 /** The server's caps (`MAX_LIST`, `MAX_ITEM` in convex/challenges.ts). */
-const MAX_ITEMS = 10
+const MAX_ITEMS = MAX_COMMITMENTS
 const MAX_LENGTH = 200
+/** A blur this soon after a press on a button belongs to that press (touch blurs after the finger lifts). */
+const BUTTON_PRESS_MS = 1000
 
 const input =
   'min-h-[44px] w-full rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainer px-3 py-2 text-base text-share-onSurface sm:text-sm placeholder:text-share-onSurfaceVariant/60 focus:border-share-primary focus:outline-none focus:ring-1 focus:ring-share-primary'
@@ -27,15 +36,40 @@ interface ListEditorProps {
   placeholder: string
   idPrefix: string
   editable?: boolean
+  /** The text in the Add box, so a submit can include it (`withDraft`). */
+  onDraftChange?: (draft: string) => void
 }
 
-export function ListEditor({ items, onChange, placeholder, idPrefix, editable = false }: ListEditorProps) {
-  const [draft, setDraft] = useState('')
+export function ListEditor({ items, onChange, placeholder, idPrefix, editable = false, onDraftChange }: ListEditorProps) {
+  const [draft, setDraftState] = useState('')
+  // The ref is read by `add`, so a second call before a render sees the
+  // cleared draft: one row, not two.
+  const draftRef = useRef('')
+  const setDraft = (value: string) => {
+    draftRef.current = value
+    setDraftState(value)
+    onDraftChange?.(value)
+  }
   const add = () => {
-    const text = draft.trim()
-    if (!text) return
-    onChange([...items, { text }])
+    const next = commitDraft(items, draftRef.current, MAX_ITEMS)
+    if (!next) return
+    onChange(next)
     setDraft('')
+  }
+
+  const buttonPressAt = useRef(-Infinity)
+  useEffect(() => {
+    const onPointerDown = (e: PointerEvent) => {
+      const onButton = e.target instanceof Element && e.target.closest('button, a, [role="button"]') !== null
+      buttonPressAt.current = onButton ? performance.now() : -Infinity
+    }
+    document.addEventListener('pointerdown', onPointerDown, true)
+    return () => document.removeEventListener('pointerdown', onPointerDown, true)
+  }, [])
+  const onBlur = () => {
+    // A press on a button: that button's own action takes the draft (or leaves it in the box).
+    if (performance.now() - buttonPressAt.current < BUTTON_PRESS_MS) return
+    add()
   }
   const edit = (i: number, text: string) => onChange(items.map((row, j) => (j === i ? { ...row, text } : row)))
   return (
@@ -68,6 +102,7 @@ export function ListEditor({ items, onChange, placeholder, idPrefix, editable = 
           <input
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
+            onBlur={onBlur}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 e.preventDefault()

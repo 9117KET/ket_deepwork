@@ -7,7 +7,7 @@
  */
 
 import { useEffect, useState } from 'react'
-import { dontsToRows, rowsToDontPayload, rowsToTexts, textsToRows, type DontLike } from '../../domain/challengeCommitments'
+import { dontsToRows, rowsToDontPayload, rowsToTexts, textsToRows, withDraft, type DontLike } from '../../domain/challengeCommitments'
 import { challengeErrorMessage, updateMyCommitments } from '../../services/challengeService'
 import { ListEditor } from './ListEditor'
 
@@ -21,6 +21,8 @@ interface CommitmentsSheetProps {
 export function CommitmentsSheet({ goals: initialGoals, donts: initialDonts, onClose }: CommitmentsSheetProps) {
   const [goals, setGoals] = useState(() => textsToRows(initialGoals))
   const [donts, setDonts] = useState(() => dontsToRows(initialDonts))
+  const [goalDraft, setGoalDraft] = useState('')
+  const [dontDraft, setDontDraft] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -36,7 +38,7 @@ export function CommitmentsSheet({ goals: initialGoals, donts: initialDonts, onC
     setBusy(true)
     setError(null)
     try {
-      await updateMyCommitments({ goals: rowsToTexts(goals), donts: rowsToDontPayload(donts) })
+      await updateMyCommitments({ goals: rowsToTexts(withDraft(goals, goalDraft)), donts: rowsToDontPayload(withDraft(donts, dontDraft)) })
       onClose()
     } catch (e) {
       setError(challengeErrorMessage(e))
@@ -61,11 +63,11 @@ export function CommitmentsSheet({ goals: initialGoals, donts: initialDonts, onC
 
         <div className="mt-3">
           <p className="text-xs font-medium text-share-onSurfaceVariant">Goals</p>
-          <ListEditor items={goals} onChange={setGoals} placeholder="What you are aiming at" idPrefix="goal" editable />
+          <ListEditor items={goals} onChange={setGoals} placeholder="What you are aiming at" idPrefix="goal" editable onDraftChange={setGoalDraft} />
         </div>
         <div className="mt-3">
           <p className="text-xs font-medium text-share-onSurfaceVariant">Don&rsquo;ts</p>
-          <ListEditor items={donts} onChange={setDonts} placeholder="No doomscrolling past 30 min" idPrefix="dont" editable />
+          <ListEditor items={donts} onChange={setDonts} placeholder="No doomscrolling past 30 min" idPrefix="dont" editable onDraftChange={setDontDraft} />
         </div>
 
         {error && (
