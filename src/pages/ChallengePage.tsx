@@ -20,6 +20,7 @@ import { ChallengeJoinPanel } from "../components/challenge/ChallengeJoinPanel";
 import { CheckinSheet } from "../components/challenge/CheckinSheet";
 import { useAuth } from "../contexts/AuthContext";
 import { buildChallengeSummary } from "../domain/challenge";
+import { activeDonts } from "../domain/challengeCommitments";
 import { DEFAULT_HABIT_DEFINITIONS } from "../domain/types";
 import { useChallenge } from "../hooks/useChallenge";
 import { usePersistentState } from "../storage/localStorageState";
@@ -114,7 +115,7 @@ export function ChallengePage() {
       {checkinOpen && state.info && state.progress && (
         <CheckinSheet
           challengeName={state.info.challenge.name}
-          donts={state.info.challenge.donts}
+          donts={activeDonts(state.info.me.donts)}
           displayName={state.info.me.displayName}
           progress={state.progress}
           date={state.myDate}

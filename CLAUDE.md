@@ -179,8 +179,8 @@ is false until the user reconnects; `/calendar` and Today both say so.
 
 ### Accountability challenge
 
-Two people, one season (e.g. 1 Oct → 31 Dec), goals, "don'ts", and two
-explicit acts a day: **Lock in today's plan** before a morning deadline and
+Two people, one season (e.g. 1 Oct → 31 Dec), each with their own goals and
+"don'ts", and two explicit acts a day: **Lock in today's plan** before a morning deadline and
 **Check in** before midnight. It replaces a WhatsApp thread; WhatsApp stays
 the ping (the Share button hands a prefilled line to the Web Share sheet, or
 copies it), the app is the record.
@@ -199,12 +199,22 @@ bookkeeping or a `userId`.
 
 **Tables** (`convex/schema.ts`, validators shared via
 `convex/_shared/challengeValidators.ts` so arg and table cannot drift):
-`challenges` (span, goals, donts, local deadlines, `status` — the cron's one
-switch), `challengeMembers` (one per user, with an IANA `timezone` refreshed
-on every sync, because the two are in different zones), `challengeInvites`
-(7-day token, one seat), `challengeDays` (one row per member per day:
-summary, `planSetAt`, `checkinAt`, note, `dontsBroken`, `remindersSent`).
+`challenges` (span, local deadlines, `status` — the cron's one switch),
+`challengeMembers` (one per user, with an IANA `timezone` refreshed on every
+sync, because the two are in different zones, and the member's own `goals`
+and `donts`), `challengeInvites` (7-day token, one seat), `challengeDays` (one
+row per member per day: summary, `planSetAt`, `checkinAt`, note,
+`dontsBroken`, `remindersSent`).
 Legacy `shareTokens` is untouched. A user is in at most one active challenge.
+
+**Goals and don'ts are per member.** Each member sets theirs on create or
+join and edits them any time (`updateMyCommitments`); the partner reads them
+via `memberView` and cannot change them. A removed don't is archived
+(`archivedAt`), never deleted, and an edited one keeps its id, so every
+`dontsBroken` id resolves forever (`resolveDontTexts` in
+`src/domain/challengeCommitments.ts`). `challenges.goals`/`donts` are legacy,
+never written again: a creator whose member row has no lists falls back to
+them (`memberCommitments`), which is the whole migration.
 
 **Reads are split hot/cold here too.** `myChallenge` and `dayCards` are small
 and live; `history` returns the whole season and callers pass

@@ -17,6 +17,8 @@ import { MobileTabBar } from "../components/planner/MobileTabBar";
 import { useAuth } from "../contexts/AuthContext";
 import { useChallenge } from "../hooks/useChallenge";
 import { acceptInvite, challengeErrorMessage } from "../services/challengeService";
+import { ListEditor } from "../components/challenge/ListEditor";
+import { rowsToTexts, withDraft, type CommitmentRow } from "../domain/challengeCommitments";
 
 const INVITE_KEY = "deepblock_challenge_invite";
 
@@ -51,6 +53,10 @@ export function ChallengeJoinPage() {
   const mine = useChallenge();
   const [typedName, setTypedName] = useState<string | null>(null);
   const displayName = typedName ?? (user?.email?.split("@")[0] ?? "");
+  const [goals, setGoals] = useState<CommitmentRow[]>([]);
+  const [donts, setDonts] = useState<CommitmentRow[]>([]);
+  const [goalDraft, setGoalDraft] = useState("");
+  const [dontDraft, setDontDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -60,7 +66,7 @@ export function ChallengeJoinPage() {
     setBusy(true);
     setError(null);
     try {
-      await acceptInvite(token, displayName);
+      await acceptInvite(token, displayName, rowsToTexts(withDraft(goals, goalDraft)), rowsToTexts(withDraft(donts, dontDraft)));
       storeToken(null);
       navigate("/challenge", { replace: true });
     } catch (err) {
@@ -112,6 +118,36 @@ export function ChallengeJoinPage() {
         <p className="mt-0.5 text-xs text-share-onSurfaceVariant">
           {preview.challenge!.startDate} → {preview.challenge!.endDate}
         </p>
+        {(preview.inviterGoals.length > 0 || preview.inviterDonts.length > 0) && (
+          <div className="mt-3 space-y-2 rounded-lg bg-share-surfaceContainer p-3 text-left">
+            {preview.inviterGoals.length > 0 && (
+              <div>
+                <p className="text-[11px] text-share-onSurfaceVariant">{preview.inviterName ? `${preview.inviterName}’s goals` : "Their goals"}</p>
+                <ul className="mt-1 space-y-0.5">
+                  {preview.inviterGoals.map((g, i) => (
+                    <li key={i} className="flex gap-2 text-sm text-share-onSurface">
+                      <span aria-hidden className="text-share-primary">◆</span>
+                      <span className="min-w-0 break-words">{g}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {preview.inviterDonts.length > 0 && (
+              <div>
+                <p className="text-[11px] text-share-onSurfaceVariant">{preview.inviterName ? `${preview.inviterName}’s don’ts` : "Their don’ts"}</p>
+                <ul className="mt-1 space-y-0.5">
+                  {preview.inviterDonts.map((d, i) => (
+                    <li key={i} className="flex gap-2 text-sm text-share-onSurface">
+                      <span aria-hidden className="text-share-tertiary">✕</span>
+                      <span className="min-w-0 break-words">{d}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     );
     if (!user) {
@@ -146,6 +182,15 @@ export function ChallengeJoinPage() {
             required
             className="mt-1 min-h-[44px] w-full rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainerHigh px-3 py-2 text-base text-share-onSurface sm:text-sm focus:border-share-primary focus:outline-none focus:ring-1 focus:ring-share-primary"
           />
+          <p className="mt-4 text-xs text-share-onSurfaceVariant">Yours to set — you can change them any time on the challenge page.</p>
+          <div className="mt-2">
+            <p className="block text-xs font-medium text-share-onSurfaceVariant">Your goals <span className="font-normal">(optional)</span></p>
+            <ListEditor items={goals} onChange={setGoals} placeholder="What you are aiming at" idPrefix="join-goal" onDraftChange={setGoalDraft} />
+          </div>
+          <div className="mt-3">
+            <p className="block text-xs font-medium text-share-onSurfaceVariant">Your don&rsquo;ts <span className="font-normal">(optional)</span></p>
+            <ListEditor items={donts} onChange={setDonts} placeholder="No doomscrolling past 30 min" idPrefix="join-dont" onDraftChange={setDontDraft} />
+          </div>
           {error && (
             <p className="mt-2 text-sm text-red-400" role="alert">
               {error}
