@@ -1,15 +1,16 @@
 /**
  * components/challenge/ChallengeDashboard.tsx
  *
- * The challenge page once you are in one: the countdown, today for both
+ * The challenge page once you are in one: the header (name, day, deadlines),
+ * the score, today for both
  * members, each member's own goals and don'ts (yours editable, theirs
  * read-only), the season so far, and the invite link while the second seat
  * is empty. A season that has ended is shown read-only: no invite, no edits,
- * no leaving; `afterCountdown` is where the page offers a new one.
+ * no leaving; `afterHeader` is where the page offers a new one.
  */
 
 import { useMemo, useState, type ReactNode } from 'react'
-import { challengeDates } from '../../domain/challenge'
+import { challengeDates, formatDeepMinutes, formatShortDate, jointStreak, memberSeason, type MemberSeason } from '../../domain/challenge'
 import { activeDonts, type DontLike } from '../../domain/challengeCommitments'
 import type { ChallengeState } from '../../hooks/useChallenge'
 import { useChallengeHistory } from '../../hooks/useChallenge'
@@ -21,8 +22,8 @@ import { MemberDayCard } from './MemberDayCard'
 
 interface ChallengeDashboardProps {
   state: ChallengeState
-  /** Shown under the countdown; the page puts "Start a new challenge" here for an ended season. */
-  afterCountdown?: ReactNode
+  /** Shown under the header: today's actions while running, "Start a new challenge" once ended. */
+  afterHeader?: ReactNode
 }
 
 const card = 'rounded-2xl bg-share-surfaceContainerLow p-4'
@@ -73,7 +74,30 @@ function CommitmentsColumn({ title, goals, donts, empty, action }: { title: stri
   )
 }
 
-export function ChallengeDashboard({ state, afterCountdown }: ChallengeDashboardProps) {
+/** One member's numbers. The leader's full-day count takes the accent; nothing else competes for it. */
+function ScoreColumn({ name, season, leads }: { name: string; season: MemberSeason; leads: boolean }) {
+  return (
+    <div className="min-w-0">
+      <p className="truncate text-xs text-share-onSurfaceVariant">{name}</p>
+      <p className={`stat-number mt-0.5 ${leads ? 'text-share-primary' : 'text-share-onBg'}`}>
+        {season.fullDays}
+        <span className="font-shareSans text-sm font-semibold text-share-onSurfaceVariant">/{season.pastDays}</span>
+      </p>
+      <p className="text-[11px] text-share-onSurfaceVariant">full days</p>
+      <p className="mt-2 text-xs text-share-onSurfaceVariant">
+        <span className="font-semibold text-share-onSurface">{season.streak}</span> in a row
+        {season.deepMinutes > 0 && (
+          <>
+            {' · '}
+            <span className="font-semibold text-share-onSurface">{formatDeepMinutes(season.deepMinutes)}</span> deep
+          </>
+        )}
+      </p>
+    </div>
+  )
+}
+
+export function ChallengeDashboard({ state, afterHeader }: ChallengeDashboardProps) {
   const { info, progress, mine, partnerCard, myDate, partnerDate } = state
   const readOnly = state.status === 'ended'
   // Each member's history runs to their own yesterday; their card is their today.
@@ -91,6 +115,9 @@ export function ChallengeDashboard({ state, afterCountdown }: ChallengeDashboard
 
   const myRows = [...(history?.mine ?? []), ...(mine ? [mine] : [])]
   const partnerRows = [...(history?.partner ?? []), ...(partnerCard ? [partnerCard] : [])]
+  const mySeason = memberSeason(myRows, dates, myDate)
+  const partnerSeason = partner ? memberSeason(partnerRows, dates, partnerDate) : null
+  const together = partner ? jointStreak(myRows, partnerRows, myDate, challenge.startDate) : 0
 
   const getLink = async () => {
     setError(null)
@@ -123,31 +150,62 @@ export function ChallengeDashboard({ state, afterCountdown }: ChallengeDashboard
 
   return (
     <div className="space-y-4">
-      {/* Countdown */}
-      <section className={`${card} text-center`}>
-        <p className={heading}>{challenge.name}</p>
-        {progress.phase === 'active' ? (
-          <>
-            <p className="stat-number mt-2 text-share-onBg">
-              {progress.daysLeft}
-              <span className="font-shareSans text-sm font-semibold text-share-onSurfaceVariant"> days left</span>
-            </p>
-            <p className="mt-1 text-sm text-share-onSurfaceVariant">
-              Day {progress.dayNumber} of {progress.totalDays} · {challenge.startDate} → {challenge.endDate}
-            </p>
-          </>
-        ) : progress.phase === 'upcoming' ? (
-          <p className="mt-1 text-sm text-share-onSurfaceVariant">
-            Starts {challenge.startDate} · {progress.totalDays} days
-          </p>
-        ) : (
-          <p className="mt-1 text-sm text-share-onSurfaceVariant">Ended {challenge.endDate}. Well fought.</p>
-        )}
-        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-share-hairline" role="progressbar" aria-valuenow={progress.dayNumber} aria-valuemin={0} aria-valuemax={progress.totalDays}>
+      {/* The season: name, where today sits, and the two deadlines */}
+      <header>
+        <p className={heading}>Challenge{partner ? ` with ${partner.displayName}` : ''}</p>
+        <h1 className="page-title mt-0.5 break-words">{challenge.name}</h1>
+        <p className="mt-1 text-sm text-share-onSurfaceVariant">
+          {progress.phase === 'active' ? (
+            <>
+              <span className="font-semibold text-share-onSurface">
+                Day {progress.dayNumber} of {progress.totalDays}
+              </span>{' '}
+              · {progress.daysLeft === 0 ? 'last day' : `${progress.daysLeft} to go, ends ${formatShortDate(challenge.endDate)}`}
+            </>
+          ) : progress.phase === 'upcoming' ? (
+            <>
+              Starts {formatShortDate(challenge.startDate)} · {progress.totalDays} days
+            </>
+          ) : (
+            <>
+              Ended {formatShortDate(challenge.endDate)} · {progress.totalDays} days
+            </>
+          )}
+        </p>
+        <p className="mt-0.5 text-xs text-share-onSurfaceDim">
+          Plan by {challenge.planDeadline} · check in by {challenge.checkinDeadline}
+        </p>
+        <div className="mt-3 h-1 overflow-hidden rounded-full bg-share-hairline" role="progressbar" aria-label="Season progress" aria-valuenow={progress.dayNumber} aria-valuemin={0} aria-valuemax={progress.totalDays}>
           <div className="h-full rounded-full bg-share-primary" style={{ width: `${(progress.phase === 'ended' ? 1 : progress.phase === 'upcoming' ? 0 : progress.dayNumber / progress.totalDays) * 100}%` }} />
         </div>
-        {afterCountdown}
-      </section>
+        {afterHeader && <div className="mt-4">{afterHeader}</div>}
+      </header>
+
+      {/* Score: full days, current run, deep work, for each */}
+      {progress.phase !== 'upcoming' && (
+        <section className={card} aria-label="Score">
+          <div className="flex items-baseline justify-between gap-2">
+            <p className={heading}>Score</p>
+            {partner && (
+              <p className="text-xs text-share-onSurfaceVariant">
+                {together > 0 ? (
+                  <>
+                    Both full <span className="font-semibold text-share-primary">{together} {together === 1 ? 'day' : 'days'}</span> running
+                  </>
+                ) : (
+                  'No shared run yet'
+                )}
+              </p>
+            )}
+          </div>
+          <div className={`mt-3 grid gap-3 ${partner ? 'grid-cols-2' : 'grid-cols-1'}`}>
+            <ScoreColumn name="You" season={mySeason} leads={!!partnerSeason && mySeason.fullDays > partnerSeason.fullDays} />
+            {partner && partnerSeason && (
+              <ScoreColumn name={partner.displayName} season={partnerSeason} leads={partnerSeason.fullDays > mySeason.fullDays} />
+            )}
+          </div>
+        </section>
+      )}
 
       {/* Today, both */}
       <section className="grid gap-3 sm:grid-cols-2">
@@ -199,9 +257,12 @@ export function ChallengeDashboard({ state, afterCountdown }: ChallengeDashboard
 
       {/* The season so far */}
       <section className={`${card} space-y-4`}>
-        <p className={heading}>The season so far</p>
-        <HistoryGrid name={me.displayName} dates={dates} rows={myRows} today={myDate} />
-        {partner && <HistoryGrid name={partner.displayName} dates={dates} rows={partnerRows} today={partnerDate} />}
+        <p className={heading}>Season</p>
+        {/* Side by side from sm, like the cards above: yours left, theirs right. */}
+        <div className={`grid gap-5 ${partner ? 'sm:grid-cols-2' : ''}`}>
+          <HistoryGrid name="You" dates={dates} rows={myRows} today={myDate} />
+          {partner && <HistoryGrid name={partner.displayName} dates={dates} rows={partnerRows} today={partnerDate} />}
+        </div>
         <HistoryLegend />
       </section>
 

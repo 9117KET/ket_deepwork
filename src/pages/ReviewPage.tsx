@@ -3,9 +3,11 @@
  *
  * One question, one screen: did this week's work happen?
  *
- * Earned hours (from the timer) against the weekly goal, a bar per day, the
- * hand-logged total beside it but never added to it, and seven days of each
- * habit. Everything month-scale, the journal and the goal cascade were cut in
+ * Worked hours against the weekly goal, a bar per day, and seven days of
+ * each habit. Hand-logged time counts toward the goal exactly like timer time:
+ * much real work is never run on the timer, and a week that left it out
+ * reported less work than was done. The bars still show which part was logged
+ * by hand (faded, as on the task row), so the two stay distinguishable. Everything month-scale, the journal and the goal cascade were cut in
  * the minimal rewrite: the calendar and an AI assistant answer "how has the
  * month gone" better than a grid nobody opened. Their data is untouched in
  * `AppState`, so nothing recorded was lost by removing the screens.
@@ -78,15 +80,17 @@ export function ReviewPage() {
     () => weekDates.map((iso) => computeDailyDeepWorkMinutes(appState.days[iso])),
     [appState.days, weekDates],
   );
-  const earnedMinutes = earnedByDay.reduce((a, b) => a + b, 0);
-  const selfReportedMinutes = useMemo(
-    () => weekDates.reduce((sum, iso) => sum + computeDailySelfReportedMinutes(appState.days[iso]), 0),
+  const handByDay = useMemo(
+    () => weekDates.map((iso) => computeDailySelfReportedMinutes(appState.days[iso])),
     [appState.days, weekDates],
   );
+  const workedByDay = earnedByDay.map((m, i) => m + handByDay[i]!);
+  const workedMinutes = workedByDay.reduce((a, b) => a + b, 0);
+  const handMinutes = handByDay.reduce((a, b) => a + b, 0);
 
   const goalHours = appState.deepWorkGoalHoursPerWeek ?? DEFAULT_GOAL_HOURS;
-  const goalRatio = goalHours > 0 ? Math.min(1, earnedMinutes / 60 / goalHours) : 0;
-  const maxDay = Math.max(60, ...earnedByDay);
+  const goalRatio = goalHours > 0 ? Math.min(1, workedMinutes / 60 / goalHours) : 0;
+  const maxDay = Math.max(60, ...workedByDay);
 
   const setGoalHours = useCallback(
     (hours: number) => {
@@ -181,7 +185,7 @@ export function ReviewPage() {
             </label>
           </div>
           <p className="stat-number mt-1 text-share-onBg">
-            {formatHours(earnedMinutes)}
+            {formatHours(workedMinutes)}
             <span className="font-shareSans text-sm font-semibold text-share-onSurfaceVariant"> / {goalHours}h</span>
           </p>
           <div
@@ -197,7 +201,9 @@ export function ReviewPage() {
           {/* A bar per day */}
           <div className="mt-5 flex items-end gap-2" aria-label="Deep work per day">
             {weekDates.map((iso, i) => {
-              const minutes = earnedByDay[i]!;
+              const earned = earnedByDay[i]!;
+              const hand = handByDay[i]!;
+              const minutes = earned + hand;
               const isToday = iso === today;
               return (
                 <div key={iso} className="flex flex-1 flex-col items-center gap-1">
@@ -205,11 +211,18 @@ export function ReviewPage() {
                     {minutes > 0 ? formatHours(minutes) : ""}
                   </span>
                   <div className="flex h-20 w-full items-end">
-                    <div
-                      className={`w-full rounded-md ${minutes > 0 ? "bg-share-primary/80" : "bg-share-hairline"}`}
-                      style={{ height: `${Math.max(4, (minutes / maxDay) * 100)}%` }}
-                      title={`${iso}: ${minutes} min`}
-                    />
+                    {minutes > 0 ? (
+                      <div
+                        className="flex w-full flex-col overflow-hidden rounded-md"
+                        style={{ height: `${Math.max(4, (minutes / maxDay) * 100)}%` }}
+                        title={`${iso}: ${minutes} min${hand > 0 ? ` (${hand} by hand)` : ""}`}
+                      >
+                        {hand > 0 && <div className="w-full bg-share-primary/35" style={{ flexGrow: hand }} />}
+                        {earned > 0 && <div className="w-full bg-share-primary/80" style={{ flexGrow: earned }} />}
+                      </div>
+                    ) : (
+                      <div className="h-[4%] w-full rounded-md bg-share-hairline" title={`${iso}: 0 min`} />
+                    )}
                   </div>
                   <span className={`text-[11px] ${isToday ? "font-bold text-share-primary" : "text-share-onSurfaceDim"}`}>
                     {WEEKDAY_LETTERS[i]}
@@ -219,9 +232,9 @@ export function ReviewPage() {
             })}
           </div>
 
-          {selfReportedMinutes > 0 && (
+          {handMinutes > 0 && (
             <p className="mt-3 text-xs text-share-onSurfaceVariant">
-              + {formatHours(selfReportedMinutes)} logged by hand — not counted toward the goal.
+              Includes {formatHours(handMinutes)} logged by hand (the lighter part of each bar).
             </p>
           )}
         </section>

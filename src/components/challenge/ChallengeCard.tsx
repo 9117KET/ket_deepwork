@@ -34,7 +34,7 @@ interface ChallengeCardProps {
   summary: ChallengeSummary
   date: string
   onOpenCheckin: () => void
-  /** Hide the link to the challenge page when the card already sits on it. */
+  /** On the challenge page itself: no link to it, and no name or day count (the header has them). */
   compact?: boolean
 }
 
@@ -140,10 +140,11 @@ export function ChallengeCard({ state, summary, date, onOpenCheckin, compact = f
       <div className="flex items-center justify-between gap-2">
         <p className="flex min-w-0 items-center gap-1.5 text-xs text-share-onSurfaceVariant">
           <Flag className="h-3.5 w-3.5 shrink-0 text-share-primary" />
-          <span className="truncate font-semibold text-share-onBg">{info.challenge.name}</span>
+          {/* On the challenge page the header already carries the name and day. */}
+          <span className="truncate font-semibold text-share-onBg">{compact ? 'Today' : info.challenge.name}</span>
           {progress.phase === 'active' ? (
             <span className="shrink-0">
-              · Day {progress.dayNumber}/{progress.totalDays} · {progress.daysLeft} left
+              {!compact && ` · Day ${progress.dayNumber}/${progress.totalDays} · ${progress.daysLeft} left`}
               {checkinAt ? (
                 <span className="font-semibold text-share-primary"> · ✓ in {formatClock(checkinAt)}</span>
               ) : planSetAt ? (

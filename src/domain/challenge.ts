@@ -166,7 +166,7 @@ export function extractInviteToken(input: string): string | null {
   }
 }
 
-function byDate(rows: ChallengeDayLike[]): Map<string, ChallengeDayLike> {
+function byDate<T extends ChallengeDayLike>(rows: T[]): Map<string, T> {
   return new Map(rows.map((r) => [r.date, r]))
 }
 
@@ -211,4 +211,57 @@ export function jointStreak(
  */
 export function reviewWeekElapsed(weekDates: string[], todayIso: string, span: ChallengeSpan): number {
   return weekDates.filter((d) => d <= todayIso && d >= span.startDate && d <= span.endDate).length
+}
+
+/** "1 Oct", in the viewer's locale; ISO dates stay out of the UI. */
+export function formatShortDate(iso: string): string {
+  return new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(utcDay(iso)))
+}
+
+/** One member's season so far, for the scoreboard. */
+export interface MemberSeason {
+  /** Days with both a plan and a check-in. */
+  fullDays: number
+  /** Days of the span already reached, today included. */
+  pastDays: number
+  /** Consecutive full days ending today, or yesterday while today is unfinished. */
+  streak: number
+  /** Earned deep work across the season, from the published summaries. */
+  deepMinutes: number
+}
+
+export function memberSeason(
+  rows: (ChallengeDayLike & { summary?: { deepWorkMinutes: number } })[],
+  dates: string[],
+  todayIso: string,
+): MemberSeason {
+  const rowsByDate = byDate(rows)
+  const reached = dates.filter((d) => d <= todayIso)
+  const full = (d: string) => dayCellState(rowsByDate.get(d), d, todayIso) === 'both'
+  let i = reached.length - 1
+  if (i >= 0 && !full(reached[i]!)) i--
+  let streak = 0
+  while (i >= 0 && full(reached[i]!)) {
+    streak++
+    i--
+  }
+  let deepMinutes = 0
+  for (const d of reached) deepMinutes += rowsByDate.get(d)?.summary?.deepWorkMinutes ?? 0
+  return { fullDays: reached.filter(full).length, pastDays: reached.length, streak, deepMinutes }
+}
+
+/**
+ * The span laid out as calendar weeks, Monday first: one array of seven per
+ * week, `null` where a week runs past either end. This is what lets two
+ * members' grids line up column for column.
+ */
+export function seasonWeeks(dates: string[]): (string | null)[][] {
+  if (dates.length === 0) return []
+  // getUTCDay: 0 = Sunday. Monday-first index: 0..6.
+  const lead = (new Date(utcDay(dates[0]!)).getUTCDay() + 6) % 7
+  const cells: (string | null)[] = [...Array<null>(lead).fill(null), ...dates]
+  while (cells.length % 7 !== 0) cells.push(null)
+  const weeks: (string | null)[][] = []
+  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7))
+  return weeks
 }
