@@ -10,6 +10,8 @@ import {
   extractInviteToken,
   formatDeepMinutes,
   jointStreak,
+  memberSeason,
+  seasonWeeks,
   reviewWeekElapsed,
 } from './challenge'
 
@@ -213,5 +215,41 @@ describe('the Review streak for a past week', () => {
     // From the week's end the streak is three; from a later today with nothing logged it would be 0.
     expect(jointStreak(rows, rows, '2026-10-04', '2026-10-01')).toBe(3)
     expect(jointStreak(rows, rows, '2026-10-20', '2026-10-01')).toBe(0)
+  })
+})
+
+describe('memberSeason', () => {
+  const dates = ['2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04', '2026-10-05']
+  const full = (date: string, deep = 0) => ({ date, planSetAt: 1, checkinAt: 2, summary: { deepWorkMinutes: deep } })
+
+  it('counts full days, reached days and deep work up to today', () => {
+    const rows = [full('2026-10-01', 60), { date: '2026-10-02', planSetAt: 1 }, full('2026-10-03', 30), full('2026-10-05', 999)]
+    expect(memberSeason(rows, dates, '2026-10-04')).toEqual({ fullDays: 2, pastDays: 4, streak: 1, deepMinutes: 90 })
+  })
+
+  it('the streak skips an unfinished today and stops at a gap', () => {
+    const rows = [full('2026-10-01'), full('2026-10-03'), full('2026-10-04'), { date: '2026-10-05', planSetAt: 1 }]
+    expect(memberSeason(rows, dates, '2026-10-05').streak).toBe(2)
+    expect(memberSeason([...rows, full('2026-10-05')], dates, '2026-10-05').streak).toBe(3)
+  })
+
+  it('a season not yet started has nothing', () => {
+    expect(memberSeason([], dates, '2026-09-30')).toEqual({ fullDays: 0, pastDays: 0, streak: 0, deepMinutes: 0 })
+  })
+})
+
+describe('seasonWeeks', () => {
+  it('pads to Monday-first weeks', () => {
+    // 1 Oct 2026 is a Thursday.
+    const weeks = seasonWeeks(challengeDates({ startDate: '2026-10-01', endDate: '2026-10-11' }))
+    expect(weeks).toHaveLength(2)
+    expect(weeks[0]).toEqual([null, null, null, '2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04'])
+    expect(weeks[1]).toEqual(['2026-10-05', '2026-10-06', '2026-10-07', '2026-10-08', '2026-10-09', '2026-10-10', '2026-10-11'])
+  })
+
+  it('pads the last week and handles an empty span', () => {
+    const weeks = seasonWeeks(['2026-10-05', '2026-10-06'])
+    expect(weeks).toEqual([['2026-10-05', '2026-10-06', null, null, null, null, null]])
+    expect(seasonWeeks([])).toEqual([])
   })
 })

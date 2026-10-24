@@ -76,12 +76,10 @@ export function computeDailyDeepWorkMinutes(day: DayState | undefined): number {
  * Returns hand-logged minutes for a day: time the user reported working on a
  * task without a timer having measured it.
  *
- * Deliberately a separate figure from `computeDailyDeepWorkMinutes` rather than
- * folded into it. Self-reported hours are not evidence of anything and must
- * never inflate a deep work total. But leaving them out of every readout meant
- * an hour honestly logged by hand vanished without explanation, which taught
- * exactly the wrong lesson - that the way to make the scoreboard move is to
- * stop logging honestly. Shown beside the earned figure, never added to it.
+ * A separate figure from `computeDailyDeepWorkMinutes` rather than folded into
+ * it, so each readout chooses. The weekly review adds it to the earned figure
+ * (much real work never runs on the timer) and shows it as the faded part of
+ * each bar; the Today badge and the challenge summary stay timer-only.
  */
 export function computeDailySelfReportedMinutes(day: DayState | undefined): number {
   if (!day) return 0

@@ -1,12 +1,14 @@
 /**
  * components/challenge/HistoryGrid.tsx
  *
- * One cell per day of the season, for one member. Both stamps, one stamp,
- * none, or not yet. Wraps rather than scrolls: at 14px a 92-day season is
- * six short rows on a phone, and the shape of a month is visible at a glance.
+ * One member's season as calendar weeks: a column per week, Monday at the
+ * top, month names over the week a month starts in. The cells stretch to
+ * fill whatever width the grid is given, so two grids side by side each use
+ * half the card and a day sits in the same place in both. A season so long
+ * that the cells would drop under 9px scrolls sideways instead.
  */
 
-import { dayCellState, type ChallengeDayLike, type DayCellState } from '../../domain/challenge'
+import { dayCellState, seasonWeeks, type ChallengeDayLike, type DayCellState } from '../../domain/challenge'
 
 // One accent: a full day is the act-now cyan, half a day is the same cyan
 // faded, a skipped plan is the warning amber, a missed day is a hairline.
@@ -15,7 +17,7 @@ const CELL: Record<DayCellState, string> = {
   plan: 'bg-share-primary/40',
   checkin: 'bg-share-tertiary',
   none: 'bg-share-hairline',
-  future: 'bg-transparent border border-share-outlineVariant/30',
+  future: 'border border-share-outlineVariant/25',
 }
 
 const LABEL: Record<DayCellState, string> = {
@@ -26,6 +28,9 @@ const LABEL: Record<DayCellState, string> = {
   future: 'not yet',
 }
 
+const WEEKDAYS = ['M', '', 'W', '', 'F', '', '']
+const MIN_CELL_PX = 9
+
 interface HistoryGridProps {
   name: string
   dates: string[]
@@ -33,27 +38,65 @@ interface HistoryGridProps {
   today: string
 }
 
+function monthLabel(week: (string | null)[], index: number): string {
+  // Label the first column, and the week that holds a month's 1st.
+  const first = week.find((d) => d !== null && (index === 0 || d.endsWith('-01')))
+  if (!first) return ''
+  return new Intl.DateTimeFormat(undefined, { month: 'short', timeZone: 'UTC' }).format(new Date(`${first}T00:00:00Z`))
+}
+
 export function HistoryGrid({ name, dates, rows, today }: HistoryGridProps) {
   const byDate = new Map(rows.map((r) => [r.date, r]))
+  const weeks = seasonWeeks(dates)
   const states = dates.map((d) => dayCellState(byDate.get(d), d, today))
   const both = states.filter((s) => s === 'both').length
   const past = states.filter((s) => s !== 'future').length
   return (
-    <div>
+    <div className="min-w-0">
       <div className="flex items-baseline justify-between gap-2">
-        <p className="text-sm font-semibold text-share-onBg">{name}</p>
-        <p className="text-[11px] text-share-onSurfaceVariant">
-          {both}/{past} full days
+        <p className="min-w-0 truncate text-sm font-semibold text-share-onBg">{name}</p>
+        <p className="shrink-0 text-[11px] text-share-onSurfaceVariant">
+          {both}/{past} full
         </p>
       </div>
-      <div className="mt-1.5 flex flex-wrap gap-[3px]" role="img" aria-label={`${name}: ${both} of ${past} days with both a plan and a check-in`}>
-        {dates.map((d, i) => (
-          <span
-            key={d}
-            title={`${d}: ${LABEL[states[i]!]}`}
-            className={`h-3.5 w-3.5 rounded-[3px] ${CELL[states[i]!]} ${d === today ? 'ring-1 ring-share-primary ring-offset-1 ring-offset-share-surfaceContainerLow' : ''}`}
-          />
-        ))}
+      <div className="mt-2 overflow-x-auto pb-1">
+        <div
+          className="grid gap-[3px]"
+          style={{
+            gridTemplateColumns: `auto repeat(${weeks.length}, minmax(${MIN_CELL_PX}px, 1fr))`,
+            minWidth: `${16 + weeks.length * (MIN_CELL_PX + 3)}px`,
+          }}
+          role="img"
+          aria-label={`${name}: ${both} of ${past} days with both a plan and a check-in`}
+        >
+          {/* Row 1: month names over their week. */}
+          <span aria-hidden />
+          {weeks.map((week, wi) => (
+            <span key={`m${wi}`} className="h-4 overflow-visible whitespace-nowrap text-[11px] leading-none text-share-onSurfaceDim" aria-hidden>
+              {monthLabel(week, wi)}
+            </span>
+          ))}
+          {/* Rows 2–8: one per weekday, Monday first. */}
+          {WEEKDAYS.map((w, di) => [
+            <span key={`d${di}`} className="flex items-center pr-1 text-[11px] leading-none text-share-onSurfaceDim" aria-hidden>
+              {w}
+            </span>,
+            ...weeks.map((week, wi) => {
+              const d = week[di]
+              if (!d) return <span key={`${wi}-${di}`} className="aspect-square" />
+              const state = dayCellState(byDate.get(d), d, today)
+              return (
+                <span
+                  key={d}
+                  title={`${d}: ${LABEL[state]}`}
+                  className={`aspect-square rounded-[3px] ${CELL[state]} ${
+                    d === today ? 'ring-1 ring-share-onBg ring-offset-1 ring-offset-share-surfaceContainerLow' : ''
+                  }`}
+                />
+              )
+            }),
+          ])}
+        </div>
       </div>
     </div>
   )

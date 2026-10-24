@@ -252,8 +252,9 @@ nudger-local day, at least an hour apart, only while the partner owes the day
 something (pure rules in `convex/_shared/challengeNudges.ts`, shared with the
 button; `challengeDays.nudgesSentAt`, legacy `nudgeSentAt` read as one).
 
-**Routes and entry points:** `/challenge` (create / join / dashboard with the
-countdown, both members' cards, the season grid, invite link),
+**Routes and entry points:** `/challenge` (create / join / dashboard: a header with
+the name, day and deadlines, today's actions, the score (full days, run, deep
+work), both members' cards, a week-column season grid per member, invite link),
 `/challenge/join?invite=TOKEN` (`?invite=`, not `?code=`, which Convex Auth
 intercepts; the token survives sign-up in sessionStorage). On Today:
 `ChallengeCard` under the header, a "Day 22/92 · 70 left" pill in
@@ -380,7 +381,7 @@ Features built around the *Deep Work* philosophy:
 
 3. **Task depth classification** — `Task.isShallow?: boolean`. Right-click / ⋮ menu shows "Mark as shallow / Mark as deep work". Shallow tasks show an amber badge. When completed shallow tasks total ≥ 120 min, a warning banner appears above the sections.
 
-4. **Weekly scoreboard** — `/review` (`ReviewPage`) shows this week's earned hours against `deepWorkGoalHoursPerWeek` (editable there), a bar per day, and hand-logged time beside it but never added to it.
+4. **Weekly scoreboard** — `/review` (`ReviewPage`) shows this week's worked hours against `deepWorkGoalHoursPerWeek` (editable there) and a bar per day. Hand-logged time counts toward the goal like timer time; each bar shows it as a faded segment so the two stay distinguishable.
 
 5. **Depth philosophy** — removed from the UI with the time blocks; `AppState.depthPhilosophy` is kept so existing settings are not dropped.
 
@@ -441,9 +442,11 @@ Features built around the *Deep Work* philosophy:
    one-tap "log the whole remainder" still costs one tap. The same
    `BlockAmountPicker` is the "In blocks" mode of `ManualLogPanel`, with two
    blocks of headroom past the estimate. The row is never filled
-   automatically. `computeWeeklySelfReportedHours`
-   shows the hand-logged total beside the weekly scoreboard, explicitly *not
-   counted* toward it.
+   automatically. On `/review` the hand-logged
+   minutes (`computeDailySelfReportedMinutes`) *are* counted toward the weekly
+   goal, shown as the faded part of each day's bar: plenty of real work never
+   runs on the timer. Elsewhere (the Today badge, the challenge summary, the
+   work log) earned time is still kept separate.
 
 9. **Block length is set from the timer** — the preset chips pick this run's
    length; the line under them (`BlockLengthLine`) shows `Your block: Xm on · Ym

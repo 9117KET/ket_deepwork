@@ -10,6 +10,7 @@
  * a completed state); a broken don't is the warning colour, `share.tertiary`.
  */
 
+import { CheckCircle2, Circle } from 'lucide-react'
 import type { ChallengeSummary } from '../../domain/challenge'
 import { formatClock, formatDeepMinutes } from '../../domain/challenge'
 import { resolveDontTexts, type DontLike } from '../../domain/challengeCommitments'
@@ -50,7 +51,7 @@ export function MemberDayCard({ name, isMe, day, donts, caption }: MemberDayCard
   // The member's full list, archived included: a don't removed since still reads as itself.
   const broke = resolveDontTexts(day?.dontsBroken ?? [], donts)
   return (
-    <div className="rounded-2xl bg-share-surfaceContainerLow p-4">
+    <div className="h-full rounded-2xl bg-share-surfaceContainerLow p-4">
       <div className="flex items-baseline justify-between gap-2">
         <p className="min-w-0 truncate text-sm font-semibold text-share-onBg">
           {name}
@@ -63,14 +64,18 @@ export function MemberDayCard({ name, isMe, day, donts, caption }: MemberDayCard
         <Stamp label="Check-in" at={day?.checkinAt} />
       </div>
       {!s || (s.top3.length === 0 && s.tasksTotal === 0 && s.privateCount === 0) ? (
-        <p className="mt-2 text-xs text-share-onSurfaceVariant">Nothing planned yet.</p>
+        <p className="mt-3 text-xs text-share-onSurfaceVariant">No plan locked in yet today.</p>
       ) : (
         <>
           {s.top3.length > 0 && (
-            <ul className="mt-2 space-y-0.5">
+            <ul className="mt-3 space-y-1">
               {s.top3.map((t, i) => (
-                <li key={i} className={`flex items-start gap-1.5 text-sm ${t.isDone ? 'text-share-onSurfaceVariant line-through' : 'text-share-onSurface'}`}>
-                  <span aria-hidden className="shrink-0">{t.isDone ? '✅' : '⬜'}</span>
+                <li key={i} className={`flex items-start gap-2 text-sm ${t.isDone ? 'text-share-onSurfaceVariant line-through decoration-share-onSurfaceDim' : 'text-share-onSurface'}`}>
+                  {t.isDone ? (
+                    <CheckCircle2 aria-label="done" className="mt-0.5 h-4 w-4 shrink-0 text-share-primary" />
+                  ) : (
+                    <Circle aria-label="not done" className="mt-0.5 h-4 w-4 shrink-0 text-share-onSurfaceDim" />
+                  )}
                   <span className="min-w-0 break-words">{t.title}</span>
                 </li>
               ))}

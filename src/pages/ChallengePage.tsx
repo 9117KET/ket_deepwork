@@ -98,11 +98,13 @@ export function ChallengePage() {
   return (
     <AppChrome showCalendarLink showChallengeLink trailing={trailing}>
       <div className="mx-auto max-w-xl px-4 py-5 pb-28 md:py-8 md:pb-10">
-        <header>
-          <h1 className="page-title">Challenge</h1>
-          <p className="mt-0.5 text-xs text-share-onSurfaceVariant">Two people, one season, a plan every morning and a check-in every night.</p>
-        </header>
-        <div className="mt-5">
+        {/* In a challenge, the dashboard's own header names it; this one is for the start forms. */}
+        {(state.status === "none" || state.status === "loading" || isHydrating) && (
+          <header className="mb-5">
+            <h1 className="page-title">Challenge</h1>
+          </header>
+        )}
+        <div>
           {state.status === "loading" || isHydrating ? (
             <p className="text-sm text-share-onSurfaceVariant">Loading…</p>
           ) : state.status === "none" ? (
@@ -111,7 +113,7 @@ export function ChallengePage() {
             <div className="space-y-4">
               <ChallengeDashboard
                 state={state}
-                afterCountdown={
+                afterHeader={
                   !startingNew && (
                     <button
                       type="button"
@@ -126,10 +128,10 @@ export function ChallengePage() {
               {startingNew && startForms}
             </div>
           ) : (
-            <div className="space-y-4">
-              <ChallengeCard state={state} summary={summary} date={state.myDate} onOpenCheckin={() => setCheckinOpen(true)} compact />
-              <ChallengeDashboard state={state} />
-            </div>
+            <ChallengeDashboard
+              state={state}
+              afterHeader={<ChallengeCard state={state} summary={summary} date={state.myDate} onOpenCheckin={() => setCheckinOpen(true)} compact />}
+            />
           )}
         </div>
       </div>
