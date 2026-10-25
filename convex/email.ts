@@ -15,6 +15,11 @@
  * Google account). Smoke-test with
  *   npx convex run email:sendTestEmail '{"to":"you@example.com"}'
  * before relying on reminders.
+ *
+ * EMAIL_DELIVERY=off makes every send a logged no-op. The dev deployment runs
+ * the same 15-minute cron as prod, with the same real Gmail account, so a
+ * seeded test challenge left active there mails real inboxes every day until
+ * someone notices. Dev keeps it off; unset it only while testing mail.
  */
 
 import { internalAction } from "./_generated/server"
@@ -29,6 +34,10 @@ interface Mail {
 }
 
 async function send(mail: Mail): Promise<void> {
+  if (process.env.EMAIL_DELIVERY === "off") {
+    console.log("[email] EMAIL_DELIVERY=off, not sending:", mail.subject)
+    return
+  }
   const user = process.env.GMAIL_SMTP_USER
   const pass = process.env.GMAIL_SMTP_APP_PASSWORD
   if (!user || !pass) throw new Error("GMAIL_SMTP_USER and GMAIL_SMTP_APP_PASSWORD must be set")

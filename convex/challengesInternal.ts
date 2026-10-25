@@ -56,6 +56,20 @@ export const listActiveChallenges = internalQuery({
   },
 })
 
+/**
+ * Ends a challenge by hand, which stops its reminders. For test seasons left
+ * running on a deployment; nothing in the app calls it. Rows are kept, as
+ * `leaveChallenge` keeps them, so the season stays readable.
+ *   npx convex run challengesInternal:endChallenge '{"challengeId":"..."}'
+ */
+export const endChallenge = internalMutation({
+  args: { challengeId: v.id("challenges") },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.challengeId, { status: "ended" })
+    return null
+  },
+})
+
 export const claimDueReminders = internalMutation({
   args: { nowMs: v.number() },
   handler: async (ctx, args): Promise<DueReminder[]> => {

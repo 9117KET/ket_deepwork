@@ -82,6 +82,14 @@ _Last updated: 2026-10-11_
    local + up to 15 min) and one 21:30 check-in window. When a domain exists,
    swapping to Resend is a change to `send()` in `convex/email.ts` only.
 
+   **Dev sends no mail.** The dev deployment runs the same cron with the same
+   real Gmail account, so a seeded test challenge left active there emailed a
+   real inbox every morning (October 2026). Dev has `EMAIL_DELIVERY=off`,
+   which turns every send into a log line; unset it only while testing mail,
+   and end test seasons afterwards with
+   `npx convex run challengesInternal:endChallenge '{"challengeId":"..."}'`.
+   Never set it on prod.
+
 4. **Reclaim `deepblock.vercel.app`** (optional) — log into the old Vercel
    account that owns it, delete that project (or detach the domain), then attach
    it to `ket-deepwork`:
