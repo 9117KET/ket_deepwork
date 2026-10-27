@@ -55,6 +55,38 @@ describe('buildChallengeSummary', () => {
     expect(JSON.stringify(s)).not.toContain('Therapy')
   })
 
+  it('with no Top 3, leads with the first three visible tasks and counts only the rest', () => {
+    const day = makeDay({
+      tasks: [
+        task({ id: 'a', title: 'Therapy', isPrivate: true }),
+        task({ id: 'b', title: 'German', isDone: true }),
+        task({ id: 'c', title: 'Gym' }),
+        task({ id: 'd', title: 'Groceries' }),
+        task({ id: 'e', title: 'Email', isDone: true }),
+        task({ id: 'f', title: 'Laundry' }),
+      ],
+    })
+    const s = buildChallengeSummary(day, [])
+    expect(s.top3FromTasks).toBe(true)
+    expect(s.top3).toEqual([
+      { title: 'German', isDone: true },
+      { title: 'Gym', isDone: false },
+      { title: 'Groceries', isDone: false },
+    ])
+    expect(s).toMatchObject({ tasksDone: 1, tasksTotal: 2, privateCount: 1 })
+    expect(JSON.stringify(s)).not.toContain('Therapy')
+  })
+
+  it('a Top 3 that is all private does not fall back to the list', () => {
+    const day = makeDay({
+      tasks: [task({ id: 'a', title: 'Secret', sectionId: 'mustDo', isPrivate: true }), task({ id: 'b', title: 'Gym' })],
+    })
+    const s = buildChallengeSummary(day, [])
+    expect(s.top3).toEqual([])
+    expect(s.top3FromTasks).toBeUndefined()
+    expect(s).toMatchObject({ tasksDone: 0, tasksTotal: 1, privateCount: 1 })
+  })
+
   it('counts earned minutes only, never hand-logged ones', () => {
     const day = makeDay({
       deepWorkSessions: [
