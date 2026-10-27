@@ -248,6 +248,20 @@ describe('the day', () => {
   })
 })
 
+describe('renaming', () => {
+  test('either member renames the season; blanks, long names and outsiders are refused', async () => {
+    const t = convexTest(schema, modules)
+    const { a, b } = await pair(t)
+    await b.as.mutation(api.challenges.renameChallenge, { name: '  Winter lock-in ' })
+    expect((await a.as.query(api.challenges.myChallenge, {}))?.challenge.name).toBe('Winter lock-in')
+    await expect(a.as.mutation(api.challenges.renameChallenge, { name: '   ' })).rejects.toThrow(/name is required/i)
+    await expect(a.as.mutation(api.challenges.renameChallenge, { name: 'x'.repeat(81) })).rejects.toThrow(/80 characters/i)
+    const c = await signUp(t, 'c@example.com')
+    await expect(c.as.mutation(api.challenges.renameChallenge, { name: 'Mine now' })).rejects.toThrow(/not in a challenge/i)
+    await expect(t.mutation(api.challenges.renameChallenge, { name: 'x' })).rejects.toThrow(/not authenticated/i)
+  })
+})
+
 describe('leaving', () => {
   test('the last one out ends the challenge; rows stay', async () => {
     const t = convexTest(schema, modules)

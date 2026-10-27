@@ -75,6 +75,10 @@ export async function updateMyCommitments(input: {
   return await convex.mutation(api.challenges.updateMyCommitments, input)
 }
 
+export async function renameChallenge(name: string): Promise<void> {
+  await convex.mutation(api.challenges.renameChallenge, { name })
+}
+
 export async function leaveChallenge(): Promise<void> {
   await convex.mutation(api.challenges.leaveChallenge, {})
 }

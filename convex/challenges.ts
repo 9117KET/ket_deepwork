@@ -553,6 +553,20 @@ export const updateMyCommitments = mutation({
   },
 })
 
+/** The season's name belongs to both members; either may change it while it runs. */
+export const renameChallenge = mutation({
+  args: { name: v.string() },
+  handler: async (ctx, args) => {
+    const userId = await requireUser(ctx)
+    const { challenge } = await requireMembership(ctx, userId)
+    const name = args.name.trim()
+    if (!name) fail("A name is required")
+    if (name.length > MAX_NAME) fail(`Name must be ${MAX_NAME} characters or fewer`)
+    await ctx.db.patch(challenge._id, { name })
+    return { name }
+  },
+})
+
 export const leaveChallenge = mutation({
   args: {},
   handler: async (ctx) => {
