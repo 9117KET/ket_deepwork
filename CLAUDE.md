@@ -253,8 +253,17 @@ something (pure rules in `convex/_shared/challengeNudges.ts`, shared with the
 button; `challengeDays.nudgesSentAt`, legacy `nudgeSentAt` read as one).
 
 **Routes and entry points:** `/challenge` (create / join / dashboard: a header with
-the name, day and deadlines, today's actions, the score (full days, run, deep
-work), both members' cards, a week-column season grid per member, invite link),
+the name (either member can rename it, `renameChallenge`), day and deadlines, a
+head-to-head score (full days, run, deep work), today's actions and both
+members' cards, one `SeasonGrid` calendar whose squares are split left you /
+right partner, each member's goals and don'ts, invite link). From `lg` it is
+two columns with the season and commitments in a right rail; on a phone it
+leads with the partner's card, folds your own day to one line
+(`MemberDayLine`, linking to Today) and shows the last two weeks of the
+season until "Whole season" is tapped. Design: "Challenge — head to head",
+https://claude.ai/artifact/AZzgoaA8FUoRdGfsCqxmWo. When a member sets no Top 3,
+the summary carries their first three visible tasks with `top3FromTasks`, and
+the card labels them so,
 `/challenge/join?invite=TOKEN` (`?invite=`, not `?code=`, which Convex Auth
 intercepts; the token survives sign-up in sessionStorage). On Today:
 `ChallengeCard` under the header, a "Day 22/92 · 70 left" pill in

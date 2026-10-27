@@ -86,6 +86,8 @@ export function ChallengePage() {
     );
   }
 
+  const inChallenge = !isHydrating && (state.status === "active" || state.status === "ended");
+
   // The server allows 40 characters; a long email prefix must not exceed it.
   const defaultDisplayName = ((user.email ?? "").split("@")[0] || "Me").slice(0, 40);
   const startForms = (
@@ -97,7 +99,8 @@ export function ChallengePage() {
 
   return (
     <AppChrome showCalendarLink showChallengeLink trailing={trailing}>
-      <div className="mx-auto max-w-xl px-4 py-5 pb-28 md:py-8 md:pb-10">
+      {/* The dashboard is two columns from lg; the start forms stay one narrow column. */}
+      <div className={`mx-auto px-4 py-5 pb-28 md:py-8 md:pb-10 ${inChallenge ? "max-w-xl lg:max-w-6xl lg:px-10" : "max-w-xl"}`}>
         {/* In a challenge, the dashboard's own header names it; this one is for the start forms. */}
         {(state.status === "none" || state.status === "loading" || isHydrating) && (
           <header className="mb-5">
@@ -130,7 +133,7 @@ export function ChallengePage() {
           ) : (
             <ChallengeDashboard
               state={state}
-              afterHeader={<ChallengeCard state={state} summary={summary} date={state.myDate} onOpenCheckin={() => setCheckinOpen(true)} compact />}
+              todayActions={<ChallengeCard state={state} summary={summary} date={state.myDate} onOpenCheckin={() => setCheckinOpen(true)} compact />}
             />
           )}
         </div>

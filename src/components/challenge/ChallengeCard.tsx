@@ -141,7 +141,7 @@ export function ChallengeCard({ state, summary, date, onOpenCheckin, compact = f
         <p className="flex min-w-0 items-center gap-1.5 text-xs text-share-onSurfaceVariant">
           <Flag className="h-3.5 w-3.5 shrink-0 text-share-primary" />
           {/* On the challenge page the header already carries the name and day. */}
-          <span className="truncate font-semibold text-share-onBg">{compact ? 'Today' : info.challenge.name}</span>
+          <span className="truncate font-semibold text-share-onBg">{compact ? 'Your day' : info.challenge.name}</span>
           {progress.phase === 'active' ? (
             <span className="shrink-0">
               {!compact && ` · Day ${progress.dayNumber}/${progress.totalDays} · ${progress.daysLeft} left`}
