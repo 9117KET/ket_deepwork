@@ -28,6 +28,8 @@ export type Dont = Infer<typeof dontValidator>
  */
 export const summaryValidator = v.object({
   top3: v.array(v.object({ title: v.string(), isDone: v.boolean() })),
+  /** `top3` is the first tasks on the list, because no Top 3 was set. */
+  top3FromTasks: v.optional(v.boolean()),
   tasksDone: v.number(),
   tasksTotal: v.number(),
   privateCount: v.number(),

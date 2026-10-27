@@ -16,6 +16,12 @@ import { computeDailyDeepWorkMinutes } from './stats'
 
 export interface ChallengeSummary {
   top3: { title: string; isDone: boolean }[]
+  /**
+   * True when the member set no Top 3 and `top3` holds the first visible
+   * tasks on their list instead, so the partner still sees what the day is
+   * about. Those tasks are then left out of `tasksDone`/`tasksTotal`.
+   */
+  top3FromTasks?: boolean
   tasksDone: number
   tasksTotal: number
   privateCount: number
@@ -59,14 +65,21 @@ function isoOfUtc(ms: number): string {
 
 export function buildChallengeSummary(day: DayState | undefined, habitDefinitions: HabitDefinition[]): ChallengeSummary {
   const roots = (day?.tasks ?? []).filter((t) => !t.parentId)
-  const top3 = roots.filter((t) => t.sectionId === 'mustDo')
+  const mustDo = roots.filter((t) => t.sectionId === 'mustDo')
   const rest = roots.filter((t) => t.sectionId !== 'mustDo')
   const restVisible = rest.filter((t) => !t.isPrivate)
+  // No Top 3 at all: lead with the list's first three instead of a bare count.
+  // A Top 3 that exists but is all private does not fall back — that would put
+  // other tasks where the member chose to show nothing.
+  const fromTasks = mustDo.length === 0 && restVisible.length > 0
+  const top3 = fromTasks ? restVisible.slice(0, 3) : mustDo.filter((t) => !t.isPrivate)
+  const counted = fromTasks ? restVisible.slice(3) : restVisible
   const habitsDone = habitDefinitions.filter((h) => day?.habitCompletions?.[h.id] === true).length
   return {
-    top3: top3.filter((t) => !t.isPrivate).map((t) => ({ title: t.title, isDone: t.isDone })),
-    tasksDone: restVisible.filter((t) => t.isDone).length,
-    tasksTotal: restVisible.length,
+    top3: top3.map((t) => ({ title: t.title, isDone: t.isDone })),
+    ...(fromTasks ? { top3FromTasks: true } : {}),
+    tasksDone: counted.filter((t) => t.isDone).length,
+    tasksTotal: counted.length,
     privateCount: roots.filter((t) => t.isPrivate).length,
     deepWorkMinutes: computeDailyDeepWorkMinutes(day),
     habitsDone,
@@ -132,7 +145,7 @@ export function buildShareText(args: {
       : `Checked in — Day ${progress.dayNumber}/${progress.totalDays} (${progress.daysLeft} left)`
   const lines = [head]
   if (summary.top3.length > 0) {
-    lines.push(`Top 3: ${summary.top3.map((t) => `${t.isDone ? '✅' : '⬜'} ${t.title}`).join(' · ')}`)
+    lines.push(`${summary.top3FromTasks ? 'Tasks' : 'Top 3'}: ${summary.top3.map((t) => `${t.isDone ? '✅' : '⬜'} ${t.title}`).join(' · ')}`)
   }
   const extras: string[] = []
   if (summary.tasksTotal > 0) {

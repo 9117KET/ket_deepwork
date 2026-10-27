@@ -67,8 +67,13 @@ export function MemberDayCard({ name, isMe, day, donts, caption }: MemberDayCard
         <p className="mt-3 text-xs text-share-onSurfaceVariant">No plan locked in yet today.</p>
       ) : (
         <>
+          {s.top3FromTasks && (
+            <p className="mt-3 text-[11px] text-share-onSurfaceVariant">
+              {isMe ? 'No Top 3 set — your partner sees your first tasks' : 'No Top 3 set — first tasks on their list'}
+            </p>
+          )}
           {s.top3.length > 0 && (
-            <ul className="mt-3 space-y-1">
+            <ul className={`${s.top3FromTasks ? 'mt-1' : 'mt-3'} space-y-1`}>
               {s.top3.map((t, i) => (
                 <li key={i} className={`flex items-start gap-2 text-sm ${t.isDone ? 'text-share-onSurfaceVariant line-through decoration-share-onSurfaceDim' : 'text-share-onSurface'}`}>
                   {t.isDone ? (
