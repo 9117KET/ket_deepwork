@@ -53,6 +53,19 @@ export function useTaskHandlers(
     setDraggedTask(null);
   };
 
+  /**
+   * A subtask being dragged by mouse. Lists reorder siblings themselves; this
+   * is only here so a drop anywhere else (another list, another parent's row)
+   * can say why nothing happened instead of doing nothing silently.
+   */
+  const draggedSubtaskRef = useRef<string | null>(null);
+  const handleSubtaskDragStart = useCallback((subtaskId: string) => {
+    draggedSubtaskRef.current = subtaskId;
+  }, []);
+  const handleSubtaskDragEnd = useCallback(() => {
+    draggedSubtaskRef.current = null;
+  }, []);
+
   const handleAddTask = (sectionId: TaskSectionId, title: string) => {
     updateAppState((prev) => {
       const existingDay = getOrCreateDay(prev, selectedDay);
@@ -340,10 +353,24 @@ export function useTaskHandlers(
     });
   };
 
-  const handleDrop = (targetSectionId: TaskSectionId, insertIndex: number) => {
+  /**
+   * Drop the dragged root at `insertIndex` in the target section's ordered
+   * list. Returns "refusedSubtask" when what was dragged is a subtask: those
+   * never leave their parent by drag.
+   */
+  const handleDrop = (
+    targetSectionId: TaskSectionId,
+    insertIndex: number,
+  ): "moved" | "refusedSubtask" | "none" => {
     const payload = draggedTaskRef.current ?? draggedTask;
     try {
-      if (!payload) return;
+      if (!payload) {
+        if (draggedSubtaskRef.current) {
+          draggedSubtaskRef.current = null;
+          return "refusedSubtask";
+        }
+        return "none";
+      }
       const fromSectionId = payload.sectionId;
       const taskId = payload.taskId;
       if (fromSectionId === targetSectionId) {
@@ -383,6 +410,7 @@ export function useTaskHandlers(
       } else {
         handleMoveTask(fromSectionId, taskId, targetSectionId, insertIndex);
       }
+      return "moved";
     } finally {
       draggedTaskRef.current = null;
       setDraggedTask(null);
@@ -783,6 +811,9 @@ export function useTaskHandlers(
     handleDragStart,
     handleDragEnd,
     handleDrop,
+    handleMoveTask,
+    handleSubtaskDragStart,
+    handleSubtaskDragEnd,
     handleAddTask,
     handleToggleTask,
     handleDeleteTask,

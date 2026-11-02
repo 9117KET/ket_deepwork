@@ -16,7 +16,7 @@
  *    title, duration picker, progress chips, hover Eye and Remove.
  */
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { DeepWorkSession, Task, TaskPatch } from '../../domain/types'
 import { computeTaskProgress, formatMinutes } from '../../domain/taskProgress'
 import { ArrowDown, ArrowUp, CheckCircle2, ChevronUp, ChevronDown, Eye, EyeOff, GripVertical, MoreVertical, X } from 'lucide-react'
@@ -27,6 +27,8 @@ import { TaskActionSheet } from './TaskActionSheet'
 import { TouchCheckbox } from './TouchCheckbox'
 import { useFocusBlocks } from './focusBlockContext'
 import { useCoarsePointer } from '../../hooks/useCoarsePointer'
+import { emptyListData, LIFTED_ROW_CLASS, rootRowData, type TouchReorder } from '../../hooks/useTouchReorder'
+import { DropLine } from './TaskItem'
 
 interface MustDoPinnedHeaderProps {
   tasks: Task[]
@@ -47,7 +49,10 @@ interface MustDoPinnedHeaderProps {
   /** Reorder: the three are ranked, so first really means first. */
   onDragStart?: (taskId: string) => void
   onDragEnd?: () => void
-  /** Drop the dragged MUST at this index among the three. */
+  /**
+   * Drop the dragged task at this index of `tasks` (the ordered list,
+   * subtasks included), which is what the planner's drop handler takes.
+   */
   onDropAt?: (insertIndex: number) => void
   /** Touch fallback for the drag handle (drag events never fire on a phone). */
   onMoveUp?: (taskId: string) => void
@@ -56,6 +61,10 @@ interface MustDoPinnedHeaderProps {
   draggedTaskId?: string | null
   /** Open the schedule sheet for a MUST. */
   onSchedule?: (taskId: string) => void
+  /** Phone sheet: move a MUST, with its subtasks, to the end of Tasks. */
+  onMoveToTasks?: (taskId: string) => void
+  /** The finger drag shared by every list on Today (`useTouchReorder`). */
+  touch?: TouchReorder
 }
 
 const MAX = 3
@@ -77,17 +86,25 @@ export function MustDoPinnedHeader({
   onMoveDown,
   draggedTaskId,
   onSchedule,
+  onMoveToTasks,
+  touch,
   partnerVisible = false,
 }: MustDoPinnedHeaderProps) {
   const { blockMinutes } = useFocusBlocks()
   const isCoarse = useCoarsePointer()
 
   const canReorder = typeof onDragStart === 'function' && typeof onDropAt === 'function'
+  /** Where the mouse went down on a draggable row. */
+  const pointerDownTargetRef = useRef<HTMLElement | null>(null)
 
   /** Start a drag, unless the gesture began on a control that owns the pointer. */
   const handleRowDragStart = (taskId: string) => (e: React.DragEvent) => {
-    const target = e.target as HTMLElement | null
-    if (target?.closest('input, select, textarea, button, a')) {
+    // Chromium names the draggable row, not the checkbox, as the target, so
+    // read where the pointer actually went down. The title sits inside the
+    // checkbox's <label>: its text still drags, the label's own box does not.
+    const origin = pointerDownTargetRef.current ?? (e.target as HTMLElement | null)
+    pointerDownTargetRef.current = null
+    if (origin?.closest('input, select, textarea, button, a') || origin?.tagName === 'LABEL') {
       e.preventDefault()
       return
     }
@@ -119,7 +136,7 @@ export function MustDoPinnedHeader({
     if (!canReorder) return
     e.preventDefault()
     e.stopPropagation()
-    if (dropIndex !== null) onDropAt?.(dropIndex)
+    if (dropIndex !== null) onDropAt?.(orderedIndexForRank(dropIndex))
     setDropIndex(null)
     onDragEnd?.()
   }
@@ -159,6 +176,89 @@ export function MustDoPinnedHeader({
   /** The MUST whose action sheet is open (phones). */
   const [sheetTaskId, setSheetTaskId] = useState<string | null>(null)
   const sheetTask = rootTasks.find((t) => t.id === sheetTaskId) ?? null
+  /** A mouse drag is over the empty Top 3. */
+  const [emptyDropOver, setEmptyDropOver] = useState(false)
+  /** What the keyboard reorder last did, read out by the live region. */
+  const [announcement, setAnnouncement] = useState('')
+  /** The desktop row menu, opened from a grip. */
+  const [gripMenu, setGripMenu] = useState<{ taskId: string; x: number; y: number; fromKey: boolean } | null>(null)
+  const gripMenuRef = useRef<HTMLDivElement | null>(null)
+  /** The grip that opened the menu; focus goes back to it on Escape. */
+  const gripMenuReturnRef = useRef<HTMLElement | null>(null)
+
+  useEffect(() => {
+    if (!gripMenu) return
+    if (gripMenu.fromKey) {
+      requestAnimationFrame(() =>
+        gripMenuRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]:not(:disabled)')?.focus(),
+      )
+    }
+    const close = (e: MouseEvent) => {
+      if (gripMenuRef.current?.contains(e.target as Node)) return
+      setGripMenu(null)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      const hadFocus = gripMenuRef.current?.contains(document.activeElement) ?? false
+      setGripMenu(null)
+      if (hadFocus) gripMenuReturnRef.current?.focus()
+    }
+    document.addEventListener('mousedown', close)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', close)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [gripMenu])
+
+  // Each MUST's place in `tasks` (subtasks included): its own index, and the
+  // index past its last subtask. Drops are expressed in these, not in ranks.
+  const rootStarts = rootTasks.map((t) => tasks.indexOf(t))
+  const boundsAt = (rank: number) => ({
+    before: rootStarts[rank] ?? tasks.length,
+    after: rootStarts[rank + 1] ?? tasks.length,
+  })
+  /** Rank 0..n (n = after the last) to an index in `tasks`. */
+  const orderedIndexForRank = (rank: number) => rootStarts[rank] ?? tasks.length
+
+  const touchItem = touch?.state.item ?? null
+  const touchTarget = touch?.state.target ?? null
+  const touchLineAt =
+    touchTarget?.kind === 'root' && touchTarget.sectionId === 'mustDo' ? touchTarget.index : null
+
+  /** Alt+Arrow on the grip, with a spoken result ("Moved up. 2 of 3."). */
+  /** Open the desktop row menu at the grip (Enter, Space, right-click, Shift+F10). */
+  const openGripMenu = (taskId: string, grip: HTMLElement, fromKey: boolean, at?: { x: number; y: number }) => {
+    const rect = grip.getBoundingClientRect()
+    const MENU_WIDTH = 176
+    const x = Math.min(Math.max(at?.x ?? rect.left, 8), Math.max(8, window.innerWidth - MENU_WIDTH - 8))
+    const y = Math.min(Math.max(at?.y ?? rect.bottom + 4, 8), Math.max(8, window.innerHeight - 160 - 8))
+    gripMenuReturnRef.current = grip
+    setGripMenu({ taskId, x, y, fromKey })
+  }
+
+  const handleGripKeyDown = (taskId: string, idx: number) => (e: React.KeyboardEvent<HTMLElement>) => {
+    if ((e.key === 'Enter' || e.key === ' ') && !e.altKey) {
+      e.preventDefault()
+      openGripMenu(taskId, e.currentTarget, true)
+      return
+    }
+    if (!e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return
+    e.preventDefault()
+    const n = rootTasks.length
+    const grip = e.currentTarget
+    if (e.key === 'ArrowUp') {
+      if (idx === 0 || !onMoveUp) return setAnnouncement(`Already first. 1 of ${n}.`)
+      onMoveUp(taskId)
+      setAnnouncement(`Moved up. ${idx} of ${n}.`)
+    } else {
+      if (idx >= n - 1 || !onMoveDown) return setAnnouncement(`Already last. ${n} of ${n}.`)
+      onMoveDown(taskId)
+      setAnnouncement(`Moved down. ${idx + 2} of ${n}.`)
+    }
+    // The row is re-ordered, not re-mounted; keep the keyboard on its grip.
+    requestAnimationFrame(() => grip.focus())
+  }
 
   const commitTitleEdit = (taskId: string) => {
     const trimmed = editingTitle.trim()
@@ -211,8 +311,22 @@ export function MustDoPinnedHeader({
         {chipText}
       </span>
     ) : null
+    const bounds = boundsAt(idx)
+    const lifted = touchItem?.taskId === task.id
+    const draggable = Boolean(touch) && trailing === 'menu'
     return (
-      <div key={task.id} data-task-id={task.id}>
+      <div
+        key={task.id}
+        data-task-id={task.id}
+        {...(draggable && touch
+          ? { ...rootRowData('mustDo', bounds.before, bounds.after), ...touch.bind({ taskId: task.id, sectionId: 'mustDo' }) }
+          : {})}
+        className={`relative ${draggable ? 'select-none [-webkit-touch-callout:none]' : ''} ${
+          lifted ? LIFTED_ROW_CLASS : ''
+        }`}
+      >
+        {draggable && touchLineAt === bounds.before && <DropLine edge="top" />}
+        {draggable && idx === rootTasks.length - 1 && touchLineAt === tasks.length && <DropLine edge="bottom" />}
         <div className="group flex items-center gap-1">
           <TouchCheckbox checked={task.isDone} onChange={() => onToggle(task.id)} label={task.title} />
           {editingId === task.id ? (
@@ -300,6 +414,7 @@ export function MustDoPinnedHeader({
         showReorder={Boolean(onMoveUp || onMoveDown)}
         onMoveUp={onMoveUp && idx > 0 ? () => onMoveUp(sheetTask.id) : undefined}
         onMoveDown={onMoveDown && idx < rootTasks.length - 1 ? () => onMoveDown(sheetTask.id) : undefined}
+        onMoveToTasks={onMoveToTasks ? () => onMoveToTasks(sheetTask.id) : undefined}
         onUpdateTask={(patch) => onUpdate(sheetTask.id, patch)}
         partnerVisible={partnerVisible}
         onAbandon={onAbandon ? () => onAbandon(sheetTask.id) : undefined}
@@ -438,6 +553,9 @@ export function MustDoPinnedHeader({
           <div
             key={task.id}
             draggable={canReorder ? true : undefined}
+            onPointerDownCapture={
+              canReorder ? (e) => { pointerDownTargetRef.current = e.target as HTMLElement } : undefined
+            }
             onDragStart={canReorder ? handleRowDragStart(task.id) : undefined}
             onDragOver={canReorder ? handleRowDragOver(idx) : undefined}
             onDrop={canReorder ? handleRowDrop : undefined}
@@ -450,10 +568,22 @@ export function MustDoPinnedHeader({
           >
             {canReorder && (
               <span
-                aria-hidden="true"
-                className="hidden shrink-0 touch-none text-share-onSurfaceVariant/40 sm:block"
+                role="button"
+                tabIndex={0}
+                onKeyDown={handleGripKeyDown(task.id, idx)}
+                onContextMenu={(e) => {
+                  e.preventDefault()
+                  // Shift+F10 reports 0,0: open at the grip instead.
+                  const at = e.clientX || e.clientY ? { x: e.clientX, y: e.clientY } : undefined
+                  openGripMenu(task.id, e.currentTarget, !at, at)
+                }}
+                aria-haspopup="menu"
+                aria-expanded={gripMenu?.taskId === task.id}
+                aria-label={`Reorder "${task.title}": drag, or Alt+Up or Alt+Down to move; Enter for menu`}
+                aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
+                className="hidden shrink-0 touch-none rounded text-share-onSurfaceVariant/40 focus:outline-none focus-visible:ring-1 focus-visible:ring-share-primary sm:block"
               >
-                <GripVertical className="h-3.5 w-3.5" />
+                <GripVertical aria-hidden className="h-3.5 w-3.5" />
               </span>
             )}
             {(onMoveUp || onMoveDown) && (
@@ -543,10 +673,45 @@ export function MustDoPinnedHeader({
       {!listCollapsed && (
         <div className="space-y-1">
           {/* Empty slots */}
+          {/* Empty, the Top 3 is still a place a task can be dropped. */}
           {rootTasks.length === 0 && (
-            <p className="text-xs italic text-share-onSurfaceVariant/50 px-1">
-              No priorities set. Add up to 3 for today.
-            </p>
+            <div
+              {...emptyListData('mustDo')}
+              onDragOver={
+                canReorder && !isCoarse
+                  ? (e) => {
+                      e.preventDefault()
+                      try {
+                        if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+                      } catch {
+                        // ignore
+                      }
+                      setEmptyDropOver(true)
+                    }
+                  : undefined
+              }
+              onDragLeave={canReorder && !isCoarse ? () => setEmptyDropOver(false) : undefined}
+              onDrop={
+                canReorder && !isCoarse
+                  ? (e) => {
+                      e.preventDefault()
+                      setEmptyDropOver(false)
+                      onDropAt?.(0)
+                      onDragEnd?.()
+                    }
+                  : undefined
+              }
+              data-testid="top3-empty-drop"
+              className={`flex min-h-[2.5rem] items-center rounded-md border border-dashed px-1 ${
+                emptyDropOver || touchLineAt === 0
+                  ? 'border-share-primary/70 bg-share-primary/5'
+                  : 'border-transparent'
+              }`}
+            >
+              <p className="text-xs italic text-share-onSurfaceVariant/50">
+                No priorities set. Add up to 3 for today.
+              </p>
+            </div>
           )}
 
           {/* Inline add input */}
@@ -587,6 +752,61 @@ export function MustDoPinnedHeader({
           )}
         </div>
       )}
+      <p className="sr-only" aria-live="polite">{announcement}</p>
+      {gripMenu && (() => {
+        const idx = rootTasks.findIndex((t) => t.id === gripMenu.taskId)
+        if (idx < 0) return null
+        const run = (fn: () => void) => () => {
+          setGripMenu(null)
+          fn()
+          gripMenuReturnRef.current?.focus()
+        }
+        const itemClass =
+          'w-full px-3 py-1.5 text-left text-sm text-share-onSurface hover:bg-share-surfaceContainerHighest focus:outline-none focus-visible:bg-share-surfaceContainerHighest disabled:opacity-40'
+        return (
+          <div
+            ref={gripMenuRef}
+            role="menu"
+            aria-label={`Actions for "${rootTasks[idx]!.title}"`}
+            className="fixed z-[70] min-w-[11rem] rounded-md border border-share-outlineVariant/50 bg-share-surfaceContainerHigh py-1 shadow-xl shadow-black/30"
+            style={{ left: gripMenu.x, top: gripMenu.y }}
+          >
+            <button
+              type="button"
+              role="menuitem"
+              className={itemClass}
+              disabled={idx === 0 || !onMoveUp}
+              onClick={run(() => onMoveUp?.(gripMenu.taskId))}
+            >
+              Move up
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className={itemClass}
+              disabled={idx >= rootTasks.length - 1 || !onMoveDown}
+              onClick={run(() => onMoveDown?.(gripMenu.taskId))}
+            >
+              Move down
+            </button>
+            {onMoveToTasks && (
+              <button
+                type="button"
+                role="menuitem"
+                className={itemClass}
+                onClick={() => {
+                  // The row leaves the Top 3, so its grip goes with it.
+                  setGripMenu(null)
+                  onMoveToTasks(gripMenu.taskId)
+                  setAnnouncement('Moved to Tasks.')
+                }}
+              >
+                Move to Tasks
+              </button>
+            )}
+          </div>
+        )
+      })()}
       {actionSheet}
     </div>
   )
