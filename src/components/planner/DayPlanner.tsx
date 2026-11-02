@@ -43,12 +43,11 @@ import { useCoarsePointer } from "../../hooks/useCoarsePointer";
 import { useCalendarDay } from "../../hooks/useCalendarDay";
 import { useWorkLog } from "../../hooks/useWorkLog";
 import { useTaskSync } from "../../hooks/useTaskSync";
-import { useChallenge } from "../../hooks/useChallenge";
+import { useChallenges } from "../../hooks/useChallenges";
 import { useChallengeSync } from "../../hooks/useChallengeSync";
-import { buildChallengeSummary } from "../../domain/challenge";
-import { activeDonts } from "../../domain/challengeCommitments";
-import { ChallengeCard } from "../challenge/ChallengeCard";
-import { CheckinSheet } from "../challenge/CheckinSheet";
+import { buildChallengeSummary, challengeProgress } from "../../domain/challenge";
+import { challengePillLabel } from "../../domain/challengeList";
+import { ChallengeTodayBlock } from "../challenge/ChallengeTodayBlock";
 import { usePersistentState, getOrCreateDay } from "../../storage/localStorageState";
 import { useAuth } from "../../contexts/AuthContext";
 import { removeTaskFromGoogle, scheduleTaskInCalendar, unscheduleTaskFromCalendar } from "../../services/calendarSyncService";
@@ -223,18 +222,15 @@ export function DayPlanner() {
   // ── Accountability challenge ──────────────────────────────────────────────
   // The partner never reads this planner; they read the summary published
   // here after every edit. Off while hydrating, like the Google mirror.
-  const challenge = useChallenge(now);
-  const challengeActive = challenge.status === "active";
+  // One summary, published once; the server fans it out to every running challenge.
+  const { active: activeChallenges } = useChallenges();
+  const challengeActive = activeChallenges.length > 0;
   const challengeSummary = useMemo(
     () => (challengeActive ? buildChallengeSummary(dayState, habits) : null),
     [challengeActive, dayState, habits],
   );
   useChallengeSync({ date: selectedDay, summary: challengeSummary, enabled: challengeActive && !isHydrating && isToday });
-  const [checkinOpen, setCheckinOpen] = useState(false);
-  const challengeDayLabel =
-    challengeActive && challenge.progress?.phase === "active"
-      ? `Day ${challenge.progress.dayNumber}/${challenge.progress.totalDays} · ${challenge.progress.daysLeft} left`
-      : undefined;
+  const challengeDayLabel = challengePillLabel(activeChallenges.map((e) => challengeProgress(e.challenge, todayIso())));
 
   const handleToggleHabit = useCallback(
     (habitId: string, value: boolean) => {
@@ -693,7 +689,7 @@ export function DayPlanner() {
 
           {isToday && challengeActive && challengeSummary && (
             <ErrorBoundary fallback={null} resetKeys={[selectedDay]}>
-              <ChallengeCard state={challenge} summary={challengeSummary} date={selectedDay} onOpenCheckin={() => setCheckinOpen(true)} />
+              <ChallengeTodayBlock active={activeChallenges} now={now} summary={challengeSummary} date={selectedDay} />
             </ErrorBoundary>
           )}
 
@@ -874,20 +870,6 @@ export function DayPlanner() {
           completedBlocksToday={completedBlocksToday}
           deepMinutesToday={deepWorkMinutesToday}
           onLeave={() => setFocusDismissed(true)}
-        />
-      )}
-
-      {checkinOpen && challenge.info && challenge.progress && challengeSummary && (
-        <CheckinSheet
-          challengeId={challenge.info.challenge.id}
-          challengeName={challenge.info.challenge.name}
-          donts={activeDonts(challenge.info.me.donts)}
-          displayName={challenge.info.me.displayName}
-          progress={challenge.progress}
-          date={selectedDay}
-          summary={challengeSummary}
-          existing={challenge.mine}
-          onClose={() => setCheckinOpen(false)}
         />
       )}
 

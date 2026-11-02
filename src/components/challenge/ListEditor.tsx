@@ -28,19 +28,21 @@ const MAX_LENGTH = 200
 const BUTTON_PRESS_MS = 1000
 
 const input =
-  'min-h-[44px] w-full rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainer px-3 py-2 text-base text-share-onSurface sm:text-sm placeholder:text-share-onSurfaceVariant/60 focus:border-share-primary focus:outline-none focus:ring-1 focus:ring-share-primary'
+  'min-h-[44px] w-full rounded-lg border border-share-outlineStrong bg-share-surfaceContainer px-3 py-2 text-base text-share-onSurface sm:text-sm placeholder:text-share-onSurfaceDim focus:border-share-onBg focus:outline-none focus:ring-1 focus:ring-share-onBg'
 
 interface ListEditorProps {
   items: CommitmentRow[]
   onChange: (items: CommitmentRow[]) => void
   placeholder: string
+  /** The Add box's accessible name ("Add a goal"); the placeholder is only an example. */
+  label?: string
   idPrefix: string
   editable?: boolean
   /** The text in the Add box, so a submit can include it (`withDraft`). */
   onDraftChange?: (draft: string) => void
 }
 
-export function ListEditor({ items, onChange, placeholder, idPrefix, editable = false, onDraftChange }: ListEditorProps) {
+export function ListEditor({ items, onChange, placeholder, label, idPrefix, editable = false, onDraftChange }: ListEditorProps) {
   const [draft, setDraftState] = useState('')
   // The ref is read by `add`, so a second call before a render sees the
   // cleared draft: one row, not two.
@@ -73,15 +75,20 @@ export function ListEditor({ items, onChange, placeholder, idPrefix, editable = 
   }
   const edit = (i: number, text: string) => onChange(items.map((row, j) => (j === i ? { ...row, text } : row)))
   return (
-    <div className="mt-1 space-y-1">
+    <div className="mt-1.5 space-y-2">
       {items.map((item, i) => (
-        <div key={item.id ?? `${idPrefix}-${i}`} className="flex items-center gap-2 rounded-lg bg-share-surfaceContainer py-0.5 pl-3 pr-0.5 text-sm text-share-onSurface">
+        <div
+          key={item.id ?? `${idPrefix}-${i}`}
+          className="flex items-center gap-2 rounded-lg bg-share-surfaceContainer pl-3 text-sm text-share-onSurface focus-within:ring-1 focus-within:ring-share-onBg"
+        >
           {editable ? (
             <input
               value={item.text}
               onChange={(e) => edit(i, e.target.value)}
               maxLength={MAX_LENGTH}
               aria-label={`Edit "${item.text}"`}
+              name={`${idPrefix}-${i}`}
+              autoComplete="off"
               className="min-w-0 flex-1 bg-transparent py-1.5 text-base text-share-onSurface focus:outline-none sm:text-sm"
             />
           ) : (
@@ -90,10 +97,10 @@ export function ListEditor({ items, onChange, placeholder, idPrefix, editable = 
           <button
             type="button"
             onClick={() => onChange(items.filter((_, j) => j !== i))}
-            className="touch-target-coarse flex shrink-0 items-center justify-center rounded p-1.5 text-share-onSurfaceVariant hover:text-share-tertiary"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-share-onSurfaceVariant hover:bg-share-surfaceContainerHigh hover:text-share-onSurface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-share-onBg"
             aria-label={`Remove "${item.text}"`}
           >
-            <X className="h-3.5 w-3.5" />
+            <X aria-hidden className="h-4 w-4" />
           </button>
         </div>
       ))}
@@ -112,9 +119,15 @@ export function ListEditor({ items, onChange, placeholder, idPrefix, editable = 
             maxLength={MAX_LENGTH}
             placeholder={placeholder}
             className={input}
-            aria-label={placeholder}
+            aria-label={label ?? placeholder}
+            name={`${idPrefix}-new`}
+            autoComplete="off"
           />
-          <button type="button" onClick={add} className="touch-target-coarse shrink-0 rounded-lg border border-share-outlineVariant/40 px-3 text-sm text-share-onSurface hover:bg-share-surfaceContainerHigh">
+          <button
+            type="button"
+            onClick={add}
+            className="min-h-11 shrink-0 rounded-lg border border-share-outlineStrong px-3 text-sm font-semibold text-share-onSurface hover:bg-share-surfaceContainerHigh focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-share-onBg"
+          >
             Add
           </button>
         </div>

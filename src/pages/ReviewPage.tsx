@@ -29,6 +29,7 @@ import {
 } from "../domain/stats";
 import { DEFAULT_HABIT_DEFINITIONS } from "../domain/types";
 import { usePersistentState } from "../storage/localStorageState";
+import { useIsAdmin } from "../hooks/useIsAdmin";
 
 const DEFAULT_GOAL_HOURS = 20;
 const WEEKDAY_LETTERS = ["M", "T", "W", "T", "F", "S", "S"];
@@ -49,6 +50,7 @@ function formatWeekRange(dates: string[]): string {
 
 export function ReviewPage() {
   const { user, loading, signOut } = useAuth();
+  const isAdmin = useIsAdmin();
   const navigate = useNavigate();
   const [appState, updateAppState, isHydrating] = usePersistentState();
   const today = todayIso();
@@ -111,7 +113,8 @@ export function ReviewPage() {
       userEmail={user?.email}
       items={[
         { kind: "action", key: "planner", label: "Back to today", onSelect: () => navigate("/") },
-        { kind: "action", key: "challenge", label: "Challenge", onSelect: () => navigate("/challenge"), hidden: !user },
+        { kind: "action", key: "challenge", label: "Challenges", onSelect: () => navigate("/challenge"), hidden: !user },
+        { kind: "action", key: "admin", label: "Admin", onSelect: () => navigate("/admin/challenges"), hidden: !isAdmin },
         { kind: "separator", key: "sep-1", hidden: !user },
         {
           kind: "action",

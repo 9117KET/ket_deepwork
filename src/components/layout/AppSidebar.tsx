@@ -8,6 +8,7 @@
 import type { ReactNode } from "react";
 import { NavLink } from "react-router-dom";
 import { MaterialIcon } from "../ui/MaterialIcon";
+import { useIsAdmin } from "../../hooks/useIsAdmin";
 
 export interface AppSidebarProps {
   showCalendarLink?: boolean;
@@ -37,9 +38,17 @@ const CALENDAR_ITEM: NavItem = {
 
 const CHALLENGE_ITEM: NavItem = {
   key: "challenge",
-  label: "Challenge",
+  label: "Challenges",
   icon: "handshake",
   to: "/challenge",
+};
+
+/** Only for the emails in ADMIN_EMAILS; the page refuses everyone else anyway. */
+const ADMIN_ITEM: NavItem = {
+  key: "admin",
+  label: "Admin",
+  icon: "admin_panel_settings",
+  to: "/admin/challenges",
 };
 
 function navItemClass(isActive: boolean) {
@@ -52,7 +61,13 @@ function navItemClass(isActive: boolean) {
 }
 
 export function AppSidebar({ showCalendarLink = false, showChallengeLink = false, trailing }: AppSidebarProps) {
-  const items = [...NAV_ITEMS, ...(showChallengeLink ? [CHALLENGE_ITEM] : []), ...(showCalendarLink ? [CALENDAR_ITEM] : [])];
+  const isAdmin = useIsAdmin();
+  const items = [
+    ...NAV_ITEMS,
+    ...(showChallengeLink ? [CHALLENGE_ITEM] : []),
+    ...(showCalendarLink ? [CALENDAR_ITEM] : []),
+    ...(isAdmin ? [ADMIN_ITEM] : []),
+  ];
 
   return (
     <aside className="fixed left-0 top-0 z-40 hidden h-dvh w-[240px] shrink-0 flex-col border-r border-share-outlineVariant/25 bg-[#161a1d] md:flex">

@@ -2,60 +2,80 @@
  * components/challenge/SeasonGrid.tsx
  *
  * Both members' season on one ordinary calendar: Monday to Sunday across
- * the top, a row per week, the day of the month in each square and the
- * month's name in the margin on the row where it begins. Each square is
- * split down the middle, the left half yours and the right half your
- * partner's, so a day only one of you finished is visible at a glance and
- * the season costs one calendar's height instead of two.
+ * the top, a row per week, the month's name in the margin where it begins.
+ * Each day holds its number and two marks side by side, yours on the left
+ * and your partner's on the right, so a day only one of you finished shows
+ * at a glance and the season costs one calendar's height instead of two.
+ *
+ * Every state is a shape as well as a hue, so the grid reads in greyscale:
+ * a full day is a filled square, a plan without a check-in a ring, a
+ * check-in without a plan a dot, a missed day a dash (the warning colour),
+ * and a day still to come is blank. It is a real <table>: each cell says,
+ * to a screen reader, the date and both members' state in words.
  *
  * On a phone only the last two weeks show until "Whole season" is tapped;
- * from `lg` the whole season is always there. The rows are hidden with CSS,
- * not left unbuilt, because the grid is small and both layouts share it.
+ * from `lg` the whole season is always there.
  */
 
 import { useState } from 'react'
 import { dayCellState, formatShortDate, seasonWeeks, type ChallengeDayLike, type DayCellState } from '../../domain/challenge'
+import { TextButton } from '../ui/TextButton'
+import { DAY_STATE_LABEL } from '../../domain/challengeList'
 
-// One accent: a full day is the act-now cyan, a plan without a check-in the
-// same cyan faded, a check-in without a plan an outline of it. A missed day
-// is the warning amber, faded; a day still to come is a hairline.
-const HALF: Record<DayCellState, string> = {
-  both: 'bg-share-primary',
-  plan: 'bg-share-primary/40',
-  checkin: 'shadow-[inset_0_0_0_1.5px_#00daf3]',
-  none: 'bg-share-tertiary/45',
-  future: 'bg-share-hairline',
+
+/** One member's mark for one day. `size` is the box it sits in, in px. */
+export function DayMark({ state, size = 14 }: { state: DayCellState; size?: number }) {
+  const box = { width: size, height: size }
+  if (state === 'both') return <span aria-hidden style={box} className="inline-block shrink-0 rounded-[3px] bg-share-done" />
+  if (state === 'plan') return <span aria-hidden style={box} className="inline-block shrink-0 rounded-[3px] border-2 border-share-done" />
+  if (state === 'checkin')
+    return (
+      <span aria-hidden style={box} className="inline-flex shrink-0 items-center justify-center">
+        <span className="h-1.5 w-1.5 rounded-full bg-share-done" />
+      </span>
+    )
+  if (state === 'none')
+    return (
+      <span aria-hidden style={box} className="inline-flex shrink-0 items-center justify-center">
+        <span className="h-0.5 w-2.5 rounded-full bg-share-tertiary" />
+      </span>
+    )
+  return <span aria-hidden style={box} className="inline-block shrink-0" />
 }
 
-const LABEL: Record<DayCellState, string> = {
-  both: 'plan and check-in',
-  plan: 'plan only',
-  checkin: 'check-in only',
-  none: 'missed',
-  future: 'not yet',
-}
-
-const WEEKDAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
+const WEEKDAYS = [
+  ['M', 'Monday'],
+  ['T', 'Tuesday'],
+  ['W', 'Wednesday'],
+  ['T', 'Thursday'],
+  ['F', 'Friday'],
+  ['S', 'Saturday'],
+  ['S', 'Sunday'],
+] as const
 
 interface SeasonGridProps {
   dates: string[]
   myRows: ChallengeDayLike[]
   myDate: string
-  /** Absent while the second seat is empty: each square is then all yours. */
+  /** Absent while the second seat is empty: each day then has one mark. */
   partner?: { name: string; rows: ChallengeDayLike[]; today: string } | null
 }
 
 /**
  * The month to name in a week's margin: the season's first month on the
- * first row, then a month on the first row whose Monday is in it. A row that
- * merely ends on the 1st (26 Oct – 1 Nov) stays under the old month; its "1"
- * is enough. Labels sit one per row, so two can never run into each other.
+ * first row, then a month on the first row whose Monday is in it.
  */
 function monthLabel(weeks: (string | null)[][], index: number): string {
   const month = (d: string | null | undefined) => d?.slice(0, 7)
   const day = index === 0 ? weeks[0]!.find((d) => d !== null) : weeks[index]![0]
   if (!day || (index > 0 && month(day) === month(weeks[index - 1]![0] ?? weeks[index - 1]!.find((d) => d !== null)))) return ''
   return new Intl.DateTimeFormat(undefined, { month: 'short', timeZone: 'UTC' }).format(new Date(`${day}T00:00:00Z`))
+}
+
+/** The month of a week's first day, for a row that has no label of its own. */
+function monthOf(week: (string | null)[]): string {
+  const day = week.find((d) => d !== null)
+  return day ? new Intl.DateTimeFormat(undefined, { month: 'short', timeZone: 'UTC' }).format(new Date(`${day}T00:00:00Z`)) : ''
 }
 
 /** The week holding `today`, or the first or last week when today is outside the season. */
@@ -72,97 +92,97 @@ export function SeasonGrid({ dates, myRows, myDate, partner }: SeasonGridProps) 
   const theirs = new Map((partner?.rows ?? []).map((r) => [r.date, r]))
   const weeks = seasonWeeks(dates)
   const current = currentWeekIndex(weeks, myDate)
-  // The last two weeks: this one and the one before, or the first two before the season starts.
   const firstShown = Math.max(0, Math.min(current - 1, weeks.length - 2))
   const lastShown = firstShown + 1
   const collapsible = weeks.length > 2
 
-  const count = (rows: Map<string, ChallengeDayLike>, today: string) => {
-    const states = dates.map((d) => dayCellState(rows.get(d), d, today))
-    return { full: states.filter((s) => s === 'both').length, past: states.filter((s) => s !== 'future').length }
-  }
-  const me = count(mine, myDate)
-  const them = partner ? count(theirs, partner.today) : null
-  const label = partner && them
-    ? `Season: you ${me.full} of ${me.past} days full, ${partner.name} ${them.full} of ${them.past}`
-    : `Season: ${me.full} of ${me.past} days with both a plan and a check-in`
-
   return (
     <div className="min-w-0">
-      <div className="flex items-baseline justify-between gap-2">
-        <p className="overline">Season</p>
-        <p className="text-[11px] text-share-onSurfaceDim">{partner ? 'left half you · right half them' : 'your days'}</p>
-      </div>
-      <div className="mt-3 max-w-[24rem]" role="img" aria-label={label}>
-        <div className="grid grid-cols-[2rem_repeat(7,minmax(0,1fr))] gap-1" aria-hidden>
-          <span />
-          {WEEKDAYS.map((w, i) => (
-            <span key={i} className="text-center text-[11px] font-bold leading-none text-share-onSurfaceDim">
-              {w}
-            </span>
-          ))}
-        </div>
-        {weeks.map((week, wi) => {
-          const outside = collapsible && !whole && (wi < firstShown || wi > lastShown)
-          return (
-            <div
-              key={wi}
-              className={`mt-1 grid-cols-[2rem_repeat(7,minmax(0,1fr))] gap-1 ${outside ? 'hidden lg:grid' : 'grid'}`}
-              aria-hidden
-            >
-              <span className="flex items-center text-[11px] font-bold leading-none text-share-onSurfaceDim">{monthLabel(weeks, wi)}</span>
-              {week.map((d, di) => {
-                if (!d) return <span key={`${wi}-${di}`} />
-                const mineState = dayCellState(mine.get(d), d, myDate)
-                const theirState = partner ? dayCellState(theirs.get(d), d, partner.today) : null
-                const title = partner
-                  ? `${formatShortDate(d)}: you ${LABEL[mineState]}, ${partner.name} ${LABEL[theirState!]}`
-                  : `${formatShortDate(d)}: ${LABEL[mineState]}`
-                return (
-                  <span
-                    key={d}
-                    title={title}
-                    className={`relative flex h-8 gap-px overflow-hidden rounded-[5px] lg:h-7 ${
-                      d === myDate ? 'ring-2 ring-share-onBg ring-offset-1 ring-offset-share-surfaceContainerLow' : ''
-                    }`}
-                  >
-                    <span className={`flex-1 ${HALF[mineState]}`} />
-                    {theirState && <span className={`flex-1 ${HALF[theirState]}`} />}
-                    <span className="absolute inset-0 flex items-center justify-center text-[11px] font-bold leading-none tabular-nums text-share-onBg [text-shadow:0_0_3px_#111316,0_0_2px_#111316]">
-                      {Number(d.slice(8))}
-                    </span>
+      <table className="w-full max-w-[26rem] table-fixed border-separate border-spacing-1">
+        <caption className="sr-only">
+          Season calendar. Each day: {partner ? `your state, then ${partner.name}'s` : 'your state'}.
+          {collapsible && !whole ? ' Only the last two weeks are listed on small screens; use Whole season for the rest.' : ''}
+        </caption>
+        <thead>
+          <tr>
+            <td className="w-9" />
+            {WEEKDAYS.map(([short, long], i) => (
+              <th key={i} scope="col" className="text-center text-caption font-semibold text-share-onSurfaceVariant">
+                <abbr title={long} className="no-underline">
+                  {short}
+                </abbr>
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {weeks.map((week, wi) => {
+            const outside = collapsible && !whole && (wi < firstShown || wi > lastShown)
+            const month = monthLabel(weeks, wi)
+            // Folded to two weeks on a phone, the first row shown names its month even mid-month.
+            const foldedMonth = collapsible && !whole && wi === firstShown && !month ? monthOf(week) : ''
+            return (
+              <tr key={wi} className={outside ? 'hidden lg:table-row' : ''}>
+                <th scope="row" className="pr-1 text-left text-caption font-semibold text-share-onSurfaceVariant">
+                  <span aria-hidden>
+                    {month}
+                    {foldedMonth && <span className="lg:hidden">{foldedMonth}</span>}
                   </span>
-                )
-              })}
-            </div>
-          )
-        })}
-      </div>
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-        <SeasonLegend />
+                  <span className="sr-only">Week of {formatShortDate(week.find((d) => d !== null)!)}</span>
+                </th>
+                {week.map((d, di) => {
+                  if (!d) return <td key={`${wi}-${di}`} />
+                  const mineState = dayCellState(mine.get(d), d, myDate)
+                  const theirState = partner ? dayCellState(theirs.get(d), d, partner.today) : null
+                  const isToday = d === myDate
+                  const spoken = partner
+                    ? `${formatShortDate(d)}${isToday ? ', today' : ''}: you ${DAY_STATE_LABEL[mineState]}, ${partner.name} ${DAY_STATE_LABEL[theirState!]}`
+                    : `${formatShortDate(d)}${isToday ? ', today' : ''}: ${DAY_STATE_LABEL[mineState]}`
+                  return (
+                    <td
+                      key={d}
+                      className={`rounded-md py-1 text-center align-top ${isToday ? 'outline outline-2 -outline-offset-1 outline-share-onBg' : ''}`}
+                    >
+                      <span className="sr-only">{spoken}</span>
+                      <span aria-hidden className={`block text-caption tabular-nums ${isToday ? 'font-bold text-share-onBg' : 'text-share-onSurfaceVariant'}`}>
+                        {Number(d.slice(8))}
+                      </span>
+                      <span aria-hidden className="mt-1 flex justify-center gap-0.5">
+                        <DayMark state={mineState} />
+                        {theirState && <DayMark state={theirState} />}
+                      </span>
+                    </td>
+                  )
+                })}
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+        <SeasonLegend partnerName={partner?.name ?? null} />
         {collapsible && (
-          <button
-            type="button"
-            onClick={() => setWhole((v) => !v)}
-            className="touch-target-coarse -my-2 inline-flex shrink-0 items-center justify-center px-1 text-xs font-semibold text-share-primary hover:underline lg:hidden"
-          >
+          <TextButton tone="quiet" onClick={() => setWhole((v) => !v)} aria-expanded={whole} className="-ml-3 lg:hidden">
             {whole ? 'Last two weeks' : 'Whole season'}
-          </button>
+          </TextButton>
         )}
       </div>
     </div>
   )
 }
 
-function SeasonLegend() {
+export function SeasonLegend({ partnerName }: { partnerName: string | null }) {
   return (
-    <p className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-share-onSurfaceVariant">
-      {(['both', 'plan', 'checkin', 'none'] as DayCellState[]).map((s) => (
-        <span key={s} className="inline-flex items-center gap-1.5">
-          <span className={`inline-block h-2.5 w-2.5 rounded-[3px] ${HALF[s]}`} />
-          {LABEL[s]}
-        </span>
-      ))}
-    </p>
+    <div className="text-caption text-share-onSurfaceVariant">
+      {partnerName && <p className="mb-1">Left mark you, right mark {partnerName}.</p>}
+      <ul className="flex flex-wrap gap-x-3 gap-y-1" aria-label="Key">
+        {(['both', 'plan', 'checkin', 'none'] as DayCellState[]).map((s) => (
+          <li key={s} className="inline-flex items-center gap-1.5">
+            <DayMark state={s} size={12} />
+            {DAY_STATE_LABEL[s]}
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }

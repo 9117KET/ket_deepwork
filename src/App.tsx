@@ -14,8 +14,11 @@ import { CalendarSyncPage } from "./pages/CalendarSyncPage";
 import { CalendarCallbackPage } from "./pages/CalendarCallbackPage";
 import { PrivacyPage } from "./pages/PrivacyPage";
 import { RestorePage } from "./pages/RestorePage";
-import { ChallengePage } from "./pages/ChallengePage";
+import { ChallengeListPage } from "./pages/ChallengeListPage";
+import { ChallengeCreatePage } from "./pages/ChallengeCreatePage";
+import { ChallengeDetailPage } from "./pages/ChallengeDetailPage";
 import { ChallengeJoinPage } from "./pages/ChallengeJoinPage";
+import { AdminChallengesPage } from "./pages/AdminChallengesPage";
 
 function App() {
   const location = useLocation();
@@ -33,8 +36,11 @@ function App() {
         <Route path="/calendar/callback" element={<CalendarCallbackPage />} />
         <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/restore" element={<RestorePage />} />
-        <Route path="/challenge" element={<ChallengePage />} />
+        <Route path="/challenge" element={<ChallengeListPage />} />
+        <Route path="/challenge/new" element={<ChallengeCreatePage />} />
         <Route path="/challenge/join" element={<ChallengeJoinPage />} />
+        <Route path="/challenge/:id" element={<ChallengeDetailPage />} />
+        <Route path="/admin/challenges" element={<AdminChallengesPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </ErrorBoundary>

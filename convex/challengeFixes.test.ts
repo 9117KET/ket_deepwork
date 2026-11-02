@@ -98,7 +98,7 @@ describe('the finished season stays readable', () => {
       await ctx.db.patch(challenge!._id, { status: 'ended' })
     })
 
-    const ended = await a.as.query(api.challenges.myChallenge, {})
+    const ended = ((await a.as.query(api.challenges.myChallenges, {}))[0] ?? null)
     expect(ended?.challenge).toMatchObject({ name: 'Q4 push', status: 'ended' })
     expect(ended?.partner).toMatchObject({ displayName: 'Sam' })
     expect(ended?.invite).toBeNull()
@@ -113,7 +113,7 @@ describe('the finished season stays readable', () => {
       a.as.mutation(api.challenges.checkIn, { challengeId, date: '2026-10-22', summary: emptySummary(), dontsBroken: [] }),
     ).rejects.toThrow(/challenge has ended/i)
     await a.as.mutation(api.challenges.createChallenge, { ...setup, name: 'Next', timezone: LONDON, displayName: 'Kin' })
-    expect((await a.as.query(api.challenges.myChallenge, {}))?.challenge).toMatchObject({ name: 'Next', status: 'active' })
+    expect((((await a.as.query(api.challenges.myChallenges, {}))[0] ?? null))?.challenge).toMatchObject({ name: 'Next', status: 'active' })
     // Both stay listed: the active one first, the finished season after it.
     const all = await a.as.query(api.challenges.myChallenges, {})
     expect(all.map((e) => [e.challenge.name, e.challenge.status])).toEqual([
@@ -181,7 +181,7 @@ describe('creation limits', () => {
     ).rejects.toThrow(/at most a year/i)
     // 2028 is a leap year: 1 Jan to 31 Dec is 366 days.
     await a.as.mutation(api.challenges.createChallenge, { ...base, startDate: '2028-01-01', endDate: '2028-12-31' })
-    expect((await a.as.query(api.challenges.myChallenge, {}))?.challenge.endDate).toBe('2028-12-31')
+    expect((((await a.as.query(api.challenges.myChallenges, {}))[0] ?? null))?.challenge.endDate).toBe('2028-12-31')
   })
 
   test('the check-in deadline must fall after 21:30', async () => {
@@ -208,10 +208,10 @@ describe('creation limits', () => {
 describe('invite preview for a member', () => {
   test('a member opening their own accepted link is told they are in; others still see "used"', async () => {
     const t = convexTest(schema, modules)
-    const { a, b, token } = await pair(t)
+    const { a, b, token, challengeId } = await pair(t)
     const c = await signUp(t, 'c@example.com')
-    expect(await b.as.query(api.challenges.invitePreview, { token })).toMatchObject({ status: 'member', challenge: { name: 'Q4 push' } })
-    expect(await a.as.query(api.challenges.invitePreview, { token })).toMatchObject({ status: 'member' })
+    expect(await b.as.query(api.challenges.invitePreview, { token })).toMatchObject({ status: 'member', challengeId, challenge: { name: 'Q4 push' } })
+    expect(await a.as.query(api.challenges.invitePreview, { token })).toMatchObject({ status: 'member', challengeId })
     expect(await c.as.query(api.challenges.invitePreview, { token })).toMatchObject({ status: 'used' })
     expect(await t.query(api.challenges.invitePreview, { token })).toMatchObject({ status: 'used' })
   })
