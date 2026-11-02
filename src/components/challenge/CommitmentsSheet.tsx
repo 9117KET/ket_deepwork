@@ -10,15 +10,17 @@ import { useEffect, useState } from 'react'
 import { dontsToRows, rowsToDontPayload, rowsToTexts, textsToRows, withDraft, type DontLike } from '../../domain/challengeCommitments'
 import { challengeErrorMessage, updateMyCommitments } from '../../services/challengeService'
 import { ListEditor } from './ListEditor'
+import type { Id } from '../../../convex/_generated/dataModel'
 
 interface CommitmentsSheetProps {
+  challengeId: Id<'challenges'>
   goals: string[]
   /** The full list; only the active ones are offered for editing. */
   donts: DontLike[]
   onClose: () => void
 }
 
-export function CommitmentsSheet({ goals: initialGoals, donts: initialDonts, onClose }: CommitmentsSheetProps) {
+export function CommitmentsSheet({ challengeId, goals: initialGoals, donts: initialDonts, onClose }: CommitmentsSheetProps) {
   const [goals, setGoals] = useState(() => textsToRows(initialGoals))
   const [donts, setDonts] = useState(() => dontsToRows(initialDonts))
   const [goalDraft, setGoalDraft] = useState('')
@@ -38,7 +40,7 @@ export function CommitmentsSheet({ goals: initialGoals, donts: initialDonts, onC
     setBusy(true)
     setError(null)
     try {
-      await updateMyCommitments({ goals: rowsToTexts(withDraft(goals, goalDraft)), donts: rowsToDontPayload(withDraft(donts, dontDraft)) })
+      await updateMyCommitments(challengeId, { goals: rowsToTexts(withDraft(goals, goalDraft)), donts: rowsToDontPayload(withDraft(donts, dontDraft)) })
       onClose()
     } catch (e) {
       setError(challengeErrorMessage(e))

@@ -140,6 +140,7 @@ export function ChallengePage() {
       </div>
       {checkinOpen && state.info && state.progress && (
         <CheckinSheet
+          challengeId={state.info.challenge.id}
           challengeName={state.info.challenge.name}
           donts={activeDonts(state.info.me.donts)}
           displayName={state.info.me.displayName}

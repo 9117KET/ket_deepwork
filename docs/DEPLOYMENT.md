@@ -90,6 +90,25 @@ _Last updated: 2026-10-11_
    `npx convex run challengesInternal:endChallenge '{"challengeId":"..."}'`.
    Never set it on prod.
 
+   **Admin list.** `ADMIN_EMAILS` is a comma-separated list of the emails
+   that may read `/admin/challenges` (every challenge, its members, their
+   emails and last activity; read-only). Case and spaces do not matter.
+   Unset or empty means nobody is an admin. Set it on **both** deployments:
+   ```bash
+   npx convex env set ADMIN_EMAILS "you@example.com"          # dev
+   npx convex env set --prod ADMIN_EMAILS "you@example.com"   # prod
+   ```
+
+   **Many challenges per user is a two-sided deploy.** The change that lets
+   one person run several challenges at once changed the arg validators of
+   `checkIn`, `nudgePartner`, `createInvite`, `updateMyCommitments`,
+   `renameChallenge` and `leaveChallenge` (each now takes a `challengeId`),
+   and the rebuilt client stops calling `myChallenge`, which is then removed.
+   Deploy the backend first, then push: run `npx convex deploy`, then push
+   `main`. In the minutes between, the old client's challenge page errors on
+   those calls; nothing else is affected (planner sync does not touch these
+   functions). All new schema fields are optional, so no migration runs.
+
 4. **Reclaim `deepblock.vercel.app`** (optional) — log into the old Vercel
    account that owns it, delete that project (or detach the domain), then attach
    it to `ket-deepwork`:

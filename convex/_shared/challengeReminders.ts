@@ -22,7 +22,12 @@ export const CHECKIN_START = "21:30"
 export const CHECKIN_REPEAT_MIN = 90
 export const CHECKIN_MAX_PER_DAY = 2
 
-export type ReminderKind = "plan" | "checkin"
+/**
+ * What an email from the sweep is about. `reminderDecision` only ever returns
+ * "plan" or "checkin"; "warning" and "closed" come from the inactivity rules
+ * (`challengeInactivity.ts`), sent through the same claim-then-send path.
+ */
+export type ReminderKind = "plan" | "checkin" | "warning" | "closed"
 
 export interface ReminderDayRow {
   planSetAt?: number
@@ -31,7 +36,7 @@ export interface ReminderDayRow {
 }
 
 export interface ReminderDecision {
-  kind: ReminderKind
+  kind: "plan" | "checkin"
   localDate: string
 }
 

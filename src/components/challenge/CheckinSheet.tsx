@@ -12,8 +12,10 @@ import { buildShareText, type ChallengeProgress, type ChallengeSummary } from '.
 import { challengeErrorMessage, checkIn, shareText, type ShareOutcome } from '../../services/challengeService'
 import type { MemberDayView } from './MemberDayCard'
 import { resolveDontTexts } from '../../domain/challengeCommitments'
+import type { Id } from '../../../convex/_generated/dataModel'
 
 interface CheckinSheetProps {
+  challengeId: Id<'challenges'>
   challengeName: string
   /** The viewer's active don'ts: the ones offered to own up to. */
   donts: { id: string; text: string }[]
@@ -25,7 +27,7 @@ interface CheckinSheetProps {
   onClose: () => void
 }
 
-export function CheckinSheet({ challengeName, donts, displayName, progress, date, summary, existing, onClose }: CheckinSheetProps) {
+export function CheckinSheet({ challengeId, challengeName, donts, displayName, progress, date, summary, existing, onClose }: CheckinSheetProps) {
   const [note, setNote] = useState(existing?.note ?? '')
   const [broken, setBroken] = useState<Set<string>>(() => new Set(existing?.dontsBroken ?? []))
   const [busy, setBusy] = useState(false)
@@ -53,7 +55,7 @@ export function CheckinSheet({ challengeName, donts, displayName, progress, date
     setBusy(true)
     setError(null)
     try {
-      await checkIn({ date, summary, note: note.trim() || undefined, dontsBroken: [...broken] })
+      await checkIn(challengeId, { date, summary, note: note.trim() || undefined, dontsBroken: [...broken] })
       setDone(true)
     } catch (e) {
       setError(challengeErrorMessage(e))

@@ -40,10 +40,10 @@ async function signUp(t: ReturnType<typeof convexTest>, email: string) {
 async function pair(t: ReturnType<typeof convexTest>) {
   const a = await signUp(t, 'a@example.com')
   const b = await signUp(t, 'b@example.com')
-  await a.as.mutation(api.challenges.createChallenge, { ...setup, timezone: BERLIN, displayName: 'Kin' })
-  const { token } = await a.as.mutation(api.challenges.createInvite, {})
+  const { challengeId } = await a.as.mutation(api.challenges.createChallenge, { ...setup, timezone: BERLIN, displayName: 'Kin' })
+  const { token } = await a.as.mutation(api.challenges.createInvite, { challengeId })
   await b.as.mutation(api.challenges.acceptInvite, { token, timezone: NY, displayName: 'Sam' })
-  return { a, b }
+  return { a, b, challengeId }
 }
 
 beforeEach(() => {
@@ -60,11 +60,21 @@ afterEach(() => {
 describe('claimDueReminders', () => {
   test('only the member whose own clock is past the deadline is due; repeats are spaced and capped', async () => {
     const t = convexTest(schema, modules)
-    await pair(t)
+    const { challengeId } = await pair(t)
     const ten05 = at('2026-10-22', '10:05', BERLIN)
+    const plan = (to: string, displayName: string) => ({
+      to,
+      kind: 'plan',
+      displayName,
+      challengeName: 'Q4 push',
+      localDate: '2026-10-22',
+      challengeId,
+      challengeIds: [challengeId],
+      challengeNames: ['Q4 push'],
+    })
 
     const first = await t.mutation(internal.challengesInternal.claimDueReminders, { nowMs: ten05 })
-    expect(first).toEqual([{ to: 'a@example.com', kind: 'plan', displayName: 'Kin', challengeName: 'Q4 push', localDate: '2026-10-22' }])
+    expect(first).toEqual([plan('a@example.com', 'Kin')])
 
     const rows = await t.run(async (ctx) => ctx.db.query('challengeDays').collect())
     expect(rows).toHaveLength(1)
@@ -78,14 +88,14 @@ describe('claimDueReminders', () => {
     expect(fourth.map((r) => r.displayName).sort()).toEqual(['Kin', 'Sam'])
     // Four is the cap for Kin; two hours on, only Sam is due again.
     const fifth = await t.mutation(internal.challengesInternal.claimDueReminders, { nowMs: ten05 + 480 * 60_000 })
-    expect(fifth).toEqual([{ to: 'b@example.com', kind: 'plan', displayName: 'Sam', challengeName: 'Q4 push', localDate: '2026-10-22' }])
+    expect(fifth).toEqual([plan('b@example.com', 'Sam')])
   })
 
   test('a locked-in plan is left alone; the evening chases the check-in', async () => {
     const t = convexTest(schema, modules)
     // Lock-in takes only the member's own today.
     vi.useFakeTimers({ now: at('2026-10-22', '09:00', BERLIN), toFake: ['Date'] })
-    const { a } = await pair(t)
+    const { a, challengeId } = await pair(t)
     await a.as.mutation(api.challenges.lockInPlan, { date: '2026-10-22', summary: emptySummary() })
     expect(await t.mutation(internal.challengesInternal.claimDueReminders, { nowMs: at('2026-10-22', '10:05', BERLIN) })).toEqual([])
 
@@ -93,7 +103,7 @@ describe('claimDueReminders', () => {
     const evening = await t.mutation(internal.challengesInternal.claimDueReminders, { nowMs: at('2026-10-22', '21:35', BERLIN) })
     expect(kin(evening)).toMatchObject([{ kind: 'checkin', localDate: '2026-10-22' }])
 
-    await a.as.mutation(api.challenges.checkIn, { date: '2026-10-22', summary: emptySummary(), dontsBroken: [] })
+    await a.as.mutation(api.challenges.checkIn, { challengeId, date: '2026-10-22', summary: emptySummary(), dontsBroken: [] })
     const late = await t.mutation(internal.challengesInternal.claimDueReminders, { nowMs: at('2026-10-22', '23:05', BERLIN) })
     expect(kin(late)).toEqual([])
   })
@@ -105,13 +115,22 @@ describe('claimDueReminders', () => {
     expect(due).toEqual([])
     const [challenge] = await t.run(async (ctx) => ctx.db.query('challenges').collect())
     expect(challenge?.status).toBe('ended')
+    expect(challenge).toMatchObject({ endedReason: 'seasonOver', endedAt: at('2027-01-02', '12:00', BERLIN) })
+  })
+
+  test('endChallenge records a manual end', async () => {
+    const t = convexTest(schema, modules)
+    const { challengeId } = await pair(t)
+    await t.mutation(internal.challengesInternal.endChallenge, { challengeId })
+    const [challenge] = await t.run(async (ctx) => ctx.db.query('challenges').collect())
+    expect(challenge).toMatchObject({ status: 'ended', endedReason: 'manual', endedAt: expect.any(Number) })
   })
 })
 
 describe('sweep', () => {
   test('sends one email per due member, from the users table, linking to the site', async () => {
     const t = convexTest(schema, modules)
-    await pair(t)
+    const { challengeId } = await pair(t)
     vi.useFakeTimers({ now: at('2026-10-22', '10:05', BERLIN) })
     const result = await t.action(internal.reminders.sweep, {})
     expect(result).toEqual({ due: 1, sent: 1 })
@@ -120,7 +139,7 @@ describe('sweep', () => {
     expect(mail.to).toBe('a@example.com')
     expect(mail.from).toContain('sender@example.com')
     expect(mail.subject).toMatch(/lock in today's plan/i)
-    expect(mail.text).toContain('https://ket-deepwork.vercel.app/challenge')
+    expect(mail.text).toContain(`https://ket-deepwork.vercel.app/challenge/${challengeId}`)
   })
 
   test('a failed send is counted, not retried, and does not stop the others', async () => {
@@ -152,9 +171,9 @@ describe('sweep', () => {
 describe('nudgePartner', () => {
   test('emails the partner, an hour apart, while they still owe the day something', async () => {
     const t = convexTest(schema, modules)
-    const { a, b } = await pair(t)
+    const { a, b, challengeId } = await pair(t)
     vi.useFakeTimers({ now: at('2026-10-22', '11:00', BERLIN) })
-    await a.as.mutation(api.challenges.nudgePartner, {})
+    await a.as.mutation(api.challenges.nudgePartner, { challengeId })
     await t.finishAllScheduledFunctions(vi.runAllTimers)
     expect(sendMail).toHaveBeenCalledTimes(1)
     const mail = sendMail.mock.calls[0]![0] as unknown as { to: string; subject: string }
@@ -162,23 +181,23 @@ describe('nudgePartner', () => {
     expect(mail.subject).toMatch(/Kin is nudging you/)
 
     vi.setSystemTime(at('2026-10-22', '11:10', BERLIN))
-    await expect(a.as.mutation(api.challenges.nudgePartner, {})).rejects.toThrow(/again in/i)
+    await expect(a.as.mutation(api.challenges.nudgePartner, { challengeId })).rejects.toThrow(/again in/i)
 
     // Sam locks in (on Sam's own date); a nudge from Kin tomorrow is refused for a different reason.
     await b.as.mutation(api.challenges.lockInPlan, { date: '2026-10-22', summary: emptySummary() })
     vi.setSystemTime(at('2026-10-23', '11:00', BERLIN))
     // 11:00 Berlin on the 23rd is 05:00 New York on the 23rd: Sam's new day, nothing locked in yet.
-    await a.as.mutation(api.challenges.nudgePartner, {})
+    await a.as.mutation(api.challenges.nudgePartner, { challengeId })
     await t.finishAllScheduledFunctions(vi.runAllTimers)
     expect(sendMail).toHaveBeenCalledTimes(2)
   })
 
   test('refused when the partner has already done the thing', async () => {
     const t = convexTest(schema, modules)
-    const { a, b } = await pair(t)
+    const { a, b, challengeId } = await pair(t)
     vi.useFakeTimers({ now: at('2026-10-22', '11:00', BERLIN) })
     await b.as.mutation(api.challenges.lockInPlan, { date: '2026-10-22', summary: emptySummary() })
-    await expect(a.as.mutation(api.challenges.nudgePartner, {})).rejects.toThrow(/already locked in/i)
+    await expect(a.as.mutation(api.challenges.nudgePartner, { challengeId })).rejects.toThrow(/already locked in/i)
     expect(sendMail).not.toHaveBeenCalled()
   })
 })

@@ -9,7 +9,9 @@
 
 import { ConvexError } from "convex/values"
 import { convex } from "../lib/convex"
+import type { FunctionReturnType } from "convex/server"
 import { api } from "../../convex/_generated/api"
+import type { Id } from "../../convex/_generated/dataModel"
 import { CHECKIN_START, hhmmToMinutes, localDateAndMinutes } from "../../convex/_shared/challengeReminders"
 import type { ChallengeSummary } from "../domain/challenge"
 import { todayIso } from "../domain/dateUtils"
@@ -55,54 +57,73 @@ export interface CreateChallengeInput {
   displayName: string
 }
 
-export async function createChallenge(input: CreateChallengeInput): Promise<void> {
-  await convex.mutation(api.challenges.createChallenge, { ...input, timezone: deviceTimezone() })
+/** Starts a challenge; you are its first member. Returns its id. */
+export async function createChallenge(input: CreateChallengeInput): Promise<Id<"challenges">> {
+  const { challengeId } = await convex.mutation(api.challenges.createChallenge, { ...input, timezone: deviceTimezone() })
+  return challengeId
 }
 
-export async function createInvite(): Promise<{ token: string; expiresAt: number }> {
-  return await convex.mutation(api.challenges.createInvite, {})
+export async function createInvite(challengeId: Id<"challenges">): Promise<{ token: string; expiresAt: number }> {
+  return await convex.mutation(api.challenges.createInvite, { challengeId })
 }
 
-export async function acceptInvite(token: string, displayName: string, goals: string[] = [], donts: string[] = []): Promise<void> {
-  await convex.mutation(api.challenges.acceptInvite, { token, timezone: deviceTimezone(), displayName, goals, donts })
+/** Joins the challenge an invite names. Returns its id. */
+export async function acceptInvite(token: string, displayName: string, goals: string[] = [], donts: string[] = []): Promise<Id<"challenges">> {
+  const { challengeId } = await convex.mutation(api.challenges.acceptInvite, { token, timezone: deviceTimezone(), displayName, goals, donts })
+  return challengeId
 }
 
-/** Replace your own lists. A don't sent with its id stays that don't; one left out is archived. */
-export async function updateMyCommitments(input: {
-  goals: string[]
-  donts: { id?: string; text: string }[]
-}): Promise<{ goals: string[]; donts: { id: string; text: string; archivedAt?: number }[] }> {
-  return await convex.mutation(api.challenges.updateMyCommitments, input)
+/** Replace your own lists in one challenge. A don't sent with its id stays that don't; one left out is archived. */
+export async function updateMyCommitments(
+  challengeId: Id<"challenges">,
+  input: {
+    goals: string[]
+    donts: { id?: string; text: string }[]
+  },
+): Promise<{ goals: string[]; donts: { id: string; text: string; archivedAt?: number }[] }> {
+  return await convex.mutation(api.challenges.updateMyCommitments, { challengeId, ...input })
 }
 
-export async function renameChallenge(name: string): Promise<void> {
-  await convex.mutation(api.challenges.renameChallenge, { name })
+export async function renameChallenge(challengeId: Id<"challenges">, name: string): Promise<void> {
+  await convex.mutation(api.challenges.renameChallenge, { challengeId, name })
 }
 
-export async function leaveChallenge(): Promise<void> {
-  await convex.mutation(api.challenges.leaveChallenge, {})
+/** Leaving. If you created the challenge, it ends for both of you. */
+export async function leaveChallenge(challengeId: Id<"challenges">): Promise<void> {
+  await convex.mutation(api.challenges.leaveChallenge, { challengeId })
 }
 
+/** Publishes the day's summary once; the server fans it out to every active challenge. */
 export async function syncChallengeSummary(date: string, summary: ChallengeSummary): Promise<void> {
   await convex.mutation(api.challenges.syncDaySummary, { date, summary, timezone: deviceTimezone() })
 }
 
-export async function lockInPlan(date: string, summary: ChallengeSummary): Promise<{ planSetAt: number }> {
-  return await convex.mutation(api.challenges.lockInPlan, { date, summary })
+export type LockInResult = FunctionReturnType<typeof api.challenges.lockInPlan>
+
+/**
+ * The morning act. Without `challengeId` it locks in today in every active
+ * challenge (one lock-in for the whole day); with one, only that challenge.
+ */
+export async function lockInPlan(date: string, summary: ChallengeSummary, challengeId?: Id<"challenges">): Promise<LockInResult> {
+  return await convex.mutation(api.challenges.lockInPlan, challengeId ? { date, summary, challengeId } : { date, summary })
 }
 
-export async function checkIn(args: {
-  date: string
-  summary: ChallengeSummary
-  note?: string
-  dontsBroken: string[]
-}): Promise<{ checkinAt: number }> {
-  return await convex.mutation(api.challenges.checkIn, args)
+/** The evening act, per challenge. */
+export async function checkIn(
+  challengeId: Id<"challenges">,
+  args: {
+    date: string
+    summary: ChallengeSummary
+    note?: string
+    dontsBroken: string[]
+  },
+): Promise<{ checkinAt: number }> {
+  return await convex.mutation(api.challenges.checkIn, { challengeId, ...args })
 }
 
 /** `left` nudges remain today; `nextAt` is when the next one opens (null once spent). */
-export async function nudgePartner(): Promise<{ left: number; nextAt: number | null }> {
-  return await convex.mutation(api.challenges.nudgePartner, {})
+export async function nudgePartner(challengeId: Id<"challenges">): Promise<{ left: number; nextAt: number | null }> {
+  return await convex.mutation(api.challenges.nudgePartner, { challengeId })
 }
 
 export function inviteUrl(token: string): string {
