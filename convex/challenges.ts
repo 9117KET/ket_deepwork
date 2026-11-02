@@ -391,22 +391,6 @@ export const myChallenges = query({
 })
 
 /**
- * @deprecated Use `myChallenges`. Kept so the single-challenge client keeps
- * working until it is rebuilt: the newest active membership, else the newest
- * ended one, in the old shape plus the new view fields.
- */
-export const myChallenge = query({
-  args: {},
-  handler: async (ctx) => {
-    const userId = await viewerId(ctx)
-    if (!userId) return null
-    const memberships = await allMemberships(ctx, userId)
-    const pick = memberships.find((m) => m.challenge.status === "active") ?? memberships.find((m) => m.challenge.status === "ended")
-    return pick ? await challengeEntry(ctx, pick, userId) : null
-  },
-})
-
-/**
  * Today for both members of one challenge. Each lives on their own local
  * date, so the client passes both; a query cannot watch a wall clock.
  * Null when signed out or not a member.
@@ -525,7 +509,7 @@ export const invitePreview = query({
     // Auth is optional here: a signed-in member revisiting the link is told they are in.
     const identity = await ctx.auth.getUserIdentity()
     if (identity && members.some((m) => m.userId === getUserId(identity.subject))) {
-      return { status: "member" as const, challenge: preview, inviterName: null, ...noLists }
+      return { status: "member" as const, challengeId: challenge._id, challenge: preview, inviterName: null, ...noLists }
     }
     if (invite.acceptedBy) return { status: "used" as const, challenge: preview, inviterName: null, ...noLists }
     if (invite.expiresAt <= Date.now()) return { status: "expired" as const, challenge: preview, inviterName: null, ...noLists }

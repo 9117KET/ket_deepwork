@@ -12,6 +12,7 @@ import { isGuestSession, markGuestSession } from "../storage/guestSession";
 import { LoginForm } from "../components/auth/LoginForm";
 import { AccountMenu } from "../components/nav/AccountMenu";
 import { AppChrome } from "../components/layout/AppChrome";
+import { useIsAdmin } from "../hooks/useIsAdmin";
 
 export function PlannerPage() {
   const { user, loading, signOut } = useAuth();
@@ -34,6 +35,7 @@ export function PlannerPage() {
   const [, startTransition] = useTransition();
 
   const isAuthenticated = Boolean(user);
+  const isAdmin = useIsAdmin();
   const showPlanner = isAuthenticated || guest;
 
   const userInitial = useMemo(() => {
@@ -86,9 +88,16 @@ export function PlannerPage() {
             {
               kind: "action",
               key: "challenge",
-              label: "Challenge",
+              label: "Challenges",
               onSelect: () => navigate("/challenge"),
               hidden: !isAuthenticated,
+            },
+            {
+              kind: "action",
+              key: "admin",
+              label: "Admin",
+              onSelect: () => navigate("/admin/challenges"),
+              hidden: !isAdmin,
             },
             {
               kind: "action",

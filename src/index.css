@@ -122,14 +122,16 @@
    * shared so every screen says "section label", "page title" and "the big
    * number" the same way.
    */
-  /* Tailwind ships a core `overline` (text-decoration-line: overline) under
+  /* A section name, in sentence case with no tracking, at the 12px caption
+     floor. It used to be 11px, uppercase and letter-spaced: under the HIG's
+     11pt floor once tracked, and template chrome rather than a heading.
+     Tailwind ships a core `overline` (text-decoration-line: overline) under
      the same name; the `none` below cancels it so no line is drawn. */
   .overline {
     text-decoration-line: none;
-    font-size: 11px;
-    font-weight: 800;
-    letter-spacing: 0.09em;
-    text-transform: uppercase;
+    font-size: 0.75rem;
+    line-height: 1.35;
+    font-weight: 700;
     color: theme('colors.share.onSurfaceVariant');
   }
 

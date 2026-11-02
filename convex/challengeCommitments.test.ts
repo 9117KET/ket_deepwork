@@ -68,7 +68,7 @@ async function giveSamDistinctDont(t: T) {
   })
 }
 
-const me = async (u: { as: ReturnType<T['withIdentity']> }) => (await u.as.query(api.challenges.myChallenge, {}))!
+const me = async (u: { as: ReturnType<T['withIdentity']> }) => (((await u.as.query(api.challenges.myChallenges, {}))[0] ?? null))!
 
 describe('where the lists live', () => {
   test('the creator owns the lists; the challenge view carries none', async () => {
