@@ -361,7 +361,7 @@ export function MustDoPinnedHeader({
                   <TaskDurationPicker
                     value={task.durationMinutes}
                     onChange={minutes => onUpdate(task.id, { durationMinutes: minutes })}
-                    className={onSchedule ? "hidden w-[7.5rem] sm:block" : "w-[7.5rem]"}
+                    className={onSchedule ? "hidden sm:block" : undefined}
                   />
                 </span>
                 {renderProgress(task)}
@@ -506,7 +506,7 @@ export function MustDoPinnedHeader({
               <TaskDurationPicker
                 value={task.durationMinutes}
                 onChange={minutes => onUpdate(task.id, { durationMinutes: minutes })}
-                className={onSchedule ? "hidden w-[7.5rem] sm:block" : "w-[7.5rem]"}
+                className={onSchedule ? "hidden sm:block" : undefined}
               />
             </span>
             {renderProgress(task)}

@@ -13,8 +13,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { Task } from '../../domain/types'
-
-const DURATIONS = [15, 30, 45, 60, 90, 120]
+import { durationOptions as ladderWith } from '../../domain/durations'
 
 export interface ScheduleRequest {
   durationMinutes: number
@@ -70,7 +69,10 @@ export function ScheduleSheet({
     }
   }
 
-  const durationOptions = DURATIONS.includes(minutes) ? DURATIONS : [...DURATIONS, minutes].sort((a, b) => a - b)
+  // The same ascending ladder as the desktop picker. The stored length is
+  // kept in order; a default the sheet opened on (the focus block) is too.
+  const fromStored = ladderWith(task.durationMinutes)
+  const durationOptions = fromStored.includes(minutes) ? fromStored : [...fromStored, minutes].sort((a, b) => a - b)
 
   return (
     <div

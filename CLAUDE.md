@@ -118,7 +118,9 @@ Task
   id, title, isDone, sectionId, date
   parentId?      ← subtask; completing parent auto-completes children
   scheduledAt?   ← "HH:MM"; opt-in anchor for externally fixed times only
-  durationMinutes?    ← the planned cost; drives the focus-block progress row
+  durationMinutes?    ← the planned cost, from the ladder in durations.ts (an
+                         off-ladder value is kept, never rewritten); drives the
+                         focus-block progress row and the day gauge
   manualLoggedMinutes?  ← LEGACY hand-logged total; still read, never written
                            (hand-logged time is now a manual DeepWorkSession)
   isShallow?     ← marks logistical / non-deep work (Cal Newport)
@@ -412,6 +414,18 @@ Features built around the *Deep Work* philosophy:
    Google Calendar (`ScheduleChip` → `ScheduleSheet`, see "Today and the
    calendar" above); `Task.scheduledAt` mirrors the event start. On phones the
    duration picker lives in that sheet, so a row stays one line.
+
+   **One ladder, one gauge.** Every length picker (the desktop row's
+   `TaskDurationPicker`, the phone's `ScheduleSheet`) offers
+   `durationOptions()` from `src/domain/durations.ts`: 10m, 15m, 20m, then 30m
+   to 8h, ascending, with a stored off-list value shown in its place. On a
+   desktop row a set length is a quiet chip and an unset one appears only on
+   hover or keyboard focus; under a finger it is always visible. The day's one completion measure is the gauge in
+   `DayHeader` (`role="meter"`), built by `computeDayCompletion` in
+   `src/domain/dayCompletion.ts`: planned minutes done of planned minutes, where
+   a task with no duration counts as 30m and the line says how many did, and a
+   parent earns its minutes pro rata of its subtasks. The Top 3's own pips and
+   a section's "~Xh left" line stay as they are.
 
 8. **Work done away from the screen** — the countdown is mirrored to
    `localStorage` (`src/storage/activeBlock.ts`) on every state change, keyed on

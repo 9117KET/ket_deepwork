@@ -35,6 +35,7 @@ import { describeWorkLoss, summarizeTaskWork, taskWithDescendantIds } from "../.
 import { normalizeFocusBlockMinutes, suggestedBreakMinutes } from "../../domain/focusBlocks";
 import { computePerHabitStreaks, getAtRiskHabitIds, computeDailyDeepWorkMinutes } from "../../domain/stats";
 import { getOrderedTasksForSection } from "../../domain/taskUtils";
+import { computeDayCompletion } from "../../domain/dayCompletion";
 import { useUndoableActions } from "../../hooks/useUndoableActions";
 import { useTaskHandlers } from "../../hooks/useTaskHandlers";
 import { useCalendarDay } from "../../hooks/useCalendarDay";
@@ -161,7 +162,7 @@ export function DayPlanner() {
     () => computeDailyDeepWorkMinutes(appState.days[selectedDay]),
     [appState, selectedDay],
   );
-  const rootTasks = useMemo(() => dayState.tasks.filter((t) => !t.parentId), [dayState.tasks]);
+  const dayCompletion = useMemo(() => computeDayCompletion(dayState.tasks), [dayState.tasks]);
   const accountabilityStats = useMemo(
     () => computeAccountabilityStats(appState.activeDays ?? [], appState.days),
     [appState.activeDays, appState.days],
@@ -648,8 +649,7 @@ export function DayPlanner() {
           <div data-tour="date-nav">
             <DayHeader
               dateLabel={formatDateLabel(selectedDay)}
-              completedTaskCount={rootTasks.filter((t) => t.isDone).length}
-              totalTaskCount={rootTasks.length}
+              completion={dayCompletion}
               streak={accountabilityStats.streak}
               isToday={isToday}
               onPrevDay={() => setSelectedDay((current) => addDays(current, -1))}
