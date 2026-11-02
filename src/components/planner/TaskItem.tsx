@@ -530,7 +530,7 @@ export function TaskItem({
             <TaskDurationPicker
               value={task.durationMinutes}
               onChange={(minutes) => onUpdateTask?.({ durationMinutes: minutes })}
-              className={onSchedule && !isSubtask ? "hidden w-[7.5rem] sm:block" : "w-[7.5rem]"}
+              className={onSchedule && !isSubtask ? "hidden sm:block" : undefined}
             />
           </span>
         )}
