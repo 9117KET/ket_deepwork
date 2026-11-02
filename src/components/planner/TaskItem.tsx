@@ -9,7 +9,9 @@
  *  - a finger (`useCoarsePointer`): checkbox, title, one chip, ⋮. The ⋮ opens
  *    `TaskActionSheet`, which holds every other action, and the progress row is
  *    one button under the title that opens the progress sheet. Nothing depends
- *    on hover, right-click, double-tap or drag, none of which a phone has.
+ *    on hover, right-click or double-tap, none of which a phone has. A press
+ *    and hold lifts the row to drag it (`useTouchReorder`); the sheet's Move
+ *    actions do the same without a gesture.
  *  - a cursor: the desktop row, unchanged: grip, popup menu, inline duration
  *    picker, progress chips, drag-and-drop.
  */
@@ -25,6 +27,7 @@ import { TaskActionSheet } from './TaskActionSheet'
 import { TouchCheckbox } from './TouchCheckbox'
 import { useFocusBlocks } from './focusBlockContext'
 import { useCoarsePointer } from '../../hooks/useCoarsePointer'
+import { LIFTED_ROW_CLASS, type TouchRowBinding } from '../../hooks/useTouchReorder'
 
 interface TaskItemProps {
   task: Task
@@ -61,7 +64,40 @@ interface TaskItemProps {
   onOpenProgressSheet?: () => void
   /** Open the schedule sheet: put this task on the calendar. */
   onSchedule?: () => void
+  /** Phone sheet: move this root, with its subtasks, to the end of the Top 3. */
+  onMoveToTop3?: () => void
+  /** Desktop grip: Alt+ArrowUp / Alt+ArrowDown move the row one step. */
+  onKeyboardMove?: (direction: 'up' | 'down') => void
+  /** Phone: the press-and-hold drag (`useTouchReorder`) and what it draws here. */
+  touch?: TaskItemTouch
 }
+
+/** What a phone row needs from the finger drag. */
+export interface TaskItemTouch {
+  binding: TouchRowBinding
+  /** `rootRowData` / `subtaskRowData`, spread onto the row so the hook can find it. */
+  data: Record<string, string | number>
+  lifted: boolean
+  lineAbove: boolean
+  lineBelow: boolean
+}
+
+/** A mouse drag never starts on a control: it would steal the click. */
+const NO_DRAG_SELECTOR = 'input, select, textarea, button, a'
+
+/** The insertion line a drag shows between rows. */
+export function DropLine({ edge }: { edge: 'top' | 'bottom' }) {
+  return (
+    <div
+      aria-hidden
+      data-drop-line
+      className={`pointer-events-none absolute inset-x-0 z-[56] h-1 rounded-full bg-share-primary ${
+        edge === 'top' ? '-top-[3px]' : '-bottom-[3px]'
+      }`}
+    />
+  )
+}
+
 
 function GripIcon() {
   return (
@@ -107,6 +143,9 @@ export function TaskItem({
   onStartBlock,
   onOpenProgressSheet,
   onSchedule,
+  onMoveToTop3,
+  onKeyboardMove,
+  touch,
   partnerVisible = false,
 }: TaskItemProps) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
@@ -118,6 +157,13 @@ export function TaskItem({
   const menuRef = useRef<HTMLDivElement | null>(null)
   const menuBtnRef = useRef<HTMLButtonElement | null>(null)
   const editInputRef = useRef<HTMLInputElement | null>(null)
+  /**
+   * Where the mouse went down. Chromium reports the draggable row, not the
+   * checkbox, as a dragstart's target, so the guard reads this instead.
+   */
+  const pointerDownTargetRef = useRef<HTMLElement | null>(null)
+  /** The menu was opened from the keyboard, so focus goes into it. */
+  const menuOpenedByKeyRef = useRef(false)
 
   useEffect(() => {
     if (!menu) return
@@ -130,8 +176,19 @@ export function TaskItem({
       ) return
       setMenu(null)
     }
+    // Opened from the keyboard: put focus on the first item, and give it
+    // back to the grip on Escape.
+    if (menuOpenedByKeyRef.current) {
+      menuOpenedByKeyRef.current = false
+      requestAnimationFrame(() =>
+        menuRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus(),
+      )
+    }
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setMenu(null)
+      if (e.key !== 'Escape') return
+      const hadFocus = menuRef.current?.contains(document.activeElement) ?? false
+      setMenu(null)
+      if (hadFocus) gripRef.current?.focus()
     }
     document.addEventListener('mousedown', close)
     document.addEventListener('touchstart', close)
@@ -175,8 +232,11 @@ export function TaskItem({
     // begins on an interactive control — let the checkbox, time/duration pickers,
     // inline editor, links, and the menu button behave normally. The grip is a
     // role="button" <div> (not matched here), so it still initiates a drag.
-    const target = e.target as HTMLElement | null
-    if (target?.closest('input, select, textarea, button, a')) {
+    // The title sits inside the checkbox's <label>, so the label's text still
+    // drags; only the label's own box (the gap by the checkbox) does not.
+    const origin = pointerDownTargetRef.current ?? (e.target as HTMLElement | null)
+    pointerDownTargetRef.current = null
+    if (origin?.closest(NO_DRAG_SELECTOR) || origin?.tagName === 'LABEL') {
       e.preventDefault()
       return
     }
@@ -328,7 +388,15 @@ export function TaskItem({
       : 'text-share-onSurface'
 
     return (
-      <div data-task-id={task.id} className={isSubtask ? 'ml-6 border-l-2 border-share-hairline pl-1' : ''}>
+      <div
+        data-task-id={task.id}
+        {...touch?.data}
+        {...touch?.binding}
+        className={`relative ${isSubtask ? 'ml-6 border-l-2 border-share-hairline pl-1' : ''} ${
+          touch ? 'select-none [-webkit-touch-callout:none]' : ''
+        } ${touch?.lifted ? LIFTED_ROW_CLASS : ''}`}
+      >
+        {touch?.lineAbove && <DropLine edge="top" />}
         <div className="group flex items-center gap-1">
           <TouchCheckbox checked={task.isDone} onChange={onToggle} label={task.title} />
           {/* Tapping the title opens the action sheet: the title is the
@@ -409,6 +477,7 @@ export function TaskItem({
             showReorder={!isSubtask && (onMoveUp !== undefined || onMoveDown !== undefined)}
             onMoveUp={onMoveUp}
             onMoveDown={onMoveDown}
+            onMoveToTop3={isSubtask ? undefined : onMoveToTop3}
             onAddSubtask={isSubtask ? undefined : onAddSubtask}
             onMoveToAnotherParent={isSubtask ? onMoveToAnotherParent : undefined}
             onUpdateTask={onUpdateTask}
@@ -417,8 +486,28 @@ export function TaskItem({
             onDelete={onDelete}
           />
         )}
+        {touch?.lineBelow && <DropLine edge="bottom" />}
       </div>
     )
+  }
+
+  /** Alt+ArrowUp / Alt+ArrowDown on the grip: the keyboard's drag. */
+  const handleGripKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    // Enter / Space: the grip is a button, and what it opens is the row's
+    // menu, the same one right-click and Shift+F10 open.
+    if ((e.key === 'Enter' || e.key === ' ') && !e.altKey && showContextMenu) {
+      e.preventDefault()
+      const rect = gripRef.current?.getBoundingClientRect()
+      menuOpenedByKeyRef.current = true
+      setMenu(clampMenu(rect?.left ?? 0, (rect?.bottom ?? 0) + 4))
+      return
+    }
+    if (!onKeyboardMove || !e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return
+    e.preventDefault()
+    e.stopPropagation()
+    onKeyboardMove(e.key === 'ArrowUp' ? 'up' : 'down')
+    // The row is re-ordered, not re-mounted; keep the keyboard on its grip.
+    requestAnimationFrame(() => gripRef.current?.focus())
   }
 
   // ── Desktop (fine pointer): grip, popup menu, chips, drag ────────────────
@@ -433,9 +522,12 @@ export function TaskItem({
       <div
         tabIndex={0}
         draggable={isReorderable}
+        onPointerDownCapture={
+          isReorderable ? (e) => { pointerDownTargetRef.current = e.target as HTMLElement } : undefined
+        }
         onDragStart={isReorderable ? handleDragStart : undefined}
         onDragEnd={isReorderable ? onDragEnd : undefined}
-        className={`group flex flex-wrap items-center gap-2 py-1.5 ${isReorderable ? 'cursor-grab active:cursor-grabbing' : ''} ${isDragging ? 'opacity-50' : ''}`}
+        className={`group flex flex-wrap items-center gap-2 rounded-md py-1.5 focus:outline-none focus-visible:ring-1 focus-visible:ring-share-primary ${isReorderable ? 'cursor-grab active:cursor-grabbing' : ''} ${isDragging ? 'opacity-50' : ''}`}
         onDragOver={handleDragOver}
         onDragLeave={onDragLeave}
         onDrop={handleDrop}
@@ -446,8 +538,14 @@ export function TaskItem({
             role="button"
             tabIndex={0}
             onContextMenu={handleContextMenu}
-            className="hidden shrink-0 touch-none rounded p-0.5 text-share-onSurfaceVariant/50 hover:bg-share-surfaceContainerHigh hover:text-share-onSurfaceVariant sm:block"
-            aria-label="Drag to reorder; right-click for menu"
+            onKeyDown={handleGripKeyDown}
+            className="hidden shrink-0 touch-none rounded p-0.5 text-share-onSurfaceVariant/50 hover:bg-share-surfaceContainerHigh hover:text-share-onSurfaceVariant focus:outline-none focus-visible:ring-1 focus-visible:ring-share-primary sm:block"
+            aria-label={
+              onKeyboardMove
+                ? 'Drag to reorder; right-click for menu; Alt+Up or Alt+Down to move'
+                : 'Drag to reorder; right-click for menu'
+            }
+            aria-keyshortcuts={onKeyboardMove ? 'Alt+ArrowUp Alt+ArrowDown' : undefined}
           >
             <GripIcon />
           </div>
@@ -530,7 +628,7 @@ export function TaskItem({
             <TaskDurationPicker
               value={task.durationMinutes}
               onChange={(minutes) => onUpdateTask?.({ durationMinutes: minutes })}
-              className={onSchedule && !isSubtask ? "hidden w-[7.5rem] sm:block" : "w-[7.5rem]"}
+              className={onSchedule && !isSubtask ? "hidden sm:block" : undefined}
             />
           </span>
         )}
@@ -619,6 +717,16 @@ export function TaskItem({
               onClick={() => closeAnd(onAddSubtask)}
             >
               Add subtask
+            </button>
+          )}
+          {onMoveToTop3 && !isSubtask && (
+            <button
+              type="button"
+              role="menuitem"
+              className="w-full px-3 py-1.5 text-left text-sm text-share-onSurface hover:bg-share-surfaceContainerHighest"
+              onClick={() => closeAnd(onMoveToTop3)}
+            >
+              Move to Top 3
             </button>
           )}
           {onMoveToAnotherParent && (

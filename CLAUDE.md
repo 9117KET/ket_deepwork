@@ -54,6 +54,8 @@ In the Convex dashboard (Project Settings -> Environment Variables) set:
 - `SITE_URL` (your deployed URL, e.g. `https://ket-deepwork.vercel.app`)
 - `GMAIL_SMTP_USER` / `GMAIL_SMTP_APP_PASSWORD` (challenge reminder emails; see
   `docs/DEPLOYMENT.md` step 3)
+- `ADMIN_EMAILS` (comma-separated; who may read the admin list of every
+  challenge; unset means nobody)
 
 ## Architecture
 
@@ -118,7 +120,9 @@ Task
   id, title, isDone, sectionId, date
   parentId?      ← subtask; completing parent auto-completes children
   scheduledAt?   ← "HH:MM"; opt-in anchor for externally fixed times only
-  durationMinutes?    ← the planned cost; drives the focus-block progress row
+  durationMinutes?    ← the planned cost, from the ladder in durations.ts (an
+                         off-ladder value is kept, never rewritten); drives the
+                         focus-block progress row and the day gauge
   manualLoggedMinutes?  ← LEGACY hand-logged total; still read, never written
                            (hand-logged time is now a manual DeepWorkSession)
   isShallow?     ← marks logistical / non-deep work (Cal Newport)
@@ -201,6 +205,20 @@ bookkeeping or a `userId`. Only the member's own today is published:
 planner syncs only while it shows today, so browsing another day never
 rewrites what the partner saw.
 
+**Many challenges, each private.** A user may be in any number of active
+challenges at once (`MAX_ACTIVE_MEMBERSHIPS` = 20; the 21st is refused), each
+with its own partner and at most two members. Nothing returned for one
+challenge says the partner is in any other: no count, no name. The summary is
+published once and fanned out: `syncDaySummary` keeps its args and writes the
+row in every active challenge whose span covers the date. The lock-in is one
+act for the whole day: `lockInPlan` without a `challengeId` stamps every
+active challenge, with one it stamps that one. Check-in and nudge are per
+challenge, because don'ts and partners differ, and every other write takes a
+`challengeId` and goes through `requireMember` ("You are not in this
+challenge", "This challenge has ended"). Those changed function arguments
+make this a two-sided deploy: backend first (`npx convex deploy`), then push
+`main`; see `docs/DEPLOYMENT.md`.
+
 **Refusals are sentences.** Every expected state (validation, invite states,
 "not in a challenge", nudge rules) throws `ConvexError({ code, message })`
 through `fail()`, because Convex redacts a plain `Error` to "Server Error" in
@@ -210,15 +228,35 @@ carry `code: "nudgeRule"`, which the card shows as a quiet status. Only
 
 **Tables** (`convex/schema.ts`, validators shared via
 `convex/_shared/challengeValidators.ts` so arg and table cannot drift):
-`challenges` (span, local deadlines, `status` — the cron's one switch),
-`challengeMembers` (one per user, with an IANA `timezone` refreshed on every
-sync, because the two are in different zones, and the member's own `goals`
-and `donts`), `challengeInvites` (7-day token, one seat), `challengeDays` (one
-row per member per day: summary, `planSetAt`, `checkinAt`, note,
-`dontsBroken`, `remindersSent`).
-Legacy `shareTokens` is untouched. A user is in at most one active challenge.
-A season runs at most 366 days, and the check-in deadline must fall after
-21:30, where the check-in reminders start.
+`challenges` (span, local deadlines, `status` — the cron's one switch, with
+`endedReason` and `endedAt` once it ends, and an inactivity `warning` while
+active), `challengeMembers` (one per user per challenge, indexed
+`by_user_challenge`, with an IANA `timezone` refreshed on every sync, because
+the two are in different zones, the member's own `goals` and `donts`,
+`joinedDate` and `lastActedAt`), `challengeInvites` (7-day token, one seat),
+`challengeDays` (one row per member per day: summary, `planSetAt`,
+`checkinAt`, note, `dontsBroken`, `remindersSent`).
+Legacy `shareTokens` is untouched. A season runs at most 366 days, and the
+check-in deadline must fall after 21:30, where the check-in reminders start.
+
+**Leaving.** The creator leaving ends the challenge for both at once
+(`endedReason: "creatorLeft"`, or `"allLeft"` when they were alone); their
+member row is kept, so the season stays readable to both. Anyone else
+leaving deletes only their own member row; the challenge runs on with one
+member and can invite again, and the last one out ends it (`"allLeft"`).
+`challengeDays` rows are never deleted. Season end is `"seasonOver"`,
+`endChallenge` by hand is `"manual"`.
+
+**Inactivity closes a challenge.** The sweep judges each member on their own
+clock over full local days only (yesterday backwards, never today), from the
+later of the start and their join date. A day with no lock-in and no
+check-in is missed, and a day with no row at all counts the same. Three
+missed days in a row put a `warning` on the challenge and email both members;
+the warned member gets no plan or check-in reminder while it stands. Their
+next lock-in or check-in clears it in the same mutation. A fourth missed day,
+a full day after the warning, closes the challenge (`"inactive"`) and emails
+both. The rules are pure in `convex/_shared/challengeInactivity.ts`
+(`countableDates`, `missedRun`, `inactivityDecision`).
 
 **Goals and don'ts are per member.** Each member sets theirs on create or
 join and edits them any time (`updateMyCommitments`); the partner reads them
@@ -229,15 +267,20 @@ via `memberView` and cannot change them. A removed don't is archived
 never written again: a creator whose member row has no lists falls back to
 them (`memberCommitments`), which is the whole migration.
 
-**Reads are split hot/cold here too.** `myChallenge` and `dayCards` are small
-and live; `history` returns the whole season and callers pass
-`toDate = yesterday`, so today's debounced writes never invalidate it.
-`history` takes two dates, `toDate` for the viewer and `partnerToDate` for the
-partner, because each one's yesterday is on their own clock; with one date a
-partner a day ahead leaves a hole in the grid. Reads fall back to the last
-ended season (`currentMembership`), so a finished challenge stays readable on
-`/challenge`, read-only, with "Start a new challenge"; writes see only an
-active one, so an ended season never blocks the next.
+**Reads are split hot/cold here too.** `myChallenges` (every membership,
+active first, at most 50), `dayCards` (one challenge) and `todayCards` (every
+active challenge's today in one subscription) are small and live; `history`
+returns one challenge's whole season and callers pass `toDate = yesterday`,
+so today's debounced writes never invalidate it. `history` takes two dates,
+`toDate` for the viewer and `partnerToDate` for the partner, because each
+one's yesterday is on their own clock; with one date a partner a day ahead
+leaves a hole in the grid. Reads accept an ended challenge, so a finished
+season stays readable, read-only; writes see only an active one, so an ended
+season never blocks the next. (The single-challenge `myChallenge` is gone;
+the client reads `myChallenges` through `src/hooks/useChallenges.ts`.)
+`adminStatus` and `adminListChallenges` give an
+`ADMIN_EMAILS` address a read-only list of every challenge with member
+emails and last activity.
 
 **Reminders are email from the user's own Gmail** (`convex/email.ts`, a
 `"use node"` nodemailer action; swap to Resend in `send()` once a domain
@@ -247,32 +290,85 @@ transaction (a failed send costs one email, never doubles one), then the
 action sends. The rules are pure in `convex/_shared/challengeReminders.ts`:
 after the plan deadline every 120 min, four at most; from 21:30 local every
 90 min for the check-in, two at most; each judged on the member's own clock.
+One missed act, one email: the caps and spacing are judged per row, but the
+sweep groups by member, so someone owing the same lock-in in three challenges
+gets one plan email naming all three, and `remindersSent` is recorded on every
+row it covers. Inactivity runs first in the same pass, and a challenge it
+closes gets nothing further. Every email links to `/challenge/<id>`.
 `nudgePartner` schedules one email from inside the mutation: up to three per
 nudger-local day, at least an hour apart, only while the partner owes the day
 something (pure rules in `convex/_shared/challengeNudges.ts`, shared with the
 button; `challengeDays.nudgesSentAt`, legacy `nudgeSentAt` read as one).
 
-**Routes and entry points:** `/challenge` (create / join / dashboard: a header with
-the name (either member can rename it, `renameChallenge`), day and deadlines, a
-head-to-head score (full days, run, deep work), today's actions and both
-members' cards, one `SeasonGrid` calendar whose squares are split left you /
-right partner, each member's goals and don'ts, invite link). From `lg` it is
-two columns with the season and commitments in a right rail; on a phone it
-leads with the partner's card, folds your own day to one line
-(`MemberDayLine`, linking to Today) and shows the last two weeks of the
-season until "Whole season" is tapped. Design: "Challenge — head to head",
-https://claude.ai/artifact/AZzgoaA8FUoRdGfsCqxmWo. When a member sets no Top 3,
-the summary carries their first three visible tasks with `top3FromTasks`, and
-the card labels them so,
-`/challenge/join?invite=TOKEN` (`?invite=`, not `?code=`, which Convex Auth
-intercepts; the token survives sign-up in sessionStorage). On Today:
-`ChallengeCard` under the header, a "Day 22/92 · 70 left" pill in
-`DayHeader`, and "Hide from partner" in the task menu. Review gets a
-challenge section. The mobile tab bar is unchanged. Guests cannot take part.
+**Routes and entry points.** Hooks: `useChallenges()` (the list),
+`useChallengeDetail(id, now)` (one challenge plus both members' today),
+`useTodayCards(active, now)` (every running challenge's today, one
+subscription) and `useChallengeHistory(id, …)`, all in
+`src/hooks/useChallenges.ts`; the strings for state (row marks, what you owe,
+the ended and warning sentences, the Today pill) are pure in
+`src/domain/challengeList.ts`. Every challenge route shares
+`ChallengeChrome` (account menu, tab bar, sign-in form for guests).
+- `/challenge` (`ChallengeListPage`): one row per challenge, running first
+  (name, "Day 22 of 92", you and your partner as ✓/– marks with words, a
+  "Warning" badge), then ended ones with the sentence for how they ended
+  ("Ended 3 Nov · Kin left", "Closed 3 Nov after 4 days without a lock-in or
+  check-in", "Season over", "Ended by hand"). "New challenge" and "Join with a
+  link" (inline). With none, an invitation. No redirect with one.
+- `/challenge/new` (`ChallengeCreatePage`): two steps. Name, length (30 / 90 /
+  365 days or custom dates), deadlines folded under "Deadlines"; then goals and
+  don'ts (optional), display name under "Advanced". Opens the new dashboard.
+- `/challenge/:id` (`ChallengeDetailPage` → `ChallengeDetail`): the first
+  screen is the header (name with Rename; "Day 22 of 92 · plan by 10:00 ·
+  check in by 23:59"), a warning banner when warned, and one Today surface:
+  your `MemberRow`, one full-width button for your next act (Lock in → Check
+  in → quiet "Edit check-in"), a hairline, your partner's `MemberRow` with
+  Share and Nudge as quiet text actions (or the invite link while alone).
+  Then, un-carded: head to head (full days and run, two numbers each, "A full
+  day is a locked plan and a check-in."), the `SeasonGrid` (a `<table>`; each
+  day has two marks, yours left, and each state is a shape: filled = full,
+  ring = plan only, dot = check-in only, dash = missed), goals and don'ts, and
+  Leave through an `ActionSheet` (a creator is told it ends the challenge for
+  both). An ended season is read-only with its sentence under the header; an
+  unknown id says "Not one of your challenges". From `lg`, the season and the
+  commitments are a right rail. Design rules: `scout-design-review.md` in
+  `docs/00-orchestration/runs/2026-11-02-duration-dnd-multichallenge-design/`.
+- `/challenge/join?invite=TOKEN` (`?invite=`, not `?code=`, which Convex Auth
+  intercepts; the token survives sign-up in sessionStorage). Being in other
+  challenges never blocks a join; "Join challenge" opens the new dashboard.
+- `/admin/challenges` (`AdminChallengesPage`): read-only table from
+  `adminListChallenges`; anyone else sees "Not an admin". The sidebar and
+  account menu show the link only when `adminStatus.isAdmin` (`useIsAdmin`).
 
-**Tests:** `npm test` covers `src/domain/challenge.test.ts`;
+When a member sets no Top 3, the summary carries their first three visible
+tasks with `top3FromTasks`, and `MemberRow` labels them so.
+
+**On Today** `ChallengeTodayBlock` sits under the header: one compact row per
+running challenge (name, your partner's mark, what you owe), one "Lock in
+today's plan" above the rows while any is unlocked (it calls `lockInPlan`
+without an id, so it locks them all), a per-row Check in that opens that
+challenge's `CheckinSheet`, and the warning sentence on a warned row. The
+`DayHeader` pill reads "Day 22/92 · 70 left" with one running challenge and
+"2 challenges" with more (`challengePillLabel`). "Hide from partner" is in the
+task menu. Review shows each running challenge's week as two rows of marks.
+The phone tab bar has a fifth tab, **Challenges**, lit on every `/challenge*`
+route and on the admin list. Guests cannot take part.
+
+**Sheets.** Every challenge sheet and `ScheduleSheet` render through
+`src/components/ui/Sheet.tsx`: portalled, `#root` made `inert` while open,
+focus moved in and trapped, Escape and scrim close, drag the header down to
+dismiss on touch, a quiet Cancel plus one verb. `ActionSheet` (same file) is
+the destructive-choice form and replaces `window.confirm`. Quiet actions are
+`ui/TextButton` (always 44px); errors are `ui/Notices` `ErrorLine` (the
+`share.error` token plus an icon). On the challenge screens cyan is only the
+one primary button; "done" is `share.done` with a ✓ or a filled shape.
+
+**Tests:** `npm test` covers `src/domain/challenge.test.ts` and
+`src/domain/challengeList.test.ts`; `e2e/challenge-guest.spec.ts` covers every
+challenge route as a guest and the shared sheet's focus trap;
 `npm run test:convex` covers `convex/challenges.test.ts`,
-`convex/reminders.test.ts` (mocked nodemailer) and the reminder rules. A
+`convex/challengesMulti.test.ts` (many challenges, privacy, admin),
+`convex/challengeInactivity.test.ts` and `convex/reminders.test.ts` (mocked
+nodemailer), and the reminder and inactivity rules. A
 two-account flow cannot run in e2e (guest-only seeding).
 
 ### Responsive foundations
@@ -294,6 +390,14 @@ gate in `e2e/mobile-responsive.spec.ts`:
    anatomy (checkbox, title, one chip, ⋮ → `TaskActionSheet`) via
    `useCoarsePointer()`; the gates live in `e2e/mobile-today.spec.ts` and
    `e2e/mobile-panels.spec.ts`, with shared fixtures in `e2e/helpers/mobile.ts`.
+   A task moves four ways: a finger presses and holds a row for 300 ms to lift
+   it and drags it between rows of either list (`useTouchReorder`; a swipe
+   without the hold still scrolls), the ⋮ sheet offers "Move to Top 3" /
+   "Move to Tasks" (with subtasks, to the end) and Move up / down, a mouse drags
+   any row, and Alt+ArrowUp / Alt+ArrowDown on a desktop grip moves it one step
+   with a spoken result. Subtasks never leave their parent by drag: a drop
+   anywhere but among their siblings is refused with a toast pointing to "Move
+   to another parent"; `e2e/touch-reorder.spec.ts` pins all of it.
 2. **`dvh`, never `vh`.** `100vh` on a phone includes the URL bar that is about
    to collapse, so the bottom of a `h-screen` layout is cut off. `#root` sets
    `100vh` then `100dvh` (older browsers keep the first).
@@ -315,7 +419,8 @@ Utilities live in `src/index.css` under `@layer utilities`; breakpoints in
 `main.tsx` wraps the app in `<BrowserRouter>` + `<AuthProvider>`. `App.tsx` routes:
 `/` (the planner — there is no landing page), `/review` (this week's worked
 time + habits), `/calendar`, `/calendar/callback`, `/privacy` (needed for the
-Google OAuth consent screen), `/restore`, `/challenge` and `/challenge/join`.
+Google OAuth consent screen), `/restore`, `/challenge`, `/challenge/new`,
+`/challenge/join`, `/challenge/:id` and `/admin/challenges`.
 `/planner`, `/planner/review` and any unknown path redirect, so old bookmarks
 still land.
 
@@ -337,8 +442,9 @@ stored data gets dropped, and that only happens after the export in
 | `src/components/planner/` | Today: header, calendar timeline, Top 3, task list, schedule sheet |
 | `src/components/timer/` | Deep work timer, phone Focus panel, desktop Focus mode |
 | `src/components/habits/` | Habit checklist, phone Habits panel, habit editor |
-| `src/components/challenge/` | Challenge card on Today, check-in sheet, create/join, dashboard, season grid |
-| `src/hooks/` | `useTaskHandlers`, `useCalendarDay`, `useWorkLog`, `useChallenge`, `useChallengeSync`, undo |
+| `src/components/challenge/` | Today block, member row, dashboard view, check-in and commitments sheets, season grid, shared chrome |
+| `src/components/ui/` | `Sheet` + `ActionSheet`, `TextButton`, `Notices` (error and warning lines), `MaterialIcon` |
+| `src/hooks/` | `useTaskHandlers`, `useCalendarDay`, `useWorkLog`, `useChallenges`, `useChallengeSync`, `useIsAdmin`, undo |
 | `src/pages/` | Route-level page components |
 | `src/services/calendarSyncService.ts` | Client wrappers for the Convex calendar actions |
 | `src/services/challengeService.ts` | Client wrappers for the challenge functions, device timezone, Web Share |
@@ -412,6 +518,18 @@ Features built around the *Deep Work* philosophy:
    Google Calendar (`ScheduleChip` → `ScheduleSheet`, see "Today and the
    calendar" above); `Task.scheduledAt` mirrors the event start. On phones the
    duration picker lives in that sheet, so a row stays one line.
+
+   **One ladder, one gauge.** Every length picker (the desktop row's
+   `TaskDurationPicker`, the phone's `ScheduleSheet`) offers
+   `durationOptions()` from `src/domain/durations.ts`: 10m, 15m, 20m, then 30m
+   to 8h, ascending, with a stored off-list value shown in its place. On a
+   desktop row a set length is a quiet chip and an unset one appears only on
+   hover or keyboard focus; under a finger it is always visible. The day's one completion measure is the gauge in
+   `DayHeader` (`role="meter"`), built by `computeDayCompletion` in
+   `src/domain/dayCompletion.ts`: planned minutes done of planned minutes, where
+   a task with no duration counts as 30m and the line says how many did, and a
+   parent earns its minutes pro rata of its subtasks. The Top 3's own pips and
+   a section's "~Xh left" line stay as they are.
 
 8. **Work done away from the screen** — the countdown is mirrored to
    `localStorage` (`src/storage/activeBlock.ts`) on every state change, keyed on

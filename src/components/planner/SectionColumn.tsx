@@ -1,7 +1,8 @@
 /**
  * components/planner/SectionColumn.tsx
  *
- * One list of tasks with its add field: reorder by drag (or arrows on touch),
+ * One list of tasks with its add field: reorder by mouse drag, finger drag
+ * (press and hold, `useTouchReorder`), the sheet, or Alt+Arrow on the grip;
  * subtasks, progress boxes, and the schedule chip. Time lives in the calendar
  * now, so the list no longer carries a block window, a capacity badge or a
  * "time block ended" prompt — only a nudge when it grows too long to finish.
@@ -10,7 +11,13 @@
 import { useState, useRef, useCallback } from 'react'
 import type { DeepWorkSession, Task, TaskPatch, TaskSection, TaskSectionId } from '../../domain/types'
 import { AddTaskInput } from './AddTaskInput'
-import { TaskItem } from './TaskItem'
+import { TaskItem, type TaskItemTouch } from './TaskItem'
+import {
+  emptyListData,
+  rootRowData,
+  subtaskRowData,
+  type TouchReorder,
+} from '../../hooks/useTouchReorder'
 import { ChevronRight, ChevronDown, AlertTriangle } from 'lucide-react'
 import { getSectionCollapsed, setSectionCollapsed } from '../../storage/uiPrefs'
 
@@ -59,6 +66,15 @@ interface SectionColumnProps {
   onScheduleTask?: (taskId: string) => void
   /** Placeholder for the add field. */
   addPlaceholder?: string
+  /** Phone sheet: move a root, with its subtasks, to the end of the Top 3. */
+  onMoveToTop3?: (taskId: string) => void
+  /** The finger drag shared by every list on Today (`useTouchReorder`). */
+  touch?: TouchReorder
+  /** A subtask's mouse drag began / ended, so a drop elsewhere can be refused out loud. */
+  onSubtaskDragStart?: (subtaskId: string) => void
+  onSubtaskDragEnd?: () => void
+  /** A subtask was dropped on another parent's subtask. */
+  onSubtaskDropRefused?: () => void
 }
 
 type DropPosition = 'above' | 'below'
@@ -90,7 +106,14 @@ export function SectionColumn({
   onScheduleTask,
   addPlaceholder = 'Add task',
   partnerVisible = false,
+  onMoveToTop3,
+  touch,
+  onSubtaskDragStart,
+  onSubtaskDragEnd,
+  onSubtaskDropRefused,
 }: SectionColumnProps) {
+  /** What the keyboard reorder last did, read out by the live region. */
+  const [announcement, setAnnouncement] = useState('')
   const [dropTarget, setDropTarget] = useState<{ index: number; position: DropPosition } | null>(
     null,
   )
@@ -143,7 +166,8 @@ export function SectionColumn({
   const handleSubtaskDragStart = useCallback((parentId: string, subtaskId: string) => {
     draggedSubtaskRef.current = { parentId, subtaskId }
     setDraggedSubtask({ parentId, subtaskId })
-  }, [])
+    onSubtaskDragStart?.(subtaskId)
+  }, [onSubtaskDragStart])
 
   const handleSubtaskDragOver = useCallback((subtaskId: string, position: DropPosition) => {
     setSubtaskDropTarget({ subtaskId, position })
@@ -151,9 +175,15 @@ export function SectionColumn({
 
   const handleSubtaskDragLeave = useCallback(() => setSubtaskDropTarget(null), [])
 
-  const handleSubtaskDrop = useCallback((targetSubtaskId: string) => {
+  const handleSubtaskDrop = useCallback((targetSubtaskId: string, parentAfterIndex: number) => {
     const payload = draggedSubtaskRef.current ?? draggedSubtask
-    if (!payload) return
+    if (!payload) {
+      // A root (or a subtask from another list) dropped on a subtask row:
+      // treat it as a drop just after that subtask's whole parent.
+      onDrop?.(parentAfterIndex)
+      setSubtaskDropTarget(null)
+      return
+    }
     const target = subtaskDropTarget
     if (!target) {
       draggedSubtaskRef.current = null
@@ -166,17 +196,52 @@ export function SectionColumn({
     if (fromIndex >= 0 && targetIndex >= 0) {
       const insertIndex = target.position === 'above' ? targetIndex : targetIndex + 1
       onReorderSubtask?.(payload.parentId, payload.subtaskId, insertIndex)
+    } else if (fromIndex >= 0) {
+      // Another parent's subtask: subtasks never change parent by drag.
+      onSubtaskDropRefused?.()
     }
     draggedSubtaskRef.current = null
     setDraggedSubtask(null)
     setSubtaskDropTarget(null)
-  }, [draggedSubtask, subtaskDropTarget, tasks, onReorderSubtask])
+  }, [draggedSubtask, subtaskDropTarget, tasks, onReorderSubtask, onSubtaskDropRefused, onDrop])
 
   const handleSubtaskDragEnd = useCallback(() => {
     draggedSubtaskRef.current = null
     setDraggedSubtask(null)
     setSubtaskDropTarget(null)
-  }, [])
+    onSubtaskDragEnd?.()
+  }, [onSubtaskDragEnd])
+
+  // Each root's place in the ordered list (`tasks`, subtasks included):
+  // `before` is the root's own index, `after` the index past its last subtask.
+  // These are the insert indices the planner's drop handler takes.
+  const rootBounds = new Map<string, { before: number; after: number }>()
+  {
+    const rootIndices: number[] = []
+    for (let i = 0; i < tasks.length; i++) if (!tasks[i]!.parentId) rootIndices.push(i)
+    rootIndices.forEach((before, k) => {
+      rootBounds.set(tasks[before]!.id, { before, after: rootIndices[k + 1] ?? tasks.length })
+    })
+  }
+
+  const touchItem = touch?.state.item ?? null
+  const touchTarget = touch?.state.target ?? null
+  const rootLineAt =
+    touchTarget?.kind === 'root' && touchTarget.sectionId === section.id ? touchTarget.index : null
+  const subtaskLine = touchTarget?.kind === 'subtask' ? touchTarget : null
+
+  /** Alt+Arrow on the grip, with a spoken result ("Moved up. 2 of 5."). */
+  const keyboardMove = (taskId: string, rootIdx: number, rootCount: number, direction: 'up' | 'down') => {
+    if (direction === 'up') {
+      if (rootIdx <= 0) return setAnnouncement(`Already first. 1 of ${rootCount}.`)
+      onMoveTaskUp?.(taskId)
+      setAnnouncement(`Moved up. ${rootIdx} of ${rootCount}.`)
+    } else {
+      if (rootIdx >= rootCount - 1) return setAnnouncement(`Already last. ${rootCount} of ${rootCount}.`)
+      onMoveTaskDown?.(taskId)
+      setAnnouncement(`Moved down. ${rootIdx + 2} of ${rootCount}.`)
+    }
+  }
 
   return (
     <section className="rounded-2xl border border-share-outlineVariant/25 bg-share-surfaceContainerLow p-3 sm:p-4">
@@ -207,9 +272,10 @@ export function SectionColumn({
       {!collapsed && <div className="space-y-1">
         {tasks.length === 0 ? (
           <div
+            {...emptyListData(section.id)}
             className={`min-h-[2.5rem] rounded-md border border-dashed ${
-              draggedTask && dropTarget !== null
-                ? 'border-amber-500/60 bg-amber-500/5'
+              (draggedTask && dropTarget !== null) || rootLineAt === 0
+                ? 'border-share-primary/70 bg-share-primary/5'
                 : 'border-transparent'
             } flex items-center justify-center`}
             onDragOver={(e) => {
@@ -230,11 +296,51 @@ export function SectionColumn({
           const roots = tasks.filter((t) => !t.parentId)
           return tasks.map((task, index) => {
             const rootIdx = task.parentId ? -1 : roots.findIndex((r) => r.id === task.id)
-            const isParent = tasks.some((t) => t.parentId === task.id)
+            const isLast = index === tasks.length - 1
+            // Where this row sits for the finger drag, and which lines it draws.
+            let rowTouch: TaskItemTouch | undefined
+            if (touch) {
+              if (task.parentId) {
+                const siblings = tasks.filter((t) => t.parentId === task.parentId)
+                const siblingIdx = siblings.findIndex((t) => t.id === task.id)
+                const parentAfter = rootBounds.get(task.parentId)?.after ?? tasks.length
+                const ownSiblings = subtaskLine?.parentId === task.parentId
+                rowTouch = {
+                  binding: touch.bind({ taskId: task.id, sectionId: section.id, parentId: task.parentId }),
+                  data: subtaskRowData(section.id, task.parentId, siblingIdx, parentAfter),
+                  lifted: touchItem?.taskId === task.id,
+                  lineAbove: ownSiblings && subtaskLine.index === siblingIdx,
+                  lineBelow:
+                    (ownSiblings && siblingIdx === siblings.length - 1 && subtaskLine.index === siblings.length) ||
+                    (isLast && rootLineAt === tasks.length),
+                }
+              } else {
+                const bounds = rootBounds.get(task.id) ?? { before: index, after: index + 1 }
+                rowTouch = {
+                  binding: touch.bind({ taskId: task.id, sectionId: section.id }),
+                  data: rootRowData(section.id, bounds.before, bounds.after),
+                  lifted: touchItem?.taskId === task.id,
+                  lineAbove: rootLineAt === bounds.before,
+                  lineBelow: isLast && rootLineAt === tasks.length,
+                }
+              }
+            }
+            const parentAfterIndex = task.parentId
+              ? (rootBounds.get(task.parentId)?.after ?? tasks.length)
+              : index + 1
             return (
               <TaskItem
                 key={task.id}
                 task={task}
+                touch={rowTouch}
+                onMoveToTop3={
+                  !task.parentId && onMoveToTop3 ? () => onMoveToTop3(task.id) : undefined
+                }
+                onKeyboardMove={
+                  !task.parentId && (onMoveTaskUp || onMoveTaskDown)
+                    ? (direction) => keyboardMove(task.id, rootIdx, roots.length, direction)
+                    : undefined
+                }
                 isSubtask={Boolean(task.parentId)}
                 isDragging={
                   task.parentId
@@ -283,7 +389,7 @@ export function SectionColumn({
                 }
                 onDrop={
                   task.parentId && onReorderSubtask
-                    ? () => handleSubtaskDrop(task.id)
+                    ? () => handleSubtaskDrop(task.id, parentAfterIndex)
                     : !task.parentId ? handleDrop : undefined
                 }
                 onDragEnd={
@@ -291,8 +397,10 @@ export function SectionColumn({
                     ? handleSubtaskDragEnd
                     : !task.parentId ? handleDragEnd : undefined
                 }
-                onMoveUp={onMoveTaskUp && rootIdx > 0 && !isParent ? () => onMoveTaskUp(task.id) : undefined}
-                onMoveDown={onMoveTaskDown && rootIdx >= 0 && rootIdx < roots.length - 1 && !isParent ? () => onMoveTaskDown(task.id) : undefined}
+                // A parent moves with its subtasks: they are grouped under it
+                // by `parentId`, wherever the parent lands.
+                onMoveUp={onMoveTaskUp && rootIdx > 0 ? () => onMoveTaskUp(task.id) : undefined}
+                onMoveDown={onMoveTaskDown && rootIdx >= 0 && rootIdx < roots.length - 1 ? () => onMoveTaskDown(task.id) : undefined}
                 onAbandon={!task.parentId && onAbandonTask ? () => onAbandonTask(task.id) : undefined}
                 onMoveToAnotherParent={task.parentId && onRequestMoveSubtask ? () => onRequestMoveSubtask(task.id) : undefined}
               />
@@ -301,6 +409,7 @@ export function SectionColumn({
         })()}
       </div>}
       {!collapsed && <AddTaskInput placeholder={addPlaceholder} onAdd={onAddTask} />}
+      <p className="sr-only" aria-live="polite">{announcement}</p>
     </section>
   )
 }

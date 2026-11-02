@@ -1,20 +1,24 @@
 /**
  * components/planner/MobileTabBar.tsx
  *
- * The phone's four destinations.
+ * The phone's five destinations.
  *
  * The bar itself barely changed; what changed is that it now partitions
  * something. Before the redesign every tab rendered the same ~2,500px of
  * dashboard and only ~700px swapped, so tapping was mostly theatre. Today,
  * Focus and Habits each own their screen, and Review is a route of its own —
- * which is why it is a link rather than a panel toggle.
+ * which is why it is a link rather than a panel toggle. Challenges is the
+ * fifth, a route too (scout design review B5): with several challenges at
+ * once it is a place, not a card. It is lit on every `/challenge*` route and
+ * on the admin list.
  *
  * Icons come from the artboards as inline SVG on a 24px grid. They are shapes,
- * not decoration: on a bar with four items and no room for description, the
- * icon is what makes a tab findable at a glance. See `docs/design/mobile/`.
+ * not decoration: on a bar with no room for description, the icon is what
+ * makes a tab findable at a glance. See `docs/design/mobile/`.
  */
 
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
+import { Flag } from 'lucide-react'
 
 /** The three tabs that swap a panel inside the planner. Review is a route. */
 export type MobileTab = 'today' | 'focus' | 'habits'
@@ -70,13 +74,15 @@ const TABS: { id: MobileTab; label: string; icon: React.ReactNode }[] = [
 ]
 
 const itemClass =
-  'touch-target flex flex-1 flex-col items-center justify-center gap-[5px] py-2 text-[11px] transition-colors short:py-1'
+  'touch-target flex flex-1 flex-col items-center justify-center gap-[5px] py-2 text-caption transition-colors short:py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-share-onBg'
 
-// Artboard: active cyan 700, resting #7d8a8f 600.
+// Artboard: active cyan 700, resting onSurfaceDim 600.
 const ACTIVE = 'font-bold text-share-primary'
 const INACTIVE = 'font-semibold text-share-onSurfaceDim hover:text-share-onSurface'
 
 export function MobileTabBar({ activeTab, onTabChange, reviewActive }: MobileTabBarProps) {
+  const { pathname } = useLocation()
+  const challengesActive = pathname.startsWith('/challenge') || pathname.startsWith('/admin/challenges')
   return (
     // Hidden at lg+, where the planner's right rail replaces these tabs. Between
     // md and lg the AppChrome sidebar (fixed, 240px) is already showing, so the
@@ -92,9 +98,9 @@ export function MobileTabBar({ activeTab, onTabChange, reviewActive }: MobileTab
         paddingRight: 'env(safe-area-inset-right)',
       }}
     >
-      <div className="flex">
+      <div className="flex [&>*]:min-w-0">
         {TABS.map((tab) => {
-          const isActive = !reviewActive && activeTab === tab.id
+          const isActive = !reviewActive && !challengesActive && activeTab === tab.id
           return (
             <button
               key={tab.id}
@@ -114,9 +120,9 @@ export function MobileTabBar({ activeTab, onTabChange, reviewActive }: MobileTab
         })}
         <Link
           to="/review"
-          aria-current={reviewActive ? 'page' : undefined}
+          aria-current={reviewActive && !challengesActive ? 'page' : undefined}
           className={`${itemClass} ${
-            reviewActive
+            reviewActive && !challengesActive
               ? ACTIVE
               : INACTIVE
           }`}
@@ -125,6 +131,16 @@ export function MobileTabBar({ activeTab, onTabChange, reviewActive }: MobileTab
             <path d="M5 20V9M12 20V4M19 20v-7" />
           </svg>
           <span>Review</span>
+        </Link>
+        <Link
+          to="/challenge"
+          aria-current={challengesActive ? 'page' : undefined}
+          className={`${itemClass} ${challengesActive ? ACTIVE : INACTIVE}`}
+        >
+          {/* Filled while lit, an outline at rest: the shape says "you are here" too. */}
+          <Flag width={21} height={21} strokeWidth={2} aria-hidden fill={challengesActive ? 'currentColor' : 'none'} />
+          {/* Five tabs on a 280px Fold cover leave 56px each: the label may not push the bar wider. */}
+          <span className="max-w-full truncate px-0.5">Challenges</span>
         </Link>
       </div>
     </div>

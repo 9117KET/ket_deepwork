@@ -40,8 +40,14 @@ export default {
           tertiary: '#ffb77d',
           /** Artboard hairlines, tracks and chip fills (docs/design/mobile). */
           hairline: '#23262a',
-          /** Tertiary text: resting tab labels, quiet meta. */
-          onSurfaceDim: '#7d8a8f',
+          /** Tertiary text: resting tab labels, quiet meta. About 6.0:1 on surfaceContainerLow, 5.0:1 on the sheet surface. */
+          onSurfaceDim: '#94a1a6',
+          /** Control and state boundaries (checkbox and field outlines): at least 3:1 on surfaceContainerLow. */
+          outlineStrong: '#6b7a7f',
+          /** The one colour for every error message, always next to an icon. */
+          error: '#ffb4ab',
+          /** "Done": a stamp, a ticked Top 3 item, a full day. Always paired with a ✓ or a filled shape. */
+          done: '#a1cddd',
           /** Ground of the fixed phone tab bar. */
           barBg: '#131518',
         },
@@ -54,6 +60,18 @@ export default {
       },
       spacing: {
         sidebar: '240px',
+      },
+      /**
+       * The five type styles of the challenge screens (scout design review,
+       * rule 9). rem, so they follow the reader's text size; nothing is
+       * smaller than the 12px caption.
+       */
+      fontSize: {
+        title: ['1.5rem', { lineHeight: '1.2', fontWeight: '800' }],
+        section: ['1.0625rem', { lineHeight: '1.35', fontWeight: '600' }],
+        body: ['0.9375rem', { lineHeight: '1.45' }],
+        caption: ['0.75rem', { lineHeight: '1.35' }],
+        numeral: ['2rem', { lineHeight: '1', fontWeight: '800' }],
       },
       // Default breakpoints are kept (md = 768px).
       // Custom scrollbar styles are in index.css.

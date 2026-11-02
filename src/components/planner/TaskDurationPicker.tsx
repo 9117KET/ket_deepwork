@@ -1,23 +1,21 @@
 /**
  * components/planner/TaskDurationPicker.tsx
  *
- * How long a task will take, chosen in focus blocks.
+ * How long a task will take: one ascending list, the short errands then 30
+ * minutes to 8 hours (`durationOptions` in domain/durations.ts), the same
+ * list the phone's schedule sheet offers.
  *
- * The old ladder of minutes (5, 10, 15, 20, 25, 30, 45, 60, 90 …) invited
- * durations that were nothing in particular - a 150-minute task is not a plan,
- * it is a guess with a false precision. Blocks are what actually happen, so the
- * picker offers those, with the minutes spelled out beside each so the cost
- * stays legible.
+ * It must not compete with the title. A set length reads as a quiet chip; an
+ * unset one stays out of sight on a mouse until the row is hovered or the
+ * control takes keyboard focus, so a fresh list does not show a boxed control
+ * per row. Under a finger it is always visible.
  *
- * Quick durations survive above them, because a 10-minute errand is real and
- * should not be rounded up into a block it does not deserve. Anything already
- * stored that is not on either list is kept as its own option rather than
- * silently rewritten - the stored minutes are the truth.
+ * A stored length that is not on the list is kept as its own option, in
+ * order, rather than silently rewritten: the stored minutes are the truth.
  */
 
-import { QUICK_DURATION_OPTIONS, blockPlanOptions, formatBlockCount } from '../../domain/focusBlocks'
+import { durationOptions } from '../../domain/durations'
 import { formatMinutes } from '../../domain/taskProgress'
-import { useFocusBlocks } from './focusBlockContext'
 
 interface TaskDurationPickerProps {
   value?: number
@@ -26,9 +24,10 @@ interface TaskDurationPickerProps {
 }
 
 export function TaskDurationPicker({ value, onChange, className }: TaskDurationPickerProps) {
-  const { blockMinutes } = useFocusBlocks()
-  const plans = blockPlanOptions(blockMinutes)
-  const known = new Set<number>([...QUICK_DURATION_OPTIONS, ...plans.map((p) => p.minutes)])
+  const isSet = value != null
+  const look = isSet
+    ? 'border-share-outlineVariant/40 text-share-onSurfaceVariant hover:border-share-primary/50 hover:text-share-onSurface'
+    : 'border-transparent text-share-onSurfaceDim opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 touch:opacity-100'
 
   return (
     <select
@@ -37,28 +36,18 @@ export function TaskDurationPicker({ value, onChange, className }: TaskDurationP
         const raw = event.target.value
         onChange(raw === '' ? undefined : Number(raw))
       }}
-      className={`min-h-[36px] rounded border border-share-outlineVariant/40 bg-share-surfaceContainer px-1 py-1 text-xs tabular-nums text-share-onSurface ${className ?? ''}`}
-      aria-label="Task duration"
-      title={`How many ${blockMinutes}-minute blocks this needs`}
+      className={`h-7 touch:h-auto touch:min-h-[44px] touch:min-w-[44px] cursor-pointer appearance-none rounded-full border bg-transparent px-2 py-0 text-center text-xs tabular-nums transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-share-primary [&>option]:bg-share-surfaceContainer [&>option]:text-share-onSurface ${look} ${className ?? ''}`}
+      name="durationMinutes"
+      autoComplete="off"
+      aria-label="How long"
+      title="How long this will take"
     >
-      <option value="">Duration</option>
-      {value != null && !known.has(value) && (
-        <option value={value}>{formatMinutes(value)}</option>
-      )}
-      <optgroup label="Quick">
-        {QUICK_DURATION_OPTIONS.map((minutes) => (
-          <option key={minutes} value={minutes}>
-            {formatMinutes(minutes)}
-          </option>
-        ))}
-      </optgroup>
-      <optgroup label={`Blocks of ${blockMinutes}m`}>
-        {plans.map((plan) => (
-          <option key={plan.blocks} value={plan.minutes}>
-            {formatBlockCount(plan.blocks)} · {formatMinutes(plan.minutes)}
-          </option>
-        ))}
-      </optgroup>
+      <option value="">Not set</option>
+      {durationOptions(value).map((minutes) => (
+        <option key={minutes} value={minutes}>
+          {formatMinutes(minutes)}
+        </option>
+      ))}
     </select>
   )
 }

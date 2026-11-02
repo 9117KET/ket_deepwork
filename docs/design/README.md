@@ -182,6 +182,15 @@ is gone and Review is a route, so the bar links to `/planner/review` rather
 than toggling a panel. Review carries the same bar, and hands the chosen tab
 back through `?tab=`.
 
+**A fifth tab, Challenges (2026-11-02).** With several challenges at once,
+challenges became a place rather than a card, so the bar gained a fifth
+destination: a link to `/challenge`, lit (and its flag icon filled) on every
+`/challenge*` route and on `/admin/challenges`; on those routes none of the
+other four is lit. The bar is still five equal columns: on a 280px Fold cover
+each is 56px, and the "Challenges" label truncates rather than widen the bar.
+Every route that shows the bar shows all five; guests get the sign-in form
+behind the fifth.
+
 **The phone does not mount what it does not show.** `useIsDesktop` gates the
 month-scale content on Review, so a phone builds neither 31-column grid until
 "Open the month grid" is tapped. `lg:hidden` would have hidden it while still

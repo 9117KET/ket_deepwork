@@ -44,16 +44,16 @@ async function signUp(t: T, email: string) {
 
 async function create(t: T) {
   const a = await signUp(t, 'a@example.com')
-  await a.as.mutation(api.challenges.createChallenge, { ...setup, timezone: BERLIN, displayName: 'Kin' })
-  const { token } = await a.as.mutation(api.challenges.createInvite, {})
-  return { a, token }
+  const { challengeId } = await a.as.mutation(api.challenges.createChallenge, { ...setup, timezone: BERLIN, displayName: 'Kin' })
+  const { token } = await a.as.mutation(api.challenges.createInvite, { challengeId })
+  return { a, token, challengeId }
 }
 
 async function pair(t: T, joinLists: { goals?: string[]; donts?: string[] } = {}) {
-  const { a, token } = await create(t)
+  const { a, token, challengeId } = await create(t)
   const b = await signUp(t, 'b@example.com')
   await b.as.mutation(api.challenges.acceptInvite, { token, timezone: NY, displayName: 'Sam', ...joinLists })
-  return { a, b, token }
+  return { a, b, token, challengeId }
 }
 
 /**
@@ -68,7 +68,7 @@ async function giveSamDistinctDont(t: T) {
   })
 }
 
-const me = async (u: { as: ReturnType<T['withIdentity']> }) => (await u.as.query(api.challenges.myChallenge, {}))!
+const me = async (u: { as: ReturnType<T['withIdentity']> }) => (((await u.as.query(api.challenges.myChallenges, {}))[0] ?? null))!
 
 describe('where the lists live', () => {
   test('the creator owns the lists; the challenge view carries none', async () => {
@@ -103,7 +103,7 @@ describe('where the lists live', () => {
 
   test('legacy: lists on the challenge row resolve to the creator, never to the invitee', async () => {
     const t = convexTest(schema, modules)
-    const { a, b } = await pair(t)
+    const { a, b, challengeId } = await pair(t)
     // Recreate the shape stored before per-member lists: lists on the challenge, none on members.
     await t.run(async (ctx) => {
       const challenge = (await ctx.db.query('challenges').collect())[0]!
@@ -116,8 +116,8 @@ describe('where the lists live', () => {
     expect((await me(b)).me).toMatchObject({ goals: [], donts: [] })
     expect((await me(b)).partner?.donts).toEqual([{ id: 'dont-1-1', text: 'Old dont' }])
     // A legacy confession still checks in, and the first edit moves the lists onto the member.
-    await a.as.mutation(api.challenges.checkIn, { date: '2026-10-22', summary: emptySummary(), dontsBroken: ['dont-1-1'] })
-    await a.as.mutation(api.challenges.updateMyCommitments, { goals: ['Old goal'], donts: [{ id: 'dont-1-1', text: 'Old dont, reworded' }] })
+    await a.as.mutation(api.challenges.checkIn, { challengeId, date: '2026-10-22', summary: emptySummary(), dontsBroken: ['dont-1-1'] })
+    await a.as.mutation(api.challenges.updateMyCommitments, { challengeId, goals: ['Old goal'], donts: [{ id: 'dont-1-1', text: 'Old dont, reworded' }] })
     expect((await me(a)).me.donts).toEqual([{ id: 'dont-1-1', text: 'Old dont, reworded' }])
   })
 })
@@ -125,9 +125,10 @@ describe('where the lists live', () => {
 describe('updateMyCommitments', () => {
   test('keeps ids through text edits, archives removed don\'ts, mints new ids', async () => {
     const t = convexTest(schema, modules)
-    const { a } = await pair(t)
+    const { a, challengeId } = await pair(t)
     const [first, second] = (await me(a)).me.donts
     const result = await a.as.mutation(api.challenges.updateMyCommitments, {
+      challengeId,
       goals: ['New goal', ' '],
       donts: [{ id: first!.id, text: 'No doomscrolling after 22:00' }, { text: 'No snooze' }],
     })
@@ -147,67 +148,68 @@ describe('updateMyCommitments', () => {
 
   test('an archived don\'t stays archived and does not count against the cap', async () => {
     const t = convexTest(schema, modules)
-    const { a } = await pair(t)
-    await a.as.mutation(api.challenges.updateMyCommitments, { goals: [], donts: [] })
+    const { a, challengeId } = await pair(t)
+    await a.as.mutation(api.challenges.updateMyCommitments, { challengeId, goals: [], donts: [] })
     const archived = (await me(a)).me.donts
     expect(archived.every((d) => d.archivedAt !== undefined)).toBe(true)
     const ten = Array.from({ length: 10 }, (_, i) => ({ text: `Dont ${i + 1}` }))
-    await a.as.mutation(api.challenges.updateMyCommitments, { goals: [], donts: ten })
+    await a.as.mutation(api.challenges.updateMyCommitments, { challengeId, goals: [], donts: ten })
     const view = (await me(a)).me.donts
     expect(view.filter((d) => d.archivedAt === undefined)).toHaveLength(10)
     expect(view.filter((d) => d.archivedAt !== undefined).map((d) => d.id)).toEqual(archived.map((d) => d.id))
     expect(new Set(view.map((d) => d.id)).size).toBe(view.length)
     // An archived id cannot be sent back as active: un-archiving is not a thing.
     await expect(
-      a.as.mutation(api.challenges.updateMyCommitments, { goals: [], donts: [{ id: archived[0]!.id, text: 'Back' }] }),
+      a.as.mutation(api.challenges.updateMyCommitments, { challengeId, goals: [], donts: [{ id: archived[0]!.id, text: 'Back' }] }),
     ).rejects.toThrow(/unknown don't/i)
   })
 
   test('rejects unknown ids, including the partner\'s', async () => {
     const t = convexTest(schema, modules)
-    const { a, b } = await pair(t, { donts: ['No sugar'] })
+    const { a, b, challengeId } = await pair(t, { donts: ['No sugar'] })
     await giveSamDistinctDont(t)
-    await expect(a.as.mutation(api.challenges.updateMyCommitments, { goals: [], donts: [{ id: 'made-up', text: 'x' }] })).rejects.toThrow(/unknown don't/i)
+    await expect(a.as.mutation(api.challenges.updateMyCommitments, { challengeId, goals: [], donts: [{ id: 'made-up', text: 'x' }] })).rejects.toThrow(/unknown don't/i)
     const sams = (await me(b)).me.donts[0]!.id
-    await expect(a.as.mutation(api.challenges.updateMyCommitments, { goals: [], donts: [{ id: sams, text: 'Hijack' }] })).rejects.toThrow(/unknown don't/i)
+    await expect(a.as.mutation(api.challenges.updateMyCommitments, { challengeId, goals: [], donts: [{ id: sams, text: 'Hijack' }] })).rejects.toThrow(/unknown don't/i)
     expect((await me(b)).me.donts).toEqual([{ id: sams, text: 'No sugar' }])
   })
 
   test('caps: at most 10 of each, 200 characters an item', async () => {
     const t = convexTest(schema, modules)
-    const { a } = await pair(t)
+    const { a, challengeId } = await pair(t)
     const eleven = Array.from({ length: 11 }, (_, i) => `Item ${i}`)
-    await expect(a.as.mutation(api.challenges.updateMyCommitments, { goals: eleven, donts: [] })).rejects.toThrow(/at most 10 goals/i)
+    await expect(a.as.mutation(api.challenges.updateMyCommitments, { challengeId, goals: eleven, donts: [] })).rejects.toThrow(/at most 10 goals/i)
     await expect(
-      a.as.mutation(api.challenges.updateMyCommitments, { goals: [], donts: eleven.map((text) => ({ text })) }),
+      a.as.mutation(api.challenges.updateMyCommitments, { challengeId, goals: [], donts: eleven.map((text) => ({ text })) }),
     ).rejects.toThrow(/at most 10 don'ts/i)
     await expect(
-      a.as.mutation(api.challenges.updateMyCommitments, { goals: [], donts: [{ text: 'x'.repeat(201) }] }),
+      a.as.mutation(api.challenges.updateMyCommitments, { challengeId, goals: [], donts: [{ text: 'x'.repeat(201) }] }),
     ).rejects.toThrow(/200 characters/)
-    await expect(a.as.mutation(api.challenges.updateMyCommitments, { goals: ['x'.repeat(201)], donts: [] })).rejects.toThrow(/200 characters/)
+    await expect(a.as.mutation(api.challenges.updateMyCommitments, { challengeId, goals: ['x'.repeat(201)], donts: [] })).rejects.toThrow(/200 characters/)
   })
 
   test('needs a signed-in member', async () => {
     const t = convexTest(schema, modules)
-    await expect(t.mutation(api.challenges.updateMyCommitments, { goals: [], donts: [] })).rejects.toThrow(/not authenticated/i)
+    const { challengeId } = await pair(t)
+    await expect(t.mutation(api.challenges.updateMyCommitments, { challengeId, goals: [], donts: [] })).rejects.toThrow(/not authenticated/i)
     const c = await signUp(t, 'c@example.com')
-    await expect(c.as.mutation(api.challenges.updateMyCommitments, { goals: [], donts: [] })).rejects.toThrow(/not in a challenge/i)
+    await expect(c.as.mutation(api.challenges.updateMyCommitments, { challengeId, goals: [], donts: [] })).rejects.toThrow(/not in this challenge/i)
   })
 })
 
 describe('checkIn against your own don\'ts', () => {
   test('a partner\'s don\'t is unknown; your own archived one still counts', async () => {
     const t = convexTest(schema, modules)
-    const { a, b } = await pair(t, { donts: ['No sugar'] })
+    const { a, b, challengeId } = await pair(t, { donts: ['No sugar'] })
     await giveSamDistinctDont(t)
     const kins = (await me(a)).me.donts
     const sams = (await me(b)).me.donts
     await expect(
-      a.as.mutation(api.challenges.checkIn, { date: '2026-10-22', summary: emptySummary(), dontsBroken: [sams[0]!.id] }),
+      a.as.mutation(api.challenges.checkIn, { challengeId, date: '2026-10-22', summary: emptySummary(), dontsBroken: [sams[0]!.id] }),
     ).rejects.toThrow(/unknown don't/i)
-    await a.as.mutation(api.challenges.updateMyCommitments, { goals: [], donts: [{ id: kins[0]!.id, text: kins[0]!.text }] })
-    await a.as.mutation(api.challenges.checkIn, { date: '2026-10-22', summary: emptySummary(), dontsBroken: [kins[1]!.id] })
-    const seen = await b.as.query(api.challenges.dayCards, { myDate: '2026-10-22', partnerDate: '2026-10-22' })
+    await a.as.mutation(api.challenges.updateMyCommitments, { challengeId, goals: [], donts: [{ id: kins[0]!.id, text: kins[0]!.text }] })
+    await a.as.mutation(api.challenges.checkIn, { challengeId, date: '2026-10-22', summary: emptySummary(), dontsBroken: [kins[1]!.id] })
+    const seen = await b.as.query(api.challenges.dayCards, { challengeId, myDate: '2026-10-22', partnerDate: '2026-10-22' })
     expect(seen?.partner?.dontsBroken).toEqual([kins[1]!.id])
     // The archived don't still resolves to its text through the partner's view.
     const partnerDonts = (await me(b)).partner!.donts
@@ -218,9 +220,9 @@ describe('checkIn against your own don\'ts', () => {
 describe('invitePreview', () => {
   test('carries the inviter\'s active goals and don\'t texts, without auth', async () => {
     const t = convexTest(schema, modules)
-    const { a, token } = await create(t)
+    const { a, token, challengeId } = await create(t)
     const [first] = (await me(a)).me.donts
-    await a.as.mutation(api.challenges.updateMyCommitments, { goals: ['Ship the thesis draft'], donts: [{ id: first!.id, text: first!.text }] })
+    await a.as.mutation(api.challenges.updateMyCommitments, { challengeId, goals: ['Ship the thesis draft'], donts: [{ id: first!.id, text: first!.text }] })
     const preview = await t.query(api.challenges.invitePreview, { token })
     expect(preview).toMatchObject({ status: 'ok', inviterName: 'Kin', inviterGoals: ['Ship the thesis draft'], inviterDonts: ['No doomscrolling'] })
   })

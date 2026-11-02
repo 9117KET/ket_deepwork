@@ -35,17 +35,19 @@ import { describeWorkLoss, summarizeTaskWork, taskWithDescendantIds } from "../.
 import { normalizeFocusBlockMinutes, suggestedBreakMinutes } from "../../domain/focusBlocks";
 import { computePerHabitStreaks, getAtRiskHabitIds, computeDailyDeepWorkMinutes } from "../../domain/stats";
 import { getOrderedTasksForSection } from "../../domain/taskUtils";
+import { computeDayCompletion } from "../../domain/dayCompletion";
 import { useUndoableActions } from "../../hooks/useUndoableActions";
 import { useTaskHandlers } from "../../hooks/useTaskHandlers";
+import { useTouchReorder } from "../../hooks/useTouchReorder";
+import { useCoarsePointer } from "../../hooks/useCoarsePointer";
 import { useCalendarDay } from "../../hooks/useCalendarDay";
 import { useWorkLog } from "../../hooks/useWorkLog";
 import { useTaskSync } from "../../hooks/useTaskSync";
-import { useChallenge } from "../../hooks/useChallenge";
+import { useChallenges } from "../../hooks/useChallenges";
 import { useChallengeSync } from "../../hooks/useChallengeSync";
-import { buildChallengeSummary } from "../../domain/challenge";
-import { activeDonts } from "../../domain/challengeCommitments";
-import { ChallengeCard } from "../challenge/ChallengeCard";
-import { CheckinSheet } from "../challenge/CheckinSheet";
+import { buildChallengeSummary, challengeProgress } from "../../domain/challenge";
+import { challengePillLabel } from "../../domain/challengeList";
+import { ChallengeTodayBlock } from "../challenge/ChallengeTodayBlock";
 import { usePersistentState, getOrCreateDay } from "../../storage/localStorageState";
 import { useAuth } from "../../contexts/AuthContext";
 import { removeTaskFromGoogle, scheduleTaskInCalendar, unscheduleTaskFromCalendar } from "../../services/calendarSyncService";
@@ -161,7 +163,7 @@ export function DayPlanner() {
     () => computeDailyDeepWorkMinutes(appState.days[selectedDay]),
     [appState, selectedDay],
   );
-  const rootTasks = useMemo(() => dayState.tasks.filter((t) => !t.parentId), [dayState.tasks]);
+  const dayCompletion = useMemo(() => computeDayCompletion(dayState.tasks), [dayState.tasks]);
   const accountabilityStats = useMemo(
     () => computeAccountabilityStats(appState.activeDays ?? [], appState.days),
     [appState.activeDays, appState.days],
@@ -172,6 +174,9 @@ export function DayPlanner() {
     handleDragStart,
     handleDragEnd,
     handleDrop,
+    handleMoveTask,
+    handleSubtaskDragStart,
+    handleSubtaskDragEnd,
     handleAddTask,
     handleToggleTask: handleToggleTaskBase,
     handleDeleteTask,
@@ -217,18 +222,15 @@ export function DayPlanner() {
   // ── Accountability challenge ──────────────────────────────────────────────
   // The partner never reads this planner; they read the summary published
   // here after every edit. Off while hydrating, like the Google mirror.
-  const challenge = useChallenge(now);
-  const challengeActive = challenge.status === "active";
+  // One summary, published once; the server fans it out to every running challenge.
+  const { active: activeChallenges } = useChallenges();
+  const challengeActive = activeChallenges.length > 0;
   const challengeSummary = useMemo(
     () => (challengeActive ? buildChallengeSummary(dayState, habits) : null),
     [challengeActive, dayState, habits],
   );
   useChallengeSync({ date: selectedDay, summary: challengeSummary, enabled: challengeActive && !isHydrating && isToday });
-  const [checkinOpen, setCheckinOpen] = useState(false);
-  const challengeDayLabel =
-    challengeActive && challenge.progress?.phase === "active"
-      ? `Day ${challenge.progress.dayNumber}/${challenge.progress.totalDays} · ${challenge.progress.daysLeft} left`
-      : undefined;
+  const challengeDayLabel = challengePillLabel(activeChallenges.map((e) => challengeProgress(e.challenge, todayIso())));
 
   const handleToggleHabit = useCallback(
     (habitId: string, value: boolean) => {
@@ -334,6 +336,27 @@ export function DayPlanner() {
     },
     [dayState.tasks, timer],
   );
+
+  // ── Moving tasks ──────────────────────────────────────────────────────────
+  /** Said when a subtask is dropped outside its parent: nothing moved, and why. */
+  const SUBTASK_STAYS_NOTICE = "Subtasks stay inside their task. Use Move to another parent.";
+  const handleDropOrRefuse = (sectionId: TaskSectionId, insertIndex: number) => {
+    if (handleDrop(sectionId, insertIndex) === "refusedSubtask") setBlockNotice(SUBTASK_STAYS_NOTICE);
+  };
+  /** The sheet's "Move to Top 3" / "Move to Tasks": the task and its subtasks, at the end. */
+  const handleMoveToEnd = (taskId: string, from: TaskSectionId, to: TaskSectionId) =>
+    handleMoveTask(from, taskId, to, Number.MAX_SAFE_INTEGER);
+  // A finger drags by press-and-hold; a mouse keeps HTML5 drag and drop.
+  const isCoarsePointer = useCoarsePointer();
+  const touchReorder = useTouchReorder({
+    enabled: isCoarsePointer,
+    onDropRoot: (item, toSectionId, index) => {
+      handleDragStart(item.sectionId, item.taskId);
+      handleDrop(toSectionId, index);
+    },
+    onDropSubtask: handleReorderSubtask,
+    onRefuseSubtask: () => setBlockNotice(SUBTASK_STAYS_NOTICE),
+  });
 
   useEffect(() => {
     if (!blockNotice) return;
@@ -593,7 +616,12 @@ export function DayPlanner() {
       draggedTask={draggedTask}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
-      onDrop={(insertIndex: number) => handleDrop(section.id, insertIndex)}
+      onDrop={(insertIndex: number) => handleDropOrRefuse(section.id, insertIndex)}
+      onMoveToTop3={(taskId) => handleMoveToEnd(taskId, section.id, "mustDo")}
+      touch={touchReorder}
+      onSubtaskDragStart={handleSubtaskDragStart}
+      onSubtaskDragEnd={handleSubtaskDragEnd}
+      onSubtaskDropRefused={() => setBlockNotice(SUBTASK_STAYS_NOTICE)}
       onAddTask={(title) => handleAddTask(section.id, title)}
       onAddTaskAbove={(beforeTaskId) => handleAddTaskAbove(section.id, beforeTaskId)}
       onAddTaskBelow={(afterTaskId) => handleAddTaskBelow(section.id, afterTaskId)}
@@ -648,8 +676,7 @@ export function DayPlanner() {
           <div data-tour="date-nav">
             <DayHeader
               dateLabel={formatDateLabel(selectedDay)}
-              completedTaskCount={rootTasks.filter((t) => t.isDone).length}
-              totalTaskCount={rootTasks.length}
+              completion={dayCompletion}
               streak={accountabilityStats.streak}
               isToday={isToday}
               onPrevDay={() => setSelectedDay((current) => addDays(current, -1))}
@@ -662,7 +689,7 @@ export function DayPlanner() {
 
           {isToday && challengeActive && challengeSummary && (
             <ErrorBoundary fallback={null} resetKeys={[selectedDay]}>
-              <ChallengeCard state={challenge} summary={challengeSummary} date={selectedDay} onOpenCheckin={() => setCheckinOpen(true)} />
+              <ChallengeTodayBlock active={activeChallenges} now={now} summary={challengeSummary} date={selectedDay} />
             </ErrorBoundary>
           )}
 
@@ -709,7 +736,9 @@ export function DayPlanner() {
               onSchedule={setScheduleTaskId}
               onDragStart={(taskId) => handleDragStart("mustDo", taskId)}
               onDragEnd={handleDragEnd}
-              onDropAt={(insertIndex) => handleDrop("mustDo", insertIndex)}
+              onDropAt={(insertIndex) => handleDropOrRefuse("mustDo", insertIndex)}
+              onMoveToTasks={(taskId) => handleMoveToEnd(taskId, "mustDo", LIST_SECTION_ID)}
+              touch={touchReorder}
               onMoveUp={(taskId) => handleReorderTask(taskId, "mustDo", "up")}
               onMoveDown={(taskId) => handleReorderTask(taskId, "mustDo", "down")}
               draggedTaskId={draggedTask?.sectionId === "mustDo" ? draggedTask.taskId : null}
@@ -841,19 +870,6 @@ export function DayPlanner() {
           completedBlocksToday={completedBlocksToday}
           deepMinutesToday={deepWorkMinutesToday}
           onLeave={() => setFocusDismissed(true)}
-        />
-      )}
-
-      {checkinOpen && challenge.info && challenge.progress && challengeSummary && (
-        <CheckinSheet
-          challengeName={challenge.info.challenge.name}
-          donts={activeDonts(challenge.info.me.donts)}
-          displayName={challenge.info.me.displayName}
-          progress={challenge.progress}
-          date={selectedDay}
-          summary={challengeSummary}
-          existing={challenge.mine}
-          onClose={() => setCheckinOpen(false)}
         />
       )}
 
