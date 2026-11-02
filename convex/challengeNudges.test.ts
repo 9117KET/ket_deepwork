@@ -40,10 +40,10 @@ async function signUp(t: ReturnType<typeof convexTest>, email: string) {
 async function pair(t: ReturnType<typeof convexTest>, overrides: Partial<typeof setup> = {}) {
   const a = await signUp(t, 'a@example.com')
   const b = await signUp(t, 'b@example.com')
-  await a.as.mutation(api.challenges.createChallenge, { ...setup, ...overrides, timezone: BERLIN, displayName: 'Kin' })
-  const { token } = await a.as.mutation(api.challenges.createInvite, {})
+  const { challengeId } = await a.as.mutation(api.challenges.createChallenge, { ...setup, ...overrides, timezone: BERLIN, displayName: 'Kin' })
+  const { token } = await a.as.mutation(api.challenges.createInvite, { challengeId })
   await b.as.mutation(api.challenges.acceptInvite, { token, timezone: NY, displayName: 'Sam' })
-  return { a, b }
+  return { a, b, challengeId }
 }
 
 beforeEach(() => {
@@ -60,20 +60,20 @@ afterEach(() => {
 describe('nudgePartner allowance', () => {
   test('three nudges an hour apart go out, the fourth is refused', async () => {
     const t = convexTest(schema, modules)
-    const { a } = await pair(t)
+    const { a, challengeId } = await pair(t)
     // 10:00 Berlin is 04:00 New York: Sam owes the plan all through this.
     vi.useFakeTimers({ now: at('2026-10-22', '10:00', BERLIN) })
-    const first = await a.as.mutation(api.challenges.nudgePartner, {})
+    const first = await a.as.mutation(api.challenges.nudgePartner, { challengeId })
     await t.finishAllScheduledFunctions(vi.runAllTimers)
     expect(first).toEqual({ left: 2, nextAt: at('2026-10-22', '11:00', BERLIN) })
 
     vi.setSystemTime(at('2026-10-22', '11:00', BERLIN))
-    const second = await a.as.mutation(api.challenges.nudgePartner, {})
+    const second = await a.as.mutation(api.challenges.nudgePartner, { challengeId })
     await t.finishAllScheduledFunctions(vi.runAllTimers)
     expect(second.left).toBe(1)
 
     vi.setSystemTime(at('2026-10-22', '12:30', BERLIN))
-    const third = await a.as.mutation(api.challenges.nudgePartner, {})
+    const third = await a.as.mutation(api.challenges.nudgePartner, { challengeId })
     await t.finishAllScheduledFunctions(vi.runAllTimers)
     expect(third).toEqual({ left: 0, nextAt: null })
     expect(sendMail).toHaveBeenCalledTimes(3)
@@ -82,29 +82,29 @@ describe('nudgePartner allowance', () => {
     }
 
     vi.setSystemTime(at('2026-10-22', '15:00', BERLIN))
-    await expect(a.as.mutation(api.challenges.nudgePartner, {})).rejects.toThrow(/nudged them 3 times today/i)
+    await expect(a.as.mutation(api.challenges.nudgePartner, { challengeId })).rejects.toThrow(/nudged them 3 times today/i)
     await t.finishAllScheduledFunctions(vi.runAllTimers)
     expect(sendMail).toHaveBeenCalledTimes(3)
 
-    const cards = await a.as.query(api.challenges.dayCards, { myDate: '2026-10-22', partnerDate: '2026-10-22' })
+    const cards = await a.as.query(api.challenges.dayCards, { challengeId, myDate: '2026-10-22', partnerDate: '2026-10-22' })
     expect(cards?.mine?.nudgesSentAt).toHaveLength(3)
   })
 
   test('a second nudge inside the hour is refused with the wait', async () => {
     const t = convexTest(schema, modules)
-    const { a } = await pair(t)
+    const { a, challengeId } = await pair(t)
     vi.useFakeTimers({ now: at('2026-10-22', '10:00', BERLIN) })
-    await a.as.mutation(api.challenges.nudgePartner, {})
+    await a.as.mutation(api.challenges.nudgePartner, { challengeId })
     await t.finishAllScheduledFunctions(vi.runAllTimers)
     vi.setSystemTime(at('2026-10-22', '10:10', BERLIN))
-    await expect(a.as.mutation(api.challenges.nudgePartner, {})).rejects.toThrow(/again in 50 min/i)
+    await expect(a.as.mutation(api.challenges.nudgePartner, { challengeId })).rejects.toThrow(/again in 50 min/i)
     await t.finishAllScheduledFunctions(vi.runAllTimers)
     expect(sendMail).toHaveBeenCalledTimes(1)
   })
 
   test('a row holding only the legacy stamp counts as one nudge', async () => {
     const t = convexTest(schema, modules)
-    const { a } = await pair(t)
+    const { a, challengeId } = await pair(t)
     const legacyAt = at('2026-10-22', '08:00', BERLIN)
     await t.run(async (ctx) => {
       const member = await ctx.db
@@ -123,35 +123,35 @@ describe('nudgePartner allowance', () => {
       })
     })
     vi.useFakeTimers({ now: at('2026-10-22', '08:30', BERLIN) })
-    await expect(a.as.mutation(api.challenges.nudgePartner, {})).rejects.toThrow(/again in 30 min/i)
+    await expect(a.as.mutation(api.challenges.nudgePartner, { challengeId })).rejects.toThrow(/again in 30 min/i)
 
     vi.setSystemTime(at('2026-10-22', '09:00', BERLIN))
-    const res = await a.as.mutation(api.challenges.nudgePartner, {})
+    const res = await a.as.mutation(api.challenges.nudgePartner, { challengeId })
     await t.finishAllScheduledFunctions(vi.runAllTimers)
     expect(res.left).toBe(1)
     expect(sendMail).toHaveBeenCalledTimes(1)
-    const cards = await a.as.query(api.challenges.dayCards, { myDate: '2026-10-22', partnerDate: '2026-10-22' })
+    const cards = await a.as.query(api.challenges.dayCards, { challengeId, myDate: '2026-10-22', partnerDate: '2026-10-22' })
     expect(cards?.mine?.nudgesSentAt).toEqual([legacyAt, at('2026-10-22', '09:00', BERLIN)])
   })
 
   test('a partner who has locked in is not owed a nudge', async () => {
     const t = convexTest(schema, modules)
-    const { a, b } = await pair(t)
+    const { a, b, challengeId } = await pair(t)
     vi.useFakeTimers({ now: at('2026-10-22', '15:00', BERLIN) })
     await b.as.mutation(api.challenges.lockInPlan, { date: '2026-10-22', summary: emptySummary() })
-    await expect(a.as.mutation(api.challenges.nudgePartner, {})).rejects.toThrow(/already locked in/i)
+    await expect(a.as.mutation(api.challenges.nudgePartner, { challengeId })).rejects.toThrow(/already locked in/i)
     await t.finishAllScheduledFunctions(vi.runAllTimers)
     expect(sendMail).not.toHaveBeenCalled()
-    const cards = await a.as.query(api.challenges.dayCards, { myDate: '2026-10-22', partnerDate: '2026-10-22' })
+    const cards = await a.as.query(api.challenges.dayCards, { challengeId, myDate: '2026-10-22', partnerDate: '2026-10-22' })
     expect(cards?.mine).toBeNull()
   })
 
   test('refused outside the challenge span on the partner clock', async () => {
     const t = convexTest(schema, modules)
-    const { a } = await pair(t, { startDate: '2026-10-23' })
+    const { a, challengeId } = await pair(t, { startDate: '2026-10-23' })
     // 05:00 Berlin on the 23rd is 23:00 New York on the 22nd: Sam's day is before the start.
     vi.useFakeTimers({ now: at('2026-10-23', '05:00', BERLIN) })
-    await expect(a.as.mutation(api.challenges.nudgePartner, {})).rejects.toThrow(/not running today/i)
+    await expect(a.as.mutation(api.challenges.nudgePartner, { challengeId })).rejects.toThrow(/not running today/i)
     expect(sendMail).not.toHaveBeenCalled()
   })
 })

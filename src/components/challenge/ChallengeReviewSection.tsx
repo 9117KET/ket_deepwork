@@ -23,7 +23,7 @@ export function ChallengeReviewSection({ weekDates, today }: ChallengeReviewSect
   const active = state.status === 'active'
   const weekEnd = weekDates[6]!
   const until = weekEnd < today ? weekEnd : addDays(today, -1)
-  const history = useChallengeHistory(active, until)
+  const history = useChallengeHistory(active ? state.info?.challenge.id : null, until)
   if (!active || !state.info) return null
   const { challenge, partner } = state.info
   // The viewer's own list, archived included, so a don't removed since still reads as itself.

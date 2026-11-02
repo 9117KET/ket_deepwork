@@ -42,10 +42,10 @@ async function signUp(t: T, email: string) {
 async function pair(t: T) {
   const a = await signUp(t, 'a@example.com')
   const b = await signUp(t, 'b@example.com')
-  await a.as.mutation(api.challenges.createChallenge, { ...setup, timezone: LONDON, displayName: 'Kin' })
-  const { token } = await a.as.mutation(api.challenges.createInvite, {})
+  const { challengeId } = await a.as.mutation(api.challenges.createChallenge, { ...setup, timezone: LONDON, displayName: 'Kin' })
+  const { token } = await a.as.mutation(api.challenges.createInvite, { challengeId })
   await b.as.mutation(api.challenges.acceptInvite, { token, timezone: TOKYO, displayName: 'Sam' })
-  return { a, b, token }
+  return { a, b, token, challengeId }
 }
 
 /** The data of the `ConvexError` a call rejects with. */
@@ -79,9 +79,9 @@ describe('refusals are sentences', () => {
 
   test('a nudge refused by the rules carries its own code', async () => {
     const t = convexTest(schema, modules)
-    const { a, b } = await pair(t)
+    const { a, b, challengeId } = await pair(t)
     await b.as.mutation(api.challenges.lockInPlan, { date: '2026-10-22', summary: emptySummary() })
-    expect(await refusal(a.as.mutation(api.challenges.nudgePartner, {}))).toEqual({
+    expect(await refusal(a.as.mutation(api.challenges.nudgePartner, { challengeId }))).toEqual({
       code: NUDGE_RULE_CODE,
       message: 'They have already locked in their plan',
     })
@@ -89,9 +89,9 @@ describe('refusals are sentences', () => {
 })
 
 describe('the finished season stays readable', () => {
-  test('an ended challenge is still returned; a new one can be started over it', async () => {
+  test('an ended challenge is still returned; a new one can be started beside it', async () => {
     const t = convexTest(schema, modules)
-    const { a } = await pair(t)
+    const { a, challengeId } = await pair(t)
     await a.as.mutation(api.challenges.lockInPlan, { date: '2026-10-22', summary: emptySummary() })
     await t.run(async (ctx) => {
       const [challenge] = await ctx.db.query('challenges').collect()
@@ -102,30 +102,40 @@ describe('the finished season stays readable', () => {
     expect(ended?.challenge).toMatchObject({ name: 'Q4 push', status: 'ended' })
     expect(ended?.partner).toMatchObject({ displayName: 'Sam' })
     expect(ended?.invite).toBeNull()
-    const hist = await a.as.query(api.challenges.history, { toDate: '2026-12-31' })
+    const hist = await a.as.query(api.challenges.history, { challengeId, toDate: '2026-12-31' })
     expect(hist?.mine.map((d) => d.date)).toEqual(['2026-10-22'])
-    expect(await a.as.query(api.challenges.dayCards, { myDate: '2026-10-22', partnerDate: '2026-10-22' })).not.toBeNull()
+    expect(await a.as.query(api.challenges.dayCards, { challengeId, myDate: '2026-10-22', partnerDate: '2026-10-22' })).not.toBeNull()
 
     // Writes see only active challenges: the ended one cannot be written to, and does not block a new one.
     await expect(a.as.mutation(api.challenges.lockInPlan, { date: '2026-10-22', summary: emptySummary() })).rejects.toThrow(/not in a challenge/i)
+    await expect(a.as.mutation(api.challenges.lockInPlan, { challengeId, date: '2026-10-22', summary: emptySummary() })).rejects.toThrow(/challenge has ended/i)
+    await expect(
+      a.as.mutation(api.challenges.checkIn, { challengeId, date: '2026-10-22', summary: emptySummary(), dontsBroken: [] }),
+    ).rejects.toThrow(/challenge has ended/i)
     await a.as.mutation(api.challenges.createChallenge, { ...setup, name: 'Next', timezone: LONDON, displayName: 'Kin' })
     expect((await a.as.query(api.challenges.myChallenge, {}))?.challenge).toMatchObject({ name: 'Next', status: 'active' })
+    // Both stay listed: the active one first, the finished season after it.
+    const all = await a.as.query(api.challenges.myChallenges, {})
+    expect(all.map((e) => [e.challenge.name, e.challenge.status])).toEqual([
+      ['Next', 'active'],
+      ['Q4 push', 'ended'],
+    ])
   })
 })
 
 describe('history to the partner\'s yesterday', () => {
   test('partnerToDate reaches the partner row on the viewer\'s today', async () => {
     const t = convexTest(schema, modules)
-    const { a, b } = await pair(t)
+    const { a, b, challengeId } = await pair(t)
     // 20:00 London on 22 Oct is 04:00 on 23 Oct in Tokyo: Sam checks in for their 22nd.
     vi.setSystemTime(at('2026-10-22', '20:00', LONDON))
-    await b.as.mutation(api.challenges.checkIn, { date: '2026-10-22', summary: emptySummary(), dontsBroken: [] })
+    await b.as.mutation(api.challenges.checkIn, { challengeId, date: '2026-10-22', summary: emptySummary(), dontsBroken: [] })
 
     // Kin's yesterday is the 21st; Sam's yesterday is the 22nd.
-    const both = await a.as.query(api.challenges.history, { toDate: '2026-10-21', partnerToDate: '2026-10-22' })
+    const both = await a.as.query(api.challenges.history, { challengeId, toDate: '2026-10-21', partnerToDate: '2026-10-22' })
     expect(both?.partner.map((d) => d.date)).toEqual(['2026-10-22'])
     expect(both?.mine).toEqual([])
-    const same = await a.as.query(api.challenges.history, { toDate: '2026-10-21' })
+    const same = await a.as.query(api.challenges.history, { challengeId, toDate: '2026-10-21' })
     expect(same?.partner).toEqual([])
   })
 })
@@ -145,18 +155,18 @@ describe('the planner publishes only today', () => {
 
   test('lock-in takes today only; check-in today or yesterday', async () => {
     const t = convexTest(schema, modules)
-    const { a } = await pair(t)
+    const { a, challengeId } = await pair(t)
     expect(await refusal(a.as.mutation(api.challenges.lockInPlan, { date: '2026-10-21', summary: emptySummary() }))).toEqual({
       code: 'challenge',
       message: 'You can only lock in today',
     })
     await a.as.mutation(api.challenges.lockInPlan, { date: '2026-10-22', summary: emptySummary() })
-    await a.as.mutation(api.challenges.checkIn, { date: '2026-10-21', summary: emptySummary(), dontsBroken: [] })
+    await a.as.mutation(api.challenges.checkIn, { challengeId, date: '2026-10-21', summary: emptySummary(), dontsBroken: [] })
     await expect(
-      a.as.mutation(api.challenges.checkIn, { date: '2026-10-20', summary: emptySummary(), dontsBroken: [] }),
+      a.as.mutation(api.challenges.checkIn, { challengeId, date: '2026-10-20', summary: emptySummary(), dontsBroken: [] }),
     ).rejects.toThrow(/only check in for today or yesterday/i)
     await expect(
-      a.as.mutation(api.challenges.checkIn, { date: '2026-10-23', summary: emptySummary(), dontsBroken: [] }),
+      a.as.mutation(api.challenges.checkIn, { challengeId, date: '2026-10-23', summary: emptySummary(), dontsBroken: [] }),
     ).rejects.toThrow(/only check in for today or yesterday/i)
   })
 })
@@ -185,12 +195,12 @@ describe('creation limits', () => {
 
   test('blank don\'t rows do not count against the cap', async () => {
     const t = convexTest(schema, modules)
-    const { a } = await pair(t)
+    const { a, challengeId } = await pair(t)
     const ten = Array.from({ length: 10 }, (_, i) => ({ text: `Dont ${i + 1}` }))
-    const saved = await a.as.mutation(api.challenges.updateMyCommitments, { goals: [], donts: [...ten, { text: '   ' }] })
+    const saved = await a.as.mutation(api.challenges.updateMyCommitments, { challengeId, goals: [], donts: [...ten, { text: '   ' }] })
     expect(saved.donts).toHaveLength(10)
     await expect(
-      a.as.mutation(api.challenges.updateMyCommitments, { goals: [], donts: [...ten, { text: 'Eleven' }] }),
+      a.as.mutation(api.challenges.updateMyCommitments, { challengeId, goals: [], donts: [...ten, { text: 'Eleven' }] }),
     ).rejects.toThrow(/at most 10 don'ts/i)
   })
 })

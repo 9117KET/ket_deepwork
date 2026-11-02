@@ -4,8 +4,10 @@ import { authTables } from "@convex-dev/auth/server"
 import {
   challengeStatusValidator,
   dontValidator,
+  endedReasonValidator,
   remindersSentValidator,
   summaryValidator,
+  warningValidator,
 } from "./_shared/challengeValidators"
 
 export default defineSchema({
@@ -172,8 +174,15 @@ export default defineSchema({
     checkinDeadline: v.string(),
     createdBy: v.string(),
     createdAt: v.number(),
-    /** The one switch the reminder cron reads; "ended" once everyone has left or the end date has passed. */
+    /**
+     * The one switch the reminder cron reads; "ended" once the creator or
+     * everyone has left, a member went inactive, or the end date has passed.
+     */
     status: challengeStatusValidator,
+    endedAt: v.optional(v.number()),
+    endedReason: v.optional(endedReasonValidator),
+    /** An inactivity warning standing against one member; a sub-state of "active". */
+    warning: v.optional(warningValidator),
   }).index("by_status", ["status"]),
 
   challengeMembers: defineTable({
@@ -188,9 +197,14 @@ export default defineSchema({
     /** Removed don'ts stay here with `archivedAt`, so old confessions still resolve. */
     donts: v.optional(v.array(dontValidator)),
     commitmentsUpdatedAt: v.optional(v.number()),
+    /** The member's last lock-in or check-in (the admin list's "last activity"). */
+    lastActedAt: v.optional(v.number()),
+    /** The member's local date at join. Older rows derive it from `joinedAt` in `timezone`. */
+    joinedDate: v.optional(v.string()),
   })
     .index("by_user", ["userId"])
-    .index("by_challenge", ["challengeId"]),
+    .index("by_challenge", ["challengeId"])
+    .index("by_user_challenge", ["userId", "challengeId"]),
 
   challengeInvites: defineTable({
     challengeId: v.id("challenges"),

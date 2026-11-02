@@ -54,6 +54,8 @@ In the Convex dashboard (Project Settings -> Environment Variables) set:
 - `SITE_URL` (your deployed URL, e.g. `https://ket-deepwork.vercel.app`)
 - `GMAIL_SMTP_USER` / `GMAIL_SMTP_APP_PASSWORD` (challenge reminder emails; see
   `docs/DEPLOYMENT.md` step 3)
+- `ADMIN_EMAILS` (comma-separated; who may read the admin list of every
+  challenge; unset means nobody)
 
 ## Architecture
 
@@ -203,6 +205,20 @@ bookkeeping or a `userId`. Only the member's own today is published:
 planner syncs only while it shows today, so browsing another day never
 rewrites what the partner saw.
 
+**Many challenges, each private.** A user may be in any number of active
+challenges at once (`MAX_ACTIVE_MEMBERSHIPS` = 20; the 21st is refused), each
+with its own partner and at most two members. Nothing returned for one
+challenge says the partner is in any other: no count, no name. The summary is
+published once and fanned out: `syncDaySummary` keeps its args and writes the
+row in every active challenge whose span covers the date. The lock-in is one
+act for the whole day: `lockInPlan` without a `challengeId` stamps every
+active challenge, with one it stamps that one. Check-in and nudge are per
+challenge, because don'ts and partners differ, and every other write takes a
+`challengeId` and goes through `requireMember` ("You are not in this
+challenge", "This challenge has ended"). Those changed function arguments
+make this a two-sided deploy: backend first (`npx convex deploy`), then push
+`main`; see `docs/DEPLOYMENT.md`.
+
 **Refusals are sentences.** Every expected state (validation, invite states,
 "not in a challenge", nudge rules) throws `ConvexError({ code, message })`
 through `fail()`, because Convex redacts a plain `Error` to "Server Error" in
@@ -212,15 +228,35 @@ carry `code: "nudgeRule"`, which the card shows as a quiet status. Only
 
 **Tables** (`convex/schema.ts`, validators shared via
 `convex/_shared/challengeValidators.ts` so arg and table cannot drift):
-`challenges` (span, local deadlines, `status` — the cron's one switch),
-`challengeMembers` (one per user, with an IANA `timezone` refreshed on every
-sync, because the two are in different zones, and the member's own `goals`
-and `donts`), `challengeInvites` (7-day token, one seat), `challengeDays` (one
-row per member per day: summary, `planSetAt`, `checkinAt`, note,
-`dontsBroken`, `remindersSent`).
-Legacy `shareTokens` is untouched. A user is in at most one active challenge.
-A season runs at most 366 days, and the check-in deadline must fall after
-21:30, where the check-in reminders start.
+`challenges` (span, local deadlines, `status` — the cron's one switch, with
+`endedReason` and `endedAt` once it ends, and an inactivity `warning` while
+active), `challengeMembers` (one per user per challenge, indexed
+`by_user_challenge`, with an IANA `timezone` refreshed on every sync, because
+the two are in different zones, the member's own `goals` and `donts`,
+`joinedDate` and `lastActedAt`), `challengeInvites` (7-day token, one seat),
+`challengeDays` (one row per member per day: summary, `planSetAt`,
+`checkinAt`, note, `dontsBroken`, `remindersSent`).
+Legacy `shareTokens` is untouched. A season runs at most 366 days, and the
+check-in deadline must fall after 21:30, where the check-in reminders start.
+
+**Leaving.** The creator leaving ends the challenge for both at once
+(`endedReason: "creatorLeft"`, or `"allLeft"` when they were alone); their
+member row is kept, so the season stays readable to both. Anyone else
+leaving deletes only their own member row; the challenge runs on with one
+member and can invite again, and the last one out ends it (`"allLeft"`).
+`challengeDays` rows are never deleted. Season end is `"seasonOver"`,
+`endChallenge` by hand is `"manual"`.
+
+**Inactivity closes a challenge.** The sweep judges each member on their own
+clock over full local days only (yesterday backwards, never today), from the
+later of the start and their join date. A day with no lock-in and no
+check-in is missed, and a day with no row at all counts the same. Three
+missed days in a row put a `warning` on the challenge and email both members;
+the warned member gets no plan or check-in reminder while it stands. Their
+next lock-in or check-in clears it in the same mutation. A fourth missed day,
+a full day after the warning, closes the challenge (`"inactive"`) and emails
+both. The rules are pure in `convex/_shared/challengeInactivity.ts`
+(`countableDates`, `missedRun`, `inactivityDecision`).
 
 **Goals and don'ts are per member.** Each member sets theirs on create or
 join and edits them any time (`updateMyCommitments`); the partner reads them
@@ -231,15 +267,20 @@ via `memberView` and cannot change them. A removed don't is archived
 never written again: a creator whose member row has no lists falls back to
 them (`memberCommitments`), which is the whole migration.
 
-**Reads are split hot/cold here too.** `myChallenge` and `dayCards` are small
-and live; `history` returns the whole season and callers pass
-`toDate = yesterday`, so today's debounced writes never invalidate it.
-`history` takes two dates, `toDate` for the viewer and `partnerToDate` for the
-partner, because each one's yesterday is on their own clock; with one date a
-partner a day ahead leaves a hole in the grid. Reads fall back to the last
-ended season (`currentMembership`), so a finished challenge stays readable on
-`/challenge`, read-only, with "Start a new challenge"; writes see only an
-active one, so an ended season never blocks the next.
+**Reads are split hot/cold here too.** `myChallenges` (every membership,
+active first, at most 50), `dayCards` (one challenge) and `todayCards` (every
+active challenge's today in one subscription) are small and live; `history`
+returns one challenge's whole season and callers pass `toDate = yesterday`,
+so today's debounced writes never invalidate it. `history` takes two dates,
+`toDate` for the viewer and `partnerToDate` for the partner, because each
+one's yesterday is on their own clock; with one date a partner a day ahead
+leaves a hole in the grid. Reads accept an ended challenge, so a finished
+season stays readable, read-only; writes see only an active one, so an ended
+season never blocks the next. `myChallenge` (the newest active membership,
+else the newest ended one) is deprecated and kept only until the client
+moves to `myChallenges`. `adminStatus` and `adminListChallenges` give an
+`ADMIN_EMAILS` address a read-only list of every challenge with member
+emails and last activity.
 
 **Reminders are email from the user's own Gmail** (`convex/email.ts`, a
 `"use node"` nodemailer action; swap to Resend in `send()` once a domain
@@ -249,6 +290,11 @@ transaction (a failed send costs one email, never doubles one), then the
 action sends. The rules are pure in `convex/_shared/challengeReminders.ts`:
 after the plan deadline every 120 min, four at most; from 21:30 local every
 90 min for the check-in, two at most; each judged on the member's own clock.
+One missed act, one email: the caps and spacing are judged per row, but the
+sweep groups by member, so someone owing the same lock-in in three challenges
+gets one plan email naming all three, and `remindersSent` is recorded on every
+row it covers. Inactivity runs first in the same pass, and a challenge it
+closes gets nothing further. Every email links to `/challenge/<id>`.
 `nudgePartner` schedules one email from inside the mutation: up to three per
 nudger-local day, at least an hour apart, only while the partner owes the day
 something (pure rules in `convex/_shared/challengeNudges.ts`, shared with the
@@ -274,7 +320,9 @@ challenge section. The mobile tab bar is unchanged. Guests cannot take part.
 
 **Tests:** `npm test` covers `src/domain/challenge.test.ts`;
 `npm run test:convex` covers `convex/challenges.test.ts`,
-`convex/reminders.test.ts` (mocked nodemailer) and the reminder rules. A
+`convex/challengesMulti.test.ts` (many challenges, privacy, admin),
+`convex/challengeInactivity.test.ts` and `convex/reminders.test.ts` (mocked
+nodemailer), and the reminder and inactivity rules. A
 two-account flow cannot run in e2e (guest-only seeding).
 
 ### Responsive foundations

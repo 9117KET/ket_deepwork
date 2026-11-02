@@ -12,6 +12,7 @@
 import { useQuery } from "convex/react"
 import type { FunctionReturnType } from "convex/server"
 import { api } from "../../convex/_generated/api"
+import type { Id } from "../../convex/_generated/dataModel"
 import { useAuth } from "../contexts/AuthContext"
 import { addDays, todayIso } from "../domain/dateUtils"
 import { challengeProgress, type ChallengeProgress } from "../domain/challenge"
@@ -45,7 +46,7 @@ export function useChallenge(now?: number): ChallengeState {
   const info = useQuery(api.challenges.myChallenge, user ? {} : "skip")
   const myDate = todayIso()
   const partnerDate = info?.partner && now != null ? localDateIn(info.partner.timezone, now) : myDate
-  const cards = useQuery(api.challenges.dayCards, info ? { myDate, partnerDate } : "skip")
+  const cards = useQuery(api.challenges.dayCards, info ? { challengeId: info.challenge.id, myDate, partnerDate } : "skip")
 
   const status: ChallengeStatus =
     !user ? "signedOut" : info === undefined ? "loading" : info === null ? "none" : info.challenge.status === "ended" ? "ended" : "active"
@@ -65,12 +66,14 @@ export function useChallenge(now?: number): ChallengeState {
  * rewritten on every edit, and this read set should not be. The partner's
  * rows run to `partnerUntilIso` (their own yesterday) when given, so a
  * partner a day ahead leaves no hole between history and their card.
+ * Skipped while `challengeId` is null. A plain string is accepted (a route
+ * param): an id that is not a challenge of the viewer's reads as null.
  */
 export function useChallengeHistory(
-  enabled: boolean,
+  challengeId: Id<"challenges"> | string | null | undefined,
   untilIso: string = addDays(todayIso(), -1),
   partnerUntilIso?: string,
 ): ChallengeHistory | null | undefined {
-  const args = partnerUntilIso && partnerUntilIso !== untilIso ? { toDate: untilIso, partnerToDate: partnerUntilIso } : { toDate: untilIso }
-  return useQuery(api.challenges.history, enabled ? args : "skip")
+  const dates = partnerUntilIso && partnerUntilIso !== untilIso ? { toDate: untilIso, partnerToDate: partnerUntilIso } : { toDate: untilIso }
+  return useQuery(api.challenges.history, challengeId ? { challengeId, ...dates } : "skip")
 }

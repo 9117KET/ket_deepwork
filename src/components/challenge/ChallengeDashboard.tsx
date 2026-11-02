@@ -21,6 +21,7 @@ import type { ChallengeState } from '../../hooks/useChallenge'
 import { useChallengeHistory } from '../../hooks/useChallenge'
 import { addDays } from '../../domain/dateUtils'
 import { challengeErrorMessage, createInvite, inviteUrl, leaveChallenge, renameChallenge, shareText } from '../../services/challengeService'
+import type { Id } from '../../../convex/_generated/dataModel'
 import { CommitmentsSheet } from './CommitmentsSheet'
 import { SeasonGrid } from './SeasonGrid'
 import { MemberDayCard, MemberDayLine } from './MemberDayCard'
@@ -83,7 +84,7 @@ function CommitmentsColumn({ title, goals, donts, empty, action }: { title: stri
 }
 
 /** The season's name, renamable in place by either member while it runs. */
-function ChallengeTitle({ name, editable }: { name: string; editable: boolean }) {
+function ChallengeTitle({ challengeId, name, editable }: { challengeId: Id<'challenges'>; name: string; editable: boolean }) {
   const [draft, setDraft] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -119,7 +120,7 @@ function ChallengeTitle({ name, editable }: { name: string; editable: boolean })
     setSaving(true)
     setError(null)
     try {
-      await renameChallenge(next)
+      await renameChallenge(challengeId, next)
       setDraft(null)
     } catch (e) {
       setError(challengeErrorMessage(e))
@@ -210,7 +211,7 @@ export function ChallengeDashboard({ state, afterHeader, todayActions }: Challen
   const { info, progress, mine, partnerCard, myDate, partnerDate } = state
   const readOnly = state.status === 'ended'
   // Each member's history runs to their own yesterday; their card is their today.
-  const history = useChallengeHistory(Boolean(info), addDays(myDate, -1), addDays(partnerDate, -1))
+  const history = useChallengeHistory(info?.challenge.id, addDays(myDate, -1), addDays(partnerDate, -1))
   const [inviteToken, setInviteToken] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -231,7 +232,7 @@ export function ChallengeDashboard({ state, afterHeader, todayActions }: Challen
   const getLink = async () => {
     setError(null)
     try {
-      const { token } = await createInvite()
+      const { token } = await createInvite(challenge.id)
       setInviteToken(token)
       return inviteUrl(token)
     } catch (e) {
@@ -250,7 +251,7 @@ export function ChallengeDashboard({ state, afterHeader, todayActions }: Challen
     setLeaving(true)
     setError(null)
     try {
-      await leaveChallenge()
+      await leaveChallenge(challenge.id)
     } catch (e) {
       setError(challengeErrorMessage(e))
       setLeaving(false)
@@ -265,7 +266,7 @@ export function ChallengeDashboard({ state, afterHeader, todayActions }: Challen
         {/* The season: name, where today sits, and the two deadlines */}
         <header>
           <p className={heading}>Challenge{partner ? ` with ${partner.displayName}` : ''}</p>
-          <ChallengeTitle name={challenge.name} editable={!readOnly} />
+          <ChallengeTitle challengeId={challenge.id} name={challenge.name} editable={!readOnly} />
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <p className="mr-1 text-sm text-share-onSurfaceVariant">
               {progress.phase === 'active' ? (
@@ -396,7 +397,7 @@ export function ChallengeDashboard({ state, afterHeader, todayActions }: Challen
         )}
       </aside>
 
-      {editing && !readOnly && <CommitmentsSheet goals={me.goals} donts={me.donts} onClose={() => setEditing(false)} />}
+      {editing && !readOnly && <CommitmentsSheet challengeId={challenge.id} goals={me.goals} donts={me.donts} onClose={() => setEditing(false)} />}
     </div>
   )
 }

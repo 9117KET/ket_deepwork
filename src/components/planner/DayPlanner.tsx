@@ -846,6 +846,7 @@ export function DayPlanner() {
 
       {checkinOpen && challenge.info && challenge.progress && challengeSummary && (
         <CheckinSheet
+          challengeId={challenge.info.challenge.id}
           challengeName={challenge.info.challenge.name}
           donts={activeDonts(challenge.info.me.donts)}
           displayName={challenge.info.me.displayName}

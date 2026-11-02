@@ -91,12 +91,13 @@ export function ChallengeCard({ state, summary, date, onOpenCheckin, compact = f
 
   const lock = () => run('lock', async () => void (await lockInPlan(date, summary)))
   const nudge = async () => {
+    if (!info) return
     setBusy('nudge')
     setError(null)
     setNotice(null)
     try {
       // "Sent" means queued: the mutation schedules the email, it does not deliver it.
-      const { left } = await nudgePartner()
+      const { left } = await nudgePartner(info.challenge.id)
       const name = partner?.displayName ?? 'your partner'
       setNotice(`Nudge sent to ${name} · ${left > 0 ? `${left} left today` : 'that was the last one today'}`)
     } catch (e) {
