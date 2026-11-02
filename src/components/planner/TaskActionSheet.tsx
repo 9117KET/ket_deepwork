@@ -5,8 +5,9 @@
  *
  * A phone row carries a checkbox, a title, one chip and a ⋮. Every other
  * action lives here, as a thumb-sized row with a label, because a phone has
- * no hover to reveal a control, no right-click to open a menu and no drag to
- * reorder. The header repeats the title in full, so a row whose title was
+ * no hover to reveal a control and no right-click to open a menu. A finger
+ * can drag a row (press and hold), but the Move actions here are the way that
+ * needs no gesture at all. The header repeats the title in full, so a row whose title was
  * clamped to two lines can always be read.
  *
  * The sheet only offers what its caller passes: an action without a callback
@@ -18,7 +19,9 @@ import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import {
   ArrowDown,
+  ArrowDownToLine,
   ArrowUp,
+  ArrowUpToLine,
   Ban,
   CalendarClock,
   Clock,
@@ -48,6 +51,10 @@ interface TaskActionSheetProps {
   showReorder?: boolean
   onMoveUp?: () => void
   onMoveDown?: () => void
+  /** A Tasks root: move it, with its subtasks, to the end of the Top 3. */
+  onMoveToTop3?: () => void
+  /** A Top 3 row: move it, with its subtasks, to the end of Tasks. */
+  onMoveToTasks?: () => void
   /** Root tasks only. */
   onAddSubtask?: () => void
   /** Subtasks only: open the parent picker. */
@@ -81,6 +88,8 @@ export function TaskActionSheet({
   showReorder = false,
   onMoveUp,
   onMoveDown,
+  onMoveToTop3,
+  onMoveToTasks,
   onAddSubtask,
   onMoveToAnotherParent,
   onUpdateTask,
@@ -122,6 +131,12 @@ export function TaskActionSheet({
   if (showReorder) {
     actions.push({ key: 'up', label: 'Move up', icon: <ArrowUp className={ICON} />, run: onMoveUp })
     actions.push({ key: 'down', label: 'Move down', icon: <ArrowDown className={ICON} />, run: onMoveDown })
+  }
+  if (onMoveToTop3) {
+    actions.push({ key: 'toTop3', label: 'Move to Top 3', icon: <ArrowUpToLine className={ICON} />, run: onMoveToTop3 })
+  }
+  if (onMoveToTasks) {
+    actions.push({ key: 'toTasks', label: 'Move to Tasks', icon: <ArrowDownToLine className={ICON} />, run: onMoveToTasks })
   }
   if (onAddSubtask) actions.push({ key: 'subtask', label: 'Add subtask', icon: <ListPlus className={ICON} />, run: onAddSubtask })
   if (onMoveToAnotherParent) {

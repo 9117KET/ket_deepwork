@@ -344,6 +344,14 @@ gate in `e2e/mobile-responsive.spec.ts`:
    anatomy (checkbox, title, one chip, ⋮ → `TaskActionSheet`) via
    `useCoarsePointer()`; the gates live in `e2e/mobile-today.spec.ts` and
    `e2e/mobile-panels.spec.ts`, with shared fixtures in `e2e/helpers/mobile.ts`.
+   A task moves four ways: a finger presses and holds a row for 300 ms to lift
+   it and drags it between rows of either list (`useTouchReorder`; a swipe
+   without the hold still scrolls), the ⋮ sheet offers "Move to Top 3" /
+   "Move to Tasks" (with subtasks, to the end) and Move up / down, a mouse drags
+   any row, and Alt+ArrowUp / Alt+ArrowDown on a desktop grip moves it one step
+   with a spoken result. Subtasks never leave their parent by drag: a drop
+   anywhere but among their siblings is refused with a toast pointing to "Move
+   to another parent"; `e2e/touch-reorder.spec.ts` pins all of it.
 2. **`dvh`, never `vh`.** `100vh` on a phone includes the URL bar that is about
    to collapse, so the bottom of a `h-screen` layout is cut off. `#root` sets
    `100vh` then `100dvh` (older browsers keep the first).

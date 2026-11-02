@@ -38,6 +38,8 @@ import { getOrderedTasksForSection } from "../../domain/taskUtils";
 import { computeDayCompletion } from "../../domain/dayCompletion";
 import { useUndoableActions } from "../../hooks/useUndoableActions";
 import { useTaskHandlers } from "../../hooks/useTaskHandlers";
+import { useTouchReorder } from "../../hooks/useTouchReorder";
+import { useCoarsePointer } from "../../hooks/useCoarsePointer";
 import { useCalendarDay } from "../../hooks/useCalendarDay";
 import { useWorkLog } from "../../hooks/useWorkLog";
 import { useTaskSync } from "../../hooks/useTaskSync";
@@ -173,6 +175,9 @@ export function DayPlanner() {
     handleDragStart,
     handleDragEnd,
     handleDrop,
+    handleMoveTask,
+    handleSubtaskDragStart,
+    handleSubtaskDragEnd,
     handleAddTask,
     handleToggleTask: handleToggleTaskBase,
     handleDeleteTask,
@@ -335,6 +340,27 @@ export function DayPlanner() {
     },
     [dayState.tasks, timer],
   );
+
+  // ── Moving tasks ──────────────────────────────────────────────────────────
+  /** Said when a subtask is dropped outside its parent: nothing moved, and why. */
+  const SUBTASK_STAYS_NOTICE = "Subtasks stay inside their task. Use Move to another parent.";
+  const handleDropOrRefuse = (sectionId: TaskSectionId, insertIndex: number) => {
+    if (handleDrop(sectionId, insertIndex) === "refusedSubtask") setBlockNotice(SUBTASK_STAYS_NOTICE);
+  };
+  /** The sheet's "Move to Top 3" / "Move to Tasks": the task and its subtasks, at the end. */
+  const handleMoveToEnd = (taskId: string, from: TaskSectionId, to: TaskSectionId) =>
+    handleMoveTask(from, taskId, to, Number.MAX_SAFE_INTEGER);
+  // A finger drags by press-and-hold; a mouse keeps HTML5 drag and drop.
+  const isCoarsePointer = useCoarsePointer();
+  const touchReorder = useTouchReorder({
+    enabled: isCoarsePointer,
+    onDropRoot: (item, toSectionId, index) => {
+      handleDragStart(item.sectionId, item.taskId);
+      handleDrop(toSectionId, index);
+    },
+    onDropSubtask: handleReorderSubtask,
+    onRefuseSubtask: () => setBlockNotice(SUBTASK_STAYS_NOTICE),
+  });
 
   useEffect(() => {
     if (!blockNotice) return;
@@ -594,7 +620,12 @@ export function DayPlanner() {
       draggedTask={draggedTask}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
-      onDrop={(insertIndex: number) => handleDrop(section.id, insertIndex)}
+      onDrop={(insertIndex: number) => handleDropOrRefuse(section.id, insertIndex)}
+      onMoveToTop3={(taskId) => handleMoveToEnd(taskId, section.id, "mustDo")}
+      touch={touchReorder}
+      onSubtaskDragStart={handleSubtaskDragStart}
+      onSubtaskDragEnd={handleSubtaskDragEnd}
+      onSubtaskDropRefused={() => setBlockNotice(SUBTASK_STAYS_NOTICE)}
       onAddTask={(title) => handleAddTask(section.id, title)}
       onAddTaskAbove={(beforeTaskId) => handleAddTaskAbove(section.id, beforeTaskId)}
       onAddTaskBelow={(afterTaskId) => handleAddTaskBelow(section.id, afterTaskId)}
@@ -709,7 +740,9 @@ export function DayPlanner() {
               onSchedule={setScheduleTaskId}
               onDragStart={(taskId) => handleDragStart("mustDo", taskId)}
               onDragEnd={handleDragEnd}
-              onDropAt={(insertIndex) => handleDrop("mustDo", insertIndex)}
+              onDropAt={(insertIndex) => handleDropOrRefuse("mustDo", insertIndex)}
+              onMoveToTasks={(taskId) => handleMoveToEnd(taskId, "mustDo", LIST_SECTION_ID)}
+              touch={touchReorder}
               onMoveUp={(taskId) => handleReorderTask(taskId, "mustDo", "up")}
               onMoveDown={(taskId) => handleReorderTask(taskId, "mustDo", "down")}
               draggedTaskId={draggedTask?.sectionId === "mustDo" ? draggedTask.taskId : null}
