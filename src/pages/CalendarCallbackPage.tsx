@@ -13,7 +13,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { checkOAuthState, completeGoogleOAuth } from "../services/calendarSyncService";
+import { checkOAuthState, completeGoogleOAuth, startGoogleOAuth } from "../services/calendarSyncService";
 import { AppChrome } from "../components/layout/AppChrome";
 import { MobileTabBar } from "../components/planner/MobileTabBar";
 import { useAuth } from "../contexts/AuthContext";
@@ -54,6 +54,26 @@ export function CalendarCallbackPage() {
     );
   }, [code, googleError, csrfError, loading, user, location.search, navigate]);
 
+  // Nothing on this page may spin forever: if sign-in or the exchange has not
+  // finished in 20s, say so and offer a way out instead of "Finalizing…".
+  const [timedOut, setTimedOut] = useState(false);
+  useEffect(() => {
+    if (result) return;
+    const t = setTimeout(() => setTimedOut(true), 20_000);
+    return () => clearTimeout(t);
+  }, [result]);
+  const [retrying, setRetrying] = useState(false);
+  const retry = async () => {
+    setRetrying(true);
+    try {
+      const { url } = await startGoogleOAuth();
+      window.location.href = url;
+    } catch (e) {
+      setResult({ status: "error", message: (e as Error).message ?? "Could not restart." });
+      setRetrying(false);
+    }
+  };
+
   const text = googleError
     ? `Failed: ${googleError}`
     : !code
@@ -66,14 +86,27 @@ export function CalendarCallbackPage() {
             ? result.status === "ok"
               ? result.message
               : `Failed: ${result.message}`
-            : "Finalizing connection…";
+            : timedOut
+              ? "This is taking longer than it should. Check your connection and try again."
+              : "Finalizing connection…";
+  const failed = text.startsWith("Failed") || timedOut;
 
   return (
     <AppChrome showCalendarLink>
       <div className="mx-auto max-w-xl px-4 py-6 md:px-8 pb-28 md:pb-10">
         <h1 className="font-shareHeadline text-2xl font-black text-share-onSurface">Calendar connection</h1>
         <p className="mt-2 text-share-onSurfaceVariant">{text}</p>
-        <div className="mt-6">
+        <div className="mt-6 flex items-center gap-4">
+          {failed && user && (
+            <button
+              type="button"
+              onClick={retry}
+              disabled={retrying}
+              className="min-h-11 rounded-lg bg-share-primary px-4 text-sm font-bold text-share-onPrimary hover:bg-share-primaryContainer disabled:opacity-60"
+            >
+              {retrying ? "Redirecting…" : "Try again"}
+            </button>
+          )}
           <Link
             to="/calendar"
             className="text-sm font-bold text-share-primary hover:text-share-primaryContainer"
