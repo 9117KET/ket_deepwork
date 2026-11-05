@@ -3,7 +3,9 @@ import {
   challengePillLabel,
   dayStage,
   endedSentence,
+  headlinePhrase,
   owedAct,
+  partnerWho,
   seasonStepError,
   sortChallenges,
   stateMark,
@@ -24,6 +26,32 @@ const entry = (name: string, over: Partial<ChallengeListItem>) => ({ name, chall
 
 // 3 Nov 2026, noon UTC: the same calendar day in every locale's timezone used by CI.
 const NOV3 = Date.UTC(2026, 10, 3, 12)
+
+describe('partnerWho', () => {
+  it('says "Just you" on a solo challenge with nobody in it', () => {
+    expect(partnerWho({ solo: true, partnerName: null, partnerDay: null })).toBe('Just you')
+  })
+
+  it('keeps "Waiting for a partner" on a two-person challenge still alone', () => {
+    expect(partnerWho({ solo: false, partnerName: null, partnerDay: null })).toBe('Waiting for a partner')
+  })
+
+  it('shows the partner and their mark once someone has joined, solo or not', () => {
+    expect(partnerWho({ solo: false, partnerName: 'Sam', partnerDay: { planSetAt: 1 } })).toBe('Sam ✓ plan locked')
+    expect(partnerWho({ solo: true, partnerName: 'Sam', partnerDay: null })).toBe('Sam – nothing yet')
+  })
+})
+
+describe('headlinePhrase', () => {
+  it('joins the number and its label', () => {
+    expect(headlinePhrase({ number: '70', label: 'days left' })).toBe('70 days left')
+    expect(headlinePhrase({ number: '1', label: 'day left' })).toBe('1 day left')
+  })
+
+  it('is the label alone when there is no number', () => {
+    expect(headlinePhrase({ number: null, label: 'Last day' })).toBe('Last day')
+  })
+})
 
 describe('sortChallenges', () => {
   it('puts active first, newest first within each group', () => {

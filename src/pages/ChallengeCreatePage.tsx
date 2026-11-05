@@ -32,6 +32,12 @@ const LENGTHS: { value: Length; label: string }[] = [
   { value: 'custom', label: 'Custom' },
 ]
 
+type Who = 'partner' | 'solo'
+const WHO: { value: Who; label: string }[] = [
+  { value: 'partner', label: 'With a partner' },
+  { value: 'solo', label: 'Just me' },
+]
+
 const FIELD =
   'min-h-11 w-full rounded-lg border border-share-outlineStrong bg-share-surfaceContainer px-3 py-2 text-base text-share-onSurface placeholder:text-share-onSurfaceDim focus:border-share-onBg focus:outline-none focus:ring-1 focus:ring-share-onBg sm:text-sm'
 const LABEL = 'block text-sm font-semibold text-share-onSurface'
@@ -56,6 +62,8 @@ function CreateBody() {
   const today = todayIso()
   const [step, setStep] = useState<1 | 2>(1)
   const [name, setName] = useState('')
+  const [who, setWho] = useState<Who>('partner')
+  const solo = who === 'solo'
   const [length, setLength] = useState<Length>(90)
   const [customStart, setCustomStart] = useState(today)
   const [customEnd, setCustomEnd] = useState(addDays(today, 89))
@@ -121,6 +129,7 @@ function CreateBody() {
         planDeadline,
         checkinDeadline,
         displayName,
+        ...(solo ? { solo: true } : {}),
       })
       navigate(`/challenge/${id}`, { replace: true })
     } catch (err) {
@@ -154,6 +163,33 @@ function CreateBody() {
               className={`${FIELD} mt-1.5`}
             />
           </div>
+
+          <fieldset>
+            <legend className={LABEL}>Who is taking part</legend>
+            <div className="mt-1.5 grid grid-cols-2 gap-2">
+              {WHO.map((w) => (
+                <label key={w.value} className="relative">
+                  <input
+                    type="radio"
+                    name="who"
+                    value={w.value}
+                    checked={who === w.value}
+                    onChange={() => setWho(w.value)}
+                    aria-describedby={w.value === 'solo' && solo ? 'ch-who-hint' : undefined}
+                    className="peer absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                  />
+                  <span className="flex min-h-11 items-center justify-center rounded-lg border border-share-outlineStrong px-3 text-sm font-semibold text-share-onSurfaceVariant peer-checked:border-share-onBg peer-checked:bg-share-surfaceContainerHigh peer-checked:text-share-onBg peer-focus-visible:ring-2 peer-focus-visible:ring-share-onBg">
+                    {w.label}
+                  </span>
+                </label>
+              ))}
+            </div>
+            {solo && (
+              <p id="ch-who-hint" className="mt-2 text-sm text-share-onSurfaceVariant">
+                You can invite someone later.
+              </p>
+            )}
+          </fieldset>
 
           <fieldset>
             <legend className={LABEL}>How long</legend>
@@ -274,7 +310,9 @@ function CreateBody() {
             <h2 ref={stepTwoHeading} tabIndex={-1} className="text-section text-share-onBg outline-none">
               What are you holding yourself to?
             </h2>
-            <p className="mt-1 text-sm text-share-onSurfaceVariant">Optional. Your partner can read these, and you can change them any time.</p>
+            <p className="mt-1 text-sm text-share-onSurfaceVariant">
+              {solo ? 'Optional. You can change them any time.' : 'Optional. Your partner can read these, and you can change them any time.'}
+            </p>
           </div>
           <div>
             <p className={LABEL}>
@@ -294,7 +332,7 @@ function CreateBody() {
             </summary>
             <div className="pb-3 pt-1">
               <label className="block text-caption font-semibold text-share-onSurfaceVariant" htmlFor="ch-display">
-                Your name, as your partner sees it
+                {solo ? 'Your name' : 'Your name, as your partner sees it'}
               </label>
               <input
                 id="ch-display"
@@ -303,8 +341,14 @@ function CreateBody() {
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 maxLength={40}
+                aria-describedby={solo ? 'ch-display-hint' : undefined}
                 className={`${FIELD} mt-1`}
               />
+              {solo && (
+                <p id="ch-display-hint" className="mt-1 text-caption text-share-onSurfaceVariant">
+                  Shown to a partner if one joins.
+                </p>
+              )}
             </div>
           </details>
 

@@ -9,6 +9,7 @@
  */
 
 import type { ChallengeProgress, DayCellState } from './challenge'
+import type { DaysLeftHeadline } from './challengeCountdown'
 
 export type EndedReason = 'creatorLeft' | 'allLeft' | 'inactive' | 'seasonOver' | 'manual'
 
@@ -80,6 +81,24 @@ export function owedLabel(act: OwedAct): string {
   if (act === 'lock') return 'you owe a plan'
   if (act === 'checkin') return 'you owe a check-in'
   return 'you are done for today'
+}
+
+/**
+ * Who stands beside you on a Today row: the partner and their mark once
+ * someone has joined, "Just you" on a challenge started alone, and
+ * "Waiting for a partner" on a two-person challenge nobody has joined yet.
+ */
+export function partnerWho(args: { solo: boolean; partnerName: string | null; partnerDay: DayActs | null | undefined }): string {
+  if (args.partnerName) {
+    const mark = stateMark(args.partnerDay)
+    return `${args.partnerName} ${mark.glyph} ${mark.label}`
+  }
+  return args.solo ? 'Just you' : 'Waiting for a partner'
+}
+
+/** The days-left headline as one phrase: "70 days left", "1 day left", "Last day". */
+export function headlinePhrase(headline: DaysLeftHeadline): string {
+  return headline.number === null ? headline.label : `${headline.number} ${headline.label}`
 }
 
 /** The server's limits on a new challenge (convex/challenges.ts `createChallenge`). */
