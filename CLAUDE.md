@@ -219,6 +219,15 @@ challenge", "This challenge has ended"). Those changed function arguments
 make this a two-sided deploy: backend first (`npx convex deploy`), then push
 `main`; see `docs/DEPLOYMENT.md`.
 
+**A challenge may be solo.** `createChallenge({ solo: true })` stores
+`challenges.solo`, and `challengeView` returns `solo` (absent reads as
+false, so every older row is two-person). It only says "nobody is expected":
+lock-in, check-in, inactivity, reminders and deletion run as for any
+one-member challenge, and a nudge still says "Nobody has joined yet". An
+invite still works, and `acceptInvite` sets `solo: false` in the same
+mutation that adds the partner, so from then on it is a two-person challenge
+in every view. A partner leaving never makes it solo again.
+
 **Refusals are sentences.** Every expected state (validation, invite states,
 "not in a challenge", nudge rules) throws `ConvexError({ code, message })`
 through `fail()`, because Convex redacts a plain `Error` to "Server Error" in
