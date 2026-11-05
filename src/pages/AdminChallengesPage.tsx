@@ -8,10 +8,14 @@
  * list query is not even asked, and would refuse them if it were.
  */
 
+import { useState } from 'react'
 import { useQuery } from 'convex/react'
 import { Link } from 'react-router-dom'
 import { api } from '../../convex/_generated/api'
 import { ChallengeChrome, ChallengeSkeleton } from '../components/challenge/ChallengeChrome'
+import { ActionSheet } from '../components/ui/Sheet'
+import { TextButton } from '../components/ui/TextButton'
+import { challengeErrorMessage, deleteChallenge } from '../services/challengeService'
 import { textButtonClass } from '../components/ui/textButtonClass'
 import { formatShortDate } from '../domain/challenge'
 import type { EndedReason } from '../domain/challengeList'
@@ -40,6 +44,22 @@ export function AdminChallengesPage() {
 function AdminBody() {
   const status = useQuery(api.challenges.adminStatus, {})
   const rows = useQuery(api.challenges.adminListChallenges, status?.isAdmin ? {} : 'skip')
+  const [target, setTarget] = useState<{ id: (typeof rows extends Array<infer R> | undefined ? R : never)['id']; name: string } | null>(null)
+  const [pending, setPending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const confirmDelete = async () => {
+    if (!target) return
+    setPending(true)
+    setError(null)
+    try {
+      await deleteChallenge(target.id)
+      setTarget(null)
+    } catch (e) {
+      setError(challengeErrorMessage(e))
+    }
+    setPending(false)
+  }
 
   if (status === undefined) return <ChallengeSkeleton />
   if (!status.isAdmin) {
@@ -59,7 +79,7 @@ function AdminBody() {
     <div>
       <h1 className="font-shareHeadline text-title text-share-onBg">All challenges</h1>
       <p className="mt-1 text-sm text-share-onSurfaceVariant">
-        {rows.length} {rows.length === 1 ? 'challenge' : 'challenges'}, newest first. Read-only.
+        {rows.length} {rows.length === 1 ? 'challenge' : 'challenges'}, newest first. Ended ones can be deleted.
       </p>
       {rows.length === 0 ? (
         <p className="mt-6 text-body text-share-onSurfaceVariant">Nobody has started a challenge yet.</p>
@@ -83,6 +103,9 @@ function AdminBody() {
                 </th>
                 <th scope="col" className="px-4 py-3 font-semibold">
                   Warning
+                </th>
+                <th scope="col" className="px-4 py-3 font-semibold">
+                  <span className="sr-only">Actions</span>
                 </th>
               </tr>
             </thead>
@@ -120,11 +143,29 @@ function AdminBody() {
                       <span className="text-share-onSurfaceVariant">None</span>
                     )}
                   </td>
+                  <td className="px-4 py-3">
+                    {r.status === 'ended' && (
+                      <TextButton tone="quiet" onClick={() => { setError(null); setTarget({ id: r.id, name: r.name }) }}>
+                        Delete
+                      </TextButton>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+      )}
+      {target && (
+        <ActionSheet
+          title={`Delete ${target.name} for good?`}
+          message="This removes the whole season and every day, check-in and note for both members. It cannot be undone."
+          actionLabel="Delete for good"
+          onAction={() => void confirmDelete()}
+          pending={pending}
+          error={error}
+          onClose={() => setTarget(null)}
+        />
       )}
     </div>
   )

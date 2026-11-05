@@ -31,6 +31,7 @@ import {
   createInvite,
   inviteUrl,
   isEveningIn,
+  deleteChallenge,
   leaveChallenge,
   lockInPlan,
   nudgePartner,
@@ -88,6 +89,9 @@ export function ChallengeDetail({ detail, history, summary, activeCount }: Chall
   const [editingCommitments, setEditingCommitments] = useState(false)
   const [leaveOpen, setLeaveOpen] = useState(false)
   const [leaving, setLeaving] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
   const [leaveError, setLeaveError] = useState<string | null>(null)
   const [busy, setBusy] = useState<null | 'lock' | 'nudge'>(null)
   const [error, setError] = useState<string | null>(null)
@@ -190,6 +194,18 @@ export function ChallengeDetail({ detail, history, summary, activeCount }: Chall
     } catch (e) {
       setLeaveError(challengeErrorMessage(e))
       setLeaving(false)
+    }
+  }
+
+  const remove = async () => {
+    setDeleting(true)
+    setDeleteError(null)
+    try {
+      await deleteChallenge(challenge.id)
+      navigate('/challenge', { replace: true })
+    } catch (e) {
+      setDeleteError(challengeErrorMessage(e))
+      setDeleting(false)
     }
   }
 
@@ -400,6 +416,13 @@ export function ChallengeDetail({ detail, history, summary, activeCount }: Chall
             </TextButton>
           </div>
         )}
+        {readOnly && challenge.isCreator && (
+          <div className="mt-8 border-t border-share-hairline pt-2">
+            <TextButton tone="quiet" onClick={() => setDeleteOpen(true)} className="-ml-3">
+              Delete challenge
+            </TextButton>
+          </div>
+        )}
       </div>
 
       {checkinOpen && summary && (
@@ -417,6 +440,17 @@ export function ChallengeDetail({ detail, history, summary, activeCount }: Chall
       )}
       {editingCommitments && !readOnly && (
         <CommitmentsSheet challengeId={challenge.id} goals={me.goals} donts={me.donts} onClose={() => setEditingCommitments(false)} />
+      )}
+      {deleteOpen && (
+        <ActionSheet
+          title={`Delete ${challenge.name} for good?`}
+          message={`This removes the whole season, every day, check-in and note, for ${partner ? `both you and ${partner.displayName}` : 'you'}. It cannot be undone. Your planner is not touched.`}
+          actionLabel="Delete for good"
+          onAction={() => void remove()}
+          pending={deleting}
+          error={deleteError}
+          onClose={() => setDeleteOpen(false)}
+        />
       )}
       {leaveOpen && (
         <ActionSheet

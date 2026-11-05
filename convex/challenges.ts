@@ -830,6 +830,42 @@ export const leaveChallenge = mutation({
   },
 })
 
+/** Rows removed per read while purging one table; a season holds far fewer. */
+const PURGE_BATCH = 500
+
+/**
+ * Deleting an ended challenge for good: its days, invites, members and the
+ * challenge itself. Two people may do it, and only once it has ended: the
+ * creator, and an `ADMIN_EMAILS` admin (who need not be a member). A running
+ * challenge is refused; ending it comes first. Nothing here touches either
+ * member's own planner. The client warns before calling it.
+ */
+export const deleteChallenge = mutation({
+  args: { challengeId: v.id("challenges") },
+  handler: async (ctx, args) => {
+    const userId = await requireUser(ctx)
+    const challenge = await ctx.db.get(args.challengeId)
+    if (!challenge) fail("This challenge no longer exists")
+    const isAdmin = isAdminEmail(await userEmail(ctx, userId))
+    if (challenge.createdBy !== userId && !isAdmin) fail("Only the creator or an admin can delete a challenge")
+    if (challenge.status !== "ended") fail("End the challenge before deleting it")
+
+    const id = challenge._id
+    const purge = async (next: () => Promise<Array<{ _id: Id<"challengeDays" | "challengeInvites" | "challengeMembers"> }>>) => {
+      for (;;) {
+        const rows = await next()
+        for (const row of rows) await ctx.db.delete(row._id)
+        if (rows.length < PURGE_BATCH) break
+      }
+    }
+    await purge(() => ctx.db.query("challengeDays").withIndex("by_challenge_user_date", (q) => q.eq("challengeId", id)).take(PURGE_BATCH))
+    await purge(() => ctx.db.query("challengeInvites").withIndex("by_challenge", (q) => q.eq("challengeId", id)).take(PURGE_BATCH))
+    await purge(() => ctx.db.query("challengeMembers").withIndex("by_challenge", (q) => q.eq("challengeId", id)).take(PURGE_BATCH))
+    await ctx.db.delete(challenge._id)
+    return null
+  },
+})
+
 // ─── The day ──────────────────────────────────────────────────────────────────
 
 /**

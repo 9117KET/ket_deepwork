@@ -287,3 +287,40 @@ describe('admin', () => {
     expect(rows.find((r) => r.name === 'Thesis sprint')!.members.map((m) => m.email)).toEqual(['kin@example.com', 'ana@example.com'])
   })
 })
+
+describe('deleting an ended challenge', () => {
+  test('the creator deletes an ended one for good; a running one, a partner and a stranger are refused', async () => {
+    const t = convexTest(schema, modules)
+    const { kin, sam, ana, q4, thesis } = await twoChallenges(t)
+    await kin.as.mutation(api.challenges.lockInPlan, { date: '2026-10-22', challengeId: q4, summary: emptySummary() })
+
+    expect((await refusal(kin.as.mutation(api.challenges.deleteChallenge, { challengeId: q4 }))).message).toMatch(/end the challenge/i)
+    await kin.as.mutation(api.challenges.leaveChallenge, { challengeId: q4 })
+    expect((await refusal(sam.as.mutation(api.challenges.deleteChallenge, { challengeId: q4 }))).message).toMatch(/creator or an admin/i)
+    expect((await refusal(ana.as.mutation(api.challenges.deleteChallenge, { challengeId: q4 }))).message).toMatch(/creator or an admin/i)
+
+    await kin.as.mutation(api.challenges.deleteChallenge, { challengeId: q4 })
+    const left = await t.run(async (ctx) => ({
+      challenges: await ctx.db.query('challenges').collect(),
+      members: await ctx.db.query('challengeMembers').collect(),
+      days: await ctx.db.query('challengeDays').collect(),
+    }))
+    expect(left.challenges.map((c) => c._id)).toEqual([thesis])
+    expect(left.members.every((m) => m.challengeId === thesis)).toBe(true)
+    expect(left.days.every((d) => d.challengeId === thesis)).toBe(true)
+    expect(await sam.as.query(api.challenges.myChallenges, {})).toHaveLength(0)
+    expect((await kin.as.query(api.challenges.myChallenges, {})).map((e) => e.challenge.name)).toEqual(['Thesis sprint'])
+    expect((await refusal(kin.as.mutation(api.challenges.deleteChallenge, { challengeId: q4 }))).message).toMatch(/no longer exists/i)
+  })
+
+  test('an admin may delete any ended challenge; a plain user may not', async () => {
+    const t = convexTest(schema, modules)
+    const { kin, sam, q4 } = await twoChallenges(t)
+    const admin = await signUp(t, 'root@example.com')
+    await kin.as.mutation(api.challenges.leaveChallenge, { challengeId: q4 })
+    process.env.ADMIN_EMAILS = 'root@example.com'
+    await expect(sam.as.mutation(api.challenges.deleteChallenge, { challengeId: q4 })).rejects.toThrow()
+    await admin.as.mutation(api.challenges.deleteChallenge, { challengeId: q4 })
+    expect(await t.run(async (ctx) => ctx.db.get(q4))).toBeNull()
+  })
+})
