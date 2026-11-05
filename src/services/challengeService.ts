@@ -55,6 +55,8 @@ export interface CreateChallengeInput {
   planDeadline: string
   checkinDeadline: string
   displayName: string
+  /** "Just me": a challenge with no partner talk. Sent only when true. */
+  solo?: boolean
 }
 
 /** Starts a challenge; you are its first member. Returns its id. */

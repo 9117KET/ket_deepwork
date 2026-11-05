@@ -133,6 +133,7 @@ function AdminBody() {
                         </li>
                       ))}
                     </ul>
+                    {r.solo && <span className="mt-1.5 block text-caption text-share-onSurfaceVariant">Solo</span>}
                   </td>
                   <td className="px-4 py-3 text-share-onSurface">
                     {r.warning ? (
