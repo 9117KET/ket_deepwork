@@ -13,6 +13,15 @@
  * the warning amber marks a warning, a missed day or a broken don't and
  * nothing else; there is no leader colour.
  *
+ * Under the title, while the season runs or is coming, the days-left
+ * headline (the one big numeral on the challenge screens) and a countdown to
+ * the next thing you owe today. The countdown ticks every second only while a
+ * deadline is ahead, and sits in `role="timer"` so a screen reader is never
+ * read every second.
+ *
+ * A challenge started "Just me" has no partner talk: the partner slot is one
+ * quiet "Invite a partner", and head to head is "Your season".
+ *
  * Presentational: data arrives as props (the page subscribes), so the view
  * renders the same from a fixture. Writes go through the challenge service.
  */
@@ -22,9 +31,11 @@ import { Link, useNavigate } from 'react-router-dom'
 import { ChevronLeft, Pencil } from 'lucide-react'
 import { buildShareText, challengeDates, formatShortDate, memberSeason, type ChallengeSummary } from '../../domain/challenge'
 import { activeDonts, resolveDontTexts, type DontLike } from '../../domain/challengeCommitments'
+import { countdownLine, countdownState, daysLeftHeadline, localDeadlineMs } from '../../domain/challengeCountdown'
 import { endedSentence, warningSentence } from '../../domain/challengeList'
 import type { ChallengeDetail as Detail, ChallengeHistory } from '../../hooks/useChallenges'
 import { useMinuteTick } from '../../hooks/useMinuteTick'
+import { useSecondTick } from '../../hooks/useSecondTick'
 import {
   challengeErrorCode,
   challengeErrorMessage,
@@ -97,6 +108,9 @@ export function ChallengeDetail({ detail, history, summary, activeCount }: Chall
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [inviteToken, setInviteToken] = useState<string | null>(null)
+  const [inviteOpen, setInviteOpen] = useState(false)
+  // Started "Just me" and still alone: no partner talk anywhere on the page.
+  const soloAlone = challenge.solo && !partner
 
   const dates = useMemo(() => challengeDates(challenge), [challenge])
   const myRows = [...(history?.mine ?? []), ...(mine ? [mine] : [])]
@@ -107,7 +121,29 @@ export function ChallengeDetail({ detail, history, summary, activeCount }: Chall
   // The nudge allowance, judged the way the server judges it: cap and gap on
   // my own day row, "owes" on the partner's clock and the partner's day.
   const times = nudgeTimes(mine)
-  const now = useMinuteTick(times.length > 0 ? Math.max(...times) + NUDGE_MIN_GAP_MS : null)
+  const nudgeWake = times.length > 0 ? Math.max(...times) + NUDGE_MIN_GAP_MS : null
+  const planSetAt = mine?.planSetAt ?? null
+  const checkinAt = mine?.checkinAt ?? null
+  const deadlineArgs = {
+    todayIso: myDate,
+    planDeadline: challenge.planDeadline,
+    checkinDeadline: challenge.checkinDeadline,
+    planSetAt,
+    checkinAt,
+    running,
+  }
+
+  // Two minute clocks: one wakes when the nudge cool-down ends, one at the
+  // check-in deadline, so the per-second tick is disarmed the moment the last
+  // deadline of the day passes (a past wake is ignored).
+  const nudgeNow = useMinuteTick(nudgeWake)
+  const deadlineNow = useMinuteTick(running && checkinAt == null ? localDeadlineMs(myDate, challenge.checkinDeadline) : null)
+  const now = Math.max(nudgeNow, deadlineNow)
+  const minuteState = countdownState({ nowMs: now, ...deadlineArgs })
+  // Armed only while a deadline is ahead: never for done, closed or idle.
+  const secondNow = useSecondTick(minuteState.kind === 'lock' || minuteState.kind === 'checkin')
+  const countdownText = countdownLine(countdownState({ nowMs: Math.max(secondNow, now), ...deadlineArgs }), challenge, true)
+  const headline = daysLeftHeadline(progress, challenge, myDate)
   const partnerInSpan = partnerDate >= challenge.startDate && partnerDate <= challenge.endDate
   const partnerOwes =
     !!partner &&
@@ -115,8 +151,6 @@ export function ChallengeDetail({ detail, history, summary, activeCount }: Chall
     partnerOwesToday({ evening: isEveningIn(partner.timezone, now), planSetAt: partnerCard?.planSetAt, checkinAt: partnerCard?.checkinAt })
   const availability = nudgeAvailability({ nowMs: now, times, partnerOwes })
 
-  const planSetAt = mine?.planSetAt ?? null
-  const checkinAt = mine?.checkinAt ?? null
   const token = inviteToken ?? info.invite?.token ?? null
 
   const lock = async () => {
@@ -234,6 +268,23 @@ export function ChallengeDetail({ detail, history, summary, activeCount }: Chall
             Challenges
           </Link>
           <ChallengeTitle challengeId={challenge.id} name={challenge.name} editable={!readOnly} />
+          {!readOnly && (
+            <div className="mt-3">
+              {headline.number !== null ? (
+                <p className="flex items-baseline gap-2">
+                  <span className="font-shareHeadline text-numeral tabular-nums text-share-onBg">{headline.number}</span>
+                  <span className="text-body text-share-onSurfaceVariant">{headline.label}</span>
+                </p>
+              ) : (
+                <p className={SECTION_HEADING}>{headline.label}</p>
+              )}
+              {countdownText !== null && (
+                <p role="timer" className="mt-1 text-body font-semibold tabular-nums text-share-onSurface">
+                  {countdownText}
+                </p>
+              )}
+            </div>
+          )}
           <p className="mt-1 text-sm text-share-onSurfaceVariant">{meta}</p>
           {readOnly && <p className="mt-2 text-body font-semibold text-share-onSurface">{endedSentence(challenge, partner?.displayName ?? null)}</p>}
         </header>
@@ -318,6 +369,26 @@ export function ChallengeDetail({ detail, history, summary, activeCount }: Chall
                     )
                   }
                 />
+              ) : soloAlone ? (
+                // "Just me": no heading, no partner talk; one quiet way to invite someone.
+                <div className="py-2">
+                  <div className="-ml-3 flex flex-wrap items-center gap-x-1">
+                    {running && planSetAt && (
+                      <TextButton onClick={() => void share()} disabled={!summary}>
+                        Share my {checkinAt ? 'check-in' : 'plan'}
+                      </TextButton>
+                    )}
+                    <TextButton tone="quiet" aria-expanded={inviteOpen} aria-controls="solo-invite" onClick={() => setInviteOpen((o) => !o)}>
+                      Invite a partner
+                    </TextButton>
+                  </div>
+                  <div id="solo-invite" hidden={!inviteOpen} className="pb-2">
+                    {token && <p className="mt-1 select-all break-all rounded-lg bg-share-hairline px-3 py-2 font-mono text-caption text-share-onSurface">{inviteUrl(token)}</p>}
+                    <TextButton onClick={() => void shareInvite()} className="-ml-3 mt-1">
+                      {token ? 'Share link' : 'Create invite link'}
+                    </TextButton>
+                  </div>
+                </div>
               ) : (
                 <div className="py-4">
                   <h3 className="text-body font-bold text-share-onBg">Nobody has joined yet</h3>
@@ -342,11 +413,11 @@ export function ChallengeDetail({ detail, history, summary, activeCount }: Chall
           </section>
         )}
 
-        {/* Head to head: two numbers each, and what a full day is. */}
+        {/* Head to head: two numbers each, and what a full day is. Alone on "Just me", it is your season. */}
         {progress.phase !== 'upcoming' && (
           <section aria-labelledby="score-heading" className="mt-10">
             <h2 id="score-heading" className={SECTION_HEADING}>
-              Head to head
+              {soloAlone ? 'Your season' : 'Head to head'}
             </h2>
             <table className="mt-2 w-full max-w-sm text-left">
               <thead>

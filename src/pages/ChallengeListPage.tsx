@@ -17,7 +17,9 @@ import { ChallengeChrome, ChallengeSkeleton } from '../components/challenge/Chal
 import { ChallengeJoinPanel } from '../components/challenge/ChallengeJoinPanel'
 import { TextButton } from '../components/ui/TextButton'
 import { formatShortDate } from '../domain/challenge'
-import { endedSentence, stateMark } from '../domain/challengeList'
+import { daysLeftHeadline } from '../domain/challengeCountdown'
+import { endedSentence, headlinePhrase, stateMark } from '../domain/challengeList'
+import { todayIso } from '../domain/dateUtils'
 import { useChallenges, useTodayCards, type ChallengeEntry, type TodayRow } from '../hooks/useChallenges'
 import { useMinuteTick } from '../hooks/useMinuteTick'
 
@@ -116,7 +118,7 @@ function ActiveRow({ row }: { row: TodayRow }) {
   const loading = mine === undefined
   const day =
     progress.phase === 'active'
-      ? `Day ${progress.dayNumber} of ${progress.totalDays}`
+      ? `Day ${progress.dayNumber} of ${progress.totalDays} · ${headlinePhrase(daysLeftHeadline(progress, challenge, todayIso()))}`
       : progress.phase === 'upcoming'
         ? `Starts ${formatShortDate(challenge.startDate)}`
         : `Last day was ${formatShortDate(challenge.endDate)}`
@@ -136,7 +138,7 @@ function ActiveRow({ row }: { row: TodayRow }) {
             {entry.partner ? (
               <Mark who={entry.partner.displayName} day={partner} loading={loading} />
             ) : (
-              <span className="text-share-onSurfaceVariant">Waiting for a partner</span>
+              <span className="text-share-onSurfaceVariant">{challenge.solo ? 'Just you' : 'Waiting for a partner'}</span>
             )}
           </span>
         )}

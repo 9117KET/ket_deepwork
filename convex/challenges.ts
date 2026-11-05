@@ -232,6 +232,8 @@ function challengeView(c: Doc<"challenges">, viewer: string) {
       ? { forMe: c.warning.userId === viewer, missedSince: c.warning.missedSince, issuedAt: c.warning.issuedAt }
       : null,
     isCreator: c.createdBy === viewer,
+    /** Created for one person and nobody has joined since. Rows without the field are two-person. */
+    solo: c.solo === true,
   }
 }
 export type ChallengeView = ReturnType<typeof challengeView>
@@ -409,6 +411,7 @@ export const dayCards = query({
     const partner = await partnerOf(ctx, challenge._id, userId)
     const partnerRow = partner ? await getDayRow(ctx, challenge._id, partner.userId, args.partnerDate) : null
     return {
+      challenge: challengeView(challenge, userId),
       mine: mine ?? null,
       partner: partnerRow ? dayView(partnerRow) : null,
     }
@@ -431,6 +434,7 @@ export const todayCards = query({
     assertIsoDate(args.myDate, "myDate")
     const out: Array<{
       challengeId: Id<"challenges">
+      challenge: ChallengeView
       mine: ReturnType<typeof myDayView> | null
       partner: ChallengeDayView | null
     }> = []
@@ -446,6 +450,7 @@ export const todayCards = query({
       const partnerRow = partner ? await getDayRow(ctx, card.challengeId, partner.userId, card.partnerDate) : null
       out.push({
         challengeId: card.challengeId,
+        challenge: challengeView(membership.challenge, userId),
         mine: mine ? myDayView(mine) : null,
         partner: partnerRow ? dayView(partnerRow) : null,
       })
@@ -485,6 +490,7 @@ export const history = query({
           .take(HISTORY_CAP)
       ).map(dayView)
     return {
+      challenge: challengeView(challenge, userId),
       mine: await rowsFor(userId, args.toDate),
       partner: partner ? await rowsFor(partner.userId, partnerToDate) : [],
     }
@@ -552,6 +558,7 @@ export interface AdminChallengeRow {
   createdAt: number
   endedAt: number | null
   warning: { displayName: string; missedSince: string; issuedAt: number } | null
+  solo: boolean
   members: Array<{
     displayName: string
     email: string | null
@@ -607,6 +614,7 @@ export const adminListChallenges = query({
         warning: c.warning
           ? { displayName: warned?.displayName ?? "A former member", missedSince: c.warning.missedSince, issuedAt: c.warning.issuedAt }
           : null,
+        solo: c.solo === true,
         members: memberRows,
       })
     }
@@ -627,6 +635,8 @@ export const createChallenge = mutation({
     checkinDeadline: v.string(),
     timezone: v.string(),
     displayName: v.string(),
+    /** Just me: no partner expected. An invite can still be made later. */
+    solo: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const userId = await requireUser(ctx)
@@ -664,6 +674,7 @@ export const createChallenge = mutation({
       createdBy: userId,
       createdAt: now,
       status: "active",
+      ...(args.solo === true ? { solo: true } : {}),
     })
     await ctx.db.insert("challengeMembers", {
       challengeId,
@@ -739,6 +750,8 @@ export const acceptInvite = mutation({
       commitmentsUpdatedAt: now,
     })
     await ctx.db.patch(invite._id, { acceptedBy: userId, acceptedAt: now })
+    // A solo challenge that gains a partner is a two-person challenge from now on.
+    if (challenge.solo === true) await ctx.db.patch(challenge._id, { solo: false })
     return { challengeId: challenge._id }
   },
 })

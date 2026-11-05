@@ -219,6 +219,32 @@ challenge", "This challenge has ended"). Those changed function arguments
 make this a two-sided deploy: backend first (`npx convex deploy`), then push
 `main`; see `docs/DEPLOYMENT.md`.
 
+**A challenge may be solo.** `createChallenge({ solo: true })` stores
+`challenges.solo`, and `challengeView` returns `solo` (absent reads as
+false, so every older row is two-person). It only says "nobody is expected":
+lock-in, check-in, inactivity, reminders and deletion run as for any
+one-member challenge, and a nudge still says "Nobody has joined yet". An
+invite still works, and `acceptInvite` sets `solo: false` in the same
+mutation that adds the partner, so from then on it is a two-person challenge
+in every view. A partner leaving never makes it solo again. On the client
+it is the "Just me" choice in step 1 of `/challenge/new` (beside "With a
+partner", the default). While a solo challenge has nobody in it, the
+dashboard's partner slot is one quiet "Invite a partner" that reveals the
+usual invite link, head to head is "Your season" with your row only, and
+the Today block and the list say "Just you" where a partner's mark would
+be (`partnerWho` in `challengeList.ts`); a two-person challenge still alone
+keeps "Nobody has joined yet" and "Waiting for a partner".
+
+**Days left and the countdown.** Every running or upcoming dashboard leads
+with the days-left headline (`daysLeftHeadline`, the `numeral` type style)
+and under it one line counting down to what you owe next today (lock in,
+then check in), both from `src/domain/challengeCountdown.ts`, on your own
+clock. The dashboard ticks every second through `useSecondTick`, armed only
+while a deadline is ahead and the tab is visible; the Today block and the
+list stay on the minute tick ("2h 14m left", "Day 22 of 92 · 70 days
+left"). The line is a `role="timer"`, which is not announced on change, so
+a screen reader is never read every second.
+
 **Refusals are sentences.** Every expected state (validation, invite states,
 "not in a challenge", nudge rules) throws `ConvexError({ code, message })`
 through `fail()`, because Convex redacts a plain `Error` to "Server Error" in

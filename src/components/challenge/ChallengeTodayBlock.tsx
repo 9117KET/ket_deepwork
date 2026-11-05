@@ -17,7 +17,8 @@ import { Link } from 'react-router-dom'
 import type { ChallengeSummary } from '../../domain/challenge'
 import { formatShortDate } from '../../domain/challenge'
 import { activeDonts } from '../../domain/challengeCommitments'
-import { owedAct, owedLabel, stateMark, warningSentence } from '../../domain/challengeList'
+import { countdownLine, countdownState } from '../../domain/challengeCountdown'
+import { partnerWho, warningSentence } from '../../domain/challengeList'
 import { useTodayCards, type ChallengeEntry, type TodayRow } from '../../hooks/useChallenges'
 import { challengeErrorMessage, lockInPlan } from '../../services/challengeService'
 import { ErrorLine, WarningLine } from '../ui/Notices'
@@ -106,6 +107,7 @@ export function ChallengeTodayBlock({ active, now, summary, date }: ChallengeTod
             key={row.entry.challenge.id}
             row={row}
             myDate={date}
+            now={now}
             // The primary above already is this row's Check in.
             showCheckin={row !== nextCheckin}
             onCheckin={() => setCheckinFor(row.entry.challenge.id)}
@@ -130,18 +132,42 @@ export function ChallengeTodayBlock({ active, now, summary, date }: ChallengeTod
   )
 }
 
-function TodayChallengeRow({ row, myDate, showCheckin, onCheckin }: { row: TodayRow; myDate: string; showCheckin: boolean; onCheckin: () => void }) {
+function TodayChallengeRow({
+  row,
+  myDate,
+  now,
+  showCheckin,
+  onCheckin,
+}: {
+  row: TodayRow
+  myDate: string
+  /** The page's minute tick: this row counts down to the minute, never the second. */
+  now: number
+  showCheckin: boolean
+  onCheckin: () => void
+}) {
   const { entry, progress, mine, partner } = row
   const { challenge } = entry
   const loading = mine === undefined
-  const owed = owedAct(mine)
-  const partnerMark = stateMark(partner)
   const running = progress.phase === 'active'
+  const countdown = countdownLine(
+    countdownState({
+      nowMs: now,
+      todayIso: myDate,
+      planDeadline: challenge.planDeadline,
+      checkinDeadline: challenge.checkinDeadline,
+      planSetAt: mine?.planSetAt,
+      checkinAt: mine?.checkinAt,
+      running: challenge.status === 'active' && running,
+    }),
+    challenge,
+    false,
+  )
 
   let status: string
-  if (!running) status = progress.phase === 'upcoming' ? `Starts ${formatShortDate(challenge.startDate)}` : 'Ended'
+  if (countdown === null) status = progress.phase === 'upcoming' ? `Starts ${formatShortDate(challenge.startDate)}` : 'Ended'
   else if (loading) status = 'Loading…'
-  else status = [entry.partner ? `${entry.partner.displayName} ${partnerMark.glyph} ${partnerMark.label}` : 'Waiting for a partner', owedLabel(owed)].join(' · ')
+  else status = [partnerWho({ solo: challenge.solo, partnerName: entry.partner?.displayName ?? null, partnerDay: partner }), countdown].join(' · ')
 
   return (
     <li className="px-4 py-2.5">

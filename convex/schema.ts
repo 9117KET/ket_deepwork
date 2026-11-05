@@ -183,6 +183,8 @@ export default defineSchema({
     endedReason: v.optional(endedReasonValidator),
     /** An inactivity warning standing against one member; a sub-state of "active". */
     warning: v.optional(warningValidator),
+    /** Created for one person; absent or false is a two-person challenge. A partner joining sets it false. */
+    solo: v.optional(v.boolean()),
   }).index("by_status", ["status"]),
 
   challengeMembers: defineTable({
