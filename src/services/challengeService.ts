@@ -93,6 +93,11 @@ export async function leaveChallenge(challengeId: Id<"challenges">): Promise<voi
   await convex.mutation(api.challenges.leaveChallenge, { challengeId })
 }
 
+/** Deletes an ended challenge for good (creator or admin). Both members lose the season. */
+export async function deleteChallenge(challengeId: Id<"challenges">): Promise<void> {
+  await convex.mutation(api.challenges.deleteChallenge, { challengeId })
+}
+
 /** Publishes the day's summary once; the server fans it out to every active challenge. */
 export async function syncChallengeSummary(date: string, summary: ChallengeSummary): Promise<void> {
   await convex.mutation(api.challenges.syncDaySummary, { date, summary, timezone: deviceTimezone() })
