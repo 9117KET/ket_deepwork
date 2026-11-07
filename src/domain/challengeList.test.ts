@@ -6,6 +6,8 @@ import {
   headlinePhrase,
   owedAct,
   partnerWho,
+  seasonDatesError,
+  seasonDeadlinesError,
   seasonStepError,
   sortChallenges,
   stateMark,
@@ -183,5 +185,31 @@ describe('seasonStepError', () => {
     expect(seasonStepError({ ...ok, checkinDeadline: '21:30' })?.field).toBe('checkin')
     expect(seasonStepError({ ...ok, checkinDeadline: '20:00' })?.field).toBe('checkin')
     expect(seasonStepError({ ...ok, checkinDeadline: '' })?.field).toBe('checkin')
+  })
+})
+
+describe('seasonDatesError and seasonDeadlinesError', () => {
+  it('checks the dates alone: format, order, at most a year', () => {
+    expect(seasonDatesError({ startDate: '2026-11-02', endDate: '2026-11-02' })).toBeNull()
+    expect(seasonDatesError({ startDate: '', endDate: '2026-11-02' })?.field).toBe('start')
+    expect(seasonDatesError({ startDate: '2026-11', endDate: '' })?.field).toBe('start')
+    expect(seasonDatesError({ startDate: '2026-11-02', endDate: '' })?.field).toBe('end')
+    expect(seasonDatesError({ startDate: '2026-11-02', endDate: '02/11/2026' })?.field).toBe('end')
+    // The create form has no start error slot, so seasonStepError shows it under Ends.
+    expect(seasonStepError({ startDate: '', endDate: '2026-11-02', planDeadline: '10:00', checkinDeadline: '23:59' })?.field).toBe('end')
+    expect(seasonDatesError({ startDate: '2026-11-02', endDate: '2026-11-01' })?.message).toContain('on or after')
+    expect(seasonDatesError({ startDate: '2026-11-02', endDate: '2027-11-03' })?.message).toContain('366')
+  })
+
+  it('checks the deadlines alone', () => {
+    expect(seasonDeadlinesError({ planDeadline: '10:00', checkinDeadline: '23:59' })).toBeNull()
+    expect(seasonDeadlinesError({ planDeadline: '21:30', checkinDeadline: '23:59' })?.field).toBe('plan')
+    expect(seasonDeadlinesError({ planDeadline: '10:00', checkinDeadline: '21:30' })?.field).toBe('checkin')
+  })
+
+  it('seasonStepError is the two in order, dates first', () => {
+    const bad = { startDate: '2026-11-02', endDate: '2026-11-01', planDeadline: '22:00', checkinDeadline: '20:00' }
+    expect(seasonStepError(bad)?.field).toBe('end')
+    expect(seasonStepError({ ...bad, endDate: '2026-11-03' })?.field).toBe('plan')
   })
 })

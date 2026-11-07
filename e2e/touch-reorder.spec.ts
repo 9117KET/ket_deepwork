@@ -107,6 +107,10 @@ test.describe('phone', () => {
 
   test('hold and drag a Tasks row into the Top 3; worked minutes untouched', async ({ page }) => {
     await openToday(page)
+    // The seed fills the Top 3, which holds at most three: make room first.
+    const making = await openActions(page, RICH_IDS.topLong)
+    await making.getByRole('menuitem', { name: 'Move to Tasks' }).click()
+    await expect.poll(() => rootsOf(page, 'mustDo')).toEqual([RICH_IDS.topDone, RICH_IDS.topScheduled])
     const before = await readDay(page)
 
     // Both rows on screen: the Tasks row near the bottom, the Top 3 above.
@@ -130,7 +134,7 @@ test.describe('phone', () => {
 
     await expect
       .poll(() => rootsOf(page, 'mustDo'))
-      .toEqual([RICH_IDS.topDone, RICH_IDS.listTimed, RICH_IDS.topScheduled, RICH_IDS.topLong])
+      .toEqual([RICH_IDS.topDone, RICH_IDS.listTimed, RICH_IDS.topScheduled])
     const after = await readDay(page)
     expect(after.tasks.find((t) => t.id === RICH_IDS.listTimed)?.sectionId).toBe('mustDo')
     // Worked minutes are sacred: a move never touches a session.
@@ -217,13 +221,21 @@ test.describe('phone', () => {
       await page.keyboard.press('Escape')
     }
 
-    // A parent goes to the end of the Top 3 and takes its subtask with it.
+    // The Top 3 is full: "Move to Top 3" is refused out loud, nothing moves.
     let sheet = await openActions(page, RICH_IDS.listParent)
+    const full = await readDay(page)
+    await sheet.getByRole('menuitem', { name: 'Move to Top 3' }).click()
+    await expect(page.getByText('Top 3 is full. Move one out first.')).toBeVisible()
+    expect((await readDay(page)).tasks).toEqual(full.tasks)
+
+    // Make room, then a parent goes to the end of the Top 3 with its subtask.
+    sheet = await openActions(page, RICH_IDS.topLong)
+    await sheet.getByRole('menuitem', { name: 'Move to Tasks' }).click()
+    sheet = await openActions(page, RICH_IDS.listParent)
     await sheet.getByRole('menuitem', { name: 'Move to Top 3' }).click()
     await expect.poll(() => rootsOf(page, 'mustDo')).toEqual([
       RICH_IDS.topDone,
       RICH_IDS.topScheduled,
-      RICH_IDS.topLong,
       RICH_IDS.listParent,
     ])
     let { tasks } = await readDay(page)
@@ -239,6 +251,7 @@ test.describe('phone', () => {
       RICH_IDS.listLong,
       RICH_IDS.listDone,
       RICH_IDS.listTimed,
+      RICH_IDS.topLong,
       RICH_IDS.listParent,
     ])
     ;({ tasks } = await readDay(page))
@@ -354,7 +367,7 @@ test.describe('desktop 1280x900', () => {
   test('Alt+ArrowDown on a grip moves the row and says so', async ({ page }) => {
     await seedDesktop(page, ABC)
     await openDesktop(page)
-    const grip = page.getByRole('button', { name: /Alt\+Up or Alt\+Down/ }).first()
+    const grip = page.getByRole('button', { name: 'Drag to move AAA' })
     await grip.focus()
     await page.keyboard.press('Alt+ArrowDown')
     await expect.poll(() => rootsOf(page, 'highPriority')).toEqual(['B', 'A', 'C'])
@@ -367,7 +380,7 @@ test.describe('desktop 1280x900', () => {
   test('Enter on a Tasks grip opens its menu, focus in it, and Escape gives it back', async ({ page }) => {
     await seedDesktop(page, ABC)
     await openDesktop(page)
-    const grip = page.getByRole('button', { name: /Alt\+Up or Alt\+Down/ }).first()
+    const grip = page.getByRole('button', { name: 'Drag to move AAA' })
     await grip.focus()
     await page.keyboard.press('Enter')
     const menu = page.getByRole('menu')
@@ -386,7 +399,7 @@ test.describe('desktop 1280x900', () => {
       ...ABC,
     ])
     await openDesktop(page)
-    const grip = page.getByRole('button', { name: /Reorder "Ptwo"/ })
+    const grip = page.getByRole('button', { name: 'Drag to move Ptwo' })
     await grip.focus()
     await page.keyboard.press('Enter')
     const menu = page.getByRole('menu')

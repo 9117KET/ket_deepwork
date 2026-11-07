@@ -8,7 +8,8 @@
  *   banner that expands to show them.
  *
  * Two row anatomies, chosen by the primary pointer like `TaskItem`:
- *  - a finger: checkbox, rank and title, one chip, ⋮. The ⋮ opens the same
+ *  - a finger: checkbox, rank and title, one chip, ⋮, drag handle (a finger
+ *    on it lifts the row at once; elsewhere a hold does). The ⋮ opens the same
  *    `TaskActionSheet` as the list, so Delete, Hide from partner, Schedule,
  *    Start and Move are all reachable by touch. The progress row is one button
  *    under the title that opens the progress sheet.
@@ -19,9 +20,12 @@
 import { useEffect, useRef, useState } from 'react'
 import type { DeepWorkSession, Task, TaskPatch } from '../../domain/types'
 import { computeTaskProgress, formatMinutes } from '../../domain/taskProgress'
-import { ArrowDown, ArrowUp, CheckCircle2, ChevronUp, ChevronDown, Eye, EyeOff, GripVertical, MoreVertical, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, CheckCircle2, ChevronUp, ChevronDown, Eye, EyeOff, MoreVertical, X } from 'lucide-react'
+import { DragHandle } from './DragHandle'
 import { TaskProgressBar, TaskProgressBoxes } from './TaskProgressBoxes'
-import { TaskDurationPicker } from './TaskDurationPicker'
+import { DurationChip } from './DurationChip'
+import type { AddTaskOptions } from './AddTaskInput'
+import { extractTrailingDuration } from '../../domain/durations'
 import { ScheduleChip } from './ScheduleChip'
 import { TaskActionSheet } from './TaskActionSheet'
 import { TouchCheckbox } from './TouchCheckbox'
@@ -39,7 +43,7 @@ interface MustDoPinnedHeaderProps {
   /** Open the progress actions sheet for a MUST. */
   onOpenProgressSheet?: (taskId: string) => void
   onToggle: (taskId: string) => void
-  onAdd: (title: string) => void
+  onAdd: (title: string, options?: AddTaskOptions) => void
   onDelete: (taskId: string) => void
   onUpdate: (taskId: string, patch: TaskPatch) => void
   /** Consciously abandon a MUST (offered in the phone action sheet). */
@@ -274,7 +278,9 @@ export function MustDoPinnedHeader({
   const handleAdd = () => {
     const trimmed = input.trim()
     if (!trimmed || rootTasks.length >= MAX) return
-    onAdd(trimmed)
+    const typed = extractTrailingDuration(trimmed)
+    if (typed) onAdd(typed.title, { durationMinutes: typed.minutes })
+    else onAdd(trimmed)
     setInput('')
     if (rootTasks.length + 1 >= MAX) setShowAdd(false)
   }
@@ -301,11 +307,18 @@ export function MustDoPinnedHeader({
    */
   const renderPhoneRow = (task: Task, idx: number, trailing: 'menu' | 'remove') => {
     const progress = computeTaskProgress(task, deepWorkSessions ?? [], blockMinutes)
-    const chipText = task.scheduledAt ?? (task.durationMinutes ? formatMinutes(task.durationMinutes) : null)
+    // Unset, the chip still shows ("Time", dim) wherever it opens the sheet.
+    const chipText =
+      task.scheduledAt ??
+      (task.durationMinutes ? formatMinutes(task.durationMinutes) : onSchedule && !task.isDone ? 'Time' : null)
     const chipPill = chipText ? (
       <span
         className={`inline-flex h-8 items-center rounded-lg bg-share-hairline px-2 text-xs tabular-nums ${
-          task.scheduledAt ? 'text-share-primary' : 'text-share-onSurfaceVariant'
+          task.scheduledAt
+            ? 'text-share-primary'
+            : task.durationMinutes
+              ? 'text-share-onSurfaceVariant'
+              : 'text-share-onSurfaceDim'
         }`}
       >
         {chipText}
@@ -360,7 +373,13 @@ export function MustDoPinnedHeader({
                 type="button"
                 onClick={() => onSchedule(task.id)}
                 className="touch-target inline-flex shrink-0 items-center justify-center"
-                aria-label={task.scheduledAt ? `Scheduled at ${task.scheduledAt}. Change` : `${chipText}. Schedule`}
+                aria-label={
+                  task.scheduledAt
+                    ? `Scheduled at ${task.scheduledAt}. Change`
+                    : task.durationMinutes
+                      ? `${chipText}. Schedule`
+                      : 'How long: not set. Schedule'
+                }
               >
                 {chipPill}
               </button>
@@ -386,6 +405,15 @@ export function MustDoPinnedHeader({
             >
               <X className="h-5 w-5" />
             </button>
+          )}
+          {/* Trailing, as a list's reorder control is on a phone: a finger
+              on it lifts the row at once; activating it opens the actions. */}
+          {draggable && (
+            <DragHandle
+              taskTitle={task.title}
+              onClick={() => setSheetTaskId(task.id)}
+              aria-haspopup="dialog"
+            />
           )}
         </div>
         {progress && (
@@ -473,10 +501,9 @@ export function MustDoPinnedHeader({
                   )}
                 </label>
                 <span className="flex shrink-0 items-center gap-1">
-                  <TaskDurationPicker
+                  <DurationChip
                     value={task.durationMinutes}
                     onChange={minutes => onUpdate(task.id, { durationMinutes: minutes })}
-                    className={onSchedule ? "hidden sm:block" : undefined}
                   />
                 </span>
                 {renderProgress(task)}
@@ -567,9 +594,10 @@ export function MustDoPinnedHeader({
             }`}
           >
             {canReorder && (
-              <span
-                role="button"
-                tabIndex={0}
+              // Visible at every width. Alt+Arrow moves; Enter, Space,
+              // right-click or Shift+F10 opens the menu.
+              <DragHandle
+                taskTitle={task.title}
                 onKeyDown={handleGripKeyDown(task.id, idx)}
                 onContextMenu={(e) => {
                   e.preventDefault()
@@ -579,12 +607,8 @@ export function MustDoPinnedHeader({
                 }}
                 aria-haspopup="menu"
                 aria-expanded={gripMenu?.taskId === task.id}
-                aria-label={`Reorder "${task.title}": drag, or Alt+Up or Alt+Down to move; Enter for menu`}
                 aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
-                className="hidden shrink-0 touch-none rounded text-share-onSurfaceVariant/40 focus:outline-none focus-visible:ring-1 focus-visible:ring-share-primary sm:block"
-              >
-                <GripVertical aria-hidden className="h-3.5 w-3.5" />
-              </span>
+              />
             )}
             {(onMoveUp || onMoveDown) && (
               <span className="flex shrink-0 items-center sm:hidden">
@@ -633,10 +657,9 @@ export function MustDoPinnedHeader({
               {onSchedule && !task.isDone && (
                 <ScheduleChip scheduledAt={task.scheduledAt} onClick={() => onSchedule(task.id)} />
               )}
-              <TaskDurationPicker
+              <DurationChip
                 value={task.durationMinutes}
                 onChange={minutes => onUpdate(task.id, { durationMinutes: minutes })}
-                className={onSchedule ? "hidden sm:block" : undefined}
               />
             </span>
             {renderProgress(task)}

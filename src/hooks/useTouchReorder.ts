@@ -4,8 +4,11 @@
  * Moving a task with a finger. HTML5 drag and drop never fires on a phone, so
  * the phone rows get their own gesture, built on pointer events:
  *
- *  - press and hold a row (HOLD_MS) without moving: the row lifts and the page
- *    stops scrolling for the rest of the touch;
+ *  - put a finger on a row's drag handle (`DragHandle`): the row lifts at once;
+ *  - or press and hold anywhere else on the row (HOLD_MS) without moving: the
+ *    row lifts and the page stops scrolling for the rest of the touch;
+ *  - a mouse or pen on the handle drags the same way, so a mouse plugged into
+ *    a touch device (whose rows are the phone anatomy) can move a row too;
  *  - move the finger: an insertion line shows where the row will land, in
  *    either list (the Top 3 or Tasks);
  *  - lift the finger: the row is dropped there through the planner's own
@@ -123,6 +126,13 @@ export function emptyListData(sectionId: TaskSectionId) {
 
 /** Nothing in these starts a lift: they own the touch. */
 const NO_LIFT_SELECTOR = 'input, select, textarea, [contenteditable="true"]'
+
+/**
+ * Marks a row's drag handle (`DragHandle`). A finger on it lifts the row at
+ * once, with no hold, because the handle has no other job; and a mouse on it
+ * drags too, so a mouse on a touch device can move a row.
+ */
+export const DRAG_HANDLE_SELECTOR = '[data-drag-handle]'
 
 interface Gesture {
   pointerId: number
@@ -319,9 +329,18 @@ export function useTouchReorder({
   const bind = useCallback(
     (item: TouchDragItem): TouchRowBinding => ({
       onPointerDown: (e) => {
-        if (!enabled || e.pointerType !== 'touch' || !e.isPrimary) return
+        if (!enabled || !e.isPrimary) return
         if (gestureRef.current) return
-        if ((e.target as HTMLElement | null)?.closest(NO_LIFT_SELECTOR)) return
+        const origin = e.target as HTMLElement | null
+        if (origin?.closest(NO_LIFT_SELECTOR)) return
+        // The handle belongs to this row, not to a nested one.
+        const handle = origin?.closest<HTMLElement>(DRAG_HANDLE_SELECTOR)
+        const fromHandle = Boolean(handle && handle.closest('[data-reorder-row]') === e.currentTarget)
+        // A finger anywhere on the row; a mouse or pen only from the handle.
+        if (e.pointerType !== 'touch' && !fromHandle) return
+        if (e.pointerType === 'mouse' && e.button !== 0) return
+        // No text selection, and no native drag, under a mouse on the handle.
+        if (e.pointerType !== 'touch') e.preventDefault()
         const el = e.currentTarget
         const g: Gesture = {
           pointerId: e.pointerId,
@@ -364,13 +383,17 @@ export function useTouchReorder({
           window.removeEventListener('pointercancel', onCancel)
         }
 
-        g.timer = window.setTimeout(() => {
+        const lift = () => {
           g.timer = null
           if (gestureRef.current !== g) return
           g.lifted = true
           setState({ item, target: null })
           startAutoScroll()
-        }, HOLD_MS)
+        }
+        // From the handle the row lifts at once; from the body a finger has
+        // to rest first, so a swipe across the list still scrolls it.
+        if (fromHandle) lift()
+        else g.timer = window.setTimeout(lift, HOLD_MS)
       },
       // A long press would otherwise open the browser's own menu.
       onContextMenu: (e) => {

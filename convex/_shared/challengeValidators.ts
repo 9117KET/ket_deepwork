@@ -13,13 +13,16 @@ export const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
 export const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/
 
 /**
- * One thing a member promised not to do. Ids are minted server-side and keep
- * through text edits. Removing a don't archives it (`archivedAt`) rather than
- * deleting it, so every id ever named in `challengeDays.dontsBroken` still
- * resolves to its text: a confession is recorded work.
+ * One goal or one don't of a member. Ids are minted server-side and keep
+ * through text edits. Removing one archives it (`archivedAt`) rather than
+ * deleting it, so every id ever named in `challengeDays.goalsKept` or
+ * `dontsBroken` still resolves to its text: a mark is recorded work.
  */
-export const dontValidator = v.object({ id: v.string(), text: v.string(), archivedAt: v.optional(v.number()) })
-export type Dont = Infer<typeof dontValidator>
+export const commitmentValidator = v.object({ id: v.string(), text: v.string(), archivedAt: v.optional(v.number()) })
+export type Commitment = Infer<typeof commitmentValidator>
+/** Kept as an alias; existing imports keep working. */
+export const dontValidator = commitmentValidator
+export type Dont = Commitment
 
 /**
  * What a partner is allowed to see of a day. Built on the client from the
@@ -32,10 +35,21 @@ export const summaryValidator = v.object({
   top3FromTasks: v.optional(v.boolean()),
   tasksDone: v.number(),
   tasksTotal: v.number(),
+  /**
+   * Every visible task outside the Top 3, title and done state: the partner
+   * sees the whole day, and a task the member marked private is left out here
+   * and counted in `privateCount` instead. Absent from rows written before
+   * 7 Nov 2026 and from older clients, which sent only the two counts.
+   */
+  tasks: v.optional(v.array(v.object({ title: v.string(), isDone: v.boolean() }))),
   privateCount: v.number(),
   deepWorkMinutes: v.number(),
   habitsDone: v.number(),
   habitsTotal: v.number(),
+  /** Whole minutes planned for the day: every root task, private ones included. Absent from old clients. */
+  plannedMinutes: v.optional(v.number()),
+  /** Whole minutes earned by ticks (rounded down), the rule of `computeDayCompletion`. Absent from old clients. */
+  doneMinutes: v.optional(v.number()),
 })
 export type ChallengeSummary = Infer<typeof summaryValidator>
 

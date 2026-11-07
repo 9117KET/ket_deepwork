@@ -44,24 +44,45 @@ export function getDescendantIds(tasks: Task[], parentId: string): Set<string> {
   return set
 }
 
+/** The Top 3 holds at most this many root tasks, however a task gets there. */
+export const TOP3_MAX = 3
+
+/**
+ * Would moving `taskId` into the Top 3 make it hold more than `TOP3_MAX`
+ * roots? A task already in the Top 3 (a reorder) or a subtask never counts.
+ */
+export function wouldOverfillTop3(tasks: Task[], taskId: string): boolean {
+  const task = tasks.find((t) => t.id === taskId)
+  if (!task || task.parentId || task.sectionId === 'mustDo') return false
+  const roots = tasks.filter((t) => t.sectionId === 'mustDo' && !t.parentId).length
+  return roots >= TOP3_MAX
+}
+
 /**
  * Clone tasks for another day: new IDs, same content, parentId remapped.
  * When resetTimes is true, scheduledAt and durationMinutes are cleared.
+ * When resetSchedule is true, only scheduledAt is cleared: the planned
+ * length is still the plan, but a copied id has no calendar event behind it.
  */
 export function cloneTasksForDay(
   tasks: Task[],
   targetDate: string,
-  options?: { resetTimes?: boolean },
+  options?: { resetTimes?: boolean; resetSchedule?: boolean },
 ): Task[] {
   const idMap = new Map<string, string>()
   const resetTimes = options?.resetTimes ?? false
+  const resetSchedule = resetTimes || (options?.resetSchedule ?? false)
   const cloned = tasks.map((t) => {
     const newId = createTaskId()
     idMap.set(t.id, newId)
-    const base = { ...t, id: newId, date: targetDate, isDone: false }
-    if (resetTimes) {
-      return { ...base, scheduledAt: undefined, durationMinutes: undefined }
-    }
+    // manualLoggedMinutes is the legacy hand-logged total. It is time worked
+    // on the source day; copying it would invent logged time on this one.
+    // Hand-logged time lives in DeepWorkSessions now, which are never copied.
+    const { manualLoggedMinutes: _legacyLogged, scheduledAt, durationMinutes, ...rest } = t
+    void _legacyLogged
+    const base: Task = { ...rest, id: newId, date: targetDate, isDone: false }
+    if (!resetSchedule && scheduledAt !== undefined) base.scheduledAt = scheduledAt
+    if (!resetTimes && durationMinutes !== undefined) base.durationMinutes = durationMinutes
     return base
   })
   return cloned.map((t) => ({

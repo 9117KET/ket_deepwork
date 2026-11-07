@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { reorderTasks, getOrderedTasksForSection, getDescendantIds, cloneTasksForDay } from './taskUtils'
+import { reorderTasks, getOrderedTasksForSection, getDescendantIds, cloneTasksForDay, wouldOverfillTop3 } from './taskUtils'
 import type { Task } from './types'
 
 // ── helpers ─────────────────────────────────────────────────────────────────
@@ -171,6 +171,42 @@ describe('cloneTasksForDay', () => {
     const cloned = cloneTasksForDay(original, '2026-05-13', { resetTimes: false })
     expect(cloned[0]!.scheduledAt).toBe('09:00')
     expect(cloned[0]!.durationMinutes).toBe(60)
+  })
+
+  it('never carries the legacy manualLoggedMinutes (it would invent logged time)', () => {
+    const original = [task('a', { manualLoggedMinutes: 45, durationMinutes: 60 })]
+    const cloned = cloneTasksForDay(original, '2026-05-13')
+    expect('manualLoggedMinutes' in cloned[0]!).toBe(false)
+    expect(cloned[0]!.durationMinutes).toBe(60)
+  })
+
+  it('clears only scheduledAt when resetSchedule is true', () => {
+    const original = [task('a', { scheduledAt: '09:00', durationMinutes: 60 })]
+    const cloned = cloneTasksForDay(original, '2026-05-13', { resetSchedule: true })
+    expect('scheduledAt' in cloned[0]!).toBe(false)
+    expect(cloned[0]!.durationMinutes).toBe(60)
+  })
+})
+
+// ── wouldOverfillTop3 ────────────────────────────────────────────────────────
+
+describe('wouldOverfillTop3', () => {
+  const top3 = [task('t1', { sectionId: 'mustDo' }), task('t2', { sectionId: 'mustDo' })]
+
+  it('allows a move while the Top 3 has room', () => {
+    expect(wouldOverfillTop3([...top3, task('l1')], 'l1')).toBe(false)
+  })
+
+  it('refuses a fourth root, and does not count subtasks as roots', () => {
+    const full = [...top3, task('t3', { sectionId: 'mustDo' }), task('s1', { sectionId: 'mustDo', parentId: 't1' }), task('l1')]
+    expect(wouldOverfillTop3(full, 'l1')).toBe(true)
+    expect(wouldOverfillTop3(full.filter((t) => t.id !== 't3'), 'l1')).toBe(false)
+  })
+
+  it('never refuses a reorder inside a full Top 3, or a subtask', () => {
+    const full = [...top3, task('t3', { sectionId: 'mustDo' }), task('c', { parentId: 'x' })]
+    expect(wouldOverfillTop3(full, 't3')).toBe(false)
+    expect(wouldOverfillTop3(full, 'c')).toBe(false)
   })
 })
 

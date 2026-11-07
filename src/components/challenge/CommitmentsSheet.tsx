@@ -2,13 +2,13 @@
  * components/challenge/CommitmentsSheet.tsx
  *
  * Edit your own goals and don'ts in one challenge. Your partner sees them
- * and cannot change them. Rewording a don't keeps it the same don't;
- * removing one archives it on the server, so a day you already confessed to
- * still reads right.
+ * and cannot change them. Rewording a goal or a don't keeps it the same one;
+ * removing one archives it on the server, so a day you already marked or
+ * confessed to still reads right.
  */
 
 import { useState } from 'react'
-import { dontsToRows, rowsToDontPayload, rowsToTexts, textsToRows, withDraft, type DontLike } from '../../domain/challengeCommitments'
+import { commitmentsToRows, rowsToCommitmentPayload, withDraft, type Commitment } from '../../domain/challengeCommitments'
 import { challengeErrorMessage, updateMyCommitments } from '../../services/challengeService'
 import { ListEditor } from './ListEditor'
 import type { Id } from '../../../convex/_generated/dataModel'
@@ -17,15 +17,15 @@ import { ErrorLine } from '../ui/Notices'
 
 interface CommitmentsSheetProps {
   challengeId: Id<'challenges'>
-  goals: string[]
-  /** The full list; only the active ones are offered for editing. */
-  donts: DontLike[]
+  /** Both full lists (normalized goals); only the active ones are offered for editing. */
+  goals: Commitment[]
+  donts: Commitment[]
   onClose: () => void
 }
 
 export function CommitmentsSheet({ challengeId, goals: initialGoals, donts: initialDonts, onClose }: CommitmentsSheetProps) {
-  const [goals, setGoals] = useState(() => textsToRows(initialGoals))
-  const [donts, setDonts] = useState(() => dontsToRows(initialDonts))
+  const [goals, setGoals] = useState(() => commitmentsToRows(initialGoals))
+  const [donts, setDonts] = useState(() => commitmentsToRows(initialDonts))
   const [goalDraft, setGoalDraft] = useState('')
   const [dontDraft, setDontDraft] = useState('')
   const [busy, setBusy] = useState(false)
@@ -35,7 +35,10 @@ export function CommitmentsSheet({ challengeId, goals: initialGoals, donts: init
     setBusy(true)
     setError(null)
     try {
-      await updateMyCommitments(challengeId, { goals: rowsToTexts(withDraft(goals, goalDraft)), donts: rowsToDontPayload(withDraft(donts, dontDraft)) })
+      await updateMyCommitments(challengeId, {
+        goals: rowsToCommitmentPayload(withDraft(goals, goalDraft)),
+        donts: rowsToCommitmentPayload(withDraft(donts, dontDraft)),
+      })
       onClose()
     } catch (e) {
       setError(challengeErrorMessage(e))

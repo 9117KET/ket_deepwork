@@ -7,7 +7,9 @@ import {
   challengeDates,
   challengeProgress,
   dayCellState,
+  dayCompletionPercent,
   extractInviteToken,
+  seasonCompletion,
   formatDeepMinutes,
   jointStreak,
   memberSeason,
@@ -51,6 +53,11 @@ describe('buildChallengeSummary', () => {
       { title: 'Call Ana', isDone: false },
     ])
     expect(s).toMatchObject({ tasksDone: 1, tasksTotal: 2, privateCount: 2, habitsDone: 2, habitsTotal: 3 })
+    // The whole visible list travels, titles and done state; a subtask never does on its own.
+    expect(s.tasks).toEqual([
+      { title: 'Email', isDone: true },
+      { title: 'Groceries', isDone: false },
+    ])
     expect(JSON.stringify(s)).not.toContain('Secret')
     expect(JSON.stringify(s)).not.toContain('Therapy')
   })
@@ -103,11 +110,87 @@ describe('buildChallengeSummary', () => {
       top3: [],
       tasksDone: 0,
       tasksTotal: 0,
+      tasks: [],
       privateCount: 0,
       deepWorkMinutes: 0,
       habitsDone: 0,
       habitsTotal: 3,
+      plannedMinutes: 0,
+      doneMinutes: 0,
     })
+  })
+
+  it('carries planned and done minutes, private tasks included', () => {
+    const day = makeDay({
+      tasks: [
+        task({ id: 'a', durationMinutes: 60, isDone: true }),
+        task({ id: 'b', durationMinutes: 120 }),
+        task({ id: 'c', title: 'Therapy', durationMinutes: 30, isDone: true, isPrivate: true }),
+      ],
+    })
+    const s = buildChallengeSummary(day, [])
+    expect(s).toMatchObject({ plannedMinutes: 210, doneMinutes: 90 })
+    expect(dayCompletionPercent(s)).toBe(42)
+    expect(JSON.stringify(s)).not.toContain('Therapy')
+  })
+
+  it('rounds done minutes down and planned minutes to the nearest whole', () => {
+    // A parent with three 10m subtasks, one done: 30m planned for the parent, 10m earned.
+    const day = makeDay({
+      tasks: [
+        task({ id: 'p', durationMinutes: 25 }),
+        task({ id: 's1', parentId: 'p', durationMinutes: 10, isDone: true }),
+        task({ id: 's2', parentId: 'p', durationMinutes: 10 }),
+        task({ id: 's3', parentId: 'p', durationMinutes: 10 }),
+      ],
+    })
+    const s = buildChallengeSummary(day, [])
+    expect(s.plannedMinutes).toBe(25)
+    expect(s.doneMinutes).toBe(8) // 25 × 1/3 = 8.33, floored
+  })
+
+  it('a day with no tasks plans nothing, so it has no percentage', () => {
+    const s = buildChallengeSummary(makeDay(), [])
+    expect(s.plannedMinutes).toBe(0)
+    expect(dayCompletionPercent(s)).toBeNull()
+  })
+})
+
+describe('dayCompletionPercent', () => {
+  const base = buildChallengeSummary(undefined, [])
+  it('is null without the fields, with nothing planned, and for no summary', () => {
+    const { plannedMinutes: _p, doneMinutes: _d, ...old } = base
+    void _p
+    void _d
+    expect(dayCompletionPercent(old)).toBeNull()
+    expect(dayCompletionPercent({ ...base, plannedMinutes: 0, doneMinutes: 0 })).toBeNull()
+    expect(dayCompletionPercent(undefined)).toBeNull()
+  })
+  it('floors to a whole percent between 0 and 100', () => {
+    expect(dayCompletionPercent({ ...base, plannedMinutes: 120, doneMinutes: 0 })).toBe(0)
+    expect(dayCompletionPercent({ ...base, plannedMinutes: 100, doneMinutes: 64 })).toBe(64)
+    expect(dayCompletionPercent({ ...base, plannedMinutes: 90, doneMinutes: 58 })).toBe(64) // 64.4
+    expect(dayCompletionPercent({ ...base, plannedMinutes: 90, doneMinutes: 90 })).toBe(100)
+  })
+})
+
+describe('seasonCompletion', () => {
+  const base = buildChallengeSummary(undefined, [])
+  const { plannedMinutes: _p, doneMinutes: _d, ...old } = base
+  void _p
+  void _d
+  it('weights by minutes and skips rows without the fields', () => {
+    const rows = [{ summary: { ...base, plannedMinutes: 100, doneMinutes: 50 } }, { summary: old }, { summary: { ...base, plannedMinutes: 100, doneMinutes: 100 } }]
+    expect(seasonCompletion(rows)).toEqual({ planned: 200, done: 150, percent: 75 })
+  })
+  it('is null when nothing was planned', () => {
+    expect(seasonCompletion([])).toEqual({ planned: 0, done: 0, percent: null })
+    expect(seasonCompletion([{}, { summary: old }])).toEqual({ planned: 0, done: 0, percent: null })
+  })
+  it('is not an average of daily percentages', () => {
+    // 1 of 10 and 90 of 90: daily average would be 55%, weighted is 91%.
+    const rows = [{ summary: { ...base, plannedMinutes: 10, doneMinutes: 1 } }, { summary: { ...base, plannedMinutes: 90, doneMinutes: 90 } }]
+    expect(seasonCompletion(rows).percent).toBe(91)
   })
 })
 

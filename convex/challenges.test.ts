@@ -218,6 +218,7 @@ describe('the day', () => {
       checkinAt: first.checkinAt,
       note: 'Solid day.',
       dontsBroken: [donts[0]!.id],
+      goalsKept: [],
     })
     const second = await a.as.mutation(api.challenges.checkIn, { challengeId, date: '2026-10-22', summary: summary(), dontsBroken: [] })
     expect(second.checkinAt).toBe(first.checkinAt)

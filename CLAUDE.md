@@ -191,7 +191,9 @@ copies it), the app is the record.
 
 **The planner stays private.** The partner never reads `plannerDays`. What
 they see is the `summary` the member's own client publishes into
-`challengeDays` — Top 3 titles with done state, done/total for the rest, a
+`challengeDays` — Top 3 titles with done state, every other visible task's
+title with done state (`tasks`, added 7 Nov 2026; older rows carry only the
+done/total counts, which are still sent), a
 count of private tasks, earned deep-work minutes, habits done/total — built by
 `buildChallengeSummary` in `src/domain/challenge.ts` and sent by
 `useChallengeSync` (the `useTaskSync` shape: 1.2s debounce, foreground
@@ -261,7 +263,10 @@ active), `challengeMembers` (one per user per challenge, indexed
 the two are in different zones, the member's own `goals` and `donts`,
 `joinedDate` and `lastActedAt`), `challengeInvites` (7-day token, one seat),
 `challengeDays` (one row per member per day: summary, `planSetAt`,
-`checkinAt`, note, `dontsBroken`, `remindersSent`).
+`checkinAt`, note, `dontsBroken`, `goalsKept`, `remindersSent`). The summary
+may carry `plannedMinutes` and `doneMinutes` (whole minutes planned and
+earned by ticks, the `computeDayCompletion` rule, private tasks included);
+both are optional, because old rows and old clients lack them.
 Legacy `shareTokens` is untouched. A season runs at most 366 days, and the
 check-in deadline must fall after 21:30, where the check-in reminders start.
 
@@ -292,6 +297,36 @@ via `memberView` and cannot change them. A removed don't is archived
 `src/domain/challengeCommitments.ts`). `challenges.goals`/`donts` are legacy,
 never written again: a creator whose member row has no lists falls back to
 them (`memberCommitments`), which is the whole migration.
+
+**Editing the dates.** `updateSpan` corrects the start, the end and,
+optionally, the two deadlines of a running season. Only a member may call it,
+and only while the challenge is active. Only the creator may change the dates
+("Only the creator can change the dates"). The span and deadline checks are
+the ones `createChallenge` makes, from one helper (`assertSpan`). The end
+cannot move before any member's local today, because the season-over sweep
+would end it at once. The start cannot move past the first day on which
+either member locked in or checked in, because `history` reads from the start
+and those days would vanish ("The start can't move past 24 Oct, when the
+first lock-in or check-in was recorded"). No `challengeDays` row is deleted or
+changed, and `status` is left alone.
+
+**Daily marks.** Goals have ids now, like don'ts: minted `goal-<ms>-<n>`,
+kept through edits, archived when removed. A member row written before that
+holds plain strings; `normalizeGoals` reads the one at index `i` as
+`goal-legacy-<i>`, and the member's first `updateMyCommitments` stores those
+ids for real, so a mark made before the edit still resolves after it.
+`memberView` (and the result of `updateMyCommitments`) carries goals twice:
+`goals` is still `string[]`, the active texts, so a client built before ids
+keeps rendering through a deploy; `goalItems` is the list with ids, archived
+ones included, like `donts`. New client code reads `goalItems`.
+`markDay` records, any time during today or yesterday on the member's own
+clock, which goals they kept (`goalsKept`) and which don'ts they broke
+(`dontsBroken`). It writes only the lists it is given and nothing else on the
+row; a missing row is created with an empty summary and no acts. A mark is
+not one of the two daily acts: it never calls `recordAct`, so it neither
+clears a warning nor saves a member from inactivity. `checkIn` takes an
+optional `goalsKept` too; left out, the day's marks stay. The partner's
+`dayView` carries `goalsKept`.
 
 **Reads are split hot/cold here too.** `myChallenges` (every membership,
 active first, at most 50), `dayCards` (one challenge) and `todayCards` (every
@@ -354,7 +389,20 @@ the ended and warning sentences, the Today pill) are pure in
   day has two marks, yours left, and each state is a shape: filled = full,
   ring = plan only, dot = check-in only, dash = missed), goals and don'ts, and
   Leave through an `ActionSheet` (a creator is told it ends the challenge for
-  both). An ended season is read-only with its sentence under the header; an
+  both). Beside Rename the creator of a running season has "Edit dates", a
+  "Dates and deadlines" sheet that calls `updateSpan` (the client checks
+  format and order with `seasonDatesError`/`seasonDeadlinesError`; whether
+  today or a recorded day blocks it is the server's sentence). Under your
+  row, while the season runs, "Today's commitments" lists your active goals
+  (✓ kept) and don'ts (✕ broke) as `aria-pressed` toggles, each tap sending
+  the full set of one kind through `markDay`; goal ids come from
+  `memberView.goalItems` (`goalItemsOf`), never from the plain `goals`
+  texts. Each `MemberRow` adds "Kept 2 of 3 goals" (`keptLine`) and "64% of
+  planned time" with a thin `role="meter"` (`dayCompletionPercent` over the
+  summary's `plannedMinutes`/`doneMinutes`, private tasks included as
+  minutes, never titles), and head to head adds "Planned time done", the
+  season's minutes done over minutes planned (`seasonCompletion`), not an
+  average of daily percentages. An ended season is read-only with its sentence under the header; an
   unknown id says "Not one of your challenges". From `lg`, the season and the
   commitments are a right rail. Design rules: `scout-design-review.md` in
   `docs/00-orchestration/runs/2026-11-02-duration-dnd-multichallenge-design/`.
@@ -374,7 +422,10 @@ today's plan" above the rows while any is unlocked (it calls `lockInPlan`
 without an id, so it locks them all), a per-row Check in that opens that
 challenge's `CheckinSheet`, and the warning sentence on a warned row. The
 `DayHeader` pill reads "Day 22/92 · 70 left" with one running challenge and
-"2 challenges" with more (`challengePillLabel`). "Hide from partner" is in the
+"2 challenges" with more (`challengePillLabel`). The block has no
+commitment toggles (Today stays lean); its `CheckinSheet` asks "Which goals
+did you keep today?" above the don'ts, seeded from the day's `goalsKept`, so
+a check-in never undoes what the dashboard marked. "Hide from partner" is in the
 task menu. Review shows each running challenge's week as two rows of marks.
 The phone tab bar has a fifth tab, **Challenges**, lit on every `/challenge*`
 route and on the admin list. Guests cannot take part.
@@ -416,14 +467,23 @@ gate in `e2e/mobile-responsive.spec.ts`:
    anatomy (checkbox, title, one chip, ⋮ → `TaskActionSheet`) via
    `useCoarsePointer()`; the gates live in `e2e/mobile-today.spec.ts` and
    `e2e/mobile-panels.spec.ts`, with shared fixtures in `e2e/helpers/mobile.ts`.
-   A task moves four ways: a finger presses and holds a row for 300 ms to lift
-   it and drags it between rows of either list (`useTouchReorder`; a swipe
-   without the hold still scrolls), the ⋮ sheet offers "Move to Top 3" /
-   "Move to Tasks" (with subtasks, to the end) and Move up / down, a mouse drags
-   any row, and Alt+ArrowUp / Alt+ArrowDown on a desktop grip moves it one step
-   with a spoken result. Subtasks never leave their parent by drag: a drop
-   anywhere but among their siblings is refused with a toast pointing to "Move
-   to another parent"; `e2e/touch-reorder.spec.ts` pins all of it.
+   Every row shows one `DragHandle` ("Drag to move <title>") at every width.
+   A task moves four ways: a finger on the handle lifts the row at once, or
+   presses and holds anywhere else on it for 300 ms, and drags it between rows
+   of either list (`useTouchReorder`; a swipe on the body without the hold
+   still scrolls, and a mouse on a touch device drags by the handle too), the
+   ⋮ sheet offers "Move to Top 3" / "Move to Tasks" (with subtasks, to the
+   end) and Move up / down, a mouse drags any row on a desktop, and
+   Alt+ArrowUp / Alt+ArrowDown on a desktop handle moves it one step with a
+   spoken result. The Top 3 never holds more than three roots: a drop or a
+   "Move to Top 3" that would make a fourth is refused with "Top 3 is full.
+   Move one out first." (`wouldOverfillTop3`). Subtasks never leave their
+   parent by drag: a drop anywhere but among their siblings is refused with a
+   toast pointing to "Move to another parent"; `e2e/touch-reorder.spec.ts` and
+   `e2e/drag-handle.spec.ts` pin all of it. "Fill from yesterday" (offered
+   while today's list is empty) copies yesterday's Top 3 into today's empty
+   slots, the rest to Tasks, and its list, all unticked, with their lengths but
+   no scheduled time and no logged minutes (`e2e/fill-from-yesterday.spec.ts`).
 2. **`dvh`, never `vh`.** `100vh` on a phone includes the URL bar that is about
    to collapse, so the bottom of a `h-screen` layout is cut off. `#root` sets
    `100vh` then `100dvh` (older browsers keep the first).
@@ -546,11 +606,14 @@ Features built around the *Deep Work* philosophy:
    duration picker lives in that sheet, so a row stays one line.
 
    **One ladder, one gauge.** Every length picker (the desktop row's
-   `TaskDurationPicker`, the phone's `ScheduleSheet`) offers
+   `DurationChip` popover, the phone's `ScheduleSheet`) offers
    `durationOptions()` from `src/domain/durations.ts`: 10m, 15m, 20m, then 30m
-   to 8h, ascending, with a stored off-list value shown in its place. On a
-   desktop row a set length is a quiet chip and an unset one appears only on
-   hover or keyboard focus; under a finger it is always visible. The day's one completion measure is the gauge in
+   to 8h, ascending, with a stored off-list value shown in its place. Every
+   root row shows its length without hover: the length, or a dim "Time" when
+   unset, on a desktop chip and on the phone's one chip alike. A length is
+   typed ("2h 30m", "45", "1:30", read by `parseDurationInput`) or picked
+   from the ladder, and one typed at the end of a new task ("Write report
+   2h") is split off by `extractTrailingDuration`. The day's one completion measure is the gauge in
    `DayHeader` (`role="meter"`), built by `computeDayCompletion` in
    `src/domain/dayCompletion.ts`: planned minutes done of planned minutes, where
    a task with no duration counts as 30m and the line says how many did, and a

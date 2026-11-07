@@ -5,8 +5,8 @@
  * create form, the join page and the commitments sheet.
  *
  * Rows carry an optional id. With `editable`, each row's text can be changed
- * in place and keeps its id, so editing a don't stays the same don't (its
- * past confessions keep pointing at it). Without it, rows are read-only text,
+ * in place and keeps its id, so editing a goal or a don't stays the same one
+ * (its past marks and confessions keep pointing at it). Without it, rows are read-only text,
  * as on the create form.
  *
  * Text left in the Add box is never dropped. Leaving the box commits it as a

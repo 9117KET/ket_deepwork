@@ -107,15 +107,39 @@ export const CHECKIN_REMINDERS_FROM = '21:30'
 
 export type SeasonField = 'end' | 'plan' | 'checkin'
 
+export interface SeasonFieldError {
+  field: SeasonField
+  message: string
+}
+
+/** The Edit dates sheet also has a Starts field that can be the one at fault. */
+export type SeasonDateField = SeasonField | 'start'
+
+export interface SeasonDateFieldError {
+  field: SeasonDateField
+  message: string
+}
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
+
 /**
- * Step 1 of the create form, checked the way the server checks it, so a
- * refusal is shown next to its field before step 2 instead of after it.
- * Times are "HH:MM", which compare correctly as strings.
+ * The dates of a season, checked the way the server checks them (format and
+ * order, at most a year). Only what the client can know: whether a recorded
+ * day blocks a new start is the server's sentence. A blank or malformed date
+ * names its own field, so the error and the focus land on it.
  */
-export function seasonStepError(args: { startDate: string; endDate: string; planDeadline: string; checkinDeadline: string }): { field: SeasonField; message: string } | null {
-  const { startDate, endDate, planDeadline, checkinDeadline } = args
+export function seasonDatesError(args: { startDate: string; endDate: string }): SeasonDateFieldError | null {
+  const { startDate, endDate } = args
+  if (!ISO_DATE.test(startDate)) return { field: 'start', message: 'Pick a start date.' }
+  if (!ISO_DATE.test(endDate)) return { field: 'end', message: 'Pick an end date.' }
   if (endDate < startDate) return { field: 'end', message: 'The end date has to be on or after the start date.' }
   if (daysFrom(startDate, endDate) + 1 > MAX_SPAN_DAYS) return { field: 'end', message: 'A challenge can run for at most a year (366 days).' }
+  return null
+}
+
+/** The two deadlines, "HH:MM", which compare correctly as strings. */
+export function seasonDeadlinesError(args: { planDeadline: string; checkinDeadline: string }): SeasonFieldError | null {
+  const { planDeadline, checkinDeadline } = args
   if (!/^\d{2}:\d{2}$/.test(planDeadline) || planDeadline >= CHECKIN_REMINDERS_FROM) {
     return { field: 'plan', message: `The plan deadline has to be before ${CHECKIN_REMINDERS_FROM}.` }
   }
@@ -123,6 +147,18 @@ export function seasonStepError(args: { startDate: string; endDate: string; plan
     return { field: 'checkin', message: `The check-in deadline has to be after ${CHECKIN_REMINDERS_FROM}, when its reminders start.` }
   }
   return null
+}
+
+/**
+ * Step 1 of the create form (and the Edit dates sheet), checked the way the
+ * server checks it, so a refusal is shown next to its field before it is
+ * sent. Dates first, then deadlines.
+ */
+export function seasonStepError(args: { startDate: string; endDate: string; planDeadline: string; checkinDeadline: string }): SeasonFieldError | null {
+  const dates = seasonDatesError(args)
+  // The create form shows every date problem under Ends, beside its one date error slot.
+  if (dates) return { field: dates.field === 'start' ? 'end' : dates.field, message: dates.message }
+  return seasonDeadlinesError(args)
 }
 
 /** A season-grid state in words, for screen readers and the key. */
