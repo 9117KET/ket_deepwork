@@ -10,6 +10,7 @@
 
 import type * as _shared_auth from "../_shared/auth.js";
 import type * as _shared_calendarTime from "../_shared/calendarTime.js";
+import type * as _shared_challengeInactivity from "../_shared/challengeInactivity.js";
 import type * as _shared_challengeNudges from "../_shared/challengeNudges.js";
 import type * as _shared_challengeReminders from "../_shared/challengeReminders.js";
 import type * as _shared_challengeValidators from "../_shared/challengeValidators.js";
@@ -40,6 +41,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   "_shared/auth": typeof _shared_auth;
   "_shared/calendarTime": typeof _shared_calendarTime;
+  "_shared/challengeInactivity": typeof _shared_challengeInactivity;
   "_shared/challengeNudges": typeof _shared_challengeNudges;
   "_shared/challengeReminders": typeof _shared_challengeReminders;
   "_shared/challengeValidators": typeof _shared_challengeValidators;

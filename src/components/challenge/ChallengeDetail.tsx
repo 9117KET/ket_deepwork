@@ -28,11 +28,11 @@
 
 import { useMemo, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ChevronLeft, Pencil } from 'lucide-react'
-import { buildShareText, challengeDates, formatShortDate, memberSeason, type ChallengeSummary } from '../../domain/challenge'
-import { activeDonts, resolveDontTexts, type DontLike } from '../../domain/challengeCommitments'
+import { CalendarDays, Check, ChevronLeft, Pencil, X } from 'lucide-react'
+import { buildShareText, challengeDates, formatShortDate, memberSeason, seasonCompletion, type ChallengeSummary } from '../../domain/challenge'
+import { activeCommitments, goalItemsOf, resolveDontTexts, type Commitment } from '../../domain/challengeCommitments'
 import { countdownLine, countdownState, daysLeftHeadline, localDeadlineMs } from '../../domain/challengeCountdown'
-import { endedSentence, warningSentence } from '../../domain/challengeList'
+import { endedSentence, seasonDatesError, seasonDeadlinesError, warningSentence, type SeasonDateField, type SeasonDateFieldError } from '../../domain/challengeList'
 import type { ChallengeDetail as Detail, ChallengeHistory } from '../../hooks/useChallenges'
 import { useMinuteTick } from '../../hooks/useMinuteTick'
 import { useSecondTick } from '../../hooks/useSecondTick'
@@ -45,9 +45,11 @@ import {
   deleteChallenge,
   leaveChallenge,
   lockInPlan,
+  markDay,
   nudgePartner,
   renameChallenge,
   shareText,
+  updateSpan,
 } from '../../services/challengeService'
 import {
   NUDGE_MIN_GAP_MS,
@@ -61,7 +63,7 @@ import {
 } from '../../../convex/_shared/challengeNudges'
 import type { Id } from '../../../convex/_generated/dataModel'
 import { ErrorLine, WarningLine } from '../ui/Notices'
-import { ActionSheet } from '../ui/Sheet'
+import { ActionSheet, Sheet } from '../ui/Sheet'
 import { TextButton } from '../ui/TextButton'
 import { textButtonClass } from '../ui/textButtonClass'
 import { CheckinSheet } from './CheckinSheet'
@@ -98,6 +100,7 @@ export function ChallengeDetail({ detail, history, summary, activeCount }: Chall
 
   const [checkinOpen, setCheckinOpen] = useState(false)
   const [editingCommitments, setEditingCommitments] = useState(false)
+  const [editingDates, setEditingDates] = useState(false)
   const [leaveOpen, setLeaveOpen] = useState(false)
   const [leaving, setLeaving] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
@@ -117,6 +120,14 @@ export function ChallengeDetail({ detail, history, summary, activeCount }: Chall
   const partnerRows = [...(history?.partner ?? []), ...(partnerCard ? [partnerCard] : [])]
   const mySeason = memberSeason(myRows, dates, myDate)
   const partnerSeason = partner ? memberSeason(partnerRows, dates, partnerDate) : null
+  // Planned time done over the days each member has reached, on their own clock.
+  const reachedBy = (until: string) => (r: { date: string }) => r.date >= challenge.startDate && r.date <= challenge.endDate && r.date <= until
+  const myCompletion = seasonCompletion(myRows.filter(reachedBy(myDate)))
+  const partnerCompletion = partner ? seasonCompletion(partnerRows.filter(reachedBy(partnerDate))) : null
+  // Goals with ids come from `goalItems`; `goals` stays plain texts for older clients.
+  const myGoals = useMemo(() => goalItemsOf(me), [me])
+  const partnerGoals = useMemo(() => goalItemsOf(partner), [partner])
+  const hasRecords = [...myRows, ...partnerRows].some((r) => r.planSetAt || r.checkinAt)
 
   // The nudge allowance, judged the way the server judges it: cap and gap on
   // my own day row, "owes" on the partner's clock and the partner's day.
@@ -267,7 +278,13 @@ export function ChallengeDetail({ detail, history, summary, activeCount }: Chall
             <ChevronLeft aria-hidden className="h-4 w-4" />
             Challenges
           </Link>
-          <ChallengeTitle challengeId={challenge.id} name={challenge.name} editable={!readOnly} />
+          <ChallengeTitle
+            challengeId={challenge.id}
+            name={challenge.name}
+            editable={!readOnly}
+            // Only the creator corrects the season's dates, and only while it runs.
+            onEditDates={!readOnly && challenge.isCreator ? () => setEditingDates(true) : undefined}
+          />
           {!readOnly && (
             <div className="mt-3">
               {headline.number !== null ? (
@@ -301,7 +318,7 @@ export function ChallengeDetail({ detail, history, summary, activeCount }: Chall
             <h2 id="today-heading" className="sr-only">
               Today
             </h2>
-            <MemberRow name={me.displayName} isMe day={mine} donts={me.donts} />
+            <MemberRow name={me.displayName} isMe day={mine} goals={myGoals} donts={me.donts} />
 
             {running ? (
               <div className="pb-4">
@@ -343,12 +360,24 @@ export function ChallengeDetail({ detail, history, summary, activeCount }: Chall
               )
             )}
 
+            {running && (
+              <TodayCommitments
+                challengeId={challenge.id}
+                date={myDate}
+                goals={activeCommitments(myGoals)}
+                donts={activeCommitments(me.donts)}
+                goalsKept={mine?.goalsKept ?? []}
+                dontsBroken={mine?.dontsBroken ?? []}
+              />
+            )}
+
             <div className="border-t border-share-hairline">
               {partner ? (
                 <MemberRow
                   name={partner.displayName}
                   isMe={false}
                   day={partnerCard}
+                  goals={partnerGoals}
                   donts={partner.donts}
                   caption={partnerDate !== myDate ? formatDayLabel(partnerDate) : undefined}
                   actions={
@@ -419,26 +448,39 @@ export function ChallengeDetail({ detail, history, summary, activeCount }: Chall
             <h2 id="score-heading" className={SECTION_HEADING}>
               {soloAlone ? 'Your season' : 'Head to head'}
             </h2>
-            <table className="mt-2 w-full max-w-sm text-left">
+            <table className="mt-2 w-full max-w-md text-left">
               <thead>
                 <tr className="text-caption text-share-onSurfaceVariant">
                   <th scope="col" className="py-1 font-semibold">
                     <span className="sr-only">Member</span>
                   </th>
-                  <th scope="col" className="py-1 text-right font-semibold">
+                  <th scope="col" className="py-1 pl-3 text-right font-semibold">
                     Full days
                   </th>
-                  <th scope="col" className="py-1 text-right font-semibold">
+                  <th scope="col" className="py-1 pl-3 text-right font-semibold">
                     In a row
+                  </th>
+                  <th scope="col" className="py-1 pl-3 text-right font-semibold">
+                    Planned time done
                   </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-share-hairline">
-                <ScoreRow name="You" full={mySeason.fullDays} of={mySeason.pastDays} streak={mySeason.streak} />
-                {partner && partnerSeason && <ScoreRow name={partner.displayName} full={partnerSeason.fullDays} of={partnerSeason.pastDays} streak={partnerSeason.streak} />}
+                <ScoreRow name="You" full={mySeason.fullDays} of={mySeason.pastDays} streak={mySeason.streak} percent={myCompletion.percent} />
+                {partner && partnerSeason && (
+                  <ScoreRow
+                    name={partner.displayName}
+                    full={partnerSeason.fullDays}
+                    of={partnerSeason.pastDays}
+                    streak={partnerSeason.streak}
+                    percent={partnerCompletion?.percent ?? null}
+                  />
+                )}
               </tbody>
             </table>
-            <p className="mt-2 text-caption text-share-onSurfaceVariant">A full day is a locked plan and a check-in.</p>
+            <p className="mt-2 text-caption text-share-onSurfaceVariant">
+              A full day is a locked plan and a check-in. Planned time done is minutes done of minutes planned, weighted by each task&rsquo;s length.
+            </p>
           </section>
         )}
       </div>
@@ -465,7 +507,7 @@ export function ChallengeDetail({ detail, history, summary, activeCount }: Chall
           <div className="mt-2 grid gap-6 sm:grid-cols-2 lg:grid-cols-1">
             <Commitments
               title="Yours"
-              goals={me.goals}
+              goals={myGoals}
               donts={me.donts}
               empty="You have not set any yet."
               action={
@@ -476,7 +518,7 @@ export function ChallengeDetail({ detail, history, summary, activeCount }: Chall
                 )
               }
             />
-            {partner && <Commitments title={`${partner.displayName}’s`} goals={partner.goals} donts={partner.donts} empty="None set yet." />}
+            {partner && <Commitments title={`${partner.displayName}’s`} goals={partnerGoals} donts={partner.donts} empty="None set yet." />}
           </div>
         </section>
 
@@ -500,7 +542,8 @@ export function ChallengeDetail({ detail, history, summary, activeCount }: Chall
         <CheckinSheet
           challengeId={challenge.id}
           challengeName={challenge.name}
-          donts={activeDonts(me.donts)}
+          goals={activeCommitments(myGoals)}
+          donts={activeCommitments(me.donts)}
           displayName={me.displayName}
           progress={progress}
           date={myDate}
@@ -510,7 +553,20 @@ export function ChallengeDetail({ detail, history, summary, activeCount }: Chall
         />
       )}
       {editingCommitments && !readOnly && (
-        <CommitmentsSheet challengeId={challenge.id} goals={me.goals} donts={me.donts} onClose={() => setEditingCommitments(false)} />
+        <CommitmentsSheet challengeId={challenge.id} goals={myGoals} donts={me.donts} onClose={() => setEditingCommitments(false)} />
+      )}
+      {editingDates && !readOnly && challenge.isCreator && (
+        <DatesSheet
+          challengeId={challenge.id}
+          initial={{
+            startDate: challenge.startDate,
+            endDate: challenge.endDate,
+            planDeadline: challenge.planDeadline,
+            checkinDeadline: challenge.checkinDeadline,
+          }}
+          hasRecords={hasRecords}
+          onClose={() => setEditingDates(false)}
+        />
       )}
       {deleteOpen && (
         <ActionSheet
@@ -538,43 +594,187 @@ export function ChallengeDetail({ detail, history, summary, activeCount }: Chall
   )
 }
 
-function ScoreRow({ name, full, of, streak }: { name: string; full: number; of: number; streak: number }) {
+function ScoreRow({ name, full, of, streak, percent }: { name: string; full: number; of: number; streak: number; percent: number | null }) {
   return (
     <tr>
       <th scope="row" className="max-w-[10rem] truncate py-2 text-body font-semibold text-share-onSurface">
         {name}
       </th>
-      <td className="py-2 text-right tabular-nums">
+      <td className="py-2 pl-3 text-right tabular-nums">
         <span className="text-title text-share-onBg">{full}</span>
         <span className="text-sm text-share-onSurfaceVariant"> of {of}</span>
       </td>
-      <td className="py-2 text-right tabular-nums">
+      <td className="py-2 pl-3 text-right tabular-nums">
         <span className="text-title text-share-onBg">{streak}</span>
+      </td>
+      <td className="py-2 pl-3 text-right tabular-nums">
+        {percent === null ? (
+          <>
+            <span aria-hidden className="text-title text-share-onSurfaceVariant">
+              –
+            </span>
+            <span className="sr-only">No planned time yet</span>
+          </>
+        ) : (
+          <span className="text-title text-share-onBg">{percent}%</span>
+        )}
       </td>
     </tr>
   )
 }
 
-/** One member's lists. Archived don'ts are history, not commitments, so they are not listed. */
-function Commitments({ title, goals, donts, empty, action }: { title: string; goals: string[]; donts: DontLike[]; empty: string; action?: ReactNode }) {
-  const current = activeDonts(donts)
+/**
+ * Your goals and don'ts for today, always in view while the season runs: a
+ * goal toggles ✓ (kept), a don't toggles ✕ (broke). Each tap sends the full
+ * set of that kind through `markDay`, never both kinds in one call, so a
+ * goal mark can never wipe a confession. While a call is in flight the
+ * toggles of that kind show the new state and refuse further taps; they stay
+ * focusable (`aria-disabled`, not `disabled`), so keyboard focus is not
+ * thrown out of the list mid-tap.
+ */
+function TodayCommitments({
+  challengeId,
+  date,
+  goals,
+  donts,
+  goalsKept,
+  dontsBroken,
+}: {
+  challengeId: Id<'challenges'>
+  date: string
+  goals: Commitment[]
+  donts: Commitment[]
+  goalsKept: string[]
+  dontsBroken: string[]
+}) {
+  const [pending, setPending] = useState<{ kind: 'goals' | 'donts'; ids: string[] } | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  if (goals.length === 0 && donts.length === 0) return null
+
+  const kept = new Set(pending?.kind === 'goals' ? pending.ids : goalsKept)
+  const broken = new Set(pending?.kind === 'donts' ? pending.ids : dontsBroken)
+
+  const toggle = async (kind: 'goals' | 'donts', id: string) => {
+    if (pending) return
+    const current = kind === 'goals' ? kept : broken
+    const next = new Set(current)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    const ids = [...next]
+    setPending({ kind, ids })
+    setError(null)
+    try {
+      await markDay(challengeId, kind === 'goals' ? { date, goalsKept: ids } : { date, dontsBroken: ids })
+    } catch (e) {
+      setError(challengeErrorMessage(e))
+    } finally {
+      setPending(null)
+    }
+  }
+
+  const busy = pending !== null
+  return (
+    <div className="pb-4" aria-busy={busy || undefined}>
+      <h3 className="text-caption text-share-onSurfaceVariant">Today&rsquo;s commitments</h3>
+      <ul className="mt-1">
+        {goals.map((g) => {
+          const on = kept.has(g.id)
+          return (
+            <li key={g.id}>
+              <CommitmentToggle
+                pressed={on}
+                text={g.text}
+                shape="goal"
+                busy={busy}
+                onToggle={() => void toggle('goals', g.id)}
+              />
+            </li>
+          )
+        })}
+        {donts.map((d) => {
+          const on = broken.has(d.id)
+          return (
+            <li key={d.id}>
+              <CommitmentToggle
+                pressed={on}
+                text={d.text}
+                shape="dont"
+                busy={busy}
+                onToggle={() => void toggle('donts', d.id)}
+              />
+            </li>
+          )
+        })}
+      </ul>
+      {error && <ErrorLine className="mt-1" message={error} />}
+    </div>
+  )
+}
+
+/**
+ * A goal is a circle that fills `share-done` with a ✓; a don't is a square
+ * that fills the warning colour with a ✕. Unset is the outline of the same
+ * shape, so the state is a shape as well as a colour. The spoken name is
+ * the commitment's text alone; `aria-pressed` says whether it is set.
+ */
+function CommitmentToggle({
+  pressed,
+  text,
+  shape,
+  busy,
+  onToggle,
+}: {
+  pressed: boolean
+  text: string
+  shape: 'goal' | 'dont'
+  busy: boolean
+  onToggle: () => void
+}) {
+  const round = shape === 'goal' ? 'rounded-full' : 'rounded-md'
+  const fill = shape === 'goal' ? 'bg-share-done' : 'bg-share-tertiary'
+  return (
+    <button
+      type="button"
+      aria-pressed={pressed}
+      aria-label={text}
+      aria-disabled={busy || undefined}
+      onClick={() => {
+        if (!busy) onToggle()
+      }}
+      className="-mx-2 flex min-h-11 w-[calc(100%+1rem)] touch-manipulation items-center gap-3 rounded-lg px-2 py-1.5 text-left text-sm text-share-onSurface transition-colors hover:bg-share-surfaceContainerHigh focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-share-onBg aria-disabled:cursor-progress"
+    >
+      <span
+        aria-hidden
+        className={`flex h-6 w-6 shrink-0 items-center justify-center ${round} ${pressed ? `${fill} text-share-bg` : 'border-2 border-share-outlineStrong'}`}
+      >
+        {pressed && (shape === 'goal' ? <Check className="h-3.5 w-3.5" strokeWidth={3.5} /> : <X className="h-3.5 w-3.5" strokeWidth={3.5} />)}
+      </span>
+      <span className={`min-w-0 break-words ${pressed && shape === 'goal' ? 'text-share-onSurfaceVariant' : ''}`}>{text}</span>
+    </button>
+  )
+}
+
+/** One member's lists. Archived goals and don'ts are history, not commitments, so they are not listed. */
+function Commitments({ title, goals, donts, empty, action }: { title: string; goals: Commitment[]; donts: Commitment[]; empty: string; action?: ReactNode }) {
+  const current = activeCommitments(donts)
+  const currentGoals = activeCommitments(goals)
   return (
     <div className="min-w-0">
       <div className="flex min-h-11 items-center justify-between gap-2">
         <h3 className="min-w-0 truncate text-body font-bold text-share-onSurface">{title}</h3>
         {action}
       </div>
-      {goals.length === 0 && current.length === 0 ? (
+      {currentGoals.length === 0 && current.length === 0 ? (
         <p className="text-sm text-share-onSurfaceVariant">{empty}</p>
       ) : (
         <div className="space-y-3">
-          {goals.length > 0 && (
+          {currentGoals.length > 0 && (
             <div>
               <h4 className="text-caption text-share-onSurfaceVariant">Goals</h4>
               <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-share-onSurface marker:text-share-onSurfaceDim">
-                {goals.map((g, i) => (
-                  <li key={i} className="break-words">
-                    {g}
+                {currentGoals.map((g) => (
+                  <li key={g.id} className="break-words">
+                    {g.text}
                   </li>
                 ))}
               </ul>
@@ -598,8 +798,141 @@ function Commitments({ title, goals, donts, empty, action }: { title: string; go
   )
 }
 
+interface SpanDraft {
+  startDate: string
+  endDate: string
+  planDeadline: string
+  checkinDeadline: string
+}
+
+const DATE_FIELD =
+  'mt-1 min-h-11 w-full rounded-lg border border-share-outlineStrong bg-share-surfaceContainer px-3 py-2 text-base text-share-onSurface focus:border-share-onBg focus:outline-none focus:ring-1 focus:ring-share-onBg sm:text-sm'
+const DATE_LABEL = 'block text-caption font-semibold text-share-onSurfaceVariant'
+const DATES_FIELD_ID: Record<SeasonDateField, string> = { start: 'dates-start', end: 'dates-end', plan: 'dates-plan', checkin: 'dates-checkin' }
+
+/**
+ * "Dates and deadlines": the creator corrects the season. The client checks
+ * only format and order (the create form's rules); whether a recorded day
+ * or today blocks the change is the server's sentence, shown as it comes.
+ */
+function DatesSheet({ challengeId, initial, hasRecords, onClose }: { challengeId: Id<'challenges'>; initial: SpanDraft; hasRecords: boolean; onClose: () => void }) {
+  const [draft, setDraft] = useState<SpanDraft>(initial)
+  const [fieldError, setFieldError] = useState<SeasonDateFieldError | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const set = (key: keyof SpanDraft) => (e: { target: { value: string } }) => setDraft((d) => ({ ...d, [key]: e.target.value }))
+  const invalid = (field: SeasonDateField) =>
+    fieldError?.field === field ? { 'aria-invalid': true as const, 'aria-describedby': 'dates-field-error' } : {}
+
+  const save = async () => {
+    setError(null)
+    const problem = seasonDatesError(draft) ?? seasonDeadlinesError(draft)
+    setFieldError(problem)
+    if (problem) {
+      document.getElementById(DATES_FIELD_ID[problem.field])?.focus()
+      return
+    }
+    const unchanged = (Object.keys(initial) as (keyof SpanDraft)[]).every((k) => initial[k] === draft[k])
+    if (unchanged) {
+      onClose()
+      return
+    }
+    setBusy(true)
+    try {
+      await updateSpan(challengeId, draft)
+      onClose()
+    } catch (e) {
+      setError(challengeErrorMessage(e))
+      setBusy(false)
+    }
+  }
+
+  const fieldMessage = fieldError ? <ErrorLine message={fieldError.message} /> : null
+
+  return (
+    <Sheet
+      onClose={onClose}
+      title="Dates and deadlines"
+      scrollable
+      action={{ label: 'Save dates', pendingLabel: 'Saving…', pending: busy, onClick: () => void save() }}
+    >
+      <form
+        className="mt-3"
+        // Our own checks name the field at fault; the browser's bubbles would pre-empt them.
+        noValidate
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (!busy) void save()
+        }}
+        // Enter in any field saves, as in any form. A form with several fields and no
+        // submit button of its own (the verb is the sheet's) gets no implicit submission.
+        onKeyDown={(e) => {
+          if (e.key !== 'Enter' || !(e.target instanceof HTMLInputElement)) return
+          e.preventDefault()
+          if (!busy) void save()
+        }}
+      >
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={DATE_LABEL} htmlFor="dates-start">
+              Starts
+            </label>
+            <input id="dates-start" name="start" type="date" value={draft.startDate} onChange={set('startDate')} required autoComplete="off" className={DATE_FIELD} {...invalid('start')} />
+          </div>
+          <div>
+            <label className={DATE_LABEL} htmlFor="dates-end">
+              Ends
+            </label>
+            <input id="dates-end" name="end" type="date" value={draft.endDate} onChange={set('endDate')} required autoComplete="off" className={DATE_FIELD} {...invalid('end')} />
+          </div>
+        </div>
+        {(fieldError?.field === 'start' || fieldError?.field === 'end') && <div id="dates-field-error" className="mt-1">{fieldMessage}</div>}
+        {hasRecords && <p className="mt-2 text-caption text-share-onSurfaceVariant">Days with a lock-in or check-in stay in the season.</p>}
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <div>
+            <label className={DATE_LABEL} htmlFor="dates-plan">
+              Plan by
+            </label>
+            <input id="dates-plan" name="plan-by" type="time" value={draft.planDeadline} onChange={set('planDeadline')} required autoComplete="off" className={DATE_FIELD} {...invalid('plan')} />
+          </div>
+          <div>
+            <label className={DATE_LABEL} htmlFor="dates-checkin">
+              Check in by
+            </label>
+            <input
+              id="dates-checkin"
+              name="check-in-by"
+              type="time"
+              value={draft.checkinDeadline}
+              onChange={set('checkinDeadline')}
+              required
+              autoComplete="off"
+              className={DATE_FIELD}
+              {...invalid('checkin')}
+            />
+          </div>
+        </div>
+        {(fieldError?.field === 'plan' || fieldError?.field === 'checkin') && <div id="dates-field-error" className="mt-1">{fieldMessage}</div>}
+        <p className="mt-2 text-caption text-share-onSurfaceVariant">In each person&rsquo;s own local time. The check-in deadline has to be later than 21:30.</p>
+        {error && <ErrorLine className="mt-2" message={error} />}
+      </form>
+    </Sheet>
+  )
+}
+
 /** The season's name, renamable in place by either member while it runs. */
-function ChallengeTitle({ challengeId, name, editable }: { challengeId: Id<'challenges'>; name: string; editable: boolean }) {
+function ChallengeTitle({
+  challengeId,
+  name,
+  editable,
+  onEditDates,
+}: {
+  challengeId: Id<'challenges'>
+  name: string
+  editable: boolean
+  /** Given only to the creator of a running season. */
+  onEditDates?: () => void
+}) {
   const [draft, setDraft] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -608,19 +941,28 @@ function ChallengeTitle({ challengeId, name, editable }: { challengeId: Id<'chal
     return (
       <div className="mt-1 flex items-start justify-between gap-2">
         <h1 className="min-w-0 break-words font-shareHeadline text-title text-share-onBg">{name}</h1>
-        {editable && (
-          <TextButton
-            tone="quiet"
-            onClick={() => {
-              setDraft(name)
-              setError(null)
-            }}
-            aria-label="Rename challenge"
-            className="-mr-3 -mt-1.5 shrink-0"
-          >
-            <Pencil aria-hidden className="h-4 w-4" />
-            Rename
-          </TextButton>
+        {(editable || onEditDates) && (
+          <div className="-mr-3 -mt-1.5 flex shrink-0 flex-wrap justify-end">
+            {onEditDates && (
+              <TextButton tone="quiet" onClick={onEditDates}>
+                <CalendarDays aria-hidden className="h-4 w-4" />
+                Edit dates
+              </TextButton>
+            )}
+            {editable && (
+              <TextButton
+                tone="quiet"
+                onClick={() => {
+                  setDraft(name)
+                  setError(null)
+                }}
+                aria-label="Rename challenge"
+              >
+                <Pencil aria-hidden className="h-4 w-4" />
+                Rename
+              </TextButton>
+            )}
+          </div>
         )}
       </div>
     )

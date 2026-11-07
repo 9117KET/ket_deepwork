@@ -152,30 +152,28 @@ test.describe('the desktop row picker', () => {
     await openWith(page, [...MIXED, ...EXTRA])
     await expect(page.getByText('Water the plants')).toBeVisible()
 
-    const unset = row(page, 't-unset').getByRole('combobox', { name: 'How long' })
-    await expect(unset).toHaveCount(1)
-    const labels = await unset.locator('option').allTextContents()
-    expect(labels).toEqual(['Not set', ...LADDER])
-
-    const odd = row(page, 't-odd').getByRole('combobox', { name: 'How long' })
-    const oddLabels = await odd.locator('option').allTextContents()
-    expect(oddLabels).toEqual(['Not set', '10m', '15m', '20m', '30m', '45m', '1h', '1h30', '2h', '2h30', '3h', '4h', '5h', '6h', '7h', '8h'])
-    await expect(odd).toHaveValue('150')
-
-    // An unset length stays out of the way until the row is hovered or the
-    // control has keyboard focus; a set one always shows.
+    // The chip is always visible (run 2026-11-07, spec 02): "Time" when
+    // unset, the length when set, with no hover needed.
     await page.mouse.move(0, 0)
-    await expect(unset).toHaveCSS('opacity', '0')
-    await expect(odd).toHaveCSS('opacity', '1')
-    await row(page, 't-unset').hover()
+    const unset = row(page, 't-unset').getByRole('button', { name: /^How long/ })
+    await expect(unset).toHaveText('Time')
     await expect(unset).toHaveCSS('opacity', '1')
-    await page.mouse.move(0, 0)
-    await expect(unset).toHaveCSS('opacity', '0')
-    await unset.focus()
-    await expect(unset).toHaveCSS('opacity', '1')
+    const odd = row(page, 't-odd').getByRole('button', { name: /^How long/ })
+    await expect(odd).toHaveText('2h30')
+
+    const popover = page.getByRole('dialog', { name: 'How long' })
+    const pills = popover.getByRole('group', { name: 'Pick a length' }).getByRole('button')
+
+    await odd.click()
+    expect(await pills.allTextContents()).toEqual(['10m', '15m', '20m', '30m', '45m', '1h', '1h30', '2h', '2h30', '3h', '4h', '5h', '6h', '7h', '8h'])
+    await expect(pills.filter({ hasText: /^2h30$/ })).toHaveAttribute('aria-pressed', 'true')
+    await page.keyboard.press('Escape')
+
+    await unset.click()
+    expect(await pills.allTextContents()).toEqual(LADDER)
 
     // Choosing from the list stores minutes.
-    await unset.selectOption({ label: '3h' })
+    await pills.filter({ hasText: /^3h$/ }).click()
     expect(await readTask(page, 't-unset')).toMatchObject({ durationMinutes: 180 })
   })
 })
@@ -190,7 +188,7 @@ test.describe('the phone schedule sheet', () => {
 
     const sheet = page.getByRole('dialog', { name: 'Water the plants' })
     await expect(sheet).toBeVisible()
-    const lengths = sheet.locator('label').filter({ hasText: 'How long' }).getByRole('button')
+    const lengths = sheet.getByRole('group', { name: 'Pick a length' }).getByRole('button')
     expect(await lengths.allTextContents()).toEqual(LADDER)
 
     await lengths.filter({ hasText: /^2h$/ }).click()

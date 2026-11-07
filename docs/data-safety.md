@@ -41,6 +41,7 @@ Three separate defects in one sequence, all now closed.
 | 8 | A session's start time | Synthesised as `now − duration`, so a paused or restored block recorded a fictional interval | The real start instant is carried through and stored |
 | 9a | Pick the wrong task in "Working on" and work a full block | The minutes were stuck on the wrong task for good; the only lever that touched a session's task was deleting the task, so the remedy for a mislabelled record was destroying the label | `reattributeSession` — the sheet's *Worked against the wrong task?* moves a block to any trackable task on the day (done ones included) or to none, changing nothing but the attribution |
 | 9 | **Any destructive planner action** | Final, immediately | One step of **Undo**, offered for 12s — covers task delete, bulk delete, *copy from day*, and habit / side-quest definition edits |
+| 9b | *Fill from yesterday* (*copy from day*) | A copy kept the legacy `manualLoggedMinutes`, so a fresh row showed logged time nobody worked that day, and kept `scheduledAt` with no calendar event behind the new id | The fill copies the source's Top 3 roots into today's free slots (the rest to Tasks) and its list roots, subtasks with their root, all **unticked**; `cloneTasksForDay` clears `scheduledAt` (`resetSchedule`) and **drops `manualLoggedMinutes`**; `deepWorkSessions` are never read or written by it. A fill with nothing new is not offered, so it never leaves an empty Undo. Gate: `e2e/fill-from-yesterday.spec.ts` |
 
 ## Open
 
@@ -50,7 +51,7 @@ Identified and reproducible, not yet fixed. Roughly in value order.
 |---|---|---|
 | 10 | Finance deletes — accounts, debts, transactions, ETF holdings, savings goals, journal entries, net-worth snapshots | **No confirmation and no undo on any of them.** Undo covers the planner only. Deleting a net-worth snapshot destroys a point in a series that cannot be reconstructed |
 | 11 | Deleting a habit or side-quest definition | Undo catches the mistake within 12s, but the underlying orphaning is unchanged: past `habitCompletions` keep a key nothing renders |
-| 12 | *Copy from day* duplicates | Undo takes the whole copy back out, but the copy itself still adds near-duplicates differing only in case or whitespace |
+| 12 | *Copy from day* duplicates | A root already on the day (same section, title trimmed and case-folded, judged where the copy would land) is skipped, and Undo takes the whole copy back out; titles that differ in inner spacing or punctuation still copy as near-duplicates |
 | 13 | Closing the tab mid-block | The block survives (mirrored to `localStorage`), but nothing warns you, and past `AWAY_BLOCK_MAX_AGE_MS` (12h) the claim is dropped unasked |
 | 14 | Editing a task's duration below what is already logged | The progress row shows overrun in amber but nothing confirms the change |
 | 15 | Undo is one step, planner-only, and 12 seconds | Deliberate (see `useUndoableActions`), but a mistake noticed a minute later is still final |

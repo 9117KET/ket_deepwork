@@ -27,10 +27,34 @@ import { addDays, todayIso } from "../domain/dateUtils"
 import { challengeProgress, type ChallengeProgress } from "../domain/challenge"
 import { localDateIn } from "../services/challengeService"
 
+/**
+ * contract: spec 03. Day views gain `goalsKept` (ids of the goals kept that
+ * day) and a member's `goals` become `Commitment[]` (legacy rows: strings).
+ * The generated types here predate both, so the day fields are added below
+ * as optional and goals are read through `normalizeGoals`, which takes
+ * either shape. Once the generated types know them this still compiles.
+ */
+export interface ContractDayFields {
+  goalsKept?: string[]
+}
+type WithDayFields<T> = T extends null | undefined ? T : T & ContractDayFields
+
+type RawDayCards = NonNullable<FunctionReturnType<typeof api.challenges.dayCards>>
+type RawHistory = NonNullable<FunctionReturnType<typeof api.challenges.history>>
+type RawTodayCard = FunctionReturnType<typeof api.challenges.todayCards>[number]
+
 export type ChallengeEntry = FunctionReturnType<typeof api.challenges.myChallenges>[number]
-export type ChallengeDayCards = NonNullable<FunctionReturnType<typeof api.challenges.dayCards>>
-export type ChallengeHistory = NonNullable<FunctionReturnType<typeof api.challenges.history>>
-export type TodayCard = FunctionReturnType<typeof api.challenges.todayCards>[number]
+/** A member as `memberView` returns it; `goals` is `(string | Commitment)[]` until normalized. */
+export type ChallengeMember = ChallengeEntry["me"]
+export type ChallengeDayCards = Omit<RawDayCards, "mine" | "partner"> & {
+  mine: WithDayFields<RawDayCards["mine"]>
+  partner: WithDayFields<RawDayCards["partner"]>
+}
+export type ChallengeHistory = Omit<RawHistory, "mine" | "partner"> & {
+  mine: WithDayFields<RawHistory["mine"][number]>[]
+  partner: WithDayFields<RawHistory["partner"][number]>[]
+}
+export type TodayCard = Omit<RawTodayCard, "mine" | "partner"> & { mine: WithDayFields<RawTodayCard["mine"]>; partner: WithDayFields<RawTodayCard["partner"]> }
 
 export interface ChallengesState {
   status: "signedOut" | "loading" | "ready"

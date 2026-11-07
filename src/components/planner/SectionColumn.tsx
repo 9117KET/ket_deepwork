@@ -10,7 +10,7 @@
 
 import { useState, useRef, useCallback } from 'react'
 import type { DeepWorkSession, Task, TaskPatch, TaskSection, TaskSectionId } from '../../domain/types'
-import { AddTaskInput } from './AddTaskInput'
+import { AddTaskInput, type AddTaskOptions } from './AddTaskInput'
 import { TaskItem, type TaskItemTouch } from './TaskItem'
 import {
   emptyListData,
@@ -32,7 +32,7 @@ interface SectionColumnProps {
   onDragEnd?: () => void
   /** Called when a task is dropped in this section at the given insert index (0 = before first task). */
   onDrop?: (insertIndex: number) => void
-  onAddTask: (title: string) => void
+  onAddTask: (title: string, options?: AddTaskOptions) => void
   onAddTaskAbove?: (beforeTaskId: string) => void
   onAddTaskBelow?: (afterTaskId: string) => void
   onAddSubtask?: (parentTaskId: string) => void

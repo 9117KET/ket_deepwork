@@ -34,10 +34,10 @@ import {
 import { describeWorkLoss, summarizeTaskWork, taskWithDescendantIds } from "../../domain/workSafety";
 import { normalizeFocusBlockMinutes, suggestedBreakMinutes } from "../../domain/focusBlocks";
 import { computePerHabitStreaks, getAtRiskHabitIds, computeDailyDeepWorkMinutes } from "../../domain/stats";
-import { getOrderedTasksForSection } from "../../domain/taskUtils";
+import { getOrderedTasksForSection, wouldOverfillTop3 } from "../../domain/taskUtils";
 import { computeDayCompletion } from "../../domain/dayCompletion";
 import { useUndoableActions } from "../../hooks/useUndoableActions";
-import { useTaskHandlers } from "../../hooks/useTaskHandlers";
+import { planCopyFromDay, useTaskHandlers } from "../../hooks/useTaskHandlers";
 import { useTouchReorder } from "../../hooks/useTouchReorder";
 import { useCoarsePointer } from "../../hooks/useCoarsePointer";
 import { useCalendarDay } from "../../hooks/useCalendarDay";
@@ -195,7 +195,7 @@ export function DayPlanner() {
     handleAbandonTask,
     handleReorderSubtask,
     handleMoveSubtask,
-  } = useTaskHandlers(updateAppState, selectedDay);
+  } = useTaskHandlers(updateAppState, selectedDay, dayState.tasks);
 
   // The day's tasks as Google Tasks, both ways. Off while hydrating: a
   // half-loaded day is not the day, and must not be mirrored as if it were.
@@ -340,19 +340,30 @@ export function DayPlanner() {
   // ── Moving tasks ──────────────────────────────────────────────────────────
   /** Said when a subtask is dropped outside its parent: nothing moved, and why. */
   const SUBTASK_STAYS_NOTICE = "Subtasks stay inside their task. Use Move to another parent.";
+  /** Said when a move would put a fourth task in the Top 3: nothing moved. */
+  const TOP3_FULL_NOTICE = "Top 3 is full. Move one out first.";
   const handleDropOrRefuse = (sectionId: TaskSectionId, insertIndex: number) => {
-    if (handleDrop(sectionId, insertIndex) === "refusedSubtask") setBlockNotice(SUBTASK_STAYS_NOTICE);
+    const result = handleDrop(sectionId, insertIndex);
+    if (result === "refusedSubtask") setBlockNotice(SUBTASK_STAYS_NOTICE);
+    else if (result === "refusedFull") setBlockNotice(TOP3_FULL_NOTICE);
   };
   /** The sheet's "Move to Top 3" / "Move to Tasks": the task and its subtasks, at the end. */
-  const handleMoveToEnd = (taskId: string, from: TaskSectionId, to: TaskSectionId) =>
+  const handleMoveToEnd = (taskId: string, from: TaskSectionId, to: TaskSectionId) => {
+    if (to === "mustDo" && wouldOverfillTop3(dayState.tasks, taskId)) {
+      setBlockNotice(TOP3_FULL_NOTICE);
+      return;
+    }
     handleMoveTask(from, taskId, to, Number.MAX_SAFE_INTEGER);
-  // A finger drags by press-and-hold; a mouse keeps HTML5 drag and drop.
+  };
+  // A finger lifts a row from its handle at once, or anywhere else by
+  // press-and-hold; a mouse on a touch device uses the handle too. A fine
+  // pointer keeps HTML5 drag and drop.
   const isCoarsePointer = useCoarsePointer();
   const touchReorder = useTouchReorder({
     enabled: isCoarsePointer,
     onDropRoot: (item, toSectionId, index) => {
       handleDragStart(item.sectionId, item.taskId);
-      handleDrop(toSectionId, index);
+      handleDropOrRefuse(toSectionId, index);
     },
     onDropSubtask: handleReorderSubtask,
     onRefuseSubtask: () => setBlockNotice(SUBTASK_STAYS_NOTICE),
@@ -521,16 +532,26 @@ export function DayPlanner() {
     }
   }, [undoable.entry, appState.days]);
 
-  // Offered while the list below the Top 3 is still empty: the three are
-  // usually set first thing, and carrying yesterday's list over comes after.
+  // Offered while the list below the Top 3 is still empty. The fill brings
+  // the source's Top 3 into today's empty slots (any left over join the list)
+  // and its list, unticked, without times or logged minutes.
+  // A source with nothing new for today (every root already here) is never
+  // offered: the click would do nothing and still leave an Undo behind.
   const copySource = useMemo(() => {
     if (dayState.tasks.some((t) => t.sectionId !== "mustDo")) return null;
+    const hasNew = (date: string) =>
+      planCopyFromDay(appState.days[date]?.tasks ?? [], dayState.tasks, LIST_SECTION_ID).length > 0;
     const yesterday = addDays(selectedDay, -1);
-    if ((appState.days[yesterday]?.tasks.length ?? 0) > 0) return { date: yesterday, label: "Fill from yesterday" };
+    if (hasNew(yesterday))
+      return { date: yesterday, label: "Fill from yesterday", undoLabel: "Copied from yesterday" };
     const lastWeekday = sameWeekdayLastWeek(selectedDay);
-    if ((appState.days[lastWeekday]?.tasks.length ?? 0) > 0) return { date: lastWeekday, label: "Fill from last week" };
-    const last = getLastDayWithTasks(appState, selectedDay);
-    return last ? { date: last, label: `Copy from ${formatDateShort(last)}` } : null;
+    if (hasNew(lastWeekday))
+      return { date: lastWeekday, label: "Fill from last week", undoLabel: "Copied from last week" };
+    const found = getLastDayWithTasks(appState, selectedDay);
+    const last = found && hasNew(found) ? found : null;
+    return last
+      ? { date: last, label: `Copy from ${formatDateShort(last)}`, undoLabel: `Copied from ${formatDateShort(last)}` }
+      : null;
   }, [appState, dayState.tasks, selectedDay]);
 
   // ── Scheduling into the calendar ──────────────────────────────────────────
@@ -622,7 +643,7 @@ export function DayPlanner() {
       onSubtaskDragStart={handleSubtaskDragStart}
       onSubtaskDragEnd={handleSubtaskDragEnd}
       onSubtaskDropRefused={() => setBlockNotice(SUBTASK_STAYS_NOTICE)}
-      onAddTask={(title) => handleAddTask(section.id, title)}
+      onAddTask={(title, options) => handleAddTask(section.id, title, options)}
       onAddTaskAbove={(beforeTaskId) => handleAddTaskAbove(section.id, beforeTaskId)}
       onAddTaskBelow={(afterTaskId) => handleAddTaskBelow(section.id, afterTaskId)}
       onAddSubtask={handleAddSubtask}
@@ -726,7 +747,7 @@ export function DayPlanner() {
             <MustDoPinnedHeader
               tasks={tasksBySection.mustDo ?? []}
               onToggle={handleToggleTask}
-              onAdd={(title) => handleAddTask("mustDo", title)}
+              onAdd={(title, options) => handleAddTask("mustDo", title, options)}
               onDelete={handleDeleteTaskGuarded}
               onAbandon={handleAbandonTaskGuarded}
               onUpdate={(id, patch) => handleUpdateTask(id, patch)}
@@ -749,7 +770,7 @@ export function DayPlanner() {
               <button
                 type="button"
                 onClick={() =>
-                  undoable.run(`Copied ${copySource.label.toLowerCase()}`, () => handleCopyFromDay(copySource.date))
+                  undoable.run(copySource.undoLabel, () => handleCopyFromDay(copySource.date, LIST_SECTION_ID))
                 }
                 className="touch-target-coarse rounded-lg border border-share-outlineVariant/40 bg-share-surfaceContainer px-3 py-1.5 text-xs text-share-onSurface hover:border-share-primary/60 hover:text-share-primary"
               >

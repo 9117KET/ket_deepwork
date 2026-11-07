@@ -15,8 +15,8 @@
 import type { ReactNode } from 'react'
 import { Check } from 'lucide-react'
 import type { ChallengeSummary } from '../../domain/challenge'
-import { formatClock, formatDeepMinutes } from '../../domain/challenge'
-import { resolveDontTexts, type DontLike } from '../../domain/challengeCommitments'
+import { dayCompletionPercent, formatClock, formatDeepMinutes } from '../../domain/challenge'
+import { activeCommitments, keptLine, resolveDontTexts, type Commitment } from '../../domain/challengeCommitments'
 
 export interface MemberDayView {
   summary?: ChallengeSummary
@@ -24,14 +24,17 @@ export interface MemberDayView {
   checkinAt?: number | null
   note?: string | null
   dontsBroken?: string[]
+  goalsKept?: string[]
 }
 
 interface MemberRowProps {
   name: string
   isMe: boolean
   day: MemberDayView | null
+  /** This member's own goals (normalized), archived ones included, so an old mark still counts. */
+  goals?: Commitment[]
   /** This member's own don'ts, archived ones included, so an old confession still reads. */
-  donts: DontLike[]
+  donts: Commitment[]
   /** Under the name, e.g. the partner's local date when it is not yours. */
   caption?: string
   /** Quiet actions at the end of the row (Share, Nudge). */
@@ -57,11 +60,41 @@ function Act({ label, at }: { label: string; at: number | null | undefined }) {
   )
 }
 
-export function MemberRow({ name, isMe, day, donts, caption, actions }: MemberRowProps) {
+/** One list of a member's tasks as the partner sees them: a filled ✓ or an empty ring, then the title. */
+function TaskLines({ tasks }: { tasks: { title: string; isDone: boolean }[] }) {
+  return (
+    <ul className="mt-1.5 space-y-1.5">
+      {tasks.map((t, i) => (
+        <li key={i} className={`flex items-start gap-2.5 text-sm leading-snug ${t.isDone ? 'text-share-onSurfaceVariant' : 'text-share-onSurface'}`}>
+          {t.isDone ? (
+            <span className="mt-px flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-share-done">
+              <Check aria-hidden className="h-3 w-3 text-share-bg" strokeWidth={3.5} />
+              <span className="sr-only">Done:</span>
+            </span>
+          ) : (
+            <span className="mt-px h-[18px] w-[18px] shrink-0 rounded-full border-2 border-share-outlineStrong">
+              <span className="sr-only">Not done:</span>
+            </span>
+          )}
+          <span className={`min-w-0 break-words ${t.isDone ? 'line-through decoration-share-onSurfaceDim' : ''}`}>{t.title}</span>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+export function MemberRow({ name, isMe, day, goals = [], donts, caption, actions }: MemberRowProps) {
   const s = day?.summary
   const broke = resolveDontTexts(day?.dontsBroken ?? [], donts)
+  const hasActiveDonts = activeCommitments(donts).length > 0
+  // Only once there is a day to speak of; a member with no row has said nothing yet.
+  const kept = day ? keptLine(day.goalsKept ?? [], goals) : null
+  const percent = dayCompletionPercent(s)
+  // Rows written since 7 Nov 2026 carry every visible task; older rows only the
+  // counts, which stay readable as "+1/2 more".
+  const tasks = s?.tasks
   const rest: string[] = []
-  if (s && s.tasksTotal > 0) rest.push(`+${s.tasksDone}/${s.tasksTotal} more`)
+  if (s && !tasks && s.tasksTotal > 0) rest.push(`+${s.tasksDone}/${s.tasksTotal} more`)
   if (s && s.privateCount > 0) rest.push(`${s.privateCount} private`)
   const meta: string[] = []
   if (s && s.deepWorkMinutes > 0) meta.push(`${formatDeepMinutes(s.deepWorkMinutes)} deep`)
@@ -83,40 +116,54 @@ export function MemberRow({ name, isMe, day, donts, caption, actions }: MemberRo
         <Act label="Check-in" at={day?.checkinAt} />
       </p>
 
+      {(percent !== null || kept) && (
+        <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-caption text-share-onSurfaceVariant">
+          {percent !== null && (
+            <span className="inline-flex items-center gap-2">
+              <span
+                role="meter"
+                aria-label="Planned time done"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={percent}
+                className="h-1.5 w-16 shrink-0 overflow-hidden rounded-full bg-share-hairline"
+              >
+                <span className="block h-full rounded-full bg-share-done" style={{ width: `${percent}%` }} />
+              </span>
+              <span className="tabular-nums">{percent}% of planned time</span>
+            </span>
+          )}
+          {kept && <span>{kept}</span>}
+        </p>
+      )}
+
       {s && s.top3.length > 0 ? (
         <div className="mt-3">
           <p className="text-caption text-share-onSurfaceVariant">{top3Label}</p>
-          <ul className="mt-1.5 space-y-1.5">
-            {s.top3.map((t, i) => (
-              <li key={i} className={`flex items-start gap-2.5 text-sm leading-snug ${t.isDone ? 'text-share-onSurfaceVariant' : 'text-share-onSurface'}`}>
-                {t.isDone ? (
-                  <span className="mt-px flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-share-done">
-                    <Check aria-hidden className="h-3 w-3 text-share-bg" strokeWidth={3.5} />
-                    <span className="sr-only">Done:</span>
-                  </span>
-                ) : (
-                  <span className="mt-px h-[18px] w-[18px] shrink-0 rounded-full border-2 border-share-outlineStrong">
-                    <span className="sr-only">Not done:</span>
-                  </span>
-                )}
-                <span className={`min-w-0 break-words ${t.isDone ? 'line-through decoration-share-onSurfaceDim' : ''}`}>{t.title}</span>
-              </li>
-            ))}
-          </ul>
+          <TaskLines tasks={s.top3} />
         </div>
       ) : (
-        !day?.planSetAt && <p className="mt-2 text-sm text-share-onSurfaceVariant">{isMe ? 'Nothing planned yet today.' : 'Nothing shared yet today.'}</p>
+        !day?.planSetAt && !tasks?.length && (
+          <p className="mt-2 text-sm text-share-onSurfaceVariant">{isMe ? 'Nothing planned yet today.' : 'Nothing shared yet today.'}</p>
+        )
       )}
 
-      {(rest.length > 0 || day?.checkinAt) && (
+      {tasks && tasks.length > 0 && (
+        <div className="mt-3">
+          <p className="text-caption text-share-onSurfaceVariant">Tasks</p>
+          <TaskLines tasks={tasks} />
+        </div>
+      )}
+
+      {(rest.length > 0 || day?.checkinAt || broke.length > 0) && (
         <div className="mt-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-caption">
           <span className="text-share-onSurfaceVariant">{rest.join(' · ')}</span>
-          {day?.checkinAt &&
-            (broke.length > 0 ? (
-              <span className="text-share-tertiary">Broke: {broke.join(', ')}</span>
-            ) : donts.length > 0 ? (
-              <span className="text-share-onSurfaceVariant">Kept all don&rsquo;ts</span>
-            ) : null)}
+          {/* A broken don't is said as soon as it is marked; "kept all" is a claim only a check-in makes. */}
+          {broke.length > 0 ? (
+            <span className="text-share-tertiary">Broke: {broke.join(', ')}</span>
+          ) : day?.checkinAt && hasActiveDonts ? (
+            <span className="text-share-onSurfaceVariant">Kept all don&rsquo;ts</span>
+          ) : null}
         </div>
       )}
       {day?.checkinAt && day.note && <p className="mt-1.5 whitespace-pre-wrap text-sm text-share-onSurface">{day.note}</p>}

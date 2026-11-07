@@ -9,14 +9,21 @@
  * Without a calendar connection the sheet still sets a plain time on the task
  * and says plainly that no reminder comes with it.
  *
+ * How long: a typed length ("2h 30m", "45", "1:30", read by
+ * `parseDurationInput`) above the ladder. Typing a valid length selects it;
+ * Enter saves it as the task's length and closes, like "Save length only".
+ *
  * Drawn by the shared `ui/Sheet` (focus trap, inert app behind, Escape and
  * scrim close, drag to dismiss on touch).
  */
 
 import { useState } from 'react'
+import type { FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import type { Task } from '../../domain/types'
-import { durationOptions as ladderWith } from '../../domain/durations'
+import { durationOptions as ladderWith, parseDurationInput } from '../../domain/durations'
+import { formatMinutes } from '../../domain/taskProgress'
+import { DURATION_INPUT_ERROR, DURATION_INPUT_PLACEHOLDER } from './DurationChip'
 import { Sheet } from '../ui/Sheet'
 import { ErrorLine } from '../ui/Notices'
 
@@ -53,6 +60,19 @@ export function ScheduleSheet({
   const [time, setTime] = useState(task.scheduledAt ?? '')
   const [busy, setBusy] = useState<null | 'next' | 'at' | 'remove'>(null)
   const [error, setError] = useState<string | null>(null)
+  const [typed, setTyped] = useState('')
+  const [typedError, setTypedError] = useState(false)
+
+  const saveTyped = (event: FormEvent) => {
+    event.preventDefault()
+    const parsed = parseDurationInput(typed)
+    if (parsed == null) {
+      setTypedError(true)
+      return
+    }
+    onSaveLength(parsed)
+    onClose()
+  }
 
   const run = async (kind: 'next' | 'at' | 'remove', fn: () => Promise<void>) => {
     setBusy(kind)
@@ -114,12 +134,46 @@ export function ScheduleSheet({
     <Sheet onClose={onClose} kicker="Schedule" title={<span className="block truncate">{task.title}</span>} footer={footer}>
       <fieldset className="mt-4">
         <legend className="text-caption font-semibold text-share-onSurfaceVariant">How long</legend>
-        <div className="mt-1.5 flex flex-wrap gap-1.5">
+        <form onSubmit={saveTyped} className="mt-1.5 flex items-center gap-2">
+          <input
+            type="text"
+            inputMode="text"
+            enterKeyHint="done"
+            value={typed}
+            onChange={(e) => {
+              const raw = e.target.value
+              setTyped(raw)
+              setTypedError(false)
+              const parsed = parseDurationInput(raw)
+              if (parsed != null) setMinutes(parsed)
+            }}
+            placeholder={DURATION_INPUT_PLACEHOLDER}
+            aria-label="Type how long"
+            aria-invalid={typedError || undefined}
+            name="duration"
+            autoComplete="off"
+            spellCheck={false}
+            className="min-h-[44px] min-w-0 flex-1 rounded-xl border border-share-outlineStrong bg-share-surfaceContainer px-3 text-sm tabular-nums text-share-onSurface placeholder:text-share-onSurfaceDim focus:border-share-onBg focus:outline-none focus:ring-1 focus:ring-share-onBg"
+          />
+          <button
+            type="submit"
+            disabled={busy !== null}
+            className="min-h-[44px] rounded-xl border border-share-outlineStrong px-4 text-sm font-semibold text-share-onSurface hover:border-share-onSurface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-share-onBg disabled:opacity-50"
+          >
+            Save length
+          </button>
+        </form>
+        {typedError && <ErrorLine className="mt-2" message={DURATION_INPUT_ERROR} />}
+        <div role="group" aria-label="Pick a length" className="mt-2 flex flex-wrap gap-1.5">
           {durationOptions.map((m) => (
             <button
               key={m}
               type="button"
-              onClick={() => setMinutes(m)}
+              onClick={() => {
+                setMinutes(m)
+                setTyped('')
+                setTypedError(false)
+              }}
               aria-pressed={m === minutes}
               className={`touch-target-coarse rounded-lg border px-2.5 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-share-onBg ${
                 m === minutes
@@ -127,7 +181,7 @@ export function ScheduleSheet({
                   : 'border-share-outlineVariant/40 text-share-onSurface hover:border-share-primary/50'
               }`}
             >
-              {m < 60 ? `${m}m` : m % 60 === 0 ? `${m / 60}h` : `${Math.floor(m / 60)}h${m % 60}`}
+              {formatMinutes(m)}
             </button>
           ))}
         </div>

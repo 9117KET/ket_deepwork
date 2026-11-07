@@ -9,11 +9,13 @@
  *  - a finger (`useCoarsePointer`): checkbox, title, one chip, ⋮. The ⋮ opens
  *    `TaskActionSheet`, which holds every other action, and the progress row is
  *    one button under the title that opens the progress sheet. Nothing depends
- *    on hover, right-click or double-tap, none of which a phone has. A press
- *    and hold lifts the row to drag it (`useTouchReorder`); the sheet's Move
- *    actions do the same without a gesture.
- *  - a cursor: the desktop row, unchanged: grip, popup menu, inline duration
- *    picker, progress chips, drag-and-drop.
+ *    on hover, right-click or double-tap, none of which a phone has. A finger
+ *    on the trailing `DragHandle` lifts the row at once, a press and hold
+ *    anywhere else lifts it too (`useTouchReorder`); the sheet's Move actions
+ *    do the same without a gesture.
+ *  - a cursor: the desktop row, unchanged: the `DragHandle` grip, popup menu,
+ *    the always-visible duration chip (`DurationChip`), progress chips,
+ *    drag-and-drop.
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -21,10 +23,11 @@ import type { DeepWorkSession, Task, TaskPatch } from '../../domain/types'
 import { computeTaskProgress, formatMinutes } from '../../domain/taskProgress'
 import { ArrowUp, ArrowDown, MoreVertical } from 'lucide-react'
 import { TaskProgressBar, TaskProgressBoxes } from './TaskProgressBoxes'
-import { TaskDurationPicker } from './TaskDurationPicker'
+import { DurationChip } from './DurationChip'
 import { ScheduleChip } from './ScheduleChip'
 import { TaskActionSheet } from './TaskActionSheet'
 import { TouchCheckbox } from './TouchCheckbox'
+import { DragHandle } from './DragHandle'
 import { useFocusBlocks } from './focusBlockContext'
 import { useCoarsePointer } from '../../hooks/useCoarsePointer'
 import { LIFTED_ROW_CLASS, type TouchRowBinding } from '../../hooks/useTouchReorder'
@@ -99,25 +102,6 @@ export function DropLine({ edge }: { edge: 'top' | 'bottom' }) {
 }
 
 
-function GripIcon() {
-  return (
-    <svg
-      className="h-4 w-4 shrink-0 text-share-onSurfaceVariant/60"
-      fill="currentColor"
-      viewBox="0 0 16 16"
-      aria-hidden
-    >
-      <circle cx="4" cy="4" r="1.5" />
-      <circle cx="12" cy="4" r="1.5" />
-      <circle cx="4" cy="8" r="1.5" />
-      <circle cx="12" cy="8" r="1.5" />
-      <circle cx="4" cy="12" r="1.5" />
-      <circle cx="12" cy="12" r="1.5" />
-    </svg>
-  )
-}
-
-
 export function TaskItem({
   task,
   isSubtask = false,
@@ -153,7 +137,7 @@ export function TaskItem({
   const isCoarse = useCoarsePointer()
   const [isEditing, setIsEditing] = useState(false)
   const [draftTitle, setDraftTitle] = useState(task.title)
-  const gripRef = useRef<HTMLDivElement | null>(null)
+  const gripRef = useRef<HTMLSpanElement | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
   const menuBtnRef = useRef<HTMLButtonElement | null>(null)
   const editInputRef = useRef<HTMLInputElement | null>(null)
@@ -372,12 +356,20 @@ export function TaskItem({
 
   // ── Phone: checkbox, title, one chip, ⋮ ─────────────────────────────────
   if (isCoarse) {
-    const chipText = task.scheduledAt ?? (task.durationMinutes ? formatMinutes(task.durationMinutes) : null)
     const chipOpensSchedule = Boolean(onSchedule) && !isSubtask && !task.isDone
+    // Unset, the chip still shows ("Time", dim) wherever it opens the sheet,
+    // so every row says where its length is set.
+    const chipText =
+      task.scheduledAt ??
+      (task.durationMinutes ? formatMinutes(task.durationMinutes) : chipOpensSchedule ? 'Time' : null)
     const chipPill = chipText ? (
       <span
         className={`inline-flex h-8 items-center rounded-lg bg-share-hairline px-2 text-xs tabular-nums ${
-          task.scheduledAt ? 'text-share-primary' : 'text-share-onSurfaceVariant'
+          task.scheduledAt
+            ? 'text-share-primary'
+            : task.durationMinutes
+              ? 'text-share-onSurfaceVariant'
+              : 'text-share-onSurfaceDim'
         }`}
       >
         {chipText}
@@ -440,7 +432,13 @@ export function TaskItem({
                 type="button"
                 onClick={onSchedule}
                 className="touch-target inline-flex shrink-0 items-center justify-center"
-                aria-label={task.scheduledAt ? `Scheduled at ${task.scheduledAt}. Change` : `${chipText}. Schedule`}
+                aria-label={
+                  task.scheduledAt
+                    ? `Scheduled at ${task.scheduledAt}. Change`
+                    : task.durationMinutes
+                      ? `${chipText}. Schedule`
+                      : 'How long: not set. Schedule'
+                }
               >
                 {chipPill}
               </button>
@@ -457,6 +455,16 @@ export function TaskItem({
             >
               <MoreVertical className="h-5 w-5" />
             </button>
+          )}
+          {/* Trailing, as a list's reorder control is on a phone. A finger on
+              it lifts the row at once (no hold); activating it opens the
+              same actions as the ⋮, Move up / down included. */}
+          {touch && (
+            <DragHandle
+              taskTitle={task.title}
+              onClick={showContextMenu ? () => setSheetOpen(true) : undefined}
+              aria-haspopup={showContextMenu ? 'dialog' : undefined}
+            />
           )}
         </div>
         {progress && (
@@ -492,7 +500,7 @@ export function TaskItem({
   }
 
   /** Alt+ArrowUp / Alt+ArrowDown on the grip: the keyboard's drag. */
-  const handleGripKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+  const handleGripKeyDown = (e: React.KeyboardEvent<HTMLElement>) => {
     // Enter / Space: the grip is a button, and what it opens is the row's
     // menu, the same one right-click and Shift+F10 open.
     if ((e.key === 'Enter' || e.key === ' ') && !e.altKey && showContextMenu) {
@@ -533,22 +541,17 @@ export function TaskItem({
         onDrop={handleDrop}
       >
         {isReorderable ? (
-          <div
+          // Visible at every width: the row drags from anywhere, but the
+          // handle is what says so. Keyboard: Alt+Arrow moves, Enter opens
+          // the menu (right-click too).
+          <DragHandle
             ref={gripRef}
-            role="button"
-            tabIndex={0}
+            taskTitle={task.title}
             onContextMenu={handleContextMenu}
             onKeyDown={handleGripKeyDown}
-            className="hidden shrink-0 touch-none rounded p-0.5 text-share-onSurfaceVariant/50 hover:bg-share-surfaceContainerHigh hover:text-share-onSurfaceVariant focus:outline-none focus-visible:ring-1 focus-visible:ring-share-primary sm:block"
-            aria-label={
-              onKeyboardMove
-                ? 'Drag to reorder; right-click for menu; Alt+Up or Alt+Down to move'
-                : 'Drag to reorder; right-click for menu'
-            }
+            aria-haspopup={showContextMenu ? 'menu' : undefined}
             aria-keyshortcuts={onKeyboardMove ? 'Alt+ArrowUp Alt+ArrowDown' : undefined}
-          >
-            <GripIcon />
-          </div>
+          />
         ) : null}
         {/* Fine pointer only (this branch never renders under a finger): the
             hover reveal below needs a cursor to work. */}
@@ -625,10 +628,9 @@ export function TaskItem({
             {onSchedule && !isSubtask && !task.isDone && (
               <ScheduleChip scheduledAt={task.scheduledAt} onClick={onSchedule} />
             )}
-            <TaskDurationPicker
+            <DurationChip
               value={task.durationMinutes}
               onChange={(minutes) => onUpdateTask?.({ durationMinutes: minutes })}
-              className={onSchedule && !isSubtask ? "hidden sm:block" : undefined}
             />
           </span>
         )}

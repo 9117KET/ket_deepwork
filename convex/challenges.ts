@@ -32,7 +32,16 @@ import { internal } from "./_generated/api"
 import { v, ConvexError } from "convex/values"
 import type { Doc, Id } from "./_generated/dataModel"
 import { getUserId } from "./_shared/auth"
-import { HHMM, ISO_DATE, emptySummary, summaryValidator, type ChallengeSummary, type Dont, type EndedReason } from "./_shared/challengeValidators"
+import {
+  HHMM,
+  ISO_DATE,
+  emptySummary,
+  summaryValidator,
+  type ChallengeSummary,
+  type Commitment,
+  type Dont,
+  type EndedReason,
+} from "./_shared/challengeValidators"
 import { isValidTimezone, localDateAndMinutes, CHECKIN_START, hhmmToMinutes } from "./_shared/challengeReminders"
 import { NUDGE_DAILY_CAP, NUDGE_MIN_GAP_MS, NUDGE_RULE_CODE, nudgeAvailability, nudgeRefusal, nudgeTimes, partnerOwesToday } from "./_shared/challengeNudges"
 
@@ -238,22 +247,47 @@ function challengeView(c: Doc<"challenges">, viewer: string) {
 }
 export type ChallengeView = ReturnType<typeof challengeView>
 
+/** The id a legacy (plain string) goal reads as: its index in the stored list. */
+export function legacyGoalId(index: number): string {
+  return `goal-legacy-${index}`
+}
+
+/**
+ * Goals as objects. A string is a legacy goal, written before goals had ids:
+ * the one at index `i` reads as `{ id: "goal-legacy-<i>", text }`, so a mark
+ * made against it keeps resolving after the member's first edit (which
+ * stores these ids for real). Objects pass through.
+ */
+export function normalizeGoals(goals: ReadonlyArray<string | Commitment> | undefined): Commitment[] {
+  return (goals ?? []).map((g, i) => (typeof g === "string" ? { id: legacyGoalId(i), text: g } : g))
+}
+
 /**
  * A member's own goals and don'ts. Rows written before per-member lists have
  * none; the creator's then come from the challenge row, where they used to
  * live, and anyone else starts empty. This is the whole migration.
  */
-function memberCommitments(challenge: Doc<"challenges">, member: Doc<"challengeMembers">): { goals: string[]; donts: Dont[] } {
+function memberCommitments(challenge: Doc<"challenges">, member: Doc<"challengeMembers">): { goals: Commitment[]; donts: Dont[] } {
   const legacy = member.userId === challenge.createdBy
   return {
-    goals: member.goals ?? (legacy ? challenge.goals : []),
+    goals: normalizeGoals(member.goals ?? (legacy ? challenge.goals : [])),
     donts: member.donts ?? (legacy ? challenge.donts : []),
   }
 }
 
+/** The texts of the active goals: the shape `goals` has always had, which the client live before ids still renders. */
+function activeGoalTexts(goals: Commitment[]): string[] {
+  return goals.filter((g) => g.archivedAt === undefined).map((g) => g.text)
+}
+
+/**
+ * A member as the other member (or they themselves) sees them. `goals` stays
+ * `string[]` (active texts only) so a client built before goal ids keeps
+ * rendering; `goalItems` carries the ids, archived ones included, like `donts`.
+ */
 function memberView(challenge: Doc<"challenges">, m: Doc<"challengeMembers">) {
   const { goals, donts } = memberCommitments(challenge, m)
-  return { displayName: m.displayName, timezone: m.timezone, joinedAt: m.joinedAt, goals, donts }
+  return { displayName: m.displayName, timezone: m.timezone, joinedAt: m.joinedAt, goals: activeGoalTexts(goals), goalItems: goals, donts }
 }
 
 /** One challenge as its member sees it: the challenge, both members, the open invite while alone. */
@@ -279,6 +313,7 @@ function dayView(row: Doc<"challengeDays">) {
     checkinAt: row.checkinAt ?? null,
     note: row.note ?? null,
     dontsBroken: row.dontsBroken,
+    goalsKept: row.goalsKept ?? [],
   }
 }
 export type ChallengeDayView = ReturnType<typeof dayView>
@@ -290,6 +325,7 @@ function myDayView(row: Doc<"challengeDays">) {
     checkinAt: row.checkinAt ?? null,
     note: row.note ?? null,
     dontsBroken: row.dontsBroken,
+    goalsKept: row.goalsKept ?? [],
     nudgesSentAt: row.nudgesSentAt ?? null,
     nudgeSentAt: row.nudgeSentAt ?? null,
   }
@@ -321,6 +357,72 @@ function mintDonts(texts: string[], now: number, offset = 0): Dont[] {
   return texts.map((text, i) => ({ id: `dont-${now}-${offset + i + 1}`, text }))
 }
 
+/** New goals from cleaned texts, the twin of `mintDonts`. */
+function mintGoals(texts: string[], now: number, offset = 0): Commitment[] {
+  return texts.map((text, i) => ({ id: `goal-${now}-${offset + i + 1}`, text }))
+}
+
+/**
+ * The span and deadline rules, shared by `createChallenge` and `updateSpan`
+ * so the two can never accept different seasons. Deadlines are checked only
+ * when given.
+ */
+function assertSpan(span: { startDate: string; endDate: string; planDeadline?: string; checkinDeadline?: string }): void {
+  assertIsoDate(span.startDate, "startDate")
+  assertIsoDate(span.endDate, "endDate")
+  if (span.startDate > span.endDate) fail("The challenge must end on or after it starts")
+  if (daysBetween(span.startDate, span.endDate) + 1 > MAX_SPAN_DAYS) fail("A challenge can run for at most a year")
+  if (span.planDeadline !== undefined) {
+    assertHhmm(span.planDeadline, "planDeadline")
+    if (hhmmToMinutes(span.planDeadline) >= hhmmToMinutes(CHECKIN_START)) {
+      fail(`The plan deadline must be before ${CHECKIN_START}`)
+    }
+  }
+  if (span.checkinDeadline !== undefined) {
+    assertHhmm(span.checkinDeadline, "checkinDeadline")
+    if (hhmmToMinutes(span.checkinDeadline) <= hhmmToMinutes(CHECKIN_START)) {
+      fail(`The check-in deadline must be after ${CHECKIN_START}`)
+    }
+  }
+}
+
+const SHORT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+/** "24 Oct" from an ISO date, for a refusal sentence. */
+function dayMonth(iso: string): string {
+  const [, month, day] = iso.split("-").map(Number)
+  return `${day} ${SHORT_MONTHS[(month ?? 1) - 1]}`
+}
+
+/**
+ * The checks a daily mark and a check-in share: the date is in the span and
+ * is the member's today or yesterday, and every id names one of the member's
+ * own goals / don'ts (archived ones count: a day edited later may name one
+ * removed since). Returns the ids de-duplicated; a list not given stays
+ * undefined.
+ */
+function cleanMarks(
+  { challenge, me }: Membership,
+  date: string,
+  marks: { goalsKept?: string[]; dontsBroken?: string[] },
+): { goalsKept?: string[]; dontsBroken?: string[] } {
+  assertIsoDate(date, "date")
+  if (!inRange(challenge, date)) fail("That day is outside the challenge")
+  const back = daysBetween(date, memberToday(me))
+  if (back !== 0 && back !== 1) fail("You can only check in for today or yesterday")
+  const { goals, donts } = memberCommitments(challenge, me)
+  const check = (ids: string[] | undefined, known: Commitment[], refusal: string) => {
+    if (ids === undefined) return undefined
+    const set = new Set(known.map((c) => c.id))
+    for (const id of ids) if (!set.has(id)) fail(refusal)
+    return [...new Set(ids)]
+  }
+  return {
+    goalsKept: check(marks.goalsKept, goals, "Unknown goal"),
+    dontsBroken: check(marks.dontsBroken, donts, "Unknown don't"),
+  }
+}
+
 function cleanDisplayName(name: string): string {
   const trimmed = name.trim()
   if (!trimmed) fail("A display name is required")
@@ -339,7 +441,7 @@ async function upsertDay(
   userId: string,
   date: string,
   summary: ChallengeSummary,
-  extra: Partial<Pick<Doc<"challengeDays">, "planSetAt" | "checkinAt" | "note" | "dontsBroken">> = {},
+  extra: Partial<Pick<Doc<"challengeDays">, "planSetAt" | "checkinAt" | "note" | "dontsBroken" | "goalsKept">> = {},
 ): Promise<Doc<"challengeDays">> {
   const now = Date.now()
   const existing = await getDayRow(ctx, challengeId, userId, date)
@@ -524,7 +626,10 @@ export const invitePreview = query({
     // What the friend is signing up next to: the inviter's active lists, texts only.
     const lists = inviter ? memberCommitments(challenge, inviter) : null
     const inviterLists = lists
-      ? { inviterGoals: lists.goals, inviterDonts: lists.donts.filter((d) => d.archivedAt === undefined).map((d) => d.text) }
+      ? {
+          inviterGoals: activeGoalTexts(lists.goals),
+          inviterDonts: lists.donts.filter((d) => d.archivedAt === undefined).map((d) => d.text),
+        }
       : noLists
     if (members.length >= MAX_MEMBERS) return { status: "full" as const, challenge: preview, inviterName, ...inviterLists }
     return { status: "ok" as const, challenge: preview, inviterName, ...inviterLists }
@@ -644,23 +749,13 @@ export const createChallenge = mutation({
     const name = args.name.trim()
     if (!name) fail("A name is required")
     if (name.length > MAX_NAME) fail(`Name must be ${MAX_NAME} characters or fewer`)
-    assertIsoDate(args.startDate, "startDate")
-    assertIsoDate(args.endDate, "endDate")
-    if (args.startDate > args.endDate) fail("The challenge must end on or after it starts")
-    if (daysBetween(args.startDate, args.endDate) + 1 > MAX_SPAN_DAYS) fail("A challenge can run for at most a year")
-    assertHhmm(args.planDeadline, "planDeadline")
-    assertHhmm(args.checkinDeadline, "checkinDeadline")
-    if (hhmmToMinutes(args.planDeadline) >= hhmmToMinutes(CHECKIN_START)) {
-      fail(`The plan deadline must be before ${CHECKIN_START}`)
-    }
-    if (hhmmToMinutes(args.checkinDeadline) <= hhmmToMinutes(CHECKIN_START)) {
-      fail(`The check-in deadline must be after ${CHECKIN_START}`)
-    }
+    assertSpan(args)
     const timezone = cleanTimezone(args.timezone)
     const displayName = cleanDisplayName(args.displayName)
-    const goals = cleanList(args.goals, "goals")
+    const goalTexts = cleanList(args.goals, "goals")
     const dontTexts = cleanList(args.donts, "don'ts")
     const now = Date.now()
+    const goals = mintGoals(goalTexts, now)
     const donts = mintDonts(dontTexts, now)
     // The lists are the creator's own; the challenge row keeps empty legacy fields.
     const challengeId = await ctx.db.insert("challenges", {
@@ -736,7 +831,7 @@ export const acceptInvite = mutation({
     await assertBelowCap(ctx, userId)
     const timezone = cleanTimezone(args.timezone)
     const displayName = cleanDisplayName(args.displayName)
-    const goals = cleanList(args.goals ?? [], "goals")
+    const goals = mintGoals(cleanList(args.goals ?? [], "goals"), now)
     const donts = mintDonts(cleanList(args.donts ?? [], "don'ts"), now)
     await ctx.db.insert("challengeMembers", {
       challengeId: challenge._id,
@@ -757,50 +852,122 @@ export const acceptInvite = mutation({
 })
 
 /**
- * Replace the caller's own goals and don'ts in one challenge. Goals are
- * replaced wholesale. A don't sent with its id keeps that id (its text may
- * change); a current don't left out is archived, not deleted, because a
- * check-in may name it; a don't sent without an id is new. Archived ones
- * stay archived and do not count against the cap.
+ * One list's edit under the keep-or-archive rule. An item sent with a known
+ * id keeps that id (its text may change; a blank text removes it); a current
+ * item left out is archived, not deleted, because a recorded day may name
+ * it; an item sent without an id is new. Archived ones stay archived and do
+ * not count against the cap. `label` is the plural in sentences ("goals"),
+ * `unknown` the refusal for an id that is not an active one of the member's.
+ */
+function reconcileList(
+  current: Commitment[],
+  rows: Array<{ id?: string; text: string }>,
+  now: number,
+  mint: (texts: string[], now: number, offset: number) => Commitment[],
+  label: string,
+  unknown: string,
+): Commitment[] {
+  // Blank rows are dropped below, so they do not count against the cap.
+  if (rows.filter((r) => r.text.trim().length > 0).length > MAX_LIST) fail(`At most ${MAX_LIST} ${label}`)
+  const active = new Set(current.filter((c) => c.archivedAt === undefined).map((c) => c.id))
+  const kept = new Set<string>()
+  const next: Commitment[] = []
+  let minted = 0
+  for (const row of rows) {
+    const text = row.text.trim()
+    if (text.length > MAX_ITEM) fail(`Each of the ${label} must be ${MAX_ITEM} characters or fewer`)
+    if (row.id !== undefined) {
+      if (!active.has(row.id) || kept.has(row.id)) fail(unknown)
+      // A blank text for a known id is a removal; it is archived below.
+      if (!text) continue
+      kept.add(row.id)
+      next.push({ id: row.id, text })
+    } else if (text) {
+      minted += 1
+      next.push(mint([text], now, current.length + minted - 1)[0]!)
+    }
+  }
+  const archived = current
+    .map((c) => (c.archivedAt !== undefined || kept.has(c.id) ? c : { ...c, archivedAt: now }))
+    .filter((c) => c.archivedAt !== undefined)
+  return [...next, ...archived]
+}
+
+/**
+ * Replace the caller's own goals and don'ts in one challenge. Both follow
+ * one rule (`reconcileList`): a known id keeps its id, a missing one is
+ * archived, a new one is minted. A goal may also arrive as a bare string,
+ * which is new. A member still on legacy string goals is converted to
+ * objects here, and the `goal-legacy-<i>` ids the client read are honoured,
+ * so a day marked before the first edit still resolves after it.
  */
 export const updateMyCommitments = mutation({
   args: {
     challengeId: v.id("challenges"),
-    goals: v.array(v.string()),
+    goals: v.array(v.union(v.string(), v.object({ id: v.optional(v.string()), text: v.string() }))),
     donts: v.array(v.object({ id: v.optional(v.string()), text: v.string() })),
   },
   handler: async (ctx, args) => {
     const userId = await requireUser(ctx)
     const { challenge, me } = await requireMember(ctx, userId, args.challengeId, { write: true })
-    const goals = cleanList(args.goals, "goals")
-    // Blank rows are dropped below, so they do not count against the cap (as with goals).
-    if (args.donts.filter((d) => d.text.trim().length > 0).length > MAX_LIST) fail(`At most ${MAX_LIST} don'ts`)
-    const current = memberCommitments(challenge, me).donts
-    const active = new Map(current.filter((d) => d.archivedAt === undefined).map((d) => [d.id, d]))
+    const current = memberCommitments(challenge, me)
     const now = Date.now()
-    const kept = new Set<string>()
-    const next: Dont[] = []
-    let minted = 0
-    for (const row of args.donts) {
-      const text = row.text.trim()
-      if (text.length > MAX_ITEM) fail(`Each of the don'ts must be ${MAX_ITEM} characters or fewer`)
-      if (row.id !== undefined) {
-        if (!active.has(row.id) || kept.has(row.id)) fail("Unknown don't")
-        // A blank text for a known id is a removal; it is archived below.
-        if (!text) continue
-        kept.add(row.id)
-        next.push({ id: row.id, text })
-      } else if (text) {
-        minted += 1
-        next.push(mintDonts([text], now, current.length + minted - 1)[0]!)
+    const goalRows = args.goals.map((g) => (typeof g === "string" ? { text: g } : g))
+    const goalItems = reconcileList(current.goals, goalRows, now, mintGoals, "goals", "Unknown goal")
+    const donts = reconcileList(current.donts, args.donts, now, mintDonts, "don'ts", "Unknown don't")
+    await ctx.db.patch(me._id, { goals: goalItems, donts, commitmentsUpdatedAt: now })
+    // The same two goal fields as `memberView`: texts for an older client, items with ids for the new one.
+    return { goals: activeGoalTexts(goalItems), goalItems, donts }
+  },
+})
+
+/**
+ * Correcting the season's dates and deadlines. Only the creator may, and only
+ * while it runs. No recorded day may fall out of it: the end cannot move
+ * before any member's today (the season-over sweep would end it at once),
+ * and the start cannot move past the first lock-in or check-in either member
+ * recorded (`history` reads from the start, so those days would vanish from
+ * view). Day rows are never touched; `status` is untouched.
+ */
+export const updateSpan = mutation({
+  args: {
+    challengeId: v.id("challenges"),
+    startDate: v.string(),
+    endDate: v.string(),
+    planDeadline: v.optional(v.string()),
+    checkinDeadline: v.optional(v.string()),
+  },
+  handler: async (ctx, args): Promise<ChallengeView> => {
+    const userId = await requireUser(ctx)
+    const { challenge } = await requireMember(ctx, userId, args.challengeId, { write: true })
+    if (challenge.createdBy !== userId) fail("Only the creator can change the dates")
+    assertSpan(args)
+    const members = await membersOf(ctx, challenge._id)
+    for (const m of members) {
+      if (args.endDate < memberToday(m)) fail("The end date can't be before today")
+    }
+    let firstRecorded: string | null = null
+    for (const m of members) {
+      // Ascending by date; the first row carrying either act is the member's earliest record.
+      const rows = ctx.db
+        .query("challengeDays")
+        .withIndex("by_challenge_user_date", (q) => q.eq("challengeId", challenge._id).eq("userId", m.userId))
+      for await (const row of rows) {
+        if (row.planSetAt === undefined && row.checkinAt === undefined) continue
+        if (firstRecorded === null || row.date < firstRecorded) firstRecorded = row.date
+        break
       }
     }
-    const archived = current.map((d) =>
-      d.archivedAt !== undefined || kept.has(d.id) ? d : { ...d, archivedAt: now },
-    ).filter((d) => d.archivedAt !== undefined)
-    const donts = [...next, ...archived]
-    await ctx.db.patch(me._id, { goals, donts, commitmentsUpdatedAt: now })
-    return { goals, donts }
+    if (firstRecorded !== null && args.startDate > firstRecorded) {
+      fail(`The start can't move past ${dayMonth(firstRecorded)}, when the first lock-in or check-in was recorded`)
+    }
+    await ctx.db.patch(challenge._id, {
+      startDate: args.startDate,
+      endDate: args.endDate,
+      ...(args.planDeadline !== undefined ? { planDeadline: args.planDeadline } : {}),
+      ...(args.checkinDeadline !== undefined ? { checkinDeadline: args.checkinDeadline } : {}),
+    })
+    return challengeView((await ctx.db.get(challenge._id))!, userId)
   },
 })
 
@@ -954,7 +1121,12 @@ export const lockInPlan = mutation({
   },
 })
 
-/** The evening act, per challenge. Checking in again updates the note and confession, not the time. */
+/**
+ * The evening act, per challenge. Checking in again updates the note and the
+ * marks, not the time. `dontsBroken` is the full set (the sheet seeds it from
+ * the row), so the latest explicit save wins; `goalsKept`, when given, is
+ * written the same way, and when absent the row's marks are left as they are.
+ */
 export const checkIn = mutation({
   args: {
     challengeId: v.id("challenges"),
@@ -962,29 +1134,22 @@ export const checkIn = mutation({
     summary: summaryValidator,
     note: v.optional(v.string()),
     dontsBroken: v.array(v.string()),
+    goalsKept: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
     const userId = await requireUser(ctx)
     const membership = await requireMember(ctx, userId, args.challengeId, { write: true })
-    const { challenge, me } = membership
-    assertIsoDate(args.date, "date")
-    if (!inRange(challenge, args.date)) fail("That day is outside the challenge")
-    const back = daysBetween(args.date, memberToday(me))
-    if (back !== 0 && back !== 1) fail("You can only check in for today or yesterday")
+    const { challenge } = membership
+    const marks = cleanMarks(membership, args.date, { goalsKept: args.goalsKept, dontsBroken: args.dontsBroken })
     const note = args.note?.trim() ?? ""
     if (note.length > MAX_NOTE) fail(`Note must be ${MAX_NOTE} characters or fewer`)
-    // Archived ones count: a check-in edited later may name a don't removed since.
-    const known = new Set(memberCommitments(challenge, me).donts.map((d) => d.id))
-    for (const id of args.dontsBroken) {
-      if (!known.has(id)) fail("Unknown don't")
-    }
-    const dontsBroken = [...new Set(args.dontsBroken)]
     const existing = await getDayRow(ctx, challenge._id, userId, args.date)
     const now = Date.now()
     const checkinAt = existing?.checkinAt ?? now
     await upsertDay(ctx, challenge._id, userId, args.date, args.summary, {
       checkinAt,
-      dontsBroken,
+      dontsBroken: marks.dontsBroken ?? [],
+      ...(marks.goalsKept !== undefined ? { goalsKept: marks.goalsKept } : {}),
       ...(note ? { note } : {}),
     })
     if (!note && existing?.note) {
@@ -992,6 +1157,52 @@ export const checkIn = mutation({
     }
     await recordAct(ctx, membership, now)
     return { checkinAt }
+  },
+})
+
+/**
+ * A daily mark, any time during the day: which goals the member kept and
+ * which don'ts they broke, in one challenge. Same date rules as `checkIn`
+ * (in the span, today or yesterday on the member's own clock), every id one
+ * of the member's own (archived counts), de-duplicated. Only the lists given
+ * are written; a list left out stays as it was. It touches nothing else on
+ * the row (not the summary, the acts, the note or the reminders), and it is
+ * not one of the two daily acts: no `recordAct`, so it never counts against
+ * inactivity. A missing row is created with an empty summary and no acts.
+ */
+export const markDay = mutation({
+  args: {
+    challengeId: v.id("challenges"),
+    date: v.string(),
+    goalsKept: v.optional(v.array(v.string())),
+    dontsBroken: v.optional(v.array(v.string())),
+  },
+  handler: async (ctx, args): Promise<{ goalsKept: string[]; dontsBroken: string[] }> => {
+    const userId = await requireUser(ctx)
+    const membership = await requireMember(ctx, userId, args.challengeId, { write: true })
+    const marks = cleanMarks(membership, args.date, { goalsKept: args.goalsKept, dontsBroken: args.dontsBroken })
+    const patch = {
+      ...(marks.goalsKept !== undefined ? { goalsKept: marks.goalsKept } : {}),
+      ...(marks.dontsBroken !== undefined ? { dontsBroken: marks.dontsBroken } : {}),
+    }
+    const challengeId = membership.challenge._id
+    const existing = await getDayRow(ctx, challengeId, userId, args.date)
+    if (existing) {
+      if (Object.keys(patch).length > 0) await ctx.db.patch(existing._id, patch)
+      const row = (await ctx.db.get(existing._id))!
+      return { goalsKept: row.goalsKept ?? [], dontsBroken: row.dontsBroken }
+    }
+    await ctx.db.insert("challengeDays", {
+      challengeId,
+      userId,
+      date: args.date,
+      summary: emptySummary(),
+      summaryUpdatedAt: Date.now(),
+      dontsBroken: [],
+      remindersSent: { plan: 0, checkin: 0 },
+      ...patch,
+    })
+    return { goalsKept: marks.goalsKept ?? [], dontsBroken: marks.dontsBroken ?? [] }
   },
 })
 

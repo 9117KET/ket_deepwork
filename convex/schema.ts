@@ -3,6 +3,7 @@ import { v } from "convex/values"
 import { authTables } from "@convex-dev/auth/server"
 import {
   challengeStatusValidator,
+  commitmentValidator,
   dontValidator,
   endedReasonValidator,
   remindersSentValidator,
@@ -195,7 +196,12 @@ export default defineSchema({
     displayName: v.string(),
     joinedAt: v.number(),
     /** This member's own lists. The partner reads them; only the member writes them. */
-    goals: v.optional(v.array(v.string())),
+    /**
+     * A string is a legacy goal (rows written before goals had ids); it reads
+     * as `goal-legacy-<index>` and is converted to objects on the member's
+     * next edit. Removed goals stay with `archivedAt`, like don'ts.
+     */
+    goals: v.optional(v.array(v.union(v.string(), commitmentValidator))),
     /** Removed don'ts stay here with `archivedAt`, so old confessions still resolve. */
     donts: v.optional(v.array(dontValidator)),
     commitmentsUpdatedAt: v.optional(v.number()),
@@ -231,6 +237,8 @@ export default defineSchema({
     note: v.optional(v.string()),
     /** Ids from the member's own don'ts (active or archived) owned up to at check-in. */
     dontsBroken: v.array(v.string()),
+    /** Ids from the member's own goals (active or archived) marked kept that day. Absent reads as `[]`. */
+    goalsKept: v.optional(v.array(v.string())),
     /** Reminder bookkeeping for this local day; never shown to the partner. */
     remindersSent: remindersSentValidator,
     /** Legacy once-a-day nudge stamp: read as one entry of `nudgesSentAt`, never written again. */

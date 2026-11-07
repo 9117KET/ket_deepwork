@@ -172,7 +172,7 @@ test('deleting a task keeps the deep work minutes it was worked for', async ({ p
 
   // On a desktop viewport the row's menu opens by right-clicking the grip; the
   // kebab button is hover-only and hidden for reorderable rows.
-  await page.getByLabel('Drag to reorder; right-click for menu').first().click({ button: 'right' })
+  await page.getByLabel(/^Drag to move /).first().click({ button: 'right' })
   await page.getByRole('menuitem', { name: /^Delete/i }).click()
   await page.waitForTimeout(600)
 
@@ -335,7 +335,7 @@ test('deleting a task with hand-logged minutes asks first, and cancelling keeps 
     void d.dismiss() // the user changes their mind
   })
 
-  await page.getByLabel('Drag to reorder; right-click for menu').first().click({ button: 'right' })
+  await page.getByLabel(/^Drag to move /).first().click({ button: 'right' })
   await page.getByRole('menuitem', { name: /^Delete/i }).click()
   await page.waitForTimeout(600)
 
@@ -361,7 +361,7 @@ test('deleting a task with only timed work does not raise a false alarm', async 
     void d.accept()
   })
 
-  await page.getByLabel('Drag to reorder; right-click for menu').first().click({ button: 'right' })
+  await page.getByLabel(/^Drag to move /).first().click({ button: 'right' })
   await page.getByRole('menuitem', { name: /^Delete/i }).click()
   await page.waitForTimeout(600)
 
@@ -384,7 +384,7 @@ test('a deleted task comes back with Undo', async ({ page }) => {
   })
   await openPlanner(page)
 
-  await page.getByLabel('Drag to reorder; right-click for menu').first().click({ button: 'right' })
+  await page.getByLabel(/^Drag to move /).first().click({ button: 'right' })
   await page.getByRole('menuitem', { name: /^Delete/i }).click()
   await page.waitForTimeout(500)
 
@@ -417,7 +417,7 @@ test('undo restores hand-logged minutes, not just the row', async ({ page }) => 
 
   page.on('dialog', (d) => void d.accept()) // yes, delete it
 
-  await page.getByLabel('Drag to reorder; right-click for menu').first().click({ button: 'right' })
+  await page.getByLabel(/^Drag to move /).first().click({ button: 'right' })
   await page.getByRole('menuitem', { name: /^Delete/i }).click()
   await page.waitForTimeout(500)
 
@@ -440,7 +440,7 @@ test('undo goes away once something else changes, rather than reverting it', asy
   })
   await openPlanner(page)
 
-  await page.getByLabel('Drag to reorder; right-click for menu').first().click({ button: 'right' })
+  await page.getByLabel(/^Drag to move /).first().click({ button: 'right' })
   await page.getByRole('menuitem', { name: /^Delete/i }).click()
   await page.waitForTimeout(400)
   await expect(page.getByRole('status')).toBeVisible()

@@ -3,14 +3,22 @@
  *
  * The add field under a list: 48px tall, so it is a thumb-sized target, and
  * 16px text on phones, so focusing it never zooms iOS.
+ *
+ * A length typed at the end ("Write report 2h") is split off and set as the
+ * task's duration (`extractTrailingDuration` in domain/durations.ts).
  */
 
 import { useState } from 'react'
 import type { FormEvent } from 'react'
+import { extractTrailingDuration } from '../../domain/durations'
+
+export interface AddTaskOptions {
+  durationMinutes?: number
+}
 
 interface AddTaskInputProps {
   placeholder?: string
-  onAdd: (title: string) => void
+  onAdd: (title: string, options?: AddTaskOptions) => void
 }
 
 export function AddTaskInput({ placeholder, onAdd }: AddTaskInputProps) {
@@ -20,7 +28,9 @@ export function AddTaskInput({ placeholder, onAdd }: AddTaskInputProps) {
     event.preventDefault()
     const trimmed = value.trim()
     if (!trimmed) return
-    onAdd(trimmed)
+    const typed = extractTrailingDuration(trimmed)
+    if (typed) onAdd(typed.title, { durationMinutes: typed.minutes })
+    else onAdd(trimmed)
     setValue('')
   }
 

@@ -13,6 +13,7 @@
 
 import type { DayState, HabitDefinition } from './types'
 import { computeDailyDeepWorkMinutes } from './stats'
+import { computeDayCompletion } from './dayCompletion'
 
 export interface ChallengeSummary {
   top3: { title: string; isDone: boolean }[]
@@ -24,10 +25,25 @@ export interface ChallengeSummary {
   top3FromTasks?: boolean
   tasksDone: number
   tasksTotal: number
+  /**
+   * Every visible task outside the Top 3 (the same set `tasksDone` and
+   * `tasksTotal` count), so the partner sees the whole day. A task marked
+   * private ("Hide from partner") is left out and counted in `privateCount`.
+   * Optional: rows written before 7 Nov 2026 carry only the counts.
+   */
+  tasks?: { title: string; isDone: boolean }[]
   privateCount: number
   deepWorkMinutes: number
   habitsDone: number
   habitsTotal: number
+  /**
+   * Whole minutes planned for the day over every root task, private ones
+   * included (`computeDayCompletion`). Optional: rows written before it and
+   * old clients lack it.
+   */
+  plannedMinutes?: number
+  /** Whole minutes earned by ticks, rounded down and never above `plannedMinutes`. */
+  doneMinutes?: number
 }
 
 export interface ChallengeSpan {
@@ -75,16 +91,57 @@ export function buildChallengeSummary(day: DayState | undefined, habitDefinition
   const top3 = fromTasks ? restVisible.slice(0, 3) : mustDo.filter((t) => !t.isPrivate)
   const counted = fromTasks ? restVisible.slice(3) : restVisible
   const habitsDone = habitDefinitions.filter((h) => day?.habitCompletions?.[h.id] === true).length
+  // Planned time counts private tasks too, like `privateCount`: counted, never
+  // titled. Two minute totals say how big the day was, not what was in it, and
+  // leaving private work out would make an honest day read as a short one.
+  const completion = computeDayCompletion(day?.tasks ?? [])
+  const plannedMinutes = Math.round(completion.plannedMinutes)
+  const doneMinutes = Math.min(Math.floor(completion.doneMinutes), plannedMinutes)
   return {
     top3: top3.map((t) => ({ title: t.title, isDone: t.isDone })),
     ...(fromTasks ? { top3FromTasks: true } : {}),
     tasksDone: counted.filter((t) => t.isDone).length,
     tasksTotal: counted.length,
+    tasks: counted.map((t) => ({ title: t.title, isDone: t.isDone })),
     privateCount: roots.filter((t) => t.isPrivate).length,
     deepWorkMinutes: computeDailyDeepWorkMinutes(day),
     habitsDone,
     habitsTotal: habitDefinitions.length,
+    plannedMinutes,
+    doneMinutes,
   }
+}
+
+/**
+ * Share of the day's planned minutes done, 0..100, rounded down. Null when
+ * nothing was planned or the summary predates the field: an empty day is not
+ * 0% of anything.
+ */
+export function dayCompletionPercent(summary: ChallengeSummary | undefined): number | null {
+  const planned = summary?.plannedMinutes
+  if (planned === undefined || planned <= 0) return null
+  return clampPercent(Math.floor((100 * (summary?.doneMinutes ?? 0)) / planned))
+}
+
+/**
+ * The season's planned time done, weighted by length: minutes done over
+ * minutes planned across the rows given (the caller passes the days reached),
+ * never an average of daily percentages. Rows without the fields add nothing.
+ */
+export function seasonCompletion(rows: { summary?: ChallengeSummary }[]): { planned: number; done: number; percent: number | null } {
+  let planned = 0
+  let done = 0
+  for (const row of rows) {
+    const p = row.summary?.plannedMinutes
+    if (p === undefined || p <= 0) continue
+    planned += p
+    done += Math.min(row.summary?.doneMinutes ?? 0, p)
+  }
+  return { planned, done, percent: planned > 0 ? clampPercent(Math.floor((100 * done) / planned)) : null }
+}
+
+function clampPercent(n: number): number {
+  return Math.min(100, Math.max(0, n))
 }
 
 /** Day arithmetic in UTC so a DST change can never make a 92-day span count 91 or 93. */

@@ -16,7 +16,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { ChallengeSummary } from '../../domain/challenge'
 import { formatShortDate } from '../../domain/challenge'
-import { activeDonts } from '../../domain/challengeCommitments'
+import { activeCommitments, activeDonts, goalItemsOf } from '../../domain/challengeCommitments'
 import { countdownLine, countdownState } from '../../domain/challengeCountdown'
 import { partnerWho, warningSentence } from '../../domain/challengeList'
 import { useTodayCards, type ChallengeEntry, type TodayRow } from '../../hooks/useChallenges'
@@ -119,6 +119,7 @@ export function ChallengeTodayBlock({ active, now, summary, date }: ChallengeTod
         <CheckinSheet
           challengeId={open.entry.challenge.id}
           challengeName={open.entry.challenge.name}
+          goals={activeCommitments(goalItemsOf(open.entry.me))}
           donts={activeDonts(open.entry.me.donts)}
           displayName={open.entry.me.displayName}
           progress={open.progress}

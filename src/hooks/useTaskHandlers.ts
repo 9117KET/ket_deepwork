@@ -5,7 +5,7 @@
  * file stays focused on layout and composition.
  */
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   FIXED_SECTIONS,
   type AbandonedTask,
@@ -22,16 +22,60 @@ import {
   getOrderedTasksForSection,
   getDescendantIds,
   cloneTasksForDay,
+  TOP3_MAX,
+  wouldOverfillTop3,
 } from "../domain/taskUtils";
 import { blockDayIso, detachSessionsFromTasks, reattributeSession } from "../domain/workSafety";
 import { withdrawManualMinutes } from "../domain/taskProgress";
 import { getOrCreateDay } from "../storage/localStorageState";
 
+/**
+ * What a fill from `sourceTasks` would add to a day holding `targetTasks`:
+ * the source tasks to copy, in order, each already moved to the section its
+ * copy lands in (not yet cloned). Empty when nothing is new, which is how the
+ * planner knows not to offer the fill at all. Rules on `handleCopyFromDay`.
+ */
+export function planCopyFromDay(
+  sourceTasks: Task[],
+  targetTasks: Task[],
+  listSectionId: TaskSectionId,
+): Task[] {
+  const keyOf = (sectionId: TaskSectionId, title: string) => `${sectionId}:${title.trim().toLowerCase()}`;
+  const existingKeys = new Set(targetTasks.filter((t) => !t.parentId).map((t) => keyOf(t.sectionId, t.title)));
+  let top3Slots = Math.max(0, TOP3_MAX - targetTasks.filter((t) => t.sectionId === "mustDo" && !t.parentId).length);
+  /** Source root id → the section its copy lands in. */
+  const landing = new Map<string, TaskSectionId>();
+  for (const root of sourceTasks.filter((t) => !t.parentId && t.sectionId !== "sideQuest")) {
+    let section = root.sectionId;
+    if (section === "mustDo") {
+      if (existingKeys.has(keyOf("mustDo", root.title))) continue;
+      if (top3Slots > 0) top3Slots -= 1;
+      else section = listSectionId;
+    }
+    const key = keyOf(section, root.title);
+    if (existingKeys.has(key)) continue;
+    existingKeys.add(key);
+    landing.set(root.id, section);
+  }
+  if (landing.size === 0) return [];
+  // Roots in source order, each followed by its own subtasks.
+  const sourceToCopy = getOrderedTasksForSection(
+    sourceTasks.filter((t) => landing.has(t.id) || (t.parentId != null && landing.has(t.parentId))),
+  );
+  const sectionOf = (t: Task) => landing.get(t.id) ?? landing.get(t.parentId ?? "") ?? t.sectionId;
+  return sourceToCopy.map((t) => ({ ...t, sectionId: sectionOf(t) }));
+}
 
 export function useTaskHandlers(
   updateAppState: (updater: (prev: AppState) => AppState) => void,
   selectedDay: string,
+  /** The open day's tasks as rendered, so a drop can be refused synchronously (the Top 3 cap). */
+  dayTasks: Task[] = [],
 ) {
+  const dayTasksRef = useRef(dayTasks);
+  useEffect(() => {
+    dayTasksRef.current = dayTasks;
+  }, [dayTasks]);
   const [draggedTask, setDraggedTask] = useState<{
     sectionId: TaskSectionId;
     taskId: string;
@@ -66,7 +110,11 @@ export function useTaskHandlers(
     draggedSubtaskRef.current = null;
   }, []);
 
-  const handleAddTask = (sectionId: TaskSectionId, title: string) => {
+  const handleAddTask = (
+    sectionId: TaskSectionId,
+    title: string,
+    options?: { durationMinutes?: number },
+  ) => {
     updateAppState((prev) => {
       const existingDay = getOrCreateDay(prev, selectedDay);
       const nextTasks: Task[] = [
@@ -77,6 +125,9 @@ export function useTaskHandlers(
           sectionId,
           date: selectedDay,
           isDone: false,
+          ...(options?.durationMinutes != null
+            ? { durationMinutes: options.durationMinutes }
+            : {}),
         },
       ];
 
@@ -309,6 +360,9 @@ export function useTaskHandlers(
         const existingDay = getOrCreateDay(prev, selectedDay);
         const task = existingDay.tasks.find((t) => t.id === taskId);
         if (!task) return prev;
+        // The Top 3 never holds a fourth root, however a task gets there.
+        // Callers refuse out loud first; this is the floor under them.
+        if (toSectionId === "mustDo" && wouldOverfillTop3(existingDay.tasks, taskId)) return prev;
         const descendantIds = getDescendantIds(existingDay.tasks, taskId);
         const toMoveIds = new Set([taskId, ...descendantIds]);
         const nextTasks = existingDay.tasks.filter((t) => !toMoveIds.has(t.id));
@@ -356,12 +410,13 @@ export function useTaskHandlers(
   /**
    * Drop the dragged root at `insertIndex` in the target section's ordered
    * list. Returns "refusedSubtask" when what was dragged is a subtask: those
-   * never leave their parent by drag.
+   * never leave their parent by drag. Returns "refusedFull" when the drop
+   * would put a fourth root in the Top 3; reordering inside it still works.
    */
   const handleDrop = (
     targetSectionId: TaskSectionId,
     insertIndex: number,
-  ): "moved" | "refusedSubtask" | "none" => {
+  ): "moved" | "refusedSubtask" | "refusedFull" | "none" => {
     const payload = draggedTaskRef.current ?? draggedTask;
     try {
       if (!payload) {
@@ -373,6 +428,13 @@ export function useTaskHandlers(
       }
       const fromSectionId = payload.sectionId;
       const taskId = payload.taskId;
+      if (
+        targetSectionId === "mustDo" &&
+        fromSectionId !== "mustDo" &&
+        wouldOverfillTop3(dayTasksRef.current, taskId)
+      ) {
+        return "refusedFull";
+      }
       if (fromSectionId === targetSectionId) {
         updateAppState((prev) => {
           try {
@@ -418,34 +480,28 @@ export function useTaskHandlers(
   };
 
   /**
-   * Copy tasks from a source day into the selected day, preserving scheduledAt
-   * and durationMinutes. Existing tasks on the target day are kept; source roots
-   * that already exist there (same section + title) are skipped, along with
-   * their subtasks. Used for fill/copy buttons.
+   * Fill the selected day from a source day ("Fill from yesterday").
+   *
+   * - The source's Top 3 roots go into today's Top 3, in order, while slots
+   *   remain (at most TOP3_MAX roots in all); any left over go to `listSectionId`.
+   * - The source's other roots keep their section. Side Quests stay personal.
+   * - A root already on the target day (same section and title, judged in the
+   *   section it would land in) is skipped with its subtasks.
+   * - Subtasks follow their copied root.
+   * - Every copy is unticked, keeps its planned length, and loses scheduledAt
+   *   (no calendar event exists for a new id) and any legacy logged minutes.
+   *   No DeepWorkSession is ever created or moved: worked minutes stay where
+   *   they were worked.
    */
   const handleCopyFromDay = useCallback(
-    (sourceDate: string) => {
+    (sourceDate: string, listSectionId: TaskSectionId = "highPriority") => {
       updateAppState((prev) => {
         const sourceDayState = getOrCreateDay(prev, sourceDate);
         if (sourceDayState.tasks.length === 0) return prev;
         const existingDay = getOrCreateDay(prev, selectedDay);
-        const existingKeys = new Set(
-          existingDay.tasks
-            .filter((t) => !t.parentId)
-            .map((t) => `${t.sectionId}:${t.title.trim().toLowerCase()}`),
-        );
-        // MUSTs and Side Quests are personal — never copy them from another day.
-        const copyableRootIds = new Set(
-          sourceDayState.tasks
-            .filter((t) => !t.parentId && t.sectionId !== 'mustDo' && t.sectionId !== 'sideQuest')
-            .filter((t) => !existingKeys.has(`${t.sectionId}:${t.title.trim().toLowerCase()}`))
-            .map((t) => t.id),
-        );
-        const sourceToCopy = sourceDayState.tasks.filter(
-          (t) => copyableRootIds.has(t.id) || (t.parentId != null && copyableRootIds.has(t.parentId)),
-        );
-        if (sourceToCopy.length === 0) return prev;
-        const newTasks = cloneTasksForDay(sourceToCopy, selectedDay);
+        const relocated = planCopyFromDay(sourceDayState.tasks, existingDay.tasks, listSectionId);
+        if (relocated.length === 0) return prev;
+        const newTasks = cloneTasksForDay(relocated, selectedDay, { resetSchedule: true });
         return {
           ...prev,
           days: {

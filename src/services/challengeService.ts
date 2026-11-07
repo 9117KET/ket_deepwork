@@ -75,19 +75,53 @@ export async function acceptInvite(token: string, displayName: string, goals: st
   return challengeId
 }
 
-/** Replace your own lists in one challenge. A don't sent with its id stays that don't; one left out is archived. */
+export type ChallengeView = FunctionReturnType<typeof api.challenges.myChallenges>[number]["challenge"]
+
+interface CommitmentInput {
+  id?: string
+  text: string
+}
+
+/**
+ * Replace your own lists in one challenge. A goal or a don't sent with its id
+ * stays that one (its marks keep pointing at it); one left out is archived.
+ */
 export async function updateMyCommitments(
   challengeId: Id<"challenges">,
   input: {
-    goals: string[]
-    donts: { id?: string; text: string }[]
+    goals: CommitmentInput[]
+    donts: CommitmentInput[]
   },
-): Promise<{ goals: string[]; donts: { id: string; text: string; archivedAt?: number }[] }> {
-  return await convex.mutation(api.challenges.updateMyCommitments, { challengeId, ...input })
+): Promise<void> {
+  await convex.mutation(api.challenges.updateMyCommitments, { challengeId, ...input })
 }
 
 export async function renameChallenge(challengeId: Id<"challenges">, name: string): Promise<void> {
   await convex.mutation(api.challenges.renameChallenge, { challengeId, name })
+}
+
+/**
+ * Correct the season's dates and deadlines (creator only, while it runs).
+ * The server refuses an end before today and a start past the first
+ * recorded day, each with a sentence; recorded days are never touched.
+ */
+export async function updateSpan(
+  challengeId: Id<"challenges">,
+  span: { startDate: string; endDate: string; planDeadline: string; checkinDeadline: string },
+): Promise<ChallengeView> {
+  return await convex.mutation(api.challenges.updateSpan, { challengeId, ...span })
+}
+
+/**
+ * Today's marks: the goals you kept, the don'ts you broke. Send the full set
+ * of one kind; a kind left out is left as it was. Not one of the two daily
+ * acts, so it never counts against inactivity.
+ */
+export async function markDay(
+  challengeId: Id<"challenges">,
+  args: { date: string; goalsKept: string[] } | { date: string; dontsBroken: string[] },
+): Promise<{ goalsKept: string[]; dontsBroken: string[] }> {
+  return await convex.mutation(api.challenges.markDay, { challengeId, ...args })
 }
 
 /** Leaving. If you created the challenge, it ends for both of you. */
@@ -123,6 +157,8 @@ export async function checkIn(
     summary: ChallengeSummary
     note?: string
     dontsBroken: string[]
+    /** Left out, the day's goal marks stay as they were. */
+    goalsKept?: string[]
   },
 ): Promise<{ checkinAt: number }> {
   return await convex.mutation(api.challenges.checkIn, { challengeId, ...args })
