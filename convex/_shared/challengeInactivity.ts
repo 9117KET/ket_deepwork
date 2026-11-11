@@ -11,7 +11,9 @@
  * the start, or before the member joined, are nobody's fault and never count.
  *
  * Three missed days in a row ⇒ warn (one email to each member). A fourth,
- * with the warning still on file ⇒ close. Any act clears the warning; the
+ * with the warning still on file ⇒ close: with two members or one the
+ * challenge ends; with three or more the sweep drops that member alone and
+ * the challenge runs on. Any act clears the warning; the
  * mutations do that at once, the sweep does it when it sees the run broken.
  */
 
@@ -44,6 +46,20 @@ export function countableDates(memberJoinedDate: string, startDate: string, toda
     if (date >= from) out.push(date)
   }
   return out
+}
+
+/**
+ * The first date a member can be judged on, before the start is applied:
+ * the later of their join date and the day after the challenge's latest
+ * reopen. A reopened challenge counts no day it spent closed, nor the reopen
+ * day itself (part of it was spent closed, and the others may not have seen
+ * the reopen yet), so its first warning comes after three full days of it
+ * running and a close after four. Pass the result to `countableDates`.
+ */
+export function inactivityFrom(memberJoinedDate: string, reopenedDate: string | undefined): string {
+  if (reopenedDate === undefined) return memberJoinedDate
+  const afterReopen = shiftIso(reopenedDate, 1)
+  return afterReopen > memberJoinedDate ? afterReopen : memberJoinedDate
 }
 
 export interface InactivityRow {

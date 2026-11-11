@@ -1,30 +1,37 @@
 /**
  * components/challenge/SeasonGrid.tsx
  *
- * Both members' season on one ordinary calendar: Monday to Sunday across
- * the top, a row per week, the month's name in the margin where it begins.
- * Each day holds its number and two marks side by side, yours on the left
- * and your partner's on the right, so a day only one of you finished shows
- * at a glance and the season costs one calendar's height instead of two.
+ * The season on one ordinary calendar: Monday to Sunday across the top, a
+ * row per week, the month's name in the margin where it begins.
+ *
+ * Two people (or one): each day holds its number and both marks side by
+ * side, yours on the left and your partner's on the right, so a day only one
+ * of you finished shows at a glance, exactly as before groups.
+ *
+ * A group (three to eight people): eight marks do not fit a 36px day on a
+ * 320px phone, and marks shrunk to fit lose the shapes that carry the
+ * meaning. So the calendar shows one member's marks at a time, at the same
+ * size, and a "Marks for" menu above it picks whose (you first, then the
+ * others in join order). A screen reader is not limited to the one picked:
+ * each day's cell says every member's state, you first.
  *
  * Every state is a shape as well as a hue, so the grid reads in greyscale:
  * a full day is a filled square, a plan without a check-in a ring, a
  * check-in without a plan a dot, a missed day a dash (the warning colour),
- * and a day still to come is blank. It is a real <table>: each cell says,
- * to a screen reader, the date and both members' state in words.
+ * a day the challenge spent closed a dotted outline (never "missed": it
+ * counts for nobody), and a day still to come is blank.
  *
  * On a phone only the last two weeks show until "Whole season" is tapped;
  * from `lg` the whole season is always there.
  */
 
-import { useState } from 'react'
-import { dayCellState, formatShortDate, seasonWeeks, type ChallengeDayLike, type DayCellState } from '../../domain/challenge'
+import { useId, useState } from 'react'
+import { formatShortDate, seasonWeeks, type ChallengeDayLike } from '../../domain/challenge'
+import { SEASON_STATE_LABEL, seasonCellState, type ClosedSpan, type SeasonCellState } from '../../domain/challengeGroup'
 import { TextButton } from '../ui/TextButton'
-import { DAY_STATE_LABEL } from '../../domain/challengeList'
-
 
 /** One member's mark for one day. `size` is the box it sits in, in px. */
-export function DayMark({ state, size = 14 }: { state: DayCellState; size?: number }) {
+export function DayMark({ state, size = 14 }: { state: SeasonCellState; size?: number }) {
   const box = { width: size, height: size }
   if (state === 'both') return <span aria-hidden style={box} className="inline-block shrink-0 rounded-[3px] bg-share-done" />
   if (state === 'plan') return <span aria-hidden style={box} className="inline-block shrink-0 rounded-[3px] border-2 border-share-done" />
@@ -40,6 +47,7 @@ export function DayMark({ state, size = 14 }: { state: DayCellState; size?: numb
         <span className="h-0.5 w-2.5 rounded-full bg-share-tertiary" />
       </span>
     )
+  if (state === 'closed') return <span aria-hidden style={box} data-state="closed" className="inline-block shrink-0 rounded-[3px] border border-dotted border-share-outlineStrong" />
   return <span aria-hidden style={box} className="inline-block shrink-0" />
 }
 
@@ -53,12 +61,22 @@ const WEEKDAYS = [
   ['S', 'Sunday'],
 ] as const
 
+/** One other member's season: keyed, named, their rows and their own today. */
+export interface GridMember {
+  key: string
+  name: string
+  rows: ChallengeDayLike[]
+  today: string
+}
+
 interface SeasonGridProps {
   dates: string[]
   myRows: ChallengeDayLike[]
   myDate: string
-  /** Absent while the second seat is empty: each day then has one mark. */
-  partner?: { name: string; rows: ChallengeDayLike[]; today: string } | null
+  /** Every other member in join order; empty while nobody has joined. */
+  others: GridMember[]
+  /** The stretches the challenge spent closed before a reopen; shown as "closed". */
+  closedSpans?: readonly ClosedSpan[]
 }
 
 /**
@@ -86,21 +104,61 @@ function currentWeekIndex(weeks: (string | null)[][], today: string): number {
   return first && today < first ? 0 : weeks.length - 1
 }
 
-export function SeasonGrid({ dates, myRows, myDate, partner }: SeasonGridProps) {
+const ME_KEY = 'me'
+
+export function SeasonGrid({ dates, myRows, myDate, others, closedSpans = [] }: SeasonGridProps) {
   const [whole, setWhole] = useState(false)
-  const mine = new Map(myRows.map((r) => [r.date, r]))
-  const theirs = new Map((partner?.rows ?? []).map((r) => [r.date, r]))
+  const [shownKey, setShownKey] = useState<string>(ME_KEY)
+  const pickerId = useId()
+  const group = others.length >= 2
+  const members = [{ key: ME_KEY, name: 'You', rows: myRows, today: myDate }, ...others].map((m) => ({
+    ...m,
+    byDate: new Map(m.rows.map((r) => [r.date, r])),
+  }))
+  // A member who left since being picked falls back to you.
+  const shown = members.find((m) => m.key === shownKey) ?? members[0]!
+  // Two people: both marks in every cell. A group: the picked member's.
+  const drawn = group ? [shown] : members
   const weeks = seasonWeeks(dates)
   const current = currentWeekIndex(weeks, myDate)
   const firstShown = Math.max(0, Math.min(current - 1, weeks.length - 2))
   const lastShown = firstShown + 1
   const collapsible = weeks.length > 2
+  const hasClosed = closedSpans.length > 0
+  const state = (m: (typeof members)[number], d: string) => seasonCellState(m.byDate.get(d), d, m.today, closedSpans)
+
+  const captionWho = group
+    ? `every member's state, you first; the marks show ${shown.key === ME_KEY ? 'yours' : `${shown.name}'s`}`
+    : others.length === 1
+      ? `your state, then ${others[0]!.name}'s`
+      : 'your state'
 
   return (
     <div className="min-w-0">
+      {group && (
+        <div className="mb-2 flex items-center gap-2">
+          <label htmlFor={pickerId} className="text-caption font-semibold text-share-onSurfaceVariant">
+            Marks for
+          </label>
+          <select
+            id={pickerId}
+            name="season-member"
+            autoComplete="off"
+            value={shown.key}
+            onChange={(e) => setShownKey(e.target.value)}
+            className="min-h-11 min-w-0 max-w-[14rem] truncate rounded-lg border border-share-outlineStrong bg-share-surfaceContainer px-3 text-base text-share-onSurface focus:border-share-onBg focus:outline-none focus:ring-1 focus:ring-share-onBg sm:text-sm"
+          >
+            {members.map((m) => (
+              <option key={m.key} value={m.key}>
+                {m.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
       <table className="w-full max-w-[26rem] table-fixed border-separate border-spacing-1">
         <caption className="sr-only">
-          Season calendar. Each day: {partner ? `your state, then ${partner.name}'s` : 'your state'}.
+          Season calendar. Each day: {captionWho}.
           {collapsible && !whole ? ' Only the last two weeks are listed on small screens; use Whole season for the rest.' : ''}
         </caption>
         <thead>
@@ -132,12 +190,13 @@ export function SeasonGrid({ dates, myRows, myDate, partner }: SeasonGridProps) 
                 </th>
                 {week.map((d, di) => {
                   if (!d) return <td key={`${wi}-${di}`} />
-                  const mineState = dayCellState(mine.get(d), d, myDate)
-                  const theirState = partner ? dayCellState(theirs.get(d), d, partner.today) : null
                   const isToday = d === myDate
-                  const spoken = partner
-                    ? `${formatShortDate(d)}${isToday ? ', today' : ''}: you ${DAY_STATE_LABEL[mineState]}, ${partner.name} ${DAY_STATE_LABEL[theirState!]}`
-                    : `${formatShortDate(d)}${isToday ? ', today' : ''}: ${DAY_STATE_LABEL[mineState]}`
+                  const head = `${formatShortDate(d)}${isToday ? ', today' : ''}`
+                  // Every member is spoken, whatever the marks show.
+                  const spoken =
+                    members.length === 1
+                      ? `${head}: ${SEASON_STATE_LABEL[state(members[0]!, d)]}`
+                      : `${head}: ${members.map((m) => `${m.key === ME_KEY ? 'you' : m.name} ${SEASON_STATE_LABEL[state(m, d)]}`).join(', ')}`
                   return (
                     <td
                       key={d}
@@ -147,9 +206,10 @@ export function SeasonGrid({ dates, myRows, myDate, partner }: SeasonGridProps) 
                       <span aria-hidden className={`block text-caption tabular-nums ${isToday ? 'font-bold text-share-onBg' : 'text-share-onSurfaceVariant'}`}>
                         {Number(d.slice(8))}
                       </span>
-                      <span aria-hidden className="mt-1 flex justify-center gap-0.5">
-                        <DayMark state={mineState} />
-                        {theirState && <DayMark state={theirState} />}
+                      <span aria-hidden data-marks className="mt-1 flex justify-center gap-0.5">
+                        {drawn.map((m) => (
+                          <DayMark key={m.key} state={state(m, d)} />
+                        ))}
                       </span>
                     </td>
                   )
@@ -160,7 +220,7 @@ export function SeasonGrid({ dates, myRows, myDate, partner }: SeasonGridProps) 
         </tbody>
       </table>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-        <SeasonLegend partnerName={partner?.name ?? null} />
+        <SeasonLegend partnerName={others.length === 1 ? others[0]!.name : null} showClosed={hasClosed} />
         {collapsible && (
           <TextButton tone="quiet" onClick={() => setWhole((v) => !v)} aria-expanded={whole} className="-ml-3 lg:hidden">
             {whole ? 'Last two weeks' : 'Whole season'}
@@ -171,15 +231,16 @@ export function SeasonGrid({ dates, myRows, myDate, partner }: SeasonGridProps) 
   )
 }
 
-export function SeasonLegend({ partnerName }: { partnerName: string | null }) {
+export function SeasonLegend({ partnerName, showClosed = false }: { partnerName: string | null; showClosed?: boolean }) {
+  const states: SeasonCellState[] = ['both', 'plan', 'checkin', 'none', ...(showClosed ? (['closed'] as const) : [])]
   return (
     <div className="text-caption text-share-onSurfaceVariant">
       {partnerName && <p className="mb-1">Left mark you, right mark {partnerName}.</p>}
       <ul className="flex flex-wrap gap-x-3 gap-y-1" aria-label="Key">
-        {(['both', 'plan', 'checkin', 'none'] as DayCellState[]).map((s) => (
+        {states.map((s) => (
           <li key={s} className="inline-flex items-center gap-1.5">
             <DayMark state={s} size={12} />
-            {DAY_STATE_LABEL[s]}
+            {SEASON_STATE_LABEL[s]}
           </li>
         ))}
       </ul>

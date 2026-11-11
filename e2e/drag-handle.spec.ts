@@ -182,7 +182,9 @@ test.describe('phone', () => {
   test('the same quick gesture on the row body does not move it', async ({ page }) => {
     await seed(page, ALL)
     await open(page)
-    const body = page.locator('[data-task-id="T3"]').getByRole('button', { name: /Tthree/ }).first()
+    // The title button (a real <button>), not the handle, which is now first
+    // in the row and is also named after the task ("Drag to move Tthree").
+    const body = page.locator('[data-task-id="T3"] button').filter({ hasText: 'Tthree' }).first()
     const from = await point(body, 0.5, 0.3)
     const to = await point(page.locator('[data-task-id="T1"]'), 0.15, 0.3)
     await flick(page, from, to)

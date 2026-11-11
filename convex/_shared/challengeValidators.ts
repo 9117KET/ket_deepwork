@@ -63,8 +63,9 @@ export const challengeStatusValidator = v.union(v.literal("active"), v.literal("
 
 /**
  * Why a challenge ended. Absent on challenges that ended before reasons were
- * recorded. `creatorLeft`: the creator left, which ends it for both;
- * `allLeft`: the last member left; `inactive`: a member went four full days
+ * recorded. `creatorLeft`: legacy, the creator left under the two-person rule
+ * (no longer written: the creator now hands over to the longest-standing
+ * member); `allLeft`: the last member left; `inactive`: a member went four full days
  * without a lock-in or check-in after a warning; `seasonOver`: every member
  * is past the end date; `manual`: ended by hand (`challengesInternal.endChallenge`).
  */
@@ -89,6 +90,28 @@ export const warningValidator = v.object({
   issuedAt: v.number(),
 })
 export type ChallengeWarning = Infer<typeof warningValidator>
+
+/**
+ * Why a member row is a former member's. `left`: they left by hand;
+ * `inactive`: the sweep dropped them from a group of three or more after
+ * four quiet days. The row is kept whole either way, so an invite brings
+ * them back with their name, lists and days intact.
+ */
+export const leftReasonValidator = v.union(v.literal("left"), v.literal("inactive"))
+export type LeftReason = Infer<typeof leftReasonValidator>
+
+/**
+ * A stretch an ended challenge spent closed before a reopen, ISO dates,
+ * both inclusive. Those days count as missed for nobody.
+ */
+export const closedSpanValidator = v.object({ from: v.string(), to: v.string() })
+export type ClosedSpan = Infer<typeof closedSpanValidator>
+
+/**
+ * Nudges sent on the nudger's local day, per member nudged: the key is the
+ * nudged member row's id as a string (`memberKey`), the value the send times.
+ */
+export const nudgesByMemberValidator = v.record(v.string(), v.array(v.number()))
 
 export function emptySummary(): ChallengeSummary {
   return { top3: [], tasksDone: 0, tasksTotal: 0, privateCount: 0, deepWorkMinutes: 0, habitsDone: 0, habitsTotal: 0 }

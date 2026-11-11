@@ -183,9 +183,9 @@ is false until the user reconnects; `/calendar` and Today both say so.
 
 ### Accountability challenge
 
-Two people, one season (e.g. 1 Oct → 31 Dec), each with their own goals and
-"don'ts", and two explicit acts a day: **Lock in today's plan** before a morning deadline and
-**Check in** before midnight. It replaces a WhatsApp thread; WhatsApp stays
+One to eight people (`MAX_MEMBERS` = 8), one season (e.g. 1 Oct → 31 Dec),
+each with their own goals and "don'ts", and two explicit acts a day: **Lock in today's plan** before a morning deadline and
+**Check in** before the check-in deadline. It replaces a WhatsApp thread; WhatsApp stays
 the ping (the Share button hands a prefilled line to the Web Share sheet, or
 copies it), the app is the record.
 
@@ -208,9 +208,10 @@ planner syncs only while it shows today, so browsing another day never
 rewrites what the partner saw.
 
 **Many challenges, each private.** A user may be in any number of active
-challenges at once (`MAX_ACTIVE_MEMBERSHIPS` = 20; the 21st is refused), each
-with its own partner and at most two members. Nothing returned for one
-challenge says the partner is in any other: no count, no name. The summary is
+challenges at once (`MAX_ACTIVE_MEMBERSHIPS` = 20; the 21st is refused; a
+row they left does not count), each with its own members, at most eight.
+Nothing returned for one challenge says a member is in any other: no count,
+no name. The summary is
 published once and fanned out: `syncDaySummary` keeps its args and writes the
 row in every active challenge whose span covers the date. The lock-in is one
 act for the whole day: `lockInPlan` without a `challengeId` stamps every
@@ -221,6 +222,40 @@ challenge", "This challenge has ended"). Those changed function arguments
 make this a two-sided deploy: backend first (`npx convex deploy`), then push
 `main`; see `docs/DEPLOYMENT.md`.
 
+**Groups.** Every read returns `others`: every other active member in join
+order (`joinedAt` ascending), each a `memberView` with a `key` (the member
+row id, the only identifier of another member that leaves the server) and
+`isCreator`. `partner` stays in every return, equal to `others[0]`, so the
+client built for two keeps working against this backend; `challengeView`
+adds `memberCount`, `capacity` (8), the warned member's `memberKey` and
+`displayName`, `reopenedDate` and `closedSpans`. `dayCards` and `todayCards`
+take optional `otherDates: [{ key, date }]` and `history` optional
+`otherToDates: [{ key, toDate }]`, because each member is on their own clock;
+a member without an entry is read at `partnerDate` (`partnerToDate ?? toDate`).
+`myChallenges` returns the open `invite` while seats remain. Any active member
+may invite; one seat per link; the ninth is refused with "This challenge is
+full (8 members)". A link whose maker has since left or been dropped is dead:
+`invitePreview` returns `notFound` and names nobody (a former member's name
+and lists are never shown), and `acceptInvite` refuses it ("This invite link
+is no longer valid"). With seats free but `MEMBER_ROW_BOUND` rows already
+kept, a newcomer is refused with "This challenge cannot take new members"; a
+former member, whose row is among them, can still return. One `membersOf` (`convex/_shared/challengeMembers.ts`,
+bounded at `MEMBER_ROW_BOUND` = 64 rows, active and former) serves both
+`challenges.ts` and the sweep; the pure rules are in
+`convex/_shared/challengeGroup.ts`. Added 11 Nov 2026 as a backend-first
+deploy: every old argument is still accepted and every old field keeps its
+name, type and meaning, so deploy the backend before the group client.
+
+On the client, `src/domain/challengeGroup.ts` holds the group rules (pure,
+tested): `othersOf` (falls back to `partner` when `others` is absent),
+per-member dates, `groupCountLabel` ("3 of 5 others locked in"),
+`othersWho`, `leaveSentence`, `seatsLeftLabel`, closed days
+(`seasonCellState`, `countedDates`) and reopen bounds. The hooks send
+`otherDates`/`otherToDates` only for a group (two or more others), so a
+two-person challenge sends exactly what it always has. Two people read as
+before: "your partner", one mark beside yours, "Head to head". From three,
+the screens say "the others" and count.
+
 **A challenge may be solo.** `createChallenge({ solo: true })` stores
 `challenges.solo`, and `challengeView` returns `solo` (absent reads as
 false, so every older row is two-person). It only says "nobody is expected":
@@ -229,13 +264,14 @@ one-member challenge, and a nudge still says "Nobody has joined yet". An
 invite still works, and `acceptInvite` sets `solo: false` in the same
 mutation that adds the partner, so from then on it is a two-person challenge
 in every view. A partner leaving never makes it solo again. On the client
-it is the "Just me" choice in step 1 of `/challenge/new` (beside "With a
-partner", the default). While a solo challenge has nobody in it, the
-dashboard's partner slot is one quiet "Invite a partner" that reveals the
+it is the "Just me" choice in step 1 of `/challenge/new` (beside "With
+others", the default). While a solo challenge has nobody in it, the
+dashboard's partner slot is one quiet "Invite someone" that reveals the
 usual invite link, head to head is "Your season" with your row only, and
 the Today block and the list say "Just you" where a partner's mark would
-be (`partnerWho` in `challengeList.ts`); a two-person challenge still alone
-keeps "Nobody has joined yet" and "Waiting for a partner".
+be (`othersWho` in `challengeGroup.ts`); a challenge with others expected
+and still alone keeps "Nobody has joined yet" and says "Waiting for
+someone to join".
 
 **Days left and the countdown.** Every running or upcoming dashboard leads
 with the days-left headline (`daysLeftHeadline`, the `numeral` type style)
@@ -260,55 +296,100 @@ carry `code: "nudgeRule"`, which the card shows as a quiet status. Only
 `endedReason` and `endedAt` once it ends, and an inactivity `warning` while
 active), `challengeMembers` (one per user per challenge, indexed
 `by_user_challenge`, with an IANA `timezone` refreshed on every sync, because
-the two are in different zones, the member's own `goals` and `donts`,
-`joinedDate` and `lastActedAt`), `challengeInvites` (7-day token, one seat),
+members are in different zones, the member's own `goals` and `donts`,
+`joinedDate` and `lastActedAt`, and `leftAt`/`leftReason` once they left or
+were dropped), `challengeInvites` (7-day token, one seat),
 `challengeDays` (one row per member per day: summary, `planSetAt`,
-`checkinAt`, note, `dontsBroken`, `goalsKept`, `remindersSent`). The summary
+`checkinAt`, note, `dontsBroken`, `goalsKept`, `remindersSent`, and on the
+nudger's row `nudgesSentAt` and `nudgesByMember`). `challenges` also carries
+`reopenedDate`, `reopenedAt` and `closedSpans` once reopened. The summary
 may carry `plannedMinutes` and `doneMinutes` (whole minutes planned and
 earned by ticks, the `computeDayCompletion` rule, private tasks included);
 both are optional, because old rows and old clients lack them.
 Legacy `shareTokens` is untouched. A season runs at most 366 days, and the
 check-in deadline must fall after 21:30, where the check-in reminders start.
 
-**Leaving.** The creator leaving ends the challenge for both at once
-(`endedReason: "creatorLeft"`, or `"allLeft"` when they were alone); their
-member row is kept, so the season stays readable to both. Anyone else
-leaving deletes only their own member row; the challenge runs on with one
-member and can invite again, and the last one out ends it (`"allLeft"`).
-`challengeDays` rows are never deleted. Season end is `"seasonOver"`,
-`endChallenge` by hand is `"manual"`.
+**Leaving.** Nothing is deleted. A member who leaves keeps their row, marked
+`leftAt` and `leftReason: "left"`: a former member, invisible to every read
+and write as a member (they see nothing of it, the others no longer see
+them). An invite brings them back to the same row (same key, name, join
+order, goals and don'ts with their ids, and their old days reappear); only
+`joinedDate` moves to their today, so inactivity counts from the return. The
+creator leaving hands the role (`createdBy`) to the remaining member with the
+earliest `joinedAt`, and the challenge runs on. The last active member
+leaving ends it (`"allLeft"`) and keeps their row active, so they can still
+read and reopen it. A warning naming the leaver is cleared. `"creatorLeft"`
+is no longer written; old rows with it stay valid. Season end is
+`"seasonOver"`, `endChallenge` by hand is `"manual"`.
 
-**Inactivity closes a challenge.** The sweep judges each member on their own
-clock over full local days only (yesterday backwards, never today), from the
-later of the start and their join date. A day with no lock-in and no
-check-in is missed, and a day with no row at all counts the same. Three
-missed days in a row put a `warning` on the challenge and email both members;
-the warned member gets no plan or check-in reminder while it stands. Their
-next lock-in or check-in clears it in the same mutation. A fourth missed day,
-a full day after the warning, closes the challenge (`"inactive"`) and emails
-both. The rules are pure in `convex/_shared/challengeInactivity.ts`
-(`countableDates`, `missedRun`, `inactivityDecision`).
+**Inactivity closes a pair, drops one from a group.** The sweep judges each
+active member on their own clock over full local days only (yesterday
+backwards, never today), from the latest of the start, their join date and
+the day after the latest reopen. A day with no lock-in and no check-in is
+missed, and a day with no row at all counts the same. Three missed days in a
+row put a `warning` on the challenge and email every member; the warned
+member gets no plan or check-in reminder while it stands. Their next lock-in
+or check-in clears it in the same mutation. A fourth missed day, a full day
+after the warning: with two members or one it closes the challenge
+(`"inactive"`) and emails both; with three or more it drops that member
+alone (`leftAt`, `leftReason: "inactive"`, the creator role handed over if it
+was theirs), clears the warning, emails every member including the dropped
+one ("dropped": an invite link brings them back with everything kept), and
+the challenge runs on. One warning at a time: a second quiet member is not
+warned until the first is resolved (known limit). The rules are pure in
+`convex/_shared/challengeInactivity.ts` (`countableDates`, `inactivityFrom`,
+`missedRun`, `inactivityDecision`).
+
+**Reopening.** `reopenChallenge({ challengeId, endDate? })`: the creator (the
+current `createdBy`, an active member) reopens an ended challenge with
+everything it recorded. Refusals: "Only the creator can reopen a challenge",
+"This challenge is already running", the 20-challenge cap, "This challenge
+no longer exists". The end date is `endDate ?? the old one`; it must be on or
+after every active member's today (else code `needsEndDate`, "Pick an end date
+from today on", and the client asks for one), not before the start, and at
+most 366 days from the reopen day ("A season runs at most 366 days from
+today"; the original start may be older). One patch: `status: "active"`,
+`endedReason`, `endedAt` and `warning` removed, `endDate`, `reopenedDate`
+(the reopener's local date), `reopenedAt`, and `closedSpans` extended with
+the stretch it spent ended (from the end date, or the day after when someone
+locked in or checked in that day, to the day before the reopen; none for a
+reopen the same day; the newest 20 kept). No member row and no day row
+changes; former members stay former. Every other active member gets one
+"running again" email, scheduled from the mutation.
+
+Known limits, accepted (11 Nov 2026):
+- A reopen checks only the creator against the 20-challenge cap, so it can put another member over 20 active challenges.
+- Former-member rows count in the newest-50 `by_user` window `allMemberships` reads, so a person who left many challenges sees fewer old ones.
+- `deleteChallenge` (creator or admin, ended only, guard unchanged) now removes the days of up to eight people, former members included.
+- `reopenedDate` is the reopener's local date; members in other zones may be a day apart from it.
 
 **Goals and don'ts are per member.** Each member sets theirs on create or
-join and edits them any time (`updateMyCommitments`); the partner reads them
-via `memberView` and cannot change them. A removed don't is archived
+join and edits them any time (`updateMyCommitments`); the other members read
+them via `memberView` and cannot change them. A removed don't is archived
 (`archivedAt`), never deleted, and an edited one keeps its id, so every
 `dontsBroken` id resolves forever (`resolveDontTexts` in
 `src/domain/challengeCommitments.ts`). `challenges.goals`/`donts` are legacy,
 never written again: a creator whose member row has no lists falls back to
-them (`memberCommitments`), which is the whole migration.
+them (`memberCommitments`), which is the whole migration; a hand-over first
+writes such a creator's legacy lists onto their own row, and empty lists
+onto a successor whose row has none, so the fallback never moves to the new
+creator.
 
 **Editing the dates.** `updateSpan` corrects the start, the end and,
 optionally, the two deadlines of a running season. Only a member may call it,
-and only while the challenge is active. Only the creator may change the dates
-("Only the creator can change the dates"). The span and deadline checks are
-the ones `createChallenge` makes, from one helper (`assertSpan`). The end
-cannot move before any member's local today, because the season-over sweep
-would end it at once. The start cannot move past the first day on which
-either member locked in or checked in, because `history` reads from the start
-and those days would vanish ("The start can't move past 24 Oct, when the
-first lock-in or check-in was recorded"). No `challengeDays` row is deleted or
-changed, and `status` is left alone.
+and only while the challenge is active. Only the creator (the current
+`createdBy`) may change the dates ("Only the creator can change the dates").
+The span and deadline checks are the ones `createChallenge` makes, from one
+helper (`assertSpan`), except that a reopened season's 366 days run from its
+`reopenedDate`, not its start ("A season runs at most 366 days from the day
+it was reopened"), so it stays editable past a year from the start. The end cannot move before any active member's local
+today, because the season-over sweep would end it at once. The start cannot
+move past the first day on which any member, former members included, locked
+in, checked in or marked a goal or don't, because `history` reads from the
+start and those days would vanish ("The start can't move past 24 Oct, when
+the first lock-in, check-in or mark was recorded"), nor past the first closed
+stretch ("The start can't move past 5 Oct, when the challenge was closed").
+No `challengeDays` row is deleted or changed, and `status` is left alone.
 
 **Daily marks.** Goals have ids now, like don'ts: minted `goal-<ms>-<n>`,
 kept through edits, archived when removed. A member row written before that
@@ -332,16 +413,16 @@ optional `goalsKept` too; left out, the day's marks stay. The partner's
 active first, at most 50), `dayCards` (one challenge) and `todayCards` (every
 active challenge's today in one subscription) are small and live; `history`
 returns one challenge's whole season and callers pass `toDate = yesterday`,
-so today's debounced writes never invalidate it. `history` takes two dates,
-`toDate` for the viewer and `partnerToDate` for the partner, because each
-one's yesterday is on their own clock; with one date a partner a day ahead
-leaves a hole in the grid. Reads accept an ended challenge, so a finished
+so today's debounced writes never invalidate it. `history` takes a date per
+member, `toDate` for the viewer, `partnerToDate` for the first other member
+and `otherToDates` for the rest, because each one's yesterday is on their own
+clock; with one date a member a day ahead leaves a hole in the grid. Reads accept an ended challenge, so a finished
 season stays readable, read-only; writes see only an active one, so an ended
 season never blocks the next. (The single-challenge `myChallenge` is gone;
 the client reads `myChallenges` through `src/hooks/useChallenges.ts`.)
 `adminStatus` and `adminListChallenges` give an
-`ADMIN_EMAILS` address a read-only list of every challenge with member
-emails and last activity.
+`ADMIN_EMAILS` address a read-only list of every challenge with its active
+members' emails and last activity, and a count of `formerMembers`.
 
 **Reminders are email from the user's own Gmail** (`convex/email.ts`, a
 `"use node"` nodemailer action; swap to Resend in `send()` once a domain
@@ -355,41 +436,70 @@ One missed act, one email: the caps and spacing are judged per row, but the
 sweep groups by member, so someone owing the same lock-in in three challenges
 gets one plan email naming all three, and `remindersSent` is recorded on every
 row it covers. Inactivity runs first in the same pass, and a challenge it
-closes gets nothing further. Every email links to `/challenge/<id>`.
-`nudgePartner` schedules one email from inside the mutation: up to three per
-nudger-local day, at least an hour apart, only while the partner owes the day
-something (pure rules in `convex/_shared/challengeNudges.ts`, shared with the
-button; `challengeDays.nudgesSentAt`, legacy `nudgeSentAt` read as one).
+closes gets nothing further. Every email links to `/challenge/<id>`. The
+check-in reminder names the challenge's own deadline ("Check in before
+22:00"; "midnight" only for 23:59, the earliest deadline when one email covers
+several challenges), and says "your partner" for two people, "the group" for
+three or more. `nudgePartner({ challengeId, memberKey? })` schedules one email
+from inside the mutation to one other member: `memberKey` names them (another
+challenge's key, or one's own: "They are not in this challenge"); without it
+the target is `others[0]`, as the two-person client expects. Up to three per
+target per nudger-local day, at least an hour apart, only while the target
+owes the day something (pure rules in `convex/_shared/challengeNudges.ts`,
+shared with the button). The per-target times are
+`challengeDays.nudgesByMember[key]` on the nudger's row (returned by
+`todayCards` as `mine.nudgesByMember`); `nudgesSentAt` still gets every nudge
+of the day, so the two-person client's count stays right; a row from before
+per-target bookkeeping counts its legacy list for `others[0]` only; legacy
+`nudgeSentAt` reads as one.
 
 **Routes and entry points.** Hooks: `useChallenges()` (the list),
-`useChallengeDetail(id, now)` (one challenge plus both members' today),
+`useChallengeDetail(id, now)` (one challenge plus every member's today:
+`others`, each `{ member, date, day }` keyed by `member.key`),
 `useTodayCards(active, now)` (every running challenge's today, one
-subscription) and `useChallengeHistory(id, …)`, all in
+subscription, each row with the same `others`) and
+`useChallengeHistory(id, toDate, partnerToDate, otherToDates)`, all in
 `src/hooks/useChallenges.ts`; the strings for state (row marks, what you owe,
 the ended and warning sentences, the Today pill) are pure in
 `src/domain/challengeList.ts`. Every challenge route shares
 `ChallengeChrome` (account menu, tab bar, sign-in form for guests).
 - `/challenge` (`ChallengeListPage`): one row per challenge, running first
-  (name, "Day 22 of 92", you and your partner as ✓/– marks with words, a
-  "Warning" badge), then ended ones with the sentence for how they ended
-  ("Ended 3 Nov · Kin left", "Closed 3 Nov after 4 days without a lock-in or
-  check-in", "Season over", "Ended by hand"). "New challenge" and "Join with a
-  link" (inline). With none, an invitation. No redirect with one.
-- `/challenge/new` (`ChallengeCreatePage`): two steps. Name, length (30 / 90 /
-  365 days or custom dates), deadlines folded under "Deadlines"; then goals and
-  don'ts (optional), display name under "Advanced". Opens the new dashboard.
+  (name, "Day 22 of 92", you and your partner as ✓/– marks with words, or
+  in a group your mark and "3 of 5 others locked in", a "Warning" badge),
+  then ended ones with the sentence for how they ended ("Ended 3 Nov · Kin
+  left" for a legacy `creatorLeft`, "Ended 3 Nov · everyone left", "Closed 3
+  Nov after 4 days without a lock-in or check-in", "Season over", "Ended by
+  hand"). "New challenge" and "Join with a link" (inline). With none, an
+  invitation. No redirect with one.
+- `/challenge/new` (`ChallengeCreatePage`): two steps. Name, "With others"
+  or "Just me" (the hint says a link seats one person and a challenge holds
+  up to 8), length (30 / 90 / 365 days or custom dates), deadlines folded
+  under "Deadlines"; then goals and don'ts (optional), display name under
+  "Advanced". Opens the new dashboard.
 - `/challenge/:id` (`ChallengeDetailPage` → `ChallengeDetail`): the first
   screen is the header (name with Rename; "Day 22 of 92 · plan by 10:00 ·
-  check in by 23:59"), a warning banner when warned, and one Today surface:
-  your `MemberRow`, one full-width button for your next act (Lock in → Check
-  in → quiet "Edit check-in"), a hairline, your partner's `MemberRow` with
-  Share and Nudge as quiet text actions (or the invite link while alone).
-  Then, un-carded: head to head (full days and run, two numbers each, "A full
-  day is a locked plan and a check-in."), the `SeasonGrid` (a `<table>`; each
-  day has two marks, yours left, and each state is a shape: filled = full,
-  ring = plan only, dot = check-in only, dash = missed), goals and don'ts, and
-  Leave through an `ActionSheet` (a creator is told it ends the challenge for
-  both). Beside Rename the creator of a running season has "Edit dates", a
+  check in by 23:59", then "Reopened 11 Nov" once reopened), a warning
+  banner when the warning is yours (or names someone no longer listed), and
+  one Today surface: your `MemberRow`, one full-width button for your next
+  act (Lock in → Check in → quiet "Edit check-in"), then one `MemberRow` per
+  other member in join order, keyed by `memberView.key`, each with its own
+  Nudge (`nudgePartner` with `memberKey` in a group, none for two; its
+  allowance from `nudgesByMember[key]` via `nudgeTimesFor`) and the warning
+  sentence on the warned member's row. Two people keep Share in the
+  partner's row; a group shares once, below the rows. While seats remain any
+  member has a quiet "Invite someone" with "3 seats left"; at 8 it is gone.
+  Then, un-carded: head to head ("Everyone so far" in a group: a row per
+  member, you first, join order, no ranking; full days and run, "A full day
+  is a locked plan and a check-in."), the `SeasonGrid` (a `<table>`; two
+  people get two marks a day, yours left; a group gets one member's marks at
+  a time, picked in a "Marks for" menu, while each cell's screen-reader text
+  names every member's state; each state is a shape: filled = full, ring =
+  plan only, dot = check-in only, dash = missed, dotted outline = closed, the
+  `closedSpans` days, which count for nobody in the score either), goals and
+  don'ts (yours, then each member's), and Leave through an `ActionSheet`
+  (`leaveSentence`: alone it ends; the creator with others is told who
+  becomes the creator; anyone else that a new invite link brings them back
+  with everything). Beside Rename the creator of a running season has "Edit dates", a
   "Dates and deadlines" sheet that calls `updateSpan` (the client checks
   format and order with `seasonDatesError`/`seasonDeadlinesError`; whether
   today or a recorded day blocks it is the server's sentence). Under your
@@ -402,13 +512,21 @@ the ended and warning sentences, the Today pill) are pure in
   summary's `plannedMinutes`/`doneMinutes`, private tasks included as
   minutes, never titles), and head to head adds "Planned time done", the
   season's minutes done over minutes planned (`seasonCompletion`), not an
-  average of daily percentages. An ended season is read-only with its sentence under the header; an
+  average of daily percentages. An ended season is read-only with its sentence under the header;
+  its creator has "Reopen challenge" beside "Delete challenge", a `ReopenSheet`
+  that reopens with one verb while the end date is ahead for everyone, and
+  otherwise asks for a new end date (min the latest member's today, max 366
+  days from yours) with the verb disabled until one is set; refusals are the
+  server's sentence; success needs no reload, the subscription flips every
+  member's dashboard. Anyone else reads "The creator can reopen it." An
   unknown id says "Not one of your challenges". From `lg`, the season and the
   commitments are a right rail. Design rules: `scout-design-review.md` in
   `docs/00-orchestration/runs/2026-11-02-duration-dnd-multichallenge-design/`.
 - `/challenge/join?invite=TOKEN` (`?invite=`, not `?code=`, which Convex Auth
   intercepts; the token survives sign-up in sessionStorage). Being in other
   challenges never blocks a join; "Join challenge" opens the new dashboard.
+  A full challenge reads "This challenge is full (8 members)."; a former
+  member previews as `ok` and joins the same way, getting their row back.
 - `/admin/challenges` (`AdminChallengesPage`): read-only table from
   `adminListChallenges`; anyone else sees "Not an admin". The sidebar and
   account menu show the link only when `adminStatus.isAdmin` (`useIsAdmin`).
@@ -417,7 +535,8 @@ When a member sets no Top 3, the summary carries their first three visible
 tasks with `top3FromTasks`, and `MemberRow` labels them so.
 
 **On Today** `ChallengeTodayBlock` sits under the header: one compact row per
-running challenge (name, your partner's mark, what you owe), one "Lock in
+running challenge (name, your partner's mark or in a group "3 of 5 others
+locked in", what you owe), one "Lock in
 today's plan" above the rows while any is unlocked (it calls `lockInPlan`
 without an id, so it locks them all), a per-row Check in that opens that
 challenge's `CheckinSheet`, and the warning sentence on a warned row. The
@@ -425,8 +544,9 @@ challenge's `CheckinSheet`, and the warning sentence on a warned row. The
 "2 challenges" with more (`challengePillLabel`). The block has no
 commitment toggles (Today stays lean); its `CheckinSheet` asks "Which goals
 did you keep today?" above the don'ts, seeded from the day's `goalsKept`, so
-a check-in never undoes what the dashboard marked. "Hide from partner" is in the
-task menu. Review shows each running challenge's week as two rows of marks.
+a check-in never undoes what the dashboard marked. "Hide from challenge" is in the
+task menu. Review shows each running challenge's week as one row of marks
+per member, you first.
 The phone tab bar has a fifth tab, **Challenges**, lit on every `/challenge*`
 route and on the admin list. Guests cannot take part.
 
@@ -439,13 +559,22 @@ the destructive-choice form and replaces `window.confirm`. Quiet actions are
 `share.error` token plus an icon). On the challenge screens cyan is only the
 one primary button; "done" is `share.done` with a ✓ or a filled shape.
 
-**Tests:** `npm test` covers `src/domain/challenge.test.ts` and
-`src/domain/challengeList.test.ts`; `e2e/challenge-guest.spec.ts` covers every
-challenge route as a guest and the shared sheet's focus trap;
+**Tests:** `npm test` covers `src/domain/challenge.test.ts`,
+`src/domain/challengeList.test.ts` and `src/domain/challengeGroup.test.ts`;
+`e2e/challenge-guest.spec.ts` covers every challenge route as a guest and
+the shared sheet's focus trap; `e2e/challenge-group.spec.ts` renders the
+dashboard from a fixture (`e2e/harness/challenge-group.html`, served by the
+Vite dev server, no backend) for two, five and eight people and the ended
+cases, and checks rows, Nudge, invite, score, grid at 320px, leave copy and
+the reopen sheet (writes are not exercised);
 `npm run test:convex` covers `convex/challenges.test.ts`,
 `convex/challengesMulti.test.ts` (many challenges, privacy, admin),
 `convex/challengeInactivity.test.ts` and `convex/reminders.test.ts` (mocked
-nodemailer), and the reminder and inactivity rules. A
+nodemailer), `convex/challengeGroups.test.ts` (eight seats, `others`, the live
+two-person client's calls, privacy with four, per-target nudges, leaving and
+returning, hand-over, a dropped member, the check-in reminder's deadline),
+`convex/challengeReopen.test.ts`, and the reminder, inactivity and group rules
+(`convex/_shared/*.test.ts`). A
 two-account flow cannot run in e2e (guest-only seeding).
 
 ### Responsive foundations
@@ -464,10 +593,13 @@ gate in `e2e/mobile-responsive.spec.ts`:
    dock at `z-70` via `.toast-dock`, the tab bar is `z-[60]`. On a coarse
    pointer every `input`, `select` and `textarea` is 16px (iOS zoom) and at
    least 44px tall (`src/index.css`), and the task rows switch to the phone
-   anatomy (checkbox, title, one chip, ⋮ → `TaskActionSheet`) via
+   anatomy (handle, checkbox, title, one chip, ⋮ → `TaskActionSheet`) via
    `useCoarsePointer()`; the gates live in `e2e/mobile-today.spec.ts` and
    `e2e/mobile-panels.spec.ts`, with shared fixtures in `e2e/helpers/mobile.ts`.
-   Every row shows one `DragHandle` ("Drag to move <title>") at every width.
+   Every row shows one `DragHandle` ("Drag to move <title>") at every width,
+   first in the row at its left edge, before the checkbox, on a phone as on a
+   desktop (`e2e/drag-handle-left.spec.ts`); a phone row that cannot be dragged
+   holds the handle's place (`PhoneHandleSpacer`), so titles stay in one column.
    A task moves four ways: a finger on the handle lifts the row at once, or
    presses and holds anywhere else on it for 300 ms, and drags it between rows
    of either list (`useTouchReorder`; a swipe on the body without the hold
@@ -576,7 +708,7 @@ Streaks require at least one task created **and** at least one task completed on
 
 Features built around the *Deep Work* philosophy:
 
-1. **Session recording** — `DeepWorkTimer` (first card in the sidebar) calls `onSessionComplete(label, minutes, taskId?)` when the countdown ends. A "Working on" selector attributes the block to one of the day's trackable tasks; the selection locks while a session is running or paused. `DayPlanner.handleSessionComplete` appends a `DeepWorkSession` to `DayState.deepWorkSessions`, which is persisted via the normal Supabase sync path (`planner_days.deep_work_sessions` JSONB column).
+1. **Session recording** — `DeepWorkTimer` (first card in the sidebar) calls `onSessionComplete(label, minutes, taskId?)` when the countdown ends. A "Working on" selector attributes the block to one of the day's trackable tasks; the selection locks while a session is running or paused, and the block holds its task from the start (`blockTask`), so paging to another day mid-block keeps it; a task deleted mid-block leaves the session unattributed (`attributedTaskOnDay`). `DayPlanner.handleSessionComplete` appends a `DeepWorkSession` to `DayState.deepWorkSessions`, which is persisted through the normal planner sync (`plannerDays` in Convex; see "Cross-device sync").
 
 2. **Daily total badge** — `DayHeader` receives `deepWorkMinutesToday` (computed by `computeDailyDeepWorkMinutes` in `stats.ts`) and renders a teal pill when > 0.
 
@@ -668,6 +800,13 @@ Features built around the *Deep Work* philosophy:
    length; the line under them (`BlockLengthLine`) shows `Your block: Xm on · Ym
    off` and offers "Make Nm my block" whenever the picked length differs from
    the configured one, calling `handleSetBlockLength` in `DayPlanner`.
+
+   **Leaving Focus only changes the view.** Desktop Focus mode (`FocusMode`)
+   has an outlined "Exit focus" button top-left, and Esc does the same; the
+   phone's running Focus tab has "Exit focus" top-left, which switches to
+   Today. While a block still runs, the sidebar timer offers "Back to focus".
+   None of them pauses, stops, banks or discards the block
+   (`e2e/focus-exit.spec.ts`).
 
 10. **Completion is offered, never taken** — a block that fills a task's row
     raises a one-tap "Mark done?" (`doneOffer` in `DayPlanner`, the twin of the

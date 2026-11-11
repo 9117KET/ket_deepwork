@@ -2,7 +2,8 @@
  * components/challenge/ChallengeTodayBlock.tsx
  *
  * Every running challenge on Today, one compact row each: its name, where
- * your partner stands, and what you still owe. Locking in is one act for the
+ * your partner stands (in a group, how many of the others have locked in),
+ * and what you still owe. Locking in is one act for the
  * whole day (the plan is the day, whoever is watching it), so there is one
  * "Lock in today's plan" above the rows while any of them is unlocked, and it
  * locks them all. Checking in is per challenge, because the don'ts and the
@@ -18,7 +19,8 @@ import type { ChallengeSummary } from '../../domain/challenge'
 import { formatShortDate } from '../../domain/challenge'
 import { activeCommitments, activeDonts, goalItemsOf } from '../../domain/challengeCommitments'
 import { countdownLine, countdownState } from '../../domain/challengeCountdown'
-import { partnerWho, warningSentence } from '../../domain/challengeList'
+import { warningSentence } from '../../domain/challengeList'
+import { othersWho } from '../../domain/challengeGroup'
 import { useTodayCards, type ChallengeEntry, type TodayRow } from '../../hooks/useChallenges'
 import { challengeErrorMessage, lockInPlan } from '../../services/challengeService'
 import { ErrorLine, WarningLine } from '../ui/Notices'
@@ -126,6 +128,7 @@ export function ChallengeTodayBlock({ active, now, summary, date }: ChallengeTod
           date={date}
           summary={summary}
           existing={open.mine ?? null}
+          otherCount={open.others.length}
           onClose={() => setCheckinFor(null)}
         />
       )}
@@ -147,7 +150,7 @@ function TodayChallengeRow({
   showCheckin: boolean
   onCheckin: () => void
 }) {
-  const { entry, progress, mine, partner } = row
+  const { entry, progress, mine } = row
   const { challenge } = entry
   const loading = mine === undefined
   const running = progress.phase === 'active'
@@ -168,7 +171,11 @@ function TodayChallengeRow({
   let status: string
   if (countdown === null) status = progress.phase === 'upcoming' ? `Starts ${formatShortDate(challenge.startDate)}` : 'Ended'
   else if (loading) status = 'Loading…'
-  else status = [partnerWho({ solo: challenge.solo, partnerName: entry.partner?.displayName ?? null, partnerDay: partner }), countdown].join(' · ')
+  else {
+    // One other member: their mark, as always. A group: "3 of 5 others locked in".
+    const who = othersWho({ solo: challenge.solo, others: row.others.map((o) => ({ name: o.member.displayName, day: o.day })) })
+    status = [who, countdown].join(' · ')
+  }
 
   return (
     <li className="px-4 py-2.5">
@@ -189,7 +196,9 @@ function TodayChallengeRow({
         )}
       </div>
       {challenge.warning && (
-        <WarningLine className="mt-1.5 text-caption">{warningSentence(challenge.warning, entry.partner?.displayName ?? null, myDate)}</WarningLine>
+        <WarningLine className="mt-1.5 text-caption">
+          {warningSentence(challenge.warning, entry.partner?.displayName ?? null, myDate, challenge.memberCount ?? 1 + row.others.length)}
+        </WarningLine>
       )}
     </li>
   )

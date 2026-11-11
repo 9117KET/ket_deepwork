@@ -786,7 +786,12 @@ export function DayPlanner() {
         {/* ── Rail (desktop): what you reach for while working ───────────── */}
         <aside className="hidden space-y-3 lg:sticky lg:top-4 lg:block lg:max-h-[calc(100dvh-2rem)] lg:overflow-y-auto">
           <SidebarCard cardId="deepWorkTimer" title="Deep work timer">
-            <DeepWorkTimer timer={timer} breakMinutes={breakMinutes} onSetBlockLength={handleSetBlockLength} />
+            <DeepWorkTimer
+              timer={timer}
+              breakMinutes={breakMinutes}
+              onSetBlockLength={handleSetBlockLength}
+              onReturnToFocus={timerRunning && focusDismissed ? () => setFocusDismissed(false) : undefined}
+            />
           </SidebarCard>
           <SidebarCard cardId="habits" title="Habits">
             <HabitChecklist
@@ -810,6 +815,7 @@ export function DayPlanner() {
           breakMinutes={breakMinutes}
           onSetBlockLength={handleSetBlockLength}
           completedBlocksToday={completedBlocksToday}
+          onExit={() => setMobileTab("today")}
         />
       )}
       {mobileTab === "habits" && (

@@ -10,11 +10,13 @@
  * way Focus can mean the same thing is to cover it. A timer running in the
  * corner of a planner is a timer you look past; this one you cannot.
  *
- * What it deliberately does not do is trap you. Esc leaves, the corner says so,
- * and leaving does not touch the block — the countdown keeps running in the
- * sidebar exactly as before. Dismissing is remembered until the block ends, so
- * a screen you pushed away does not shove itself back in front of you a second
- * later. See `docs/design/desktop/DesktopFocus.dc.html`.
+ * What it deliberately does not do is trap you. "Exit focus" in the corner is
+ * a real button, Esc does the same, and leaving does not touch the block — the
+ * countdown keeps running in the sidebar exactly as before. Dismissing is
+ * remembered until the block ends, so a screen you pushed away does not shove
+ * itself back in front of you a second later; the sidebar timer offers "Back
+ * to focus" for when you want it again. See
+ * `docs/design/desktop/DesktopFocus.dc.html`.
  *
  * Stopping is the one place this screen is careful. "Finish early" banks the
  * minutes worked, because they were really worked; the restart button throws
@@ -107,15 +109,21 @@ export function FocusMode({
       />
 
       <div className="relative flex items-center justify-between px-8 py-6">
+        {/*
+          The way out reads as a button at rest: a border you can see and text
+          at full contrast (onBg on surfaceContainerLow, about 13:1). It hides
+          this screen and nothing else; the block keeps running in the sidebar,
+          which offers "Back to focus" while it does.
+        */}
         <button
           type="button"
           onClick={onLeave}
-          className="touch-target flex items-center gap-2 rounded-lg px-2 text-sm font-semibold text-share-onSurfaceVariant/70 transition-colors hover:text-share-onBg"
+          className="flex min-h-[44px] items-center gap-2 rounded-xl border border-share-outlineStrong bg-share-surfaceContainerLow pl-3 pr-4 text-sm font-semibold text-share-onBg transition-colors hover:border-share-onSurfaceVariant hover:bg-share-surfaceContainer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-share-primary"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M15 18l-6-6 6-6" />
           </svg>
-          <span>Leave focus</span>
+          <span>Exit focus</span>
         </button>
         <p className="text-sm text-share-onSurfaceVariant/70">
           Block {blockNumber} today
@@ -284,7 +292,7 @@ export function FocusMode({
       </div>
 
       <p className="relative pb-8 text-center text-sm text-[#556064]">
-        The sidebar and the day are hidden while a block runs. Press Esc to bring them back.
+        The sidebar and the day are hidden while a block runs. Exit focus or press Esc to bring them back.
       </p>
     </div>
   )

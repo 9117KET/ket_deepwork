@@ -20,7 +20,18 @@
  * read every second.
  *
  * A challenge started "Just me" has no partner talk: the partner slot is one
- * quiet "Invite a partner", and head to head is "Your season".
+ * quiet "Invite someone", and head to head is "Your season".
+ *
+ * A challenge holds up to eight people. Each other member gets their own
+ * `MemberRow` in join order, with their own Nudge and, when it is theirs,
+ * the warning sentence; every per-member element is keyed by
+ * `memberView.key`. Share stays one action for the whole group. While seats
+ * remain, any member can share an invite link ("Invite someone", with the
+ * seats left). Two people read exactly as before groups: "Head to head",
+ * Share and Nudge in the partner's row, two marks a day in the season.
+ *
+ * An ended challenge is read-only. Its creator can reopen it from here
+ * (`ReopenSheet`); everyone else is told the creator can.
  *
  * Presentational: data arrives as props (the page subscribes), so the view
  * renders the same from a fixture. Writes go through the challenge service.
@@ -33,7 +44,19 @@ import { buildShareText, challengeDates, formatShortDate, memberSeason, seasonCo
 import { activeCommitments, goalItemsOf, resolveDontTexts, type Commitment } from '../../domain/challengeCommitments'
 import { countdownLine, countdownState, daysLeftHeadline, localDeadlineMs } from '../../domain/challengeCountdown'
 import { endedSentence, seasonDatesError, seasonDeadlinesError, warningSentence, type SeasonDateField, type SeasonDateFieldError } from '../../domain/challengeList'
-import type { ChallengeDetail as Detail, ChallengeHistory } from '../../hooks/useChallenges'
+import {
+  countedDates,
+  deleteAudience,
+  isGroup,
+  leaveSentence,
+  reopenDateBounds,
+  reopenEndDateError,
+  reopenNeedsEndDate,
+  rowsOf,
+  seatsLeftLabel,
+  audienceNoun,
+} from '../../domain/challengeGroup'
+import type { ChallengeDetail as Detail, ChallengeHistory, MemberToday } from '../../hooks/useChallenges'
 import { useMinuteTick } from '../../hooks/useMinuteTick'
 import { useSecondTick } from '../../hooks/useSecondTick'
 import {
@@ -48,6 +71,7 @@ import {
   markDay,
   nudgePartner,
   renameChallenge,
+  reopenChallenge,
   shareText,
   updateSpan,
 } from '../../services/challengeService'
@@ -58,9 +82,10 @@ import {
   nudgeAvailability,
   nudgeLabel,
   nudgeLeftCaption,
-  nudgeTimes,
   partnerOwesToday,
+  type NudgeAvailability,
 } from '../../../convex/_shared/challengeNudges'
+import { nudgeTimesFor } from '../../../convex/_shared/challengeGroup'
 import type { Id } from '../../../convex/_generated/dataModel'
 import { ErrorLine, WarningLine } from '../ui/Notices'
 import { ActionSheet, Sheet } from '../ui/Sheet'
@@ -86,15 +111,20 @@ const QUIET_WIDE =
   'touch-target inline-flex min-h-12 w-full items-center justify-center rounded-lg border border-share-outlineStrong px-4 text-body font-semibold text-share-onSurface transition-colors hover:bg-share-surfaceContainerHigh focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-share-onBg'
 const SECTION_HEADING = 'text-section text-share-onBg'
 
-/** "Tue 3 Nov": the partner's date, shown only when it is not yours. */
+/** "11 Nov 2027", for a range that can cross a year. */
+function formatDateWithYear(iso: string): string {
+  return new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${iso}T00:00:00Z`))
+}
+
+/** "Tue 3 Nov": another member's date, shown only when it is not yours. */
 function formatDayLabel(iso: string): string {
   return new Intl.DateTimeFormat(undefined, { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(`${iso}T00:00:00Z`))
 }
 
 export function ChallengeDetail({ detail, history, summary, activeCount }: ChallengeDetailProps) {
   const navigate = useNavigate()
-  const { info, progress, mine, partnerCard, myDate, partnerDate } = detail
-  const { challenge, me, partner } = info
+  const { info, progress, mine, myDate } = detail
+  const { challenge, me } = info
   const readOnly = detail.status === 'ended'
   const running = !readOnly && progress.phase === 'active'
 
@@ -105,34 +135,55 @@ export function ChallengeDetail({ detail, history, summary, activeCount }: Chall
   const [leaving, setLeaving] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [reopenOpen, setReopenOpen] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [leaveError, setLeaveError] = useState<string | null>(null)
   const [busy, setBusy] = useState<null | 'lock' | 'nudge'>(null)
+  /** The member a nudge is on its way to, while it is. */
+  const [nudgingKey, setNudgingKey] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [inviteToken, setInviteToken] = useState<string | null>(null)
   const [inviteOpen, setInviteOpen] = useState(false)
+
+  // Every other member in join order; the first is the two-person `partner`.
+  const others = detail.others
+  const partner = others[0]?.member ?? null
+  const group = isGroup(others.length)
   // Started "Just me" and still alone: no partner talk anywhere on the page.
   const soloAlone = challenge.solo && !partner
+  const memberCount = challenge.memberCount ?? 1 + others.length
+  const capacity = challenge.capacity ?? 2
+  const seatsLeft = seatsLeftLabel(memberCount, capacity)
+  const closedSpans = useMemo(() => challenge.closedSpans ?? [], [challenge])
 
   const dates = useMemo(() => challengeDates(challenge), [challenge])
+  // The days a challenge spent closed count for nobody: not in a score, not in a run.
+  const counted = useMemo(() => countedDates(dates, closedSpans), [dates, closedSpans])
   const myRows = [...(history?.mine ?? []), ...(mine ? [mine] : [])]
-  const partnerRows = [...(history?.partner ?? []), ...(partnerCard ? [partnerCard] : [])]
-  const mySeason = memberSeason(myRows, dates, myDate)
-  const partnerSeason = partner ? memberSeason(partnerRows, dates, partnerDate) : null
+  const mySeason = memberSeason(myRows, counted, myDate)
   // Planned time done over the days each member has reached, on their own clock.
   const reachedBy = (until: string) => (r: { date: string }) => r.date >= challenge.startDate && r.date <= challenge.endDate && r.date <= until
   const myCompletion = seasonCompletion(myRows.filter(reachedBy(myDate)))
-  const partnerCompletion = partner ? seasonCompletion(partnerRows.filter(reachedBy(partnerDate))) : null
   // Goals with ids come from `goalItems`; `goals` stays plain texts for older clients.
   const myGoals = useMemo(() => goalItemsOf(me), [me])
-  const partnerGoals = useMemo(() => goalItemsOf(partner), [partner])
-  const hasRecords = [...myRows, ...partnerRows].some((r) => r.planSetAt || r.checkinAt)
+  const members = others.map((o, i) => {
+    const rows = [...rowsOf(history, o.member.key, i === 0), ...(o.day ? [o.day] : [])]
+    return {
+      ...o,
+      rows,
+      goals: goalItemsOf(o.member),
+      season: memberSeason(rows, counted, o.date),
+      completion: seasonCompletion(rows.filter(reachedBy(o.date))),
+    }
+  })
+  const hasRecords = [...myRows, ...members.flatMap((m) => m.rows)].some((r) => r.planSetAt || r.checkinAt)
 
-  // The nudge allowance, judged the way the server judges it: cap and gap on
-  // my own day row, "owes" on the partner's clock and the partner's day.
-  const times = nudgeTimes(mine)
-  const nudgeWake = times.length > 0 ? Math.max(...times) + NUDGE_MIN_GAP_MS : null
+  // The nudge allowance, judged the way the server judges it: cap and gap
+  // per member nudged, on my own day row; "owes" on their clock and day.
+  const timesFor = (key: string, i: number) => nudgeTimesFor(mine, key, i === 0)
+  const lastNudge = Math.max(0, ...others.map((o, i) => Math.max(0, ...timesFor(o.member.key, i))))
+  const nudgeWake = lastNudge > 0 ? lastNudge + NUDGE_MIN_GAP_MS : null
   const planSetAt = mine?.planSetAt ?? null
   const checkinAt = mine?.checkinAt ?? null
   const deadlineArgs = {
@@ -155,14 +206,17 @@ export function ChallengeDetail({ detail, history, summary, activeCount }: Chall
   const secondNow = useSecondTick(minuteState.kind === 'lock' || minuteState.kind === 'checkin')
   const countdownText = countdownLine(countdownState({ nowMs: Math.max(secondNow, now), ...deadlineArgs }), challenge, true)
   const headline = daysLeftHeadline(progress, challenge, myDate)
-  const partnerInSpan = partnerDate >= challenge.startDate && partnerDate <= challenge.endDate
-  const partnerOwes =
-    !!partner &&
-    partnerInSpan &&
-    partnerOwesToday({ evening: isEveningIn(partner.timezone, now), planSetAt: partnerCard?.planSetAt, checkinAt: partnerCard?.checkinAt })
-  const availability = nudgeAvailability({ nowMs: now, times, partnerOwes })
+  const availabilityOf = (o: MemberToday<{ planSetAt?: number | null; checkinAt?: number | null }>, i: number): NudgeAvailability => {
+    const inSpan = o.date >= challenge.startDate && o.date <= challenge.endDate
+    const owes = inSpan && partnerOwesToday({ evening: isEveningIn(o.member.timezone, now), planSetAt: o.day?.planSetAt, checkinAt: o.day?.checkinAt })
+    return nudgeAvailability({ nowMs: now, times: timesFor(o.member.key, i), partnerOwes: owes })
+  }
 
   const token = inviteToken ?? info.invite?.token ?? null
+  // The warning belongs on the warned member's row; one about you, or about someone no longer listed, is the banner.
+  const warnedKey = challenge.warning && !challenge.warning.forMe ? (challenge.warning.memberKey ?? partner?.key ?? null) : null
+  const warningOnRow = warnedKey !== null && others.some((o) => o.member.key === warnedKey)
+  const warningText = challenge.warning ? warningSentence(challenge.warning, partner?.displayName ?? null, myDate, memberCount) : null
 
   const lock = async () => {
     if (!summary) return
@@ -178,14 +232,16 @@ export function ChallengeDetail({ detail, history, summary, activeCount }: Chall
     }
   }
 
-  const nudge = async () => {
+  const nudge = async (member: { key: string; displayName: string }) => {
     setBusy('nudge')
+    setNudgingKey(member.key)
     setError(null)
     setNotice(null)
     try {
       // "Sent" means queued: the mutation schedules the email, it does not deliver it.
-      const { left } = await nudgePartner(challenge.id)
-      setNotice(`Nudge sent to ${partner?.displayName ?? 'your partner'}. ${left > 0 ? `${left} left today.` : 'That was the last one today.'}`)
+      // Two people send no key, exactly as before groups; a group names whom.
+      const { left } = await nudgePartner(challenge.id, group ? member.key : undefined)
+      setNotice(`Nudge sent to ${member.displayName}. ${left > 0 ? `${left} left today.` : 'That was the last one today.'}`)
     } catch (e) {
       const message = challengeErrorMessage(e)
       // A rule refusal (another device nudged, the partner just locked in) is a state, not a failure.
@@ -194,6 +250,7 @@ export function ChallengeDetail({ detail, history, summary, activeCount }: Chall
       else setError(message)
     } finally {
       setBusy(null)
+      setNudgingKey(null)
     }
   }
 
@@ -254,8 +311,33 @@ export function ChallengeDetail({ detail, history, summary, activeCount }: Chall
     }
   }
 
-  const nudgeText = nudgeLabel(availability, now)
-  const nudgeCaption = availability.state === 'ready' || availability.state === 'cooling' ? nudgeLeftCaption(availability.left) : ''
+  /** One member's Nudge as a quiet text action plus its caption; nothing when there is nothing to nudge about. */
+  const nudgeActions = (o: (typeof others)[number], i: number): ReactNode => {
+    const availability = availabilityOf(o, i)
+    const text = nudgeLabel(availability, now)
+    if (!text) return null
+    const caption = availability.state === 'ready' || availability.state === 'cooling' ? nudgeLeftCaption(availability.left) : ''
+    const sending = busy === 'nudge' && nudgingKey === o.member.key
+    return (
+      <>
+        <TextButton
+          onClick={() => void nudge(o.member)}
+          disabled={busy === 'nudge' || availability.state !== 'ready'}
+          // In a group every row has a Nudge; the name says whose.
+          aria-label={group && availability.state === 'ready' && !sending ? `Nudge ${o.member.displayName}` : undefined}
+        >
+          {sending ? 'Sending…' : text}
+        </TextButton>
+        {caption && <span className="text-caption text-share-onSurfaceVariant">{caption}</span>}
+      </>
+    )
+  }
+
+  const shareButton = running && planSetAt && (
+    <TextButton onClick={() => void share()} disabled={!summary}>
+      Share my {checkinAt ? 'check-in' : 'plan'}
+    </TextButton>
+  )
 
   const meta =
     readOnly || progress.phase === 'ended'
@@ -264,11 +346,7 @@ export function ChallengeDetail({ detail, history, summary, activeCount }: Chall
         ? `Starts ${formatShortDate(challenge.startDate)} · plan by ${challenge.planDeadline} · check in by ${challenge.checkinDeadline}`
         : `Day ${progress.dayNumber} of ${progress.totalDays} · plan by ${challenge.planDeadline} · check in by ${challenge.checkinDeadline}`
 
-  const leaveMessage = challenge.isCreator
-    ? partner
-      ? 'Leaving ends this challenge for both of you. Your days stay recorded.'
-      : 'Leaving ends this challenge. Your days stay recorded.'
-    : `${partner?.displayName ?? 'Your partner'} keeps the challenge. Your days stay recorded.`
+  const leaveMessage = leaveSentence({ isCreator: challenge.isCreator, others: others.map((o) => o.member) })
 
   return (
     <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_24rem] lg:items-start lg:gap-10">
@@ -303,12 +381,18 @@ export function ChallengeDetail({ detail, history, summary, activeCount }: Chall
             </div>
           )}
           <p className="mt-1 text-sm text-share-onSurfaceVariant">{meta}</p>
-          {readOnly && <p className="mt-2 text-body font-semibold text-share-onSurface">{endedSentence(challenge, partner?.displayName ?? null)}</p>}
+          {!readOnly && challenge.reopenedDate && <p className="mt-1 text-sm text-share-onSurfaceVariant">Reopened {formatShortDate(challenge.reopenedDate)}</p>}
+          {readOnly && (
+            <>
+              <p className="mt-2 text-body font-semibold text-share-onSurface">{endedSentence(challenge, partner?.displayName ?? null)}</p>
+              {!challenge.isCreator && <p className="mt-1 text-sm text-share-onSurfaceVariant">The creator can reopen it.</p>}
+            </>
+          )}
         </header>
 
-        {!readOnly && challenge.warning && (
+        {!readOnly && warningText && !warningOnRow && (
           <div role="status" className="mt-4 rounded-xl border border-share-tertiary/50 px-4 py-3">
-            <WarningLine className="text-sm">{warningSentence(challenge.warning, partner?.displayName ?? null, myDate)}</WarningLine>
+            <WarningLine className="text-sm">{warningText}</WarningLine>
           </div>
         )}
 
@@ -318,7 +402,7 @@ export function ChallengeDetail({ detail, history, summary, activeCount }: Chall
             <h2 id="today-heading" className="sr-only">
               Today
             </h2>
-            <MemberRow name={me.displayName} isMe day={mine} goals={myGoals} donts={me.donts} />
+            <MemberRow name={me.displayName} isMe day={mine} goals={myGoals} donts={me.donts} audience={audienceNoun(others.length)} />
 
             {running ? (
               <div className="pb-4">
@@ -371,64 +455,81 @@ export function ChallengeDetail({ detail, history, summary, activeCount }: Chall
               />
             )}
 
-            <div className="border-t border-share-hairline">
-              {partner ? (
-                <MemberRow
-                  name={partner.displayName}
-                  isMe={false}
-                  day={partnerCard}
-                  goals={partnerGoals}
-                  donts={partner.donts}
-                  caption={partnerDate !== myDate ? formatDayLabel(partnerDate) : undefined}
-                  actions={
-                    running && (
-                      <>
-                        {planSetAt && (
-                          <TextButton onClick={() => void share()} disabled={!summary}>
-                            Share my {checkinAt ? 'check-in' : 'plan'}
-                          </TextButton>
-                        )}
-                        {nudgeText && (
-                          <TextButton onClick={() => void nudge()} disabled={busy === 'nudge' || availability.state !== 'ready'}>
-                            {busy === 'nudge' ? 'Sending…' : nudgeText}
-                          </TextButton>
-                        )}
-                        {nudgeCaption && <span className="text-caption text-share-onSurfaceVariant">{nudgeCaption}</span>}
-                      </>
-                    )
-                  }
-                />
-              ) : soloAlone ? (
-                // "Just me": no heading, no partner talk; one quiet way to invite someone.
-                <div className="py-2">
-                  <div className="-ml-3 flex flex-wrap items-center gap-x-1">
-                    {running && planSetAt && (
-                      <TextButton onClick={() => void share()} disabled={!summary}>
-                        Share my {checkinAt ? 'check-in' : 'plan'}
-                      </TextButton>
+            {others.length > 0 ? (
+              <>
+                {members.map((o, i) => (
+                  <div key={o.member.key} className="border-t border-share-hairline">
+                    <MemberRow
+                      name={o.member.displayName}
+                      isMe={false}
+                      day={o.day ?? null}
+                      goals={o.goals}
+                      donts={o.member.donts}
+                      caption={o.date !== myDate ? formatDayLabel(o.date) : undefined}
+                      warning={warningOnRow && o.member.key === warnedKey ? warningText : null}
+                      actions={
+                        running && (
+                          <>
+                            {/* Two people: Share sits with the partner, as it always has. A group shares once, below. */}
+                            {!group && shareButton}
+                            {nudgeActions(o, i)}
+                          </>
+                        )
+                      }
+                    />
+                  </div>
+                ))}
+                {((group && shareButton) || seatsLeft) && (
+                  <div className="border-t border-share-hairline py-2">
+                    <div className="-ml-3 flex flex-wrap items-center gap-x-1">
+                      {group && shareButton}
+                      {seatsLeft && (
+                        <TextButton tone="quiet" aria-expanded={inviteOpen} aria-controls="group-invite" onClick={() => setInviteOpen((o) => !o)}>
+                          Invite someone
+                        </TextButton>
+                      )}
+                      {seatsLeft && <span className="text-caption text-share-onSurfaceVariant">{seatsLeft}</span>}
+                    </div>
+                    {seatsLeft && (
+                      <div id="group-invite" hidden={!inviteOpen} className="pb-2">
+                        <p className="mt-1 text-caption text-share-onSurfaceVariant">A link works for seven days and seats one person. A challenge holds up to {capacity}.</p>
+                        {token && <p className="mt-1 select-all break-all rounded-lg bg-share-hairline px-3 py-2 font-mono text-caption text-share-onSurface">{inviteUrl(token)}</p>}
+                        <TextButton onClick={() => void shareInvite()} className="-ml-3 mt-1">
+                          {token ? 'Share link' : 'Create invite link'}
+                        </TextButton>
+                      </div>
                     )}
-                    <TextButton tone="quiet" aria-expanded={inviteOpen} aria-controls="solo-invite" onClick={() => setInviteOpen((o) => !o)}>
-                      Invite a partner
-                    </TextButton>
                   </div>
-                  <div id="solo-invite" hidden={!inviteOpen} className="pb-2">
-                    {token && <p className="mt-1 select-all break-all rounded-lg bg-share-hairline px-3 py-2 font-mono text-caption text-share-onSurface">{inviteUrl(token)}</p>}
-                    <TextButton onClick={() => void shareInvite()} className="-ml-3 mt-1">
-                      {token ? 'Share link' : 'Create invite link'}
-                    </TextButton>
-                  </div>
+                )}
+              </>
+            ) : soloAlone ? (
+              // "Just me": no heading, no partner talk; one quiet way to invite someone.
+              <div className="border-t border-share-hairline py-2">
+                <div className="-ml-3 flex flex-wrap items-center gap-x-1">
+                  {shareButton}
+                  <TextButton tone="quiet" aria-expanded={inviteOpen} aria-controls="solo-invite" onClick={() => setInviteOpen((o) => !o)}>
+                    Invite someone
+                  </TextButton>
                 </div>
-              ) : (
-                <div className="py-4">
-                  <h3 className="text-body font-bold text-share-onBg">Nobody has joined yet</h3>
-                  <p className="mt-1 text-sm text-share-onSurfaceVariant">Send your partner a link. It works for seven days and seats one person.</p>
-                  {token && <p className="mt-2 select-all break-all rounded-lg bg-share-hairline px-3 py-2 font-mono text-caption text-share-onSurface">{inviteUrl(token)}</p>}
+                <div id="solo-invite" hidden={!inviteOpen} className="pb-2">
+                  {token && <p className="mt-1 select-all break-all rounded-lg bg-share-hairline px-3 py-2 font-mono text-caption text-share-onSurface">{inviteUrl(token)}</p>}
                   <TextButton onClick={() => void shareInvite()} className="-ml-3 mt-1">
                     {token ? 'Share link' : 'Create invite link'}
                   </TextButton>
                 </div>
-              )}
-            </div>
+              </div>
+            ) : (
+              <div className="border-t border-share-hairline py-4">
+                <h3 className="text-body font-bold text-share-onBg">Nobody has joined yet</h3>
+                <p className="mt-1 text-sm text-share-onSurfaceVariant">
+                  Send someone a link. It works for seven days and seats one person; a challenge holds up to {capacity}.
+                </p>
+                {token && <p className="mt-2 select-all break-all rounded-lg bg-share-hairline px-3 py-2 font-mono text-caption text-share-onSurface">{inviteUrl(token)}</p>}
+                <TextButton onClick={() => void shareInvite()} className="-ml-3 mt-1">
+                  {token ? 'Share link' : 'Create invite link'}
+                </TextButton>
+              </div>
+            )}
             {(error || notice) && (
               <div className="pb-4">
                 {error && <ErrorLine message={error} />}
@@ -442,11 +543,12 @@ export function ChallengeDetail({ detail, history, summary, activeCount }: Chall
           </section>
         )}
 
-        {/* Head to head: two numbers each, and what a full day is. Alone on "Just me", it is your season. */}
+        {/* Head to head: two numbers each, and what a full day is. Alone on "Just me", it is your season.
+            A group lists everyone, you first, then join order: no ranking, no medal. */}
         {progress.phase !== 'upcoming' && (
           <section aria-labelledby="score-heading" className="mt-10">
             <h2 id="score-heading" className={SECTION_HEADING}>
-              {soloAlone ? 'Your season' : 'Head to head'}
+              {soloAlone ? 'Your season' : group ? 'Everyone so far' : 'Head to head'}
             </h2>
             <table className="mt-2 w-full max-w-md text-left">
               <thead>
@@ -467,19 +569,21 @@ export function ChallengeDetail({ detail, history, summary, activeCount }: Chall
               </thead>
               <tbody className="divide-y divide-share-hairline">
                 <ScoreRow name="You" full={mySeason.fullDays} of={mySeason.pastDays} streak={mySeason.streak} percent={myCompletion.percent} />
-                {partner && partnerSeason && (
+                {members.map((o) => (
                   <ScoreRow
-                    name={partner.displayName}
-                    full={partnerSeason.fullDays}
-                    of={partnerSeason.pastDays}
-                    streak={partnerSeason.streak}
-                    percent={partnerCompletion?.percent ?? null}
+                    key={o.member.key}
+                    name={o.member.displayName}
+                    full={o.season.fullDays}
+                    of={o.season.pastDays}
+                    streak={o.season.streak}
+                    percent={o.completion.percent}
                   />
-                )}
+                ))}
               </tbody>
             </table>
             <p className="mt-2 text-caption text-share-onSurfaceVariant">
               A full day is a locked plan and a check-in. Planned time done is minutes done of minutes planned, weighted by each task&rsquo;s length.
+              {closedSpans.length > 0 && ' Days the challenge was closed count for nobody.'}
             </p>
           </section>
         )}
@@ -495,7 +599,8 @@ export function ChallengeDetail({ detail, history, summary, activeCount }: Chall
               dates={dates}
               myRows={myRows}
               myDate={myDate}
-              partner={partner ? { name: partner.displayName, rows: partnerRows, today: partnerDate } : null}
+              others={members.map((o) => ({ key: o.member.key, name: o.member.displayName, rows: o.rows, today: o.date }))}
+              closedSpans={closedSpans}
             />
           </div>
         </section>
@@ -518,7 +623,9 @@ export function ChallengeDetail({ detail, history, summary, activeCount }: Chall
                 )
               }
             />
-            {partner && <Commitments title={`${partner.displayName}’s`} goals={partnerGoals} donts={partner.donts} empty="None set yet." />}
+            {members.map((o) => (
+              <Commitments key={o.member.key} title={`${o.member.displayName}’s`} goals={o.goals} donts={o.member.donts} empty="None set yet." />
+            ))}
           </div>
         </section>
 
@@ -530,8 +637,11 @@ export function ChallengeDetail({ detail, history, summary, activeCount }: Chall
           </div>
         )}
         {readOnly && challenge.isCreator && (
-          <div className="mt-8 border-t border-share-hairline pt-2">
-            <TextButton tone="quiet" onClick={() => setDeleteOpen(true)} className="-ml-3">
+          <div className="mt-8 flex flex-wrap gap-x-1 border-t border-share-hairline pt-2">
+            <TextButton onClick={() => setReopenOpen(true)} className="-ml-3">
+              Reopen challenge
+            </TextButton>
+            <TextButton tone="quiet" onClick={() => setDeleteOpen(true)}>
               Delete challenge
             </TextButton>
           </div>
@@ -549,11 +659,12 @@ export function ChallengeDetail({ detail, history, summary, activeCount }: Chall
           date={myDate}
           summary={summary}
           existing={mine}
+          otherCount={others.length}
           onClose={() => setCheckinOpen(false)}
         />
       )}
       {editingCommitments && !readOnly && (
-        <CommitmentsSheet challengeId={challenge.id} goals={myGoals} donts={me.donts} onClose={() => setEditingCommitments(false)} />
+        <CommitmentsSheet challengeId={challenge.id} goals={myGoals} donts={me.donts} otherCount={others.length} onClose={() => setEditingCommitments(false)} />
       )}
       {editingDates && !readOnly && challenge.isCreator && (
         <DatesSheet
@@ -571,12 +682,23 @@ export function ChallengeDetail({ detail, history, summary, activeCount }: Chall
       {deleteOpen && (
         <ActionSheet
           title={`Delete ${challenge.name} for good?`}
-          message={`This removes the whole season, every day, check-in and note, for ${partner ? `both you and ${partner.displayName}` : 'you'}. It cannot be undone. Your planner is not touched.`}
+          message={`This removes the whole season, every day, check-in and note, for ${deleteAudience(others.map((o) => o.member))}. It cannot be undone. Your planner is not touched.`}
           actionLabel="Delete for good"
           onAction={() => void remove()}
           pending={deleting}
           error={deleteError}
           onClose={() => setDeleteOpen(false)}
+        />
+      )}
+      {reopenOpen && readOnly && challenge.isCreator && (
+        <ReopenSheet
+          challengeId={challenge.id}
+          name={challenge.name}
+          startDate={challenge.startDate}
+          endDate={challenge.endDate}
+          myDate={myDate}
+          memberTodays={others.map((o) => o.date)}
+          onClose={() => setReopenOpen(false)}
         />
       )}
       {leaveOpen && (
@@ -916,6 +1038,110 @@ function DatesSheet({ challengeId, initial, hasRecords, onClose }: { challengeId
         <p className="mt-2 text-caption text-share-onSurfaceVariant">In each person&rsquo;s own local time. The check-in deadline has to be later than 21:30.</p>
         {error && <ErrorLine className="mt-2" message={error} />}
       </form>
+    </Sheet>
+  )
+}
+
+/**
+ * "Reopen challenge": the creator brings an ended season back with
+ * everything it recorded. While the end date is still ahead for everyone,
+ * one verb reopens it. Once it has passed for anyone, the sheet asks for a
+ * new end date (from the latest member's today to 366 days from yours) and
+ * the verb waits for one. Any refusal is the server's sentence. On success
+ * nothing is navigated: every member's subscription flips the dashboard
+ * back to running.
+ */
+export function ReopenSheet({
+  challengeId,
+  name,
+  startDate,
+  endDate,
+  myDate,
+  memberTodays,
+  onClose,
+}: {
+  challengeId: Id<'challenges'>
+  name: string
+  startDate: string
+  endDate: string
+  myDate: string
+  /** Every other member's own today: an end before any of them would end it again at once. */
+  memberTodays: string[]
+  onClose: () => void
+}) {
+  const needsDate = reopenNeedsEndDate({ endDate, myDate, memberTodays })
+  const bounds = reopenDateBounds({ myDate, memberTodays })
+  const [draft, setDraft] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  const reopen = async () => {
+    setError(null)
+    if (needsDate) {
+      const problem = reopenEndDateError({ endDate: draft, myDate, memberTodays, startDate })
+      if (problem) {
+        setError(problem)
+        document.getElementById('reopen-end')?.focus()
+        return
+      }
+    }
+    setBusy(true)
+    try {
+      await reopenChallenge(challengeId, needsDate ? draft : undefined)
+      onClose()
+    } catch (e) {
+      // `needsEndDate` and every other refusal arrive as the server's sentence.
+      setError(challengeErrorMessage(e))
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Sheet
+      onClose={onClose}
+      title={`Reopen ${name}?`}
+      description="Everything recorded so far is kept. The days it was closed count against nobody."
+      action={{ label: 'Reopen challenge', pendingLabel: 'Reopening…', pending: busy, disabled: needsDate && !draft, onClick: () => void reopen() }}
+    >
+      {needsDate ? (
+        <form
+          className="mt-3"
+          noValidate
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (!busy && draft) void reopen()
+          }}
+        >
+          <p className="text-sm text-share-onSurface">Its end date, {formatShortDate(endDate)}, has passed. Pick a new one to run to.</p>
+          <label className={`${DATE_LABEL} mt-3`} htmlFor="reopen-end">
+            New end date
+          </label>
+          <input
+            id="reopen-end"
+            name="end"
+            type="date"
+            value={draft}
+            min={bounds.min}
+            max={bounds.max}
+            onChange={(e) => {
+              setDraft(e.target.value)
+              setError(null)
+            }}
+            required
+            autoComplete="off"
+            aria-invalid={error ? true : undefined}
+            aria-describedby="reopen-end-hint"
+            className={DATE_FIELD}
+          />
+          <p id="reopen-end-hint" className="mt-1 text-caption text-share-onSurfaceVariant">
+            {/* The range spans a year, so both ends carry theirs. */}
+            From {formatDateWithYear(bounds.min)} to {formatDateWithYear(bounds.max)}.
+          </p>
+        </form>
+      ) : (
+        <p className="mt-3 text-sm text-share-onSurface">It runs to {formatShortDate(endDate)} again.</p>
+      )}
+      {error && <ErrorLine className="mt-2" message={error} />}
     </Sheet>
   )
 }

@@ -125,7 +125,14 @@ describe('inactivity', () => {
     // Each member sees the warning as "me" or "not me", never a user id.
     const samView = (await sam.as.query(api.challenges.myChallenges, {}))[0]!.challenge
     const kinView = (await kin.as.query(api.challenges.myChallenges, {}))[0]!.challenge
-    expect(samView.warning).toEqual({ forMe: true, missedSince: '2026-10-18', issuedAt: at('2026-10-21', '08:00', NY) })
+    // The warning names the warned member by key and display name (added for groups), never by user id.
+    expect(samView.warning).toEqual({
+      forMe: true,
+      missedSince: '2026-10-18',
+      issuedAt: at('2026-10-21', '08:00', NY),
+      memberKey: (await sam.as.query(api.challenges.myChallenges, {}))[0]!.me.key,
+      displayName: 'Sam',
+    })
     expect(kinView.warning?.forMe).toBe(false)
     expect(JSON.stringify(kinView)).not.toContain(sam.id)
 

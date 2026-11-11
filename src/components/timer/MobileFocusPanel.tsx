@@ -16,7 +16,9 @@
  *   and the digits where the ring will be. Every rule still lives in
  *   `useDeepWorkTimer`; this file only draws it.
  * - **Running or paused** — the ring is the screen: what you are on, how long
- *   is left, and three controls. Nothing to read, nothing to decide.
+ *   is left, and three controls. Nothing to read, nothing to decide. "Exit
+ *   focus" in the top-left corner goes back to Today and leaves the block
+ *   running; it is a tab change, nothing more.
  *
  * Both states are a column at least one screen tall with flexible space above
  * and below, so the content sits in the middle on a tall phone instead of
@@ -40,6 +42,11 @@ interface MobileFocusPanelProps {
   onSetBlockLength?: (minutes: number, breakMinutes: number) => void
   /** Blocks already banked today, so this one can be numbered. */
   completedBlocksToday: number
+  /**
+   * Go back to Today with the block still running. Only a change of tab: it
+   * never pauses, stops, banks or discards anything.
+   */
+  onExit?: () => void
 }
 
 const RADIUS = 120
@@ -64,6 +71,7 @@ export function MobileFocusPanel({
   breakMinutes,
   onSetBlockLength,
   completedBlocksToday,
+  onExit,
 }: MobileFocusPanelProps) {
   const [confirmDiscard, setConfirmDiscard] = useState(false)
   const {
@@ -92,9 +100,31 @@ export function MobileFocusPanel({
 
   return (
     <div className={`${COLUMN} items-center pt-3`} data-testid="mobile-focus-running">
-      <p className="text-xs font-semibold text-share-onSurfaceVariant">
-        Block {completedBlocksToday + 1} today
-      </p>
+      {/*
+        The way out sits top-left, where a phone puts "back", and as far from
+        Discard, Pause and Finish early as the screen allows, so a thumb going
+        for those cannot land on it. It is outlined and worded, never a round
+        icon like the block controls, so it cannot pass for Discard either.
+      */}
+      <div className="flex w-full items-center justify-between gap-3">
+        {onExit ? (
+          <button
+            type="button"
+            onClick={onExit}
+            className="flex min-h-[44px] items-center gap-1.5 rounded-xl border border-share-outlineStrong bg-share-surfaceContainerLow pl-2.5 pr-3.5 text-sm font-semibold text-share-onBg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-share-primary"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+            <span>Exit focus</span>
+          </button>
+        ) : (
+          <span aria-hidden="true" />
+        )}
+        <p className="text-xs font-semibold text-share-onSurfaceVariant">
+          Block {completedBlocksToday + 1} today
+        </p>
+      </div>
 
       <div className="min-h-6 flex-1" aria-hidden="true" />
 

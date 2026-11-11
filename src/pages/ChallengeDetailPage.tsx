@@ -2,7 +2,7 @@
  * pages/ChallengeDetailPage.tsx
  *
  * /challenge/:id — one challenge's dashboard. The page subscribes (the
- * challenge, both members' today, the season so far) and builds today's
+ * challenge, every member's today, the season so far) and builds today's
  * summary from the planner; `ChallengeDetail` draws it. An id that is not
  * one of yours, or a challenge you have left, reads as a sentence and a way
  * back, never an error.
@@ -16,7 +16,7 @@ import { textButtonClass } from '../components/ui/textButtonClass'
 import { buildChallengeSummary } from '../domain/challenge'
 import { addDays } from '../domain/dateUtils'
 import { DEFAULT_HABIT_DEFINITIONS } from '../domain/types'
-import { useChallengeDetail, useChallengeHistory, useChallenges } from '../hooks/useChallenges'
+import { otherToDatesOf, useChallengeDetail, useChallengeHistory, useChallenges } from '../hooks/useChallenges'
 import { useMinuteTick } from '../hooks/useMinuteTick'
 import { usePersistentState } from '../storage/localStorageState'
 
@@ -35,7 +35,12 @@ function DetailBody() {
   const { active } = useChallenges()
   const [appState, , isHydrating] = usePersistentState()
   // Each member's history runs to their own yesterday; their card is their today.
-  const history = useChallengeHistory(detail.info ? detail.info.challenge.id : null, addDays(detail.myDate, -1), addDays(detail.partnerDate, -1))
+  const history = useChallengeHistory(
+    detail.info ? detail.info.challenge.id : null,
+    addDays(detail.myDate, -1),
+    addDays(detail.partnerDate, -1),
+    otherToDatesOf(detail.others),
+  )
 
   const habits = appState.habitDefinitions ?? DEFAULT_HABIT_DEFINITIONS
   const summary = useMemo(

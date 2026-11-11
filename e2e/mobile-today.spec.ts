@@ -113,7 +113,7 @@ test('a Top 3 row has a ⋮ that reaches Delete and Schedule by touch', async ({
   await expect(sheet.getByRole('menuitem', { name: 'Delete' })).toBeVisible()
   await expect(sheet.getByRole('menuitem', { name: /schedule/i })).toBeVisible()
   // A guest has no challenge, so there is no partner to hide from.
-  await expect(sheet.getByRole('menuitem', { name: 'Hide from partner' })).toHaveCount(0)
+  await expect(sheet.getByRole('menuitem', { name: 'Hide from challenge' })).toHaveCount(0)
 })
 
 test('the progress bar under a task is one button that opens the progress sheet', async ({ page }) => {

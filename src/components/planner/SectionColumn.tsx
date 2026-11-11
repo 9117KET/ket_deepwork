@@ -39,7 +39,7 @@ interface SectionColumnProps {
   onToggleTask: (taskId: string) => void
   onDeleteTask: (taskId: string) => void
   onUpdateTask: (taskId: string, patch: TaskPatch) => void
-  /** An accountability challenge is running: offer "hide from partner" on each task. */
+  /** An accountability challenge is running: offer "hide from challenge" on each task. */
   partnerVisible?: boolean
   /** Mobile reorder: move a root task up within this section. */
   onMoveTaskUp?: (taskId: string) => void

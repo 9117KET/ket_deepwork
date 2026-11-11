@@ -30,7 +30,9 @@ async function injectGuestState(page: Page) {
       const localIso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
       window.sessionStorage.setItem(`shutdown_reminder_shown_${localIso}`, '1')
     }
-    const today = new Date().toISOString().slice(0, 10)
+    // The local date, as the planner reads it. The UTC date differs near midnight.
+    const now = new Date()
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
     window.localStorage.setItem(
       'deepblock_state_v1',
       JSON.stringify({

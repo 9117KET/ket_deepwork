@@ -36,9 +36,15 @@ interface DeepWorkTimerProps {
    * rather than showing a dead one.
    */
   onSetBlockLength?: (minutes: number, breakMinutes: number) => void
+  /**
+   * Bring the desktop Focus screen back over the day. Passed only while a
+   * block is live and Focus was put away, so the control exists exactly when
+   * there is somewhere to go back to.
+   */
+  onReturnToFocus?: () => void
 }
 
-export function DeepWorkTimer({ timer, breakMinutes, onSetBlockLength }: DeepWorkTimerProps) {
+export function DeepWorkTimer({ timer, breakMinutes, onSetBlockLength, onReturnToFocus }: DeepWorkTimerProps) {
   const {
     label,
     setLabel,
@@ -73,6 +79,14 @@ export function DeepWorkTimer({ timer, breakMinutes, onSetBlockLength }: DeepWor
   const presetMinutes = FOCUS_BLOCK_PRESETS.map((preset) => preset.minutes)
   const isCustom = !presetMinutes.includes(durationMinutes)
 
+  // A running or paused block holds its task even when the day on screen does
+  // not offer it (paged to another day mid-block), so name it as a locked
+  // choice rather than showing no task or hiding the control.
+  const heldTaskOffScreen =
+    isAttributionLocked && selectedTask != null && !options.some((option) => option.id === selectedTask.id)
+      ? selectedTask
+      : null
+
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault()
     start()
@@ -88,7 +102,7 @@ export function DeepWorkTimer({ timer, breakMinutes, onSetBlockLength }: DeepWor
       </header>
 
       <form onSubmit={handleSubmit} className="space-y-3">
-        {options.length > 0 && (
+        {(options.length > 0 || heldTaskOffScreen) && (
           <div className="space-y-1">
             <label className="block text-xs text-share-onSurfaceVariant" htmlFor="deep-work-timer-task">
               Working on
@@ -108,6 +122,9 @@ export function DeepWorkTimer({ timer, breakMinutes, onSetBlockLength }: DeepWor
               }
             >
               <option value="">No task - just log the time</option>
+              {heldTaskOffScreen && (
+                <option value={heldTaskOffScreen.id}>{heldTaskOffScreen.title}</option>
+              )}
               {options.map((option) => (
                 <option key={option.id} value={option.id}>
                   {option.title}
@@ -245,6 +262,16 @@ export function DeepWorkTimer({ timer, breakMinutes, onSetBlockLength }: DeepWor
               className="min-h-[44px] rounded-md border border-share-primary/60 bg-share-primary/10 px-4 py-1.5 text-sm text-share-primary hover:bg-share-primary/20"
             >
               Resume
+            </button>
+          ) : null}
+
+          {!isIdleOrFinished && onReturnToFocus ? (
+            <button
+              type="button"
+              onClick={onReturnToFocus}
+              className="hidden min-h-[44px] rounded-md border border-share-outlineStrong bg-share-surfaceContainer px-4 py-1.5 text-sm font-medium text-share-onBg hover:border-share-primary/60 hover:text-share-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-share-primary lg:inline-flex lg:items-center"
+            >
+              Back to focus
             </button>
           ) : null}
 

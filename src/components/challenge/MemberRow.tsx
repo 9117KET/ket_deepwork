@@ -4,8 +4,8 @@
  * One member's today, as the other is allowed to see it: the two acts, the
  * Top 3 (or, with no Top 3 set, the first tasks on their list, labelled
  * so), counts for the rest, earned minutes, habits, and the evening's note
- * and confession. The same row renders you and your partner, so what you see
- * of yourself is exactly what your partner sees, and each fact is said once.
+ * and confession. The same row renders you and every other member, so what
+ * you see of yourself is exactly what they see, and each fact is said once.
  *
  * Colour: "done" is `share-done` with a ✓ shape, every time; a broken don't
  * is the warning colour; nothing here is cyan, which belongs to the one
@@ -17,6 +17,7 @@ import { Check } from 'lucide-react'
 import type { ChallengeSummary } from '../../domain/challenge'
 import { dayCompletionPercent, formatClock, formatDeepMinutes } from '../../domain/challenge'
 import { activeCommitments, keptLine, resolveDontTexts, type Commitment } from '../../domain/challengeCommitments'
+import { WarningLine } from '../ui/Notices'
 
 export interface MemberDayView {
   summary?: ChallengeSummary
@@ -39,6 +40,10 @@ interface MemberRowProps {
   caption?: string
   /** Quiet actions at the end of the row (Share, Nudge). */
   actions?: ReactNode
+  /** The inactivity warning, when it names this member. */
+  warning?: string | null
+  /** Who sees your row, in a sentence: "your partner" (default) or "the others" in a group. */
+  audience?: string
 }
 
 function Act({ label, at }: { label: string; at: number | null | undefined }) {
@@ -83,7 +88,7 @@ function TaskLines({ tasks }: { tasks: { title: string; isDone: boolean }[] }) {
   )
 }
 
-export function MemberRow({ name, isMe, day, goals = [], donts, caption, actions }: MemberRowProps) {
+export function MemberRow({ name, isMe, day, goals = [], donts, caption, actions, warning, audience = 'your partner' }: MemberRowProps) {
   const s = day?.summary
   const broke = resolveDontTexts(day?.dontsBroken ?? [], donts)
   const hasActiveDonts = activeCommitments(donts).length > 0
@@ -99,7 +104,8 @@ export function MemberRow({ name, isMe, day, goals = [], donts, caption, actions
   const meta: string[] = []
   if (s && s.deepWorkMinutes > 0) meta.push(`${formatDeepMinutes(s.deepWorkMinutes)} deep`)
   if (s && s.habitsTotal > 0) meta.push(`habits ${s.habitsDone}/${s.habitsTotal}`)
-  const top3Label = s?.top3FromTasks ? (isMe ? 'No Top 3 set, so your partner sees your first three tasks' : 'No Top 3 set; their first three tasks') : 'Top 3'
+  const sees = audience === 'your partner' ? 'your partner sees' : `${audience} see`
+  const top3Label = s?.top3FromTasks ? (isMe ? `No Top 3 set, so ${sees} your first three tasks` : 'No Top 3 set; their first three tasks') : 'Top 3'
 
   return (
     <article aria-label={isMe ? `You today` : `${name} today`} className="min-w-0 py-4">
@@ -110,6 +116,12 @@ export function MemberRow({ name, isMe, day, goals = [], donts, caption, actions
         </h3>
         {meta.length > 0 && <p className="shrink-0 text-caption text-share-onSurfaceVariant">{meta.join(' · ')}</p>}
       </div>
+
+      {warning && (
+        <div role="status" className="mt-1.5">
+          <WarningLine className="text-sm">{warning}</WarningLine>
+        </div>
+      )}
 
       <p className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm">
         <Act label="Plan" at={day?.planSetAt} />

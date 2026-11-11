@@ -2,15 +2,15 @@
  * convex/challengesMulti.test.ts
  *
  * One person, many challenges, each with its own partner and each private to
- * its two members. The day's summary fans out, the lock-in is one act for the
- * day, the check-in is per challenge, the creator leaving ends it, and an
- * admin reads every challenge. Run with: npm run test:convex
+ * its members. The day's summary fans out, the lock-in is one act for the
+ * day, the check-in is per challenge, the creator leaving hands it over, and
+ * an admin reads every challenge. Run with: npm run test:convex
  */
 import { convexTest } from 'convex-test'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { ConvexError } from 'convex/values'
 import schema from './schema'
-import { api } from './_generated/api'
+import { api, internal } from './_generated/api'
 import type { Id } from './_generated/dataModel'
 import { emptySummary } from './_shared/challengeValidators'
 
@@ -225,22 +225,22 @@ describe('the cap', () => {
 })
 
 describe('leaving', () => {
-  test('the creator leaving ends it for both, and both can still read it', async () => {
+  // Rewritten for groups (2026-11-11): the creator leaving no longer ends it (`creatorLeft`);
+  // the role passes to the longest-standing member and the challenge runs on.
+  test('the creator leaving hands it to the partner, who runs on; the leaver no longer sees it', async () => {
     const t = convexTest(schema, modules)
     const { kin, sam, q4, thesis } = await twoChallenges(t)
     await kin.as.mutation(api.challenges.leaveChallenge, { challengeId: q4 })
     const samSees = await sam.as.query(api.challenges.myChallenges, {})
     expect(samSees).toHaveLength(1)
-    expect(samSees[0]!.challenge).toMatchObject({ status: 'ended', endedReason: 'creatorLeft', endedAt: Date.UTC(2026, 9, 22, 10, 0) })
-    expect(samSees[0]!.partner?.displayName).toBe('Kin')
+    expect(samSees[0]!.challenge).toMatchObject({ status: 'active', endedReason: null, isCreator: true, memberCount: 1 })
+    expect(samSees[0]!.partner).toBeNull()
     const kinSees = await kin.as.query(api.challenges.myChallenges, {})
-    expect(kinSees.map((e) => [e.challenge.name, e.challenge.status])).toEqual([
-      ['Thesis sprint', 'active'],
-      ['Q4 push', 'ended'],
-    ])
-    expect(await refusal(sam.as.mutation(api.challenges.checkIn, { challengeId: q4, date: '2026-10-22', summary: emptySummary(), dontsBroken: [] }))).toEqual({
+    expect(kinSees.map((e) => [e.challenge.name, e.challenge.status])).toEqual([['Thesis sprint', 'active']])
+    await sam.as.mutation(api.challenges.checkIn, { challengeId: q4, date: '2026-10-22', summary: emptySummary(), dontsBroken: [] })
+    expect(await refusal(kin.as.mutation(api.challenges.checkIn, { challengeId: q4, date: '2026-10-22', summary: emptySummary(), dontsBroken: [] }))).toEqual({
       code: 'challenge',
-      message: 'This challenge has ended',
+      message: 'You are not in this challenge',
     })
     // The other challenge is untouched.
     expect((await kin.as.query(api.challenges.myChallenges, {}))[0]!.challenge.id).toBe(thesis)
@@ -275,14 +275,14 @@ describe('admin', () => {
     expect(await refusal(sam.as.query(api.challenges.adminListChallenges, {}))).toEqual({ code: 'challenge', message: 'Not an admin' })
 
     await sam.as.mutation(api.challenges.lockInPlan, { date: '2026-10-22', summary: emptySummary() })
+    // Rewritten for groups (2026-11-11): the creator leaving hands over instead of ending it with `creatorLeft`.
     await kin.as.mutation(api.challenges.leaveChallenge, { challengeId: q4 })
     const rows = await kin.as.query(api.challenges.adminListChallenges, {})
     expect(rows.map((r) => r.name)).toEqual(['Thesis sprint', 'Q4 push'])
     const q4Row = rows.find((r) => r.id === q4)!
-    expect(q4Row).toMatchObject({ status: 'ended', endedReason: 'creatorLeft', warning: null })
+    expect(q4Row).toMatchObject({ status: 'active', endedReason: null, warning: null, formerMembers: 1 })
     expect(q4Row.members).toEqual([
-      { displayName: 'Kin', email: 'kin@example.com', timezone: BERLIN, joinedAt: expect.any(Number), lastActedAt: null, isCreator: true },
-      { displayName: 'Sam', email: 'sam@example.com', timezone: NY, joinedAt: expect.any(Number), lastActedAt: Date.UTC(2026, 9, 22, 10, 0), isCreator: false },
+      { displayName: 'Sam', email: 'sam@example.com', timezone: NY, joinedAt: expect.any(Number), lastActedAt: Date.UTC(2026, 9, 22, 10, 0), isCreator: true },
     ])
     expect(rows.find((r) => r.name === 'Thesis sprint')!.members.map((m) => m.email)).toEqual(['kin@example.com', 'ana@example.com'])
   })
@@ -295,7 +295,8 @@ describe('deleting an ended challenge', () => {
     await kin.as.mutation(api.challenges.lockInPlan, { date: '2026-10-22', challengeId: q4, summary: emptySummary() })
 
     expect((await refusal(kin.as.mutation(api.challenges.deleteChallenge, { challengeId: q4 }))).message).toMatch(/end the challenge/i)
-    await kin.as.mutation(api.challenges.leaveChallenge, { challengeId: q4 })
+    // Ended by hand: the creator leaving no longer ends a challenge with others in it (2026-11-11).
+    await t.mutation(internal.challengesInternal.endChallenge, { challengeId: q4 })
     expect((await refusal(sam.as.mutation(api.challenges.deleteChallenge, { challengeId: q4 }))).message).toMatch(/creator or an admin/i)
     expect((await refusal(ana.as.mutation(api.challenges.deleteChallenge, { challengeId: q4 }))).message).toMatch(/creator or an admin/i)
 
@@ -315,9 +316,9 @@ describe('deleting an ended challenge', () => {
 
   test('an admin may delete any ended challenge; a plain user may not', async () => {
     const t = convexTest(schema, modules)
-    const { kin, sam, q4 } = await twoChallenges(t)
+    const { sam, q4 } = await twoChallenges(t)
     const admin = await signUp(t, 'root@example.com')
-    await kin.as.mutation(api.challenges.leaveChallenge, { challengeId: q4 })
+    await t.mutation(internal.challengesInternal.endChallenge, { challengeId: q4 })
     process.env.ADMIN_EMAILS = 'root@example.com'
     await expect(sam.as.mutation(api.challenges.deleteChallenge, { challengeId: q4 })).rejects.toThrow()
     await admin.as.mutation(api.challenges.deleteChallenge, { challengeId: q4 })

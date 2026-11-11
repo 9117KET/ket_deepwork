@@ -96,7 +96,9 @@ describe('setup', () => {
 })
 
 describe('invites', () => {
-  test('an invite link previews without auth, is accepted once, and a third person finds it full', async () => {
+  // Rewritten for groups (2026-11-11): a third person is no longer refused for a challenge of two;
+  // they need a fresh link, since each link is one seat. The cap of eight is pinned in challengeGroups.test.ts.
+  test('an invite link previews without auth, is accepted once, and a third person needs a fresh link', async () => {
     const t = convexTest(schema, modules)
     const a = await signUp(t, 'a@example.com')
     const b = await signUp(t, 'b@example.com')
@@ -114,6 +116,8 @@ describe('invites', () => {
       inviterName: 'Kin',
       inviterGoals: ['Ship the thesis draft', 'Run 3x a week'],
       inviterDonts: ['No doomscrolling past 30 min', 'No alcohol'],
+      memberCount: 1,
+      capacity: 8,
     })
     expect(await t.query(api.challenges.invitePreview, { token: 'nope' })).toMatchObject({ status: 'notFound' })
 
@@ -126,9 +130,13 @@ describe('invites', () => {
     await expect(
       c.as.mutation(api.challenges.acceptInvite, { token: first.token, timezone: NY, displayName: 'Cy' }),
     ).rejects.toThrow(/already been used/i)
-    await expect(a.as.mutation(api.challenges.createInvite, { challengeId })).rejects.toThrow(/two members/i)
     // Accepting again as a member is a no-op, not an error.
     await b.as.mutation(api.challenges.acceptInvite, { token: first.token, timezone: NY, displayName: 'Sam' })
+    // Seats remain: a fresh link lets the third person in.
+    const fresh = await a.as.mutation(api.challenges.createInvite, { challengeId })
+    expect(fresh.token).not.toBe(first.token)
+    await c.as.mutation(api.challenges.acceptInvite, { token: fresh.token, timezone: NY, displayName: 'Cy' })
+    expect((await a.as.query(api.challenges.myChallenges, {}))[0]!.challenge.memberCount).toBe(3)
   })
 
   test('an expired invite is refused', async () => {

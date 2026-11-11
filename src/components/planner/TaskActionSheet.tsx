@@ -157,7 +157,7 @@ export function TaskActionSheet({
     if (partnerVisible) {
       actions.push({
         key: 'private',
-        label: task.isPrivate ? 'Show to partner' : 'Hide from partner',
+        label: task.isPrivate ? 'Show in challenge' : 'Hide from challenge',
         icon: task.isPrivate ? <Eye className={ICON} /> : <EyeOff className={ICON} />,
         run: () => onUpdateTask({ isPrivate: !task.isPrivate }),
       })

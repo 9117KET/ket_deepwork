@@ -3,7 +3,7 @@
  *
  * /challenge — every challenge you are in, one row each. Running ones first,
  * each saying where it is in its season and where you and your partner
- * stand today; then the ended ones, each with the sentence that says how it
+ * stand today (in a group, how many of the others have locked in); then the ended ones, each with the sentence that says how it
  * ended. A row is one tap to its dashboard. With exactly one challenge the
  * list stays (no redirect): the row is one tap, and the way to a second
  * challenge stays in view.
@@ -19,6 +19,7 @@ import { TextButton } from '../components/ui/TextButton'
 import { formatShortDate } from '../domain/challenge'
 import { daysLeftHeadline } from '../domain/challengeCountdown'
 import { endedSentence, headlinePhrase, stateMark } from '../domain/challengeList'
+import { groupCountLabel } from '../domain/challengeGroup'
 import { todayIso } from '../domain/dateUtils'
 import { useChallenges, useTodayCards, type ChallengeEntry, type TodayRow } from '../hooks/useChallenges'
 import { useMinuteTick } from '../hooks/useMinuteTick'
@@ -63,7 +64,7 @@ function ListBody() {
       <h1 className="font-shareHeadline text-title text-share-onBg">Challenges</h1>
       {entries.length === 0 && (
         <p className="mt-2 max-w-prose text-body text-share-onSurfaceVariant">
-          Pick one friend and a season. Each day you lock in your plan in the morning and check in at night, and each of you sees how the other is doing.
+          Pick a friend, or a few (up to 8 people), and a season. Each day you lock in your plan in the morning and check in at night, and everyone sees how the others are doing.
         </p>
       )}
       {actions}
@@ -98,7 +99,7 @@ function ListBody() {
   )
 }
 
-function Mark({ who, day, loading }: { who: string; day: TodayRow['mine'] | TodayRow['partner']; loading: boolean }) {
+function Mark({ who, day, loading }: { who: string; day: TodayRow['mine'] | TodayRow['partner'] | undefined; loading: boolean }) {
   const mark = stateMark(day)
   return (
     <span className={`inline-flex min-w-0 items-center gap-1.5 ${mark.done ? 'text-share-done' : 'text-share-onSurfaceVariant'}`}>
@@ -113,7 +114,7 @@ function Mark({ who, day, loading }: { who: string; day: TodayRow['mine'] | Toda
 }
 
 function ActiveRow({ row }: { row: TodayRow }) {
-  const { entry, progress, mine, partner } = row
+  const { entry, progress, mine, others } = row
   const { challenge } = entry
   const loading = mine === undefined
   const day =
@@ -135,10 +136,13 @@ function ActiveRow({ row }: { row: TodayRow }) {
         {progress.phase === 'active' && (
           <span className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-sm">
             <Mark who="You" day={mine} loading={loading} />
-            {entry.partner ? (
-              <Mark who={entry.partner.displayName} day={partner} loading={loading} />
+            {others.length === 1 ? (
+              <Mark who={others[0]!.member.displayName} day={others[0]!.day} loading={loading} />
+            ) : others.length > 1 ? (
+              // A group: how many of the others have acted, never one name standing for all.
+              <span className="text-share-onSurfaceVariant">{loading ? '' : groupCountLabel(others.map((o) => o.day))}</span>
             ) : (
-              <span className="text-share-onSurfaceVariant">{challenge.solo ? 'Just you' : 'Waiting for a partner'}</span>
+              <span className="text-share-onSurfaceVariant">{challenge.solo ? 'Just you' : 'Waiting for someone to join'}</span>
             )}
           </span>
         )}

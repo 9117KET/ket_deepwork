@@ -45,7 +45,9 @@ function seed(page: Page) {
     if (!window.sessionStorage.getItem('_pw_attr_ready')) {
       window.sessionStorage.setItem('_pw_attr_ready', '1')
       try {
-        const today = new Date().toISOString().slice(0, 10)
+        // The local date, as the planner reads it. The UTC date differs near midnight.
+        const now = new Date()
+        const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
         const mk = (id: string, title: string) => ({
           id,
           title,

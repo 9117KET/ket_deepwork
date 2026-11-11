@@ -6,11 +6,11 @@
  * Delete is only via this menu (no ✕ button) to avoid accidental removal.
  *
  * Two anatomies, chosen by the primary pointer rather than the width:
- *  - a finger (`useCoarsePointer`): checkbox, title, one chip, ⋮. The ⋮ opens
- *    `TaskActionSheet`, which holds every other action, and the progress row is
- *    one button under the title that opens the progress sheet. Nothing depends
- *    on hover, right-click or double-tap, none of which a phone has. A finger
- *    on the trailing `DragHandle` lifts the row at once, a press and hold
+ *  - a finger (`useCoarsePointer`): drag handle, checkbox, title, one chip, ⋮.
+ *    The ⋮ opens `TaskActionSheet`, which holds every other action, and the
+ *    progress row is one button under the title that opens the progress sheet.
+ *    Nothing depends on hover, right-click or double-tap, none of which a phone
+ *    has. A finger on the leading `DragHandle` lifts the row at once, a press and hold
  *    anywhere else lifts it too (`useTouchReorder`); the sheet's Move actions
  *    do the same without a gesture.
  *  - a cursor: the desktop row, unchanged: the `DragHandle` grip, popup menu,
@@ -44,7 +44,7 @@ interface TaskItemProps {
   onAddTaskBelow?: () => void
   onAddSubtask?: () => void
   onUpdateTask?: (patch: TaskPatch) => void
-  /** An accountability challenge is running: offer "hide from partner" in the menu. */
+  /** An accountability challenge is running: offer "hide from challenge" in the menu. */
   partnerVisible?: boolean
   /** Consciously abandon this task (Drucker: abandonment as a success). */
   onAbandon?: () => void
@@ -101,6 +101,14 @@ export function DropLine({ edge }: { edge: 'top' | 'bottom' }) {
   )
 }
 
+/**
+ * A phone row with no handle (no finger drag wired, or the Top 3's all-done
+ * list) holds the handle's place, so its checkbox and title line up with the
+ * rows that have one.
+ */
+export function PhoneHandleSpacer() {
+  return <span aria-hidden className="-mr-1 w-11 shrink-0" />
+}
 
 export function TaskItem({
   task,
@@ -354,7 +362,7 @@ export function TaskItem({
     />
   )
 
-  // ── Phone: checkbox, title, one chip, ⋮ ─────────────────────────────────
+  // ── Phone: handle, checkbox, title, one chip, ⋮ ─────────────────────────
   if (isCoarse) {
     const chipOpensSchedule = Boolean(onSchedule) && !isSubtask && !task.isDone
     // Unset, the chip still shows ("Time", dim) wherever it opens the sheet,
@@ -390,6 +398,21 @@ export function TaskItem({
       >
         {touch?.lineAbove && <DropLine edge="top" />}
         <div className="group flex items-center gap-1">
+          {/* Leading, as on the desktop row: the handle is the first thing in
+              every row. A finger on it lifts the row at once (no hold);
+              activating it opens the same actions as the ⋮, Move up / down
+              included. `-mr-1` cancels the gap: two 44px targets side by side
+              already sit apart, and the title keeps those 4px. */}
+          {touch ? (
+            <DragHandle
+              taskTitle={task.title}
+              onClick={showContextMenu ? () => setSheetOpen(true) : undefined}
+              aria-haspopup={showContextMenu ? 'dialog' : undefined}
+              className="-mr-1"
+            />
+          ) : (
+            <PhoneHandleSpacer />
+          )}
           <TouchCheckbox checked={task.isDone} onChange={onToggle} label={task.title} />
           {/* Tapping the title opens the action sheet: the title is the
               biggest thing on the row, and the sheet shows it in full. */}
@@ -456,19 +479,10 @@ export function TaskItem({
               <MoreVertical className="h-5 w-5" />
             </button>
           )}
-          {/* Trailing, as a list's reorder control is on a phone. A finger on
-              it lifts the row at once (no hold); activating it opens the
-              same actions as the ⋮, Move up / down included. */}
-          {touch && (
-            <DragHandle
-              taskTitle={task.title}
-              onClick={showContextMenu ? () => setSheetOpen(true) : undefined}
-              aria-haspopup={showContextMenu ? 'dialog' : undefined}
-            />
-          )}
         </div>
         {progress && (
-          <div className="pl-11 pr-2">
+          // Handle 44 - 4 + gap 4, checkbox 44, gap 4: the title's left edge.
+          <div className="pl-[92px] pr-2">
             <TaskProgressBar progress={progress} taskId={task.id} onOpen={onOpenProgressSheet} />
           </div>
         )}
@@ -678,7 +692,7 @@ export function TaskItem({
               onClick={() => closeAnd(() => onUpdateTask?.({ isPrivate: !task.isPrivate }))}
               title="Only the challenge partner's view is affected"
             >
-              {task.isPrivate ? 'Show to partner' : 'Hide from partner'}
+              {task.isPrivate ? 'Show in challenge' : 'Hide from challenge'}
             </button>
           )}
           {onSchedule && !isSubtask && (

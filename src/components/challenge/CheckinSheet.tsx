@@ -12,6 +12,7 @@ import { useRef, useState } from 'react'
 import { buildShareText, type ChallengeProgress, type ChallengeSummary } from '../../domain/challenge'
 import { challengeErrorMessage, checkIn, shareText, type ShareOutcome } from '../../services/challengeService'
 import { resolveDontTexts } from '../../domain/challengeCommitments'
+import { audienceNoun, capitalize } from '../../domain/challengeGroup'
 import type { Id } from '../../../convex/_generated/dataModel'
 import { Sheet, sheetPrimaryButton, sheetQuietButton } from '../ui/Sheet'
 import { ErrorLine } from '../ui/Notices'
@@ -28,10 +29,12 @@ interface CheckinSheetProps {
   date: string
   summary: ChallengeSummary
   existing: { checkinAt?: number | null; note?: string | null; dontsBroken?: string[]; goalsKept?: string[] } | null
+  /** How many other members there are: one reads "your partner", more read "the others". */
+  otherCount?: number
   onClose: () => void
 }
 
-export function CheckinSheet({ challengeId, challengeName, goals, donts, displayName, progress, date, summary, existing, onClose }: CheckinSheetProps) {
+export function CheckinSheet({ challengeId, challengeName, goals, donts, displayName, progress, date, summary, existing, otherCount = 1, onClose }: CheckinSheetProps) {
   const [note, setNote] = useState(existing?.note ?? '')
   const [broken, setBroken] = useState<Set<string>>(() => new Set(existing?.dontsBroken ?? []))
   const [kept, setKept] = useState<Set<string>>(() => new Set(existing?.goalsKept ?? []))
@@ -102,7 +105,9 @@ export function CheckinSheet({ challengeId, challengeName, goals, donts, display
           </div>
         }
       >
-        <p className="mt-3 text-sm text-share-onSurface">Your partner can see it now. Want to send it to them too?</p>
+        <p className="mt-3 text-sm text-share-onSurface">
+          {otherCount === 0 ? 'It is recorded. Want to share it?' : `${capitalize(audienceNoun(otherCount))} can see it now. Want to send it to them too?`}
+        </p>
         {shared === 'copied' && (
           <p className="mt-2 text-caption text-share-onSurfaceVariant" role="status">
             Copied. Paste it into WhatsApp.
