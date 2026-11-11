@@ -6,7 +6,9 @@
  * from today, or your own dates), with the two daily deadlines folded away
  * under "Deadlines" at sensible defaults. Step 2 is what you are holding
  * yourself to: goals and don'ts, both optional and editable later. Your name
- * as your partner sees it defaults from the account, under "Advanced".
+ * as the others see it defaults from the account, under "Advanced". "With
+ * others" is the default: one friend or a group of up to eight, each seated
+ * by an invite link.
  * Creating opens the new challenge's dashboard. The timezone comes from the
  * device without asking.
  */
@@ -22,6 +24,7 @@ import { formatShortDate } from '../domain/challenge'
 import { rowsToTexts, withDraft, type CommitmentRow } from '../domain/challengeCommitments'
 import { addDays, todayIso } from '../domain/dateUtils'
 import { seasonStepError, type SeasonField } from '../domain/challengeList'
+import { MAX_MEMBERS } from '../../convex/_shared/challengeGroup'
 import { challengeErrorMessage, createChallenge } from '../services/challengeService'
 
 type Length = 30 | 90 | 365 | 'custom'
@@ -34,7 +37,8 @@ const LENGTHS: { value: Length; label: string }[] = [
 
 type Who = 'partner' | 'solo'
 const WHO: { value: Who; label: string }[] = [
-  { value: 'partner', label: 'With a partner' },
+  // "With others": one friend or up to seven, all on the same footing.
+  { value: 'partner', label: 'With others' },
   { value: 'solo', label: 'Just me' },
 ]
 
@@ -175,7 +179,7 @@ function CreateBody() {
                     value={w.value}
                     checked={who === w.value}
                     onChange={() => setWho(w.value)}
-                    aria-describedby={w.value === 'solo' && solo ? 'ch-who-hint' : undefined}
+                    aria-describedby={w.value === who ? 'ch-who-hint' : undefined}
                     className="peer absolute inset-0 h-full w-full cursor-pointer opacity-0"
                   />
                   <span className="flex min-h-11 items-center justify-center rounded-lg border border-share-outlineStrong px-3 text-sm font-semibold text-share-onSurfaceVariant peer-checked:border-share-onBg peer-checked:bg-share-surfaceContainerHigh peer-checked:text-share-onBg peer-focus-visible:ring-2 peer-focus-visible:ring-share-onBg">
@@ -184,11 +188,11 @@ function CreateBody() {
                 </label>
               ))}
             </div>
-            {solo && (
-              <p id="ch-who-hint" className="mt-2 text-sm text-share-onSurfaceVariant">
-                You can invite someone later.
-              </p>
-            )}
+            <p id="ch-who-hint" className="mt-2 text-sm text-share-onSurfaceVariant">
+              {solo
+                ? 'You can invite someone later.'
+                : `Once it is created, you share an invite link. Each link seats one person, and a challenge holds up to ${MAX_MEMBERS} people.`}
+            </p>
           </fieldset>
 
           <fieldset>
@@ -311,7 +315,7 @@ function CreateBody() {
               What are you holding yourself to?
             </h2>
             <p className="mt-1 text-sm text-share-onSurfaceVariant">
-              {solo ? 'Optional. You can change them any time.' : 'Optional. Your partner can read these, and you can change them any time.'}
+              {solo ? 'Optional. You can change them any time.' : 'Optional. Everyone who joins can read these, and you can change them any time.'}
             </p>
           </div>
           <div>
@@ -332,7 +336,7 @@ function CreateBody() {
             </summary>
             <div className="pb-3 pt-1">
               <label className="block text-caption font-semibold text-share-onSurfaceVariant" htmlFor="ch-display">
-                {solo ? 'Your name' : 'Your name, as your partner sees it'}
+                {solo ? 'Your name' : 'Your name, as the others see it'}
               </label>
               <input
                 id="ch-display"
@@ -346,7 +350,7 @@ function CreateBody() {
               />
               {solo && (
                 <p id="ch-display-hint" className="mt-1 text-caption text-share-onSurfaceVariant">
-                  Shown to a partner if one joins.
+                  Shown to anyone who joins.
                 </p>
               )}
             </div>

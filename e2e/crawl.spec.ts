@@ -45,7 +45,9 @@ async function injectGuestState(page: Page, overrides: Record<string, unknown> =
       window.sessionStorage.setItem(`shutdown_reminder_shown_${localIso}`, '1')
     }
 
-    const today = new Date().toISOString().slice(0, 10)
+    // The local date, as the planner reads it. The UTC date differs near midnight.
+    const now = new Date()
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
     const appState = {
       days: {
         [today]: {
@@ -231,7 +233,11 @@ test.describe('Planner — Must Do pinned header', () => {
 test.describe('Planner — section interactions', () => {
   test.beforeEach(async ({ page }) => {
     // Pre-seed one task so sections have content to interact with
-    const today = new Date().toISOString().slice(0, 10)
+    // The browser's local date, as the planner reads it. The UTC date differs near midnight.
+    const today = await page.evaluate(() => {
+      const now = new Date()
+      return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    })
     await injectGuestState(page, {
       days: {
         [today]: {
@@ -558,7 +564,9 @@ test.describe('Planner — localStorage state integrity', () => {
         const raw = window.localStorage.getItem('deepblock_state_v1')
         if (!raw) return null
         const parsed = JSON.parse(raw)
-        const today = new Date().toISOString().slice(0, 10)
+        // The local date, as the planner reads it. The UTC date differs near midnight.
+        const now = new Date()
+        const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
         const tasks = parsed.state?.days?.[today]?.tasks ?? []
         return tasks.some((t: { title: string }) => t.title === 'Persistence check task')
       })

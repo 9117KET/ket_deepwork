@@ -24,6 +24,7 @@ import { acceptInvite, challengeErrorMessage } from "../services/challengeServic
 import { ListEditor } from "../components/challenge/ListEditor";
 import { formatShortDate } from "../domain/challenge";
 import { rowsToTexts, withDraft, type CommitmentRow } from "../domain/challengeCommitments";
+import { MAX_MEMBERS } from "../../convex/_shared/challengeGroup";
 
 const INVITE_KEY = "deepblock_challenge_invite";
 
@@ -99,7 +100,7 @@ export function ChallengeJoinPage() {
     body = (
       <div className={column}>
         <h1 className="font-shareHeadline text-title text-share-onBg">No invite here</h1>
-        <p className="mt-2 text-body text-share-onSurfaceVariant">The link is missing its invite code. Ask your partner to send it again.</p>
+        <p className="mt-2 text-body text-share-onSurfaceVariant">The link is missing its invite code. Ask whoever invited you to send it again.</p>
         <Link to="/challenge" className={back}>
           See your challenges
         </Link>
@@ -124,9 +125,9 @@ export function ChallengeJoinPage() {
   } else if (preview.status !== "ok") {
     const reason = {
       notFound: "This invite link is not valid.",
-      expired: "This invite has expired. Ask your partner for a new link.",
+      expired: "This invite has expired. Ask whoever invited you for a new link.",
       used: "This invite has already been used.",
-      full: "This challenge already has two members.",
+      full: `This challenge is full (${preview.capacity ?? MAX_MEMBERS} members).`,
       ended: "This challenge has ended.",
     }[preview.status];
     body = (
@@ -189,7 +190,7 @@ export function ChallengeJoinPage() {
         <form onSubmit={(e) => void join(e)} className={column}>
           {header}
           <label htmlFor="join-name" className="block text-sm font-semibold text-share-onSurface">
-            Your name, as your partner sees it
+            Your name, as the others see it
           </label>
           <input
             id="join-name"

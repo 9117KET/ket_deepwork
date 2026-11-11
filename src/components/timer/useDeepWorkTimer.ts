@@ -14,12 +14,14 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { playChime } from '../../audio/chimes'
 import { normalizeFocusBlockMinutes } from '../../domain/focusBlocks'
-import { MIN_BANKABLE_MINUTES, bankableMinutes } from '../../domain/workSafety'
+import { toLocalDayIso } from '../../domain/dateUtils'
+import { MIN_BANKABLE_MINUTES, bankableMinutes, blockDayIso } from '../../domain/workSafety'
 import {
   AWAY_BLOCK_MAX_AGE_MS,
   clearActiveBlock,
   readActiveBlock,
   writeActiveBlock,
+  type PersistedActiveBlock,
 } from '../../storage/activeBlock'
 
 /** A task this session can be attributed to. */
@@ -172,9 +174,17 @@ export function useDeepWorkTimer({
   const startedAtRef = useRef<string | null>(restored.startedAt)
 
   const options = useMemo(() => taskOptions ?? [], [taskOptions])
-  // A task deleted mid-session leaves a dangling id behind; fall back to an
-  // unattributed session rather than crediting work to something that is gone.
-  const selectedTask = options.find((option) => option.id === selectedTaskId)
+  /** The task picked on the day on screen, which is what an idle timer offers. */
+  const liveTask = options.find((option) => option.id === selectedTaskId)
+  /**
+   * The task this block is worked against, held from the moment it starts.
+   * The options come from the day on screen, so looking the task up there
+   * dropped the attribution as soon as the planner was paged to another day
+   * mid-block. A task deleted mid-block is dropped when the session is filed
+   * (`attributedTaskOnDay`), not here.
+   */
+  const [heldTask, setHeldTask] = useState<TimerTaskOption | undefined>(restored.task)
+  const selectedTask = blockTask(status, heldTask, liveTask)
   // The attribution is locked once a session is under way. Swapping tasks
   // mid-block would credit the whole block to whichever task happened to be
   // selected when the countdown ended.
@@ -262,6 +272,7 @@ export function useDeepWorkTimer({
 
   const start = useCallback(() => {
     startedAtRef.current = new Date().toISOString()
+    setHeldTask(liveTask)
     // Pin the length for this run. While `pickedMinutes` is null the duration
     // follows the configured block length, so changing that setting mid-block
     // used to move the finish line under a running countdown and record the
@@ -269,7 +280,7 @@ export function useDeepWorkTimer({
     setPickedMinutes(durationMinutes)
     setTargetTime(Date.now() + durationMinutes * 60 * 1000)
     setStatus('running')
-  }, [durationMinutes])
+  }, [durationMinutes, liveTask, setHeldTask])
 
   const pause = useCallback(() => {
     if (status !== 'running') return
@@ -335,6 +346,9 @@ export function useDeepWorkTimer({
     const minutesToRun = Math.max(1, Math.round(request.minutes))
     startedAtRef.current = new Date().toISOString()
     onSelectTask?.(request.taskId)
+    // Same rule as before the task was held: a task the day does not offer for
+    // attribution starts an unattributed block.
+    setHeldTask(options.find((option) => option.id === request.taskId))
     if (request.label) setLabel(request.label)
     setPickedMinutes(minutesToRun)
     setCustomInput('')
@@ -344,7 +358,7 @@ export function useDeepWorkTimer({
     setStatus('running')
     onBlockStarted?.()
     return 'started'
-  }, [status, onSelectTask, onBlockStarted])
+  }, [status, onSelectTask, onBlockStarted, options, setHeldTask])
 
   // Only the identity of the running block, never its remaining milliseconds -
   // a chip runs its own second hand, so this does not re-render the whole day
@@ -386,12 +400,16 @@ export function useDeepWorkTimer({
    */
   useEffect(() => {
     if (status === 'running' && targetTime != null) {
+      const startedAt = startedAtRef.current ?? new Date().toISOString()
       writeActiveBlock({
-        dayIso: dayIso ?? new Date().toISOString().slice(0, 10),
+        // The day the block started, never the day on screen: paging to
+        // another day mid-block used to rewrite this, and an away claim then
+        // filed the minutes there.
+        dayIso: persistedBlockDayIso(startedAt, dayIso),
         taskId: selectedTask?.id,
         label,
         totalMinutes: durationMinutes,
-        startedAt: startedAtRef.current ?? new Date().toISOString(),
+        startedAt,
         status: 'running',
         endsAt: targetTime,
         remainingMs: 0,
@@ -399,12 +417,13 @@ export function useDeepWorkTimer({
       return
     }
     if (status === 'paused') {
+      const startedAt = startedAtRef.current ?? new Date().toISOString()
       writeActiveBlock({
-        dayIso: dayIso ?? new Date().toISOString().slice(0, 10),
+        dayIso: persistedBlockDayIso(startedAt, dayIso),
         taskId: selectedTask?.id,
         label,
         totalMinutes: durationMinutes,
-        startedAt: startedAtRef.current ?? new Date().toISOString(),
+        startedAt,
         status: 'paused',
         endsAt: null,
         remainingMs: pausedRemainingMs,
@@ -480,6 +499,35 @@ function useLatest<T>(value: T) {
   return ref
 }
 
+/**
+ * The day stored with a running or paused block: the local day it started on,
+ * from its start instant, so paging the planner to another day mid-block does
+ * not move it. A block that crosses midnight stays on the day it started
+ * (`blockDayIso`). The fallbacks are local dates, never a UTC slice of
+ * `toISOString()`, which is the previous day for the first hours after
+ * midnight anywhere east of Greenwich.
+ */
+export function persistedBlockDayIso(
+  startedAt: string | null | undefined,
+  screenDayIso: string | undefined,
+  now: Date = new Date(),
+): string {
+  return blockDayIso(startedAt, screenDayIso ?? toLocalDayIso(now))
+}
+
+/**
+ * The task a block is worked against: the one held since it started while it
+ * runs or is paused, whatever the day on screen offers; the current selection
+ * otherwise.
+ */
+export function blockTask(
+  status: TimerStatus,
+  held: TimerTaskOption | undefined,
+  live: TimerTaskOption | undefined,
+): TimerTaskOption | undefined {
+  return status === 'running' || status === 'paused' ? held : live
+}
+
 /** The shape of a timer picked back up from storage. */
 interface RestoredTimer {
   status: TimerStatus
@@ -488,6 +536,8 @@ interface RestoredTimer {
   label?: string
   minutes?: number
   taskId?: string
+  /** The task a restored running or paused block is held against. */
+  task?: TimerTaskOption
   startedAt: string | null
   awayBlock: AwayBlock | null
 }
@@ -510,23 +560,29 @@ const IDLE_TIMER: RestoredTimer = {
  * back as a claim rather than a session - the clock is evidence the interval
  * passed, not that you spent it working, and only you know which.
  */
-function restoreTimer(): RestoredTimer {
-  const stored = readActiveBlock()
+export function restoreTimer(
+  stored: PersistedActiveBlock | null = readActiveBlock(),
+  now: number = Date.now(),
+): RestoredTimer {
   if (!stored) return IDLE_TIMER
 
   const shape = {
     label: stored.label,
     minutes: stored.totalMinutes,
     taskId: stored.taskId,
+    // Held as it was stored, so a block restored onto a screen showing another
+    // day keeps its task. The block's label is the task's title when it was
+    // picked; it is only what the timer shows meanwhile.
+    task: stored.taskId ? { id: stored.taskId, title: stored.label } : undefined,
     startedAt: stored.startedAt,
   }
 
-  if (stored.status === 'running' && stored.endsAt != null && stored.endsAt > Date.now()) {
+  if (stored.status === 'running' && stored.endsAt != null && stored.endsAt > now) {
     return {
       ...shape,
       status: 'running',
       targetTime: stored.endsAt,
-      remainingMs: Math.max(0, stored.endsAt - Date.now()),
+      remainingMs: Math.max(0, stored.endsAt - now),
       awayBlock: null,
     }
   }
@@ -541,8 +597,8 @@ function restoreTimer(): RestoredTimer {
     }
   }
 
-  const finishedAt = stored.endsAt ?? Date.now()
-  if (Date.now() - finishedAt > AWAY_BLOCK_MAX_AGE_MS) {
+  const finishedAt = stored.endsAt ?? now
+  if (now - finishedAt > AWAY_BLOCK_MAX_AGE_MS) {
     // Too long ago for "did you work it?" to have an honest answer - you were
     // asleep, or the tab sat open for two days.
     clearActiveBlock()
@@ -554,7 +610,9 @@ function restoreTimer(): RestoredTimer {
     // The stored record deliberately survives until the claim is answered, so a
     // reload cannot throw away an hour of work by losing the prompt.
     awayBlock: {
-      dayIso: stored.dayIso,
+      // Read from the start instant: a record written by an older build carries
+      // the day that was on screen when it was last written.
+      dayIso: blockDayIso(stored.startedAt, stored.dayIso),
       taskId: stored.taskId,
       label: stored.label,
       minutes: stored.totalMinutes,

@@ -138,7 +138,8 @@ describe('a partner joins', () => {
     expect(kinSees[0]!.partner?.displayName).toBe('Sam')
   })
 
-  test('a third person cannot join', async () => {
+  // Rewritten for groups (2026-11-11): a third person may join, but only with a link of their own.
+  test('a third person cannot use a spent link, and joins with a fresh one', async () => {
     const t = convexTest(schema, modules)
     const kin = await signUp(t, 'kin@example.com')
     const sam = await signUp(t, 'sam@example.com')
@@ -147,13 +148,14 @@ describe('a partner joins', () => {
     const { token } = await kin.as.mutation(api.challenges.createInvite, { challengeId: id })
     await sam.as.mutation(api.challenges.acceptInvite, { token, timezone: NY, displayName: 'Sam' })
 
-    expect((await refusal(kin.as.mutation(api.challenges.createInvite, { challengeId: id }))).message).toBe(
-      'The challenge already has two members',
-    )
     expect((await refusal(ana.as.mutation(api.challenges.acceptInvite, { token, timezone: NY, displayName: 'Ana' }))).message).toBe(
       'This invite has already been used',
     )
     expect(await ana.as.query(api.challenges.myChallenges, {})).toHaveLength(0)
+    const fresh = await kin.as.mutation(api.challenges.createInvite, { challengeId: id })
+    await ana.as.mutation(api.challenges.acceptInvite, { token: fresh.token, timezone: NY, displayName: 'Ana' })
+    expect((await stored(t, id))!.solo).toBe(false)
+    expect((await ana.as.query(api.challenges.myChallenges, {}))[0]!.others.map((o) => o.displayName)).toEqual(['Kin', 'Sam'])
   })
 })
 

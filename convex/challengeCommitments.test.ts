@@ -234,12 +234,27 @@ describe('invitePreview', () => {
     expect(used).toMatchObject({ status: 'used', inviterGoals: [], inviterDonts: [] })
     const missing = await t.query(api.challenges.invitePreview, { token: 'nope' })
     expect(missing).toMatchObject({ status: 'notFound', inviterGoals: [], inviterDonts: [] })
-    // A second, still-open invite on a full challenge.
+    // A second, still-open invite on a full challenge: eight active members (six seeded beside the pair).
     await t.run(async (ctx) => {
       const challenge = (await ctx.db.query('challenges').collect())[0]!
+      for (let i = 0; i < 6; i++) {
+        await ctx.db.insert('challengeMembers', {
+          challengeId: challenge._id,
+          userId: `seeded-${i}`,
+          timezone: 'Europe/Berlin',
+          displayName: `Seeded ${i}`,
+          joinedAt: Date.now() + i,
+        })
+      }
       await ctx.db.insert('challengeInvites', { challengeId: challenge._id, token: 'second', createdBy: challenge.createdBy, expiresAt: Date.now() + 60_000 })
     })
     const full = await t.query(api.challenges.invitePreview, { token: 'second' })
-    expect(full).toMatchObject({ status: 'full', inviterGoals: ['Ship the thesis draft'], inviterDonts: ['No doomscrolling', 'No alcohol'] })
+    expect(full).toMatchObject({
+      status: 'full',
+      inviterGoals: ['Ship the thesis draft'],
+      inviterDonts: ['No doomscrolling', 'No alcohol'],
+      memberCount: 8,
+      capacity: 8,
+    })
   })
 })

@@ -23,7 +23,7 @@ export function ChallengeJoinPanel({ onCancel }: { onCancel?: () => void }) {
     e.preventDefault()
     const token = extractInviteToken(value)
     if (!token) {
-      setError('That does not look like an invite link. Paste the whole link your partner sent.')
+      setError('That does not look like an invite link. Paste the whole link you were sent.')
       inputRef.current?.focus()
       return
     }
@@ -36,7 +36,7 @@ export function ChallengeJoinPanel({ onCancel }: { onCancel?: () => void }) {
         Join with a link
       </h2>
       <label htmlFor="invite-link" className="mt-1 block text-sm text-share-onSurfaceVariant">
-        Paste the invite link your partner sent you.
+        Paste the invite link you were sent.
       </label>
       <div className="mt-2 flex gap-2">
         <input

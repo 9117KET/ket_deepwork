@@ -13,8 +13,10 @@
  * - `useChallengeHistory(id, …)`: the season up to yesterday. Heavy, so only
  *   the dashboard and Review mount it, and today is kept out of its read set.
  *
- * `now` is a minute tick from the caller, so a partner's date rolls over
- * without a reload; each partner lives on their own clock.
+ * `now` is a minute tick from the caller, so another member's date rolls
+ * over without a reload; each member lives on their own clock. A challenge
+ * holds up to eight people: `others` is every other member in join order,
+ * keyed by `memberView.key`, and `partner` stays its first entry.
  */
 
 import { useMemo } from "react"
@@ -26,6 +28,7 @@ import { useAuth } from "../contexts/AuthContext"
 import { addDays, todayIso } from "../domain/dateUtils"
 import { challengeProgress, type ChallengeProgress } from "../domain/challenge"
 import { localDateIn } from "../services/challengeService"
+import { dayOf, isGroup, memberDates, memberToDates, othersOf, type KeyedMember } from "../domain/challengeGroup"
 
 /**
  * contract: spec 03. Day views gain `goalsKept` (ids of the goals kept that
@@ -83,6 +86,33 @@ export function partnerDateOf(entry: Pick<ChallengeEntry, "partner">, now: numbe
 /** "missing": signed in, loaded, and this id is not one of yours (a stale or foreign link). */
 export type ChallengeDetailStatus = "signedOut" | "loading" | "missing" | "active" | "ended"
 
+/** Another member of a challenge, keyed (`memberView.key`), in join order. */
+export type OtherMember = KeyedMember<ChallengeMember>
+
+/** Every other active member of one challenge, keyed; the single `partner` on an older server. */
+export function otherMembersOf(entry: Pick<ChallengeEntry, "partner"> & { others?: ChallengeMember[] | null }): OtherMember[] {
+  return othersOf<ChallengeMember>(entry)
+}
+
+/**
+ * Each other member's own local date. Sent to the server only for a group:
+ * with one other member `partnerDate` already says it, so a two-person
+ * challenge sends exactly what it always has.
+ */
+function otherDatesArg(others: OtherMember[], now: number): { key: string; date: string }[] | undefined {
+  if (!isGroup(others.length)) return undefined
+  return memberDates(others, (tz) => localDateIn(tz, now))
+}
+
+/** One other member's today: who, their own date, and their day (undefined while loading, null with no row). */
+export interface MemberToday<D> {
+  member: OtherMember
+  date: string
+  day: D | null | undefined
+}
+
+type DayView = NonNullable<ChallengeDayCards["partner"]>
+
 export interface ChallengeDetail {
   status: ChallengeDetailStatus
   info: ChallengeEntry | null
@@ -92,6 +122,8 @@ export interface ChallengeDetail {
   partnerDate: string
   mine: ChallengeDayCards["mine"] | null
   partnerCard: ChallengeDayCards["partner"] | null
+  /** Every other member in join order, with their own date and today; the first is `partner`. */
+  others: MemberToday<DayView>[]
 }
 
 export function useChallengeDetail(id: string | undefined, now: number): ChallengeDetail {
@@ -99,7 +131,12 @@ export function useChallengeDetail(id: string | undefined, now: number): Challen
   const info = list.entries.find((e) => e.challenge.id === id) ?? null
   const myDate = todayIso()
   const partnerDate = info ? partnerDateOf(info, now, myDate) : myDate
-  const cards = useQuery(api.challenges.dayCards, info ? { challengeId: info.challenge.id, myDate, partnerDate } : "skip")
+  const others = info ? otherMembersOf(info) : []
+  const otherDates = otherDatesArg(others, now)
+  const cards = useQuery(
+    api.challenges.dayCards,
+    info ? { challengeId: info.challenge.id, myDate, partnerDate, ...(otherDates ? { otherDates } : {}) } : "skip",
+  )
   const status: ChallengeDetailStatus =
     list.status === "signedOut"
       ? "signedOut"
@@ -118,6 +155,11 @@ export function useChallengeDetail(id: string | undefined, now: number): Challen
     partnerDate,
     mine: cards?.mine ?? null,
     partnerCard: cards?.partner ?? null,
+    others: others.map((member, i) => ({
+      member,
+      date: otherDates?.[i]?.date ?? partnerDate,
+      day: cards === undefined ? undefined : dayOf<DayView>(cards, member.key, i === 0),
+    })),
   }
 }
 
@@ -128,22 +170,34 @@ export interface TodayRow {
   /** Undefined while loading; null when there is no row yet. */
   mine: TodayCard["mine"] | null | undefined
   partner: TodayCard["partner"] | null | undefined
+  /** Every other member's today, join order; the first is `partner`. */
+  others: MemberToday<NonNullable<TodayCard["partner"]>>[]
 }
 
 /** Today in every active challenge, one subscription. Rows keep the order of `active`. */
 export function useTodayCards(active: ChallengeEntry[], now: number): { myDate: string; rows: TodayRow[]; loading: boolean } {
   const myDate = todayIso()
-  const request = active.map((e) => ({ challengeId: e.challenge.id, partnerDate: partnerDateOf(e, now, myDate) }))
+  const members = active.map((e) => otherMembersOf(e))
+  const request = active.map((e, i) => {
+    const otherDates = otherDatesArg(members[i]!, now)
+    return { challengeId: e.challenge.id, partnerDate: partnerDateOf(e, now, myDate), ...(otherDates ? { otherDates } : {}) }
+  })
   const cards = useQuery(api.challenges.todayCards, request.length > 0 ? { myDate, cards: request } : "skip")
   const byId = new Map((cards ?? []).map((c) => [c.challengeId as string, c]))
   const rows = active.map((entry, i) => {
     const card = byId.get(entry.challenge.id)
+    const req = request[i]!
     return {
       entry,
       progress: challengeProgress(entry.challenge, myDate),
-      partnerDate: request[i]!.partnerDate,
+      partnerDate: req.partnerDate,
       mine: cards === undefined ? undefined : (card?.mine ?? null),
       partner: cards === undefined ? undefined : (card?.partner ?? null),
+      others: members[i]!.map((member, j) => ({
+        member,
+        date: req.otherDates?.[j]?.date ?? req.partnerDate,
+        day: cards === undefined ? undefined : dayOf<NonNullable<TodayCard["partner"]>>(card, member.key, j === 0),
+      })),
     }
   })
   return { myDate, rows, loading: request.length > 0 && cards === undefined }
@@ -152,8 +206,9 @@ export function useTodayCards(active: ChallengeEntry[], now: number): { myDate: 
 /**
  * Every recorded day up to yesterday. Today is deliberately left out: it is
  * rewritten on every edit, and this read set should not be. The partner's
- * rows run to `partnerUntilIso` (their own yesterday) when given, so a
- * partner a day ahead leaves no hole between history and their card.
+ * rows run to `partnerUntilIso` (their own yesterday) when given, and in a
+ * group each other member's to their own yesterday (`otherToDates`), so a
+ * member a day ahead leaves no hole between history and their card.
  * Skipped while `challengeId` is null. A plain string is accepted (a route
  * param): an id that is not a challenge of the viewer's reads as null.
  */
@@ -161,7 +216,15 @@ export function useChallengeHistory(
   challengeId: Id<"challenges"> | string | null | undefined,
   untilIso: string = addDays(todayIso(), -1),
   partnerUntilIso?: string,
+  otherToDates?: { key: string; toDate: string }[],
 ): ChallengeHistory | null | undefined {
   const dates = partnerUntilIso && partnerUntilIso !== untilIso ? { toDate: untilIso, partnerToDate: partnerUntilIso } : { toDate: untilIso }
-  return useQuery(api.challenges.history, challengeId ? { challengeId, ...dates } : "skip")
+  // Only a group sends per-member dates; two people need no more than `partnerToDate`.
+  const group = otherToDates && isGroup(otherToDates.length) ? { otherToDates } : {}
+  return useQuery(api.challenges.history, challengeId ? { challengeId, ...dates, ...group } : "skip")
+}
+
+/** Each other member's own yesterday, for `useChallengeHistory`, from their own today. */
+export function otherToDatesOf(others: { member: { key: string }; date: string }[]): { key: string; toDate: string }[] {
+  return memberToDates(others.map((o) => ({ key: o.member.key, date: o.date })))
 }

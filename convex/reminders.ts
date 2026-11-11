@@ -5,13 +5,14 @@
  * hands back before this action tries to deliver one, so a send that fails
  * costs one email and a crash mid-loop never doubles any. The rules for who
  * is due live in `_shared/challengeReminders.ts` (plan, check-in) and
- * `_shared/challengeInactivity.ts` (warning, closed).
+ * `_shared/challengeInactivity.ts` (warning, closed, dropped).
  */
 
 import { internalAction } from "./_generated/server"
 import { internal } from "./_generated/api"
 import type { DueReminder } from "./challengesInternal"
 import { CLOSE_AFTER_DAYS, WARN_AFTER_DAYS } from "./_shared/challengeInactivity"
+import { checkinDeadlinePhrase } from "./_shared/challengeGroup"
 
 export function reminderEmail(r: DueReminder, siteUrl: string): { subject: string; text: string } {
   const link = `${siteUrl}/challenge/${r.challengeId}`
@@ -31,12 +32,15 @@ export function reminderEmail(r: DueReminder, siteUrl: string): { subject: strin
     }
   }
   if (r.kind === "checkin") {
+    // The challenge's own deadline; "midnight" only for 23:59 (`checkinDeadlinePhrase`).
+    const by = checkinDeadlinePhrase(r.checkinDeadline ?? "23:59")
+    const who = r.group ? "the group" : "your partner"
     return {
-      subject: `Check in before midnight — ${names}`,
+      subject: `Check in before ${by} — ${names}`,
       text: [
         `Hi ${r.displayName},`,
         ``,
-        `The day is nearly over and you have not checked in for ${r.localDate}. Say how it went, own up to any don'ts, and your partner will see it.`,
+        `You have not checked in for ${r.localDate} yet, and the check-in closes at ${by}. Say how it went, own up to any don'ts, and ${who} will see it.`,
         ``,
         link,
       ].join("\n"),
@@ -47,16 +51,42 @@ export function reminderEmail(r: DueReminder, siteUrl: string): { subject: strin
     // The quiet member is addressed directly, in the greeting's own sentence.
     const lines = r.toInactive
       ? [
-          `Hi ${r.displayName}, you have not locked in a plan or checked in for ${WARN_AFTER_DAYS} days in "${r.challengeName}". If you lock in or check in today, it stays open.`,
+          r.dropsMember
+            ? `Hi ${r.displayName}, you have not locked in a plan or checked in for ${WARN_AFTER_DAYS} days in "${r.challengeName}". If you lock in or check in today, you stay in.`
+            : `Hi ${r.displayName}, you have not locked in a plan or checked in for ${WARN_AFTER_DAYS} days in "${r.challengeName}". If you lock in or check in today, it stays open.`,
         ]
       : [
           `Hi ${r.displayName},`,
           ``,
-          `${about} has not locked in a plan or checked in for ${WARN_AFTER_DAYS} days in "${r.challengeName}". If that stays the same through tomorrow, the challenge closes on its own and the reminders stop. One lock-in or check-in keeps it open.`,
+          r.dropsMember
+            ? `${about} has not locked in a plan or checked in for ${WARN_AFTER_DAYS} days in "${r.challengeName}". If that stays the same through tomorrow, ${about} drops out and the challenge runs on for everyone else.`
+            : `${about} has not locked in a plan or checked in for ${WARN_AFTER_DAYS} days in "${r.challengeName}". If that stays the same through tomorrow, the challenge closes on its own and the reminders stop. One lock-in or check-in keeps it open.`,
         ]
     return {
       subject: `Three days without a lock-in or check-in — ${r.challengeName}`,
       text: [...lines, ``, link].join("\n"),
+    }
+  }
+  if (r.kind === "dropped") {
+    if (r.toInactive) {
+      return {
+        subject: `You are out of ${r.challengeName} for now`,
+        text: [
+          `Hi ${r.displayName},`,
+          ``,
+          `You went ${CLOSE_AFTER_DAYS} days without a lock-in or check-in in "${r.challengeName}", so you have dropped out of it. It runs on for the others. Everything you recorded is kept: ask one of them for an invite link and you are back in with your days, goals and don'ts intact.`,
+        ].join("\n"),
+      }
+    }
+    return {
+      subject: `${about} has dropped out of ${r.challengeName}`,
+      text: [
+        `Hi ${r.displayName},`,
+        ``,
+        `${about} went ${CLOSE_AFTER_DAYS} days without a lock-in or check-in, so they have dropped out of "${r.challengeName}". The challenge runs on. Their days are kept, and an invite link brings them back with everything intact.`,
+        ``,
+        link,
+      ].join("\n"),
     }
   }
   return {

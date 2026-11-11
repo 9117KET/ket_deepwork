@@ -1,8 +1,8 @@
 /**
  * components/challenge/CommitmentsSheet.tsx
  *
- * Edit your own goals and don'ts in one challenge. Your partner sees them
- * and cannot change them. Rewording a goal or a don't keeps it the same one;
+ * Edit your own goals and don'ts in one challenge. The other members see
+ * them and cannot change them. Rewording a goal or a don't keeps it the same one;
  * removing one archives it on the server, so a day you already marked or
  * confessed to still reads right.
  */
@@ -10,6 +10,7 @@
 import { useState } from 'react'
 import { commitmentsToRows, rowsToCommitmentPayload, withDraft, type Commitment } from '../../domain/challengeCommitments'
 import { challengeErrorMessage, updateMyCommitments } from '../../services/challengeService'
+import { audienceNoun, capitalize } from '../../domain/challengeGroup'
 import { ListEditor } from './ListEditor'
 import type { Id } from '../../../convex/_generated/dataModel'
 import { Sheet } from '../ui/Sheet'
@@ -20,10 +21,12 @@ interface CommitmentsSheetProps {
   /** Both full lists (normalized goals); only the active ones are offered for editing. */
   goals: Commitment[]
   donts: Commitment[]
+  /** How many other members there are: one reads "your partner", more read "the others". */
+  otherCount?: number
   onClose: () => void
 }
 
-export function CommitmentsSheet({ challengeId, goals: initialGoals, donts: initialDonts, onClose }: CommitmentsSheetProps) {
+export function CommitmentsSheet({ challengeId, goals: initialGoals, donts: initialDonts, otherCount = 1, onClose }: CommitmentsSheetProps) {
   const [goals, setGoals] = useState(() => commitmentsToRows(initialGoals))
   const [donts, setDonts] = useState(() => commitmentsToRows(initialDonts))
   const [goalDraft, setGoalDraft] = useState('')
@@ -50,7 +53,7 @@ export function CommitmentsSheet({ challengeId, goals: initialGoals, donts: init
     <Sheet
       onClose={onClose}
       title="Your goals and don’ts"
-      description="Your partner can read these. Only you can change them."
+      description={otherCount === 0 ? 'Anyone who joins can read these. Only you can change them.' : `${capitalize(audienceNoun(otherCount))} can read these. Only you can change them.`}
       scrollable
       action={{ label: 'Save goals and don’ts', pendingLabel: 'Saving…', pending: busy, onClick: () => void save() }}
     >

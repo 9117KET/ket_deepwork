@@ -8,9 +8,9 @@
  *   banner that expands to show them.
  *
  * Two row anatomies, chosen by the primary pointer like `TaskItem`:
- *  - a finger: checkbox, rank and title, one chip, ⋮, drag handle (a finger
- *    on it lifts the row at once; elsewhere a hold does). The ⋮ opens the same
- *    `TaskActionSheet` as the list, so Delete, Hide from partner, Schedule,
+ *  - a finger: drag handle (a finger on it lifts the row at once; elsewhere a
+ *    hold does), checkbox, rank and title, one chip, ⋮. The ⋮ opens the same
+ *    `TaskActionSheet` as the list, so Delete, Hide from challenge, Schedule,
  *    Start and Move are all reachable by touch. The progress row is one button
  *    under the title that opens the progress sheet.
  *  - a cursor: the desktop row, unchanged: grip and drag, click-to-edit
@@ -32,7 +32,7 @@ import { TouchCheckbox } from './TouchCheckbox'
 import { useFocusBlocks } from './focusBlockContext'
 import { useCoarsePointer } from '../../hooks/useCoarsePointer'
 import { emptyListData, LIFTED_ROW_CLASS, rootRowData, type TouchReorder } from '../../hooks/useTouchReorder'
-import { DropLine } from './TaskItem'
+import { DropLine, PhoneHandleSpacer } from './TaskItem'
 
 interface MustDoPinnedHeaderProps {
   tasks: Task[]
@@ -48,7 +48,7 @@ interface MustDoPinnedHeaderProps {
   onUpdate: (taskId: string, patch: TaskPatch) => void
   /** Consciously abandon a MUST (offered in the phone action sheet). */
   onAbandon?: (taskId: string) => void
-  /** An accountability challenge is running: offer "hide from partner" on each MUST. */
+  /** An accountability challenge is running: offer "hide from challenge" on each MUST. */
   partnerVisible?: boolean
   /** Reorder: the three are ranked, so first really means first. */
   onDragStart?: (taskId: string) => void
@@ -302,8 +302,9 @@ export function MustDoPinnedHeader({
   )
 
   /**
-   * The phone row: checkbox, rank and title, one chip, then ⋮ (or, in the
-   * all-done list, a visible Remove). The progress bar sits under the title.
+   * The phone row: drag handle (or its empty place), checkbox, rank and
+   * title, one chip, then ⋮ (or, in the all-done list, a visible Remove).
+   * The progress bar sits under the title.
    */
   const renderPhoneRow = (task: Task, idx: number, trailing: 'menu' | 'remove') => {
     const progress = computeTaskProgress(task, deepWorkSessions ?? [], blockMinutes)
@@ -341,6 +342,19 @@ export function MustDoPinnedHeader({
         {draggable && touchLineAt === bounds.before && <DropLine edge="top" />}
         {draggable && idx === rootTasks.length - 1 && touchLineAt === tasks.length && <DropLine edge="bottom" />}
         <div className="group flex items-center gap-1">
+          {/* Leading, as on every row: a finger on it lifts the row at once;
+              activating it opens the actions. A row that cannot be dragged
+              holds its place, so the titles stay in one column. */}
+          {draggable ? (
+            <DragHandle
+              taskTitle={task.title}
+              onClick={() => setSheetTaskId(task.id)}
+              aria-haspopup="dialog"
+              className="-mr-1"
+            />
+          ) : (
+            <PhoneHandleSpacer />
+          )}
           <TouchCheckbox checked={task.isDone} onChange={() => onToggle(task.id)} label={task.title} />
           {editingId === task.id ? (
             <div className="flex min-w-0 flex-1 items-center py-1.5">{renderTitleEditor(task)}</div>
@@ -406,18 +420,10 @@ export function MustDoPinnedHeader({
               <X className="h-5 w-5" />
             </button>
           )}
-          {/* Trailing, as a list's reorder control is on a phone: a finger
-              on it lifts the row at once; activating it opens the actions. */}
-          {draggable && (
-            <DragHandle
-              taskTitle={task.title}
-              onClick={() => setSheetTaskId(task.id)}
-              aria-haspopup="dialog"
-            />
-          )}
         </div>
         {progress && (
-          <div className="pl-11 pr-2">
+          // Handle 44 - 4 + gap 4, checkbox 44, gap 4: the title's left edge.
+          <div className="pl-[92px] pr-2">
             <TaskProgressBar
               progress={progress}
               taskId={task.id}
@@ -675,7 +681,7 @@ export function MustDoPinnedHeader({
                     ? 'text-share-onSurfaceVariant hover:text-share-onSurface'
                     : 'text-transparent group-hover:text-share-onSurfaceVariant/50 hover:!text-share-onSurface'
                 }`}
-                aria-label={task.isPrivate ? 'Show to partner' : 'Hide from partner'}
+                aria-label={task.isPrivate ? 'Show in challenge' : 'Hide from challenge'}
                 title={task.isPrivate ? 'Hidden from your challenge partner — show it' : 'Hide from your challenge partner (counted, never titled)'}
               >
                 {task.isPrivate ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}

@@ -5,9 +5,9 @@
  *
  * Gmail SMTP with an app password, because there is no domain to verify
  * with a transactional provider yet. Every message is sent *from* the
- * configured Gmail account — to its owner and to the partner alike — and a
- * personal account caps at 500 recipients a day, which two people will never
- * approach. When a domain exists, swapping to Resend is a change to `send()`
+ * configured Gmail account — to its owner and to every other member alike —
+ * and a personal account caps at 500 recipients a day, which a few groups of
+ * up to eight will not approach. When a domain exists, swapping to Resend is a change to `send()`
  * and nothing else.
  *
  * Env (Convex dashboard, both deployments): GMAIL_SMTP_USER,

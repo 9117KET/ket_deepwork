@@ -32,6 +32,8 @@ Three separate defects in one sequence, all now closed.
 | # | Scenario | What used to happen | Guard |
 |---|---|---|---|
 | 1 | Start a block, page to another day, let it land | The whole session was written onto **the day on screen**, inflating a day that was already closed | `blockDayIso` — a block belongs to the day it *started* |
+| 1b | Start a block, page to another day, close the tab, let it land, claim it | The stored record (`deepblock_active_block_v1`) carried the day **on screen** when it was last written, so the away claim filed the minutes there; its fallback was a UTC date, the previous day for the first hours after midnight east of Greenwich | The record stores the local day the block started (`persistedBlockDayIso` in `useDeepWorkTimer.ts`), and the claim reads the day from `startedAt` (`blockDayIso`), so a record written by an older build is filed right too. A block that crosses midnight stays on the day it started. Gate: `e2e/away-block-day.spec.ts` (running, paused and restored, in flight on return) and `src/components/timer/useDeepWorkTimer.test.ts` |
+| 1c | Start a block for a task, page to another day, let it land (live or claimed later) | The timer looked its task up in the day on screen, found nothing there, and recorded the block against **no task**: the minutes were kept, what they were for was lost | The timer holds the task from the moment the block starts (`blockTask` in `useDeepWorkTimer.ts`, restored with the stored record). When the session is filed, `attributedTaskOnDay` keeps the id only while the task still exists on the block's day, so a task deleted mid-block leaves the session unattributed, never dangling. Gate: `e2e/away-block-day.spec.ts` and `src/domain/blockAttribution.test.ts` |
 | 2 | Change your block length while a block runs | The finish line moved under the countdown and the session recorded minutes never worked | Length is pinned at `start()`; presets and custom input are inert while running *or paused* |
 | 3 | Stop a block that has been running a while | Elapsed minutes were binned silently, no record, no undo | **Stop** offers *Keep 31m and stop* / *Discard* / *Cancel*. Below 1 minute it still resets in one click |
 | 4 | Start a block while one is running | Dead end — the only exit named was the destructive one | Notice names the non-destructive route and reports what is at stake |
@@ -64,7 +66,9 @@ Google Calendar.
 ```bash
 npx vitest run src/domain/workSafety.test.ts         # the ledger rules
 npx vitest run src/hooks/useUndoableActions.test.ts  # the undo staleness rule
+npx vitest run src/components/timer/useDeepWorkTimer.test.ts  # the stored block's day
 npx playwright test e2e/work-safety.spec.ts          # the behaviour
+npx playwright test e2e/away-block-day.spec.ts       # a block claimed after the tab closed
 ```
 
 The e2e suite seeds `deepblock_active_block_v1` directly to put a block

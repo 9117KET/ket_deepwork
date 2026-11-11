@@ -124,12 +124,16 @@ export async function markDay(
   return await convex.mutation(api.challenges.markDay, { challengeId, ...args })
 }
 
-/** Leaving. If you created the challenge, it ends for both of you. */
+/**
+ * Leaving. Alone, it ends the challenge. The creator with others hands it
+ * to the earliest joined member and it goes on; anyone else just leaves it.
+ * Nothing recorded is deleted, and a new invite link brings a leaver back.
+ */
 export async function leaveChallenge(challengeId: Id<"challenges">): Promise<void> {
   await convex.mutation(api.challenges.leaveChallenge, { challengeId })
 }
 
-/** Deletes an ended challenge for good (creator or admin). Both members lose the season. */
+/** Deletes an ended challenge for good (creator or admin). Every member loses the season. */
 export async function deleteChallenge(challengeId: Id<"challenges">): Promise<void> {
   await convex.mutation(api.challenges.deleteChallenge, { challengeId })
 }
@@ -164,9 +168,24 @@ export async function checkIn(
   return await convex.mutation(api.challenges.checkIn, { challengeId, ...args })
 }
 
-/** `left` nudges remain today; `nextAt` is when the next one opens (null once spent). */
-export async function nudgePartner(challengeId: Id<"challenges">): Promise<{ left: number; nextAt: number | null }> {
-  return await convex.mutation(api.challenges.nudgePartner, { challengeId })
+/**
+ * Nudge one other member. `memberKey` names them (`memberView.key`); left
+ * out, the server nudges the first other member, which is what a
+ * two-person challenge has always sent. `left` nudges toward that member
+ * remain today; `nextAt` is when the next one opens (null once spent).
+ */
+export async function nudgePartner(challengeId: Id<"challenges">, memberKey?: string): Promise<{ left: number; nextAt: number | null }> {
+  return await convex.mutation(api.challenges.nudgePartner, memberKey ? { challengeId, memberKey } : { challengeId })
+}
+
+/**
+ * Reopen an ended challenge (creator only) with everything it recorded.
+ * `endDate` is needed once the old end date is before any member's today;
+ * the server refuses without one (code `needsEndDate`, "Pick an end date
+ * from today on").
+ */
+export async function reopenChallenge(challengeId: Id<"challenges">, endDate?: string): Promise<void> {
+  await convex.mutation(api.challenges.reopenChallenge, endDate ? { challengeId, endDate } : { challengeId })
 }
 
 export function inviteUrl(token: string): string {

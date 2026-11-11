@@ -28,7 +28,7 @@ export interface ChallengeSummary {
   /**
    * Every visible task outside the Top 3 (the same set `tasksDone` and
    * `tasksTotal` count), so the partner sees the whole day. A task marked
-   * private ("Hide from partner") is left out and counted in `privateCount`.
+   * private ("Hide from challenge") is left out and counted in `privateCount`.
    * Optional: rows written before 7 Nov 2026 carry only the counts.
    */
   tasks?: { title: string; isDone: boolean }[]

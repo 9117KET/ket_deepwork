@@ -21,7 +21,8 @@ export interface ChallengeListItem {
   endedReason: EndedReason | null
   endedAt: number | null
   isCreator: boolean
-  warning: { forMe: boolean; missedSince: string; issuedAt: number } | null
+  /** `memberKey` and `displayName` name the warned member (servers from 11 Nov 2026 on). */
+  warning: { forMe: boolean; missedSince: string; issuedAt: number; memberKey?: string; displayName?: string } | null
 }
 
 /** A day's two acts, as either member's row carries them. */
@@ -206,19 +207,28 @@ export function daysFrom(fromIso: string, toIso: string): number {
 /**
  * The warning banner, when the server has warned a season. `todayIso` is the
  * viewer's date: the run is counted from `missedSince` up to yesterday, and
- * never reads as fewer than the three days that raised it.
+ * never reads as fewer than the three days that raised it. The warned
+ * member is named by the warning itself when the server says who; else
+ * `partnerName`. With three or more members (`memberCount`), a quiet member
+ * drops out alone and the challenge goes on, so the sentence says that.
  */
 export function warningSentence(
   warning: NonNullable<ChallengeListItem['warning']>,
   partnerName: string | null,
   todayIso: string,
+  memberCount: number = 2,
 ): string {
   const days = Math.max(3, daysFrom(warning.missedSince, todayIso))
+  const group = memberCount >= 3
   if (warning.forMe) {
-    return `No lock-in or check-in from you for ${days} days. It closes tomorrow unless you lock in or check in today.`
+    return group
+      ? `No lock-in or check-in from you for ${days} days. You drop out tomorrow unless you lock in or check in today.`
+      : `No lock-in or check-in from you for ${days} days. It closes tomorrow unless you lock in or check in today.`
   }
-  const name = partnerName ?? 'your partner'
-  return `No lock-in or check-in from ${name} for ${days} days. It closes tomorrow unless ${name} locks in or checks in.`
+  const name = warning.displayName || partnerName || 'your partner'
+  return group
+    ? `No lock-in or check-in from ${name} for ${days} days. ${name} drops out tomorrow unless they lock in or check in.`
+    : `No lock-in or check-in from ${name} for ${days} days. It closes tomorrow unless ${name} locks in or checks in.`
 }
 
 /**

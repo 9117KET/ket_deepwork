@@ -1,30 +1,38 @@
 /**
- * convex/challenges.ts — the two-person accountability challenge.
+ * convex/challenges.ts — the accountability challenge, one to eight people.
  *
- * Two people agree on a span of days. Each member sets their own goals and
- * "don'ts" (on their `challengeMembers` row, editable any time, readable by
- * the partner), and each day has two explicit acts: lock in the plan (before
- * a morning deadline) and check in (before midnight). The planner itself
- * stays private. What a partner sees is the `summary` each member's own
- * client publishes — Top 3 titles, counts, earned minutes, habits — never a
- * `plannerDays` row. A task marked private is counted in that summary, never
- * titled.
+ * Up to `MAX_MEMBERS` people agree on a span of days. Each member sets their
+ * own goals and "don'ts" (on their `challengeMembers` row, editable any
+ * time, readable by the others), and each day has two explicit acts: lock in
+ * the plan (before a morning deadline) and check in (before the check-in
+ * deadline). The planner itself stays private. What the others see is the
+ * `summary` each member's own client publishes — Top 3 titles, counts,
+ * earned minutes, habits — never a `plannerDays` row. A task marked private
+ * is counted in that summary, never titled.
+ *
+ * Leaving keeps the member row (`leftAt`, a former member), so an invite
+ * brings them back with everything intact; the creator leaving hands the
+ * role to the longest-standing member; the last one out ends it. The
+ * creator may reopen an ended challenge with everything it recorded.
+ * `partner` in every return is the first other member (`others[0]`), which
+ * the client built for two people still reads.
  *
  * A removed don't is archived, never deleted, so a confession that named it
  * still resolves. Challenges created before per-member lists keep theirs on
  * the `challenges` row; `memberCommitments` hands them to the creator.
  *
  * A person may run any number of challenges at once (up to
- * `MAX_ACTIVE_MEMBERSHIPS`), each with its own partner and each private to
- * its two members: nothing returned for challenge A says the partner is in
- * any other. The day's summary is published once and fanned out to every
- * active membership; the lock-in is one act for the whole day; the check-in
- * and the nudge are per challenge, because don'ts and partners differ.
+ * `MAX_ACTIVE_MEMBERSHIPS`), each with its own members and each private to
+ * them: nothing returned for challenge A says a member is in any other. The
+ * day's summary is published once and fanned out to every active
+ * membership; the lock-in is one act for the whole day; the check-in and the
+ * nudge are per challenge, because don'ts and members differ.
  *
  * Membership is checked on every read and write (`requireMember`), and every
  * function derives the caller from the identity, never from an argument.
- * The partner's `userId` is never returned to the client; the member view is
- * a display name, a timezone and the member's lists.
+ * No other member's `userId` or email is ever returned to the client; the
+ * member view is a key (the member row id), a display name, a timezone and
+ * the member's lists.
  */
 
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server"
@@ -38,16 +46,30 @@ import {
   emptySummary,
   summaryValidator,
   type ChallengeSummary,
+  type ClosedSpan,
   type Commitment,
   type Dont,
   type EndedReason,
 } from "./_shared/challengeValidators"
 import { isValidTimezone, localDateAndMinutes, CHECKIN_START, hhmmToMinutes } from "./_shared/challengeReminders"
 import { NUDGE_DAILY_CAP, NUDGE_MIN_GAP_MS, NUDGE_RULE_CODE, nudgeAvailability, nudgeRefusal, nudgeTimes, partnerOwesToday } from "./_shared/challengeNudges"
+import {
+  MAX_MEMBERS,
+  MEMBER_ROW_BOUND,
+  activeInJoinOrder,
+  appendClosedSpan,
+  closedSpanFor,
+  firstClosedDate,
+  nudgeTimesFor,
+  reopenEndProblem,
+} from "./_shared/challengeGroup"
+import { handOverIfCreator, memberCommitments, memberRowsOf, membersOf } from "./_shared/challengeMembers"
+
+export { MAX_MEMBERS } from "./_shared/challengeGroup"
+export { legacyGoalId, normalizeGoals } from "./_shared/challengeMembers"
 
 type Ctx = QueryCtx | MutationCtx
 
-const MAX_MEMBERS = 2
 /** Active challenges one person may be in at once; a bound, not a target. */
 export const MAX_ACTIVE_MEMBERSHIPS = 20
 /** Memberships, active or ended, that a person's reads look at: the newest ones. */
@@ -110,7 +132,7 @@ interface Membership {
 /**
  * Every membership the caller has, active or ended, newest first. Bounded:
  * the newest `MAX_ALL_MEMBERSHIPS` rows on `by_user`; anything older is out
- * of sight.
+ * of sight. A former member's row (`leftAt`) is not a membership.
  */
 async function allMemberships(ctx: Ctx, userId: string): Promise<Membership[]> {
   const rows = await ctx.db
@@ -120,6 +142,7 @@ async function allMemberships(ctx: Ctx, userId: string): Promise<Membership[]> {
     .take(MAX_ALL_MEMBERSHIPS)
   const out: Membership[] = []
   for (const me of rows) {
+    if (me.leftAt !== undefined) continue
     const challenge = await ctx.db.get(me.challengeId)
     if (challenge) out.push({ challenge, me })
   }
@@ -135,13 +158,21 @@ async function activeMemberships(ctx: Ctx, userId: string): Promise<Membership[]
   return (await allMemberships(ctx, userId)).filter((m) => m.challenge.status === "active").slice(0, MAX_ACTIVE_MEMBERSHIPS)
 }
 
-/** The caller's row in one challenge, or null. One point read on `by_user_challenge`. */
-async function findMember(ctx: Ctx, userId: string, challengeId: Id<"challenges">): Promise<Membership | null> {
-  const me = await ctx.db
+/** The caller's own member row in one challenge, active or former, or null. One point read. */
+async function ownRow(ctx: Ctx, userId: string, challengeId: Id<"challenges">): Promise<Doc<"challengeMembers"> | null> {
+  return await ctx.db
     .query("challengeMembers")
     .withIndex("by_user_challenge", (q) => q.eq("userId", userId).eq("challengeId", challengeId))
     .unique()
-  if (!me) return null
+}
+
+/**
+ * The caller's active row in one challenge, or null. A former member
+ * (`leftAt`) is not in it: they see and write nothing.
+ */
+async function findMember(ctx: Ctx, userId: string, challengeId: Id<"challenges">): Promise<Membership | null> {
+  const me = await ownRow(ctx, userId, challengeId)
+  if (!me || me.leftAt !== undefined) return null
   const challenge = await ctx.db.get(challengeId)
   return challenge ? { challenge, me } : null
 }
@@ -178,16 +209,37 @@ async function assertBelowCap(ctx: Ctx, userId: string): Promise<void> {
   }
 }
 
-async function membersOf(ctx: Ctx, challengeId: Id<"challenges">): Promise<Doc<"challengeMembers">[]> {
-  return await ctx.db
-    .query("challengeMembers")
-    .withIndex("by_challenge", (q) => q.eq("challengeId", challengeId))
-    .take(MAX_MEMBERS + 1)
+/**
+ * Who is in a challenge, as one viewer's reads need it: every row (for the
+ * warned member's name), the active members in join order, and the others
+ * the viewer sees, `partner` being the first of them.
+ */
+interface Roster {
+  rows: Doc<"challengeMembers">[]
+  active: Doc<"challengeMembers">[]
+  others: Doc<"challengeMembers">[]
 }
 
-async function partnerOf(ctx: Ctx, challengeId: Id<"challenges">, userId: string) {
-  const members = await membersOf(ctx, challengeId)
-  return members.find((m) => m.userId !== userId) ?? null
+async function rosterOf(ctx: Ctx, challengeId: Id<"challenges">, viewer: string): Promise<Roster> {
+  const rows = await memberRowsOf(ctx, challengeId)
+  const active = activeOf(rows)
+  return { rows, active, others: active.filter((m) => m.userId !== viewer) }
+}
+
+/** The active members among `rows`, join order (the one rule `membersOf` uses). */
+const activeOf = (rows: Doc<"challengeMembers">[]) => activeInJoinOrder(rows)
+
+/** The refusal for a join or an invite with every seat taken. */
+const FULL_MESSAGE = `This challenge is full (${MAX_MEMBERS} members)`
+
+/** Validates an optional per-member date list; the result maps member key to date. */
+function memberDates(list: Array<{ key: string; date: string }> | undefined, label: string): Map<string, string> {
+  const out = new Map<string, string>()
+  for (const entry of (list ?? []).slice(0, MEMBER_ROW_BOUND)) {
+    assertIsoDate(entry.date, label)
+    out.set(entry.key, entry.date)
+  }
+  return out
 }
 
 async function getDayRow(ctx: Ctx, challengeId: Id<"challenges">, userId: string, date: string) {
@@ -197,14 +249,18 @@ async function getDayRow(ctx: Ctx, challengeId: Id<"challenges">, userId: string
     .unique()
 }
 
-/** The newest invite that is still open, if any. */
-async function openInvite(ctx: Ctx, challengeId: Id<"challenges">, now: number) {
+/**
+ * The newest invite that is still open, if any. An invite made by someone
+ * who is no longer an active member (`active`) is dead and never handed out.
+ */
+async function openInvite(ctx: Ctx, challengeId: Id<"challenges">, now: number, active: Doc<"challengeMembers">[]) {
   const invites = await ctx.db
     .query("challengeInvites")
     .withIndex("by_challenge", (q) => q.eq("challengeId", challengeId))
     .order("desc")
     .take(10)
-  return invites.find((i) => !i.acceptedBy && i.expiresAt > now) ?? null
+  const makers = new Set(active.map((m) => m.userId))
+  return invites.find((i) => !i.acceptedBy && i.expiresAt > now && makers.has(i.createdBy)) ?? null
 }
 
 /** A user's email, from the `users` row (the Password provider's JWT carries none). */
@@ -224,8 +280,13 @@ function isAdminEmail(email: string | null | undefined): boolean {
   return admins.includes(email.trim().toLowerCase())
 }
 
-/** The challenge as one member sees it. The warning says "me" or "not me", never a user id. */
-function challengeView(c: Doc<"challenges">, viewer: string) {
+/**
+ * The challenge as one member sees it. The warning says "me" or "not me" and
+ * names the warned member by key and display name, never a user id.
+ * `rows` are the challenge's member rows (`memberRowsOf`), active and former.
+ */
+function challengeView(c: Doc<"challenges">, viewer: string, rows: Doc<"challengeMembers">[]) {
+  const warned = c.warning ? rows.find((m) => m.userId === c.warning!.userId) : undefined
   return {
     id: c._id,
     name: c.name,
@@ -238,42 +299,28 @@ function challengeView(c: Doc<"challenges">, viewer: string) {
     endedReason: c.endedReason ?? null,
     endedAt: c.endedAt ?? null,
     warning: c.warning
-      ? { forMe: c.warning.userId === viewer, missedSince: c.warning.missedSince, issuedAt: c.warning.issuedAt }
+      ? {
+          forMe: c.warning.userId === viewer,
+          missedSince: c.warning.missedSince,
+          issuedAt: c.warning.issuedAt,
+          /** The warned member's key and name; empty key and "A former member" if their row is gone. */
+          memberKey: warned ? (warned._id as string) : "",
+          displayName: warned?.displayName ?? "A former member",
+        }
       : null,
     isCreator: c.createdBy === viewer,
     /** Created for one person and nobody has joined since. Rows without the field are two-person. */
     solo: c.solo === true,
+    /** Active members, the viewer included. */
+    memberCount: activeOf(rows).length,
+    capacity: MAX_MEMBERS,
+    /** The reopener's local date of the latest reopen, or null if never reopened. */
+    reopenedDate: c.reopenedDate ?? null,
+    /** The stretches spent ended before each reopen, oldest first; empty when none. */
+    closedSpans: c.closedSpans ?? [],
   }
 }
 export type ChallengeView = ReturnType<typeof challengeView>
-
-/** The id a legacy (plain string) goal reads as: its index in the stored list. */
-export function legacyGoalId(index: number): string {
-  return `goal-legacy-${index}`
-}
-
-/**
- * Goals as objects. A string is a legacy goal, written before goals had ids:
- * the one at index `i` reads as `{ id: "goal-legacy-<i>", text }`, so a mark
- * made against it keeps resolving after the member's first edit (which
- * stores these ids for real). Objects pass through.
- */
-export function normalizeGoals(goals: ReadonlyArray<string | Commitment> | undefined): Commitment[] {
-  return (goals ?? []).map((g, i) => (typeof g === "string" ? { id: legacyGoalId(i), text: g } : g))
-}
-
-/**
- * A member's own goals and don'ts. Rows written before per-member lists have
- * none; the creator's then come from the challenge row, where they used to
- * live, and anyone else starts empty. This is the whole migration.
- */
-function memberCommitments(challenge: Doc<"challenges">, member: Doc<"challengeMembers">): { goals: Commitment[]; donts: Dont[] } {
-  const legacy = member.userId === challenge.createdBy
-  return {
-    goals: normalizeGoals(member.goals ?? (legacy ? challenge.goals : [])),
-    donts: member.donts ?? (legacy ? challenge.donts : []),
-  }
-}
 
 /** The texts of the active goals: the shape `goals` has always had, which the client live before ids still renders. */
 function activeGoalTexts(goals: Commitment[]): string[] {
@@ -281,23 +328,42 @@ function activeGoalTexts(goals: Commitment[]): string[] {
 }
 
 /**
- * A member as the other member (or they themselves) sees them. `goals` stays
+ * A member as another member (or they themselves) sees them. `goals` stays
  * `string[]` (active texts only) so a client built before goal ids keeps
  * rendering; `goalItems` carries the ids, archived ones included, like `donts`.
+ * `key` (the member row id) is the only identifier of a member that leaves
+ * the server: no user id, no email.
  */
 function memberView(challenge: Doc<"challenges">, m: Doc<"challengeMembers">) {
   const { goals, donts } = memberCommitments(challenge, m)
-  return { displayName: m.displayName, timezone: m.timezone, joinedAt: m.joinedAt, goals: activeGoalTexts(goals), goalItems: goals, donts }
-}
-
-/** One challenge as its member sees it: the challenge, both members, the open invite while alone. */
-async function challengeEntry(ctx: Ctx, { challenge, me }: Membership, viewer: string) {
-  const partner = await partnerOf(ctx, challenge._id, viewer)
-  const invite = partner || challenge.status !== "active" ? null : await openInvite(ctx, challenge._id, Date.now())
   return {
-    challenge: challengeView(challenge, viewer),
+    displayName: m.displayName,
+    timezone: m.timezone,
+    joinedAt: m.joinedAt,
+    goals: activeGoalTexts(goals),
+    goalItems: goals,
+    donts,
+    key: m._id as string,
+    isCreator: m.userId === challenge.createdBy,
+  }
+}
+export type MemberView = ReturnType<typeof memberView>
+
+/**
+ * One challenge as its member sees it: the challenge, every other active
+ * member in join order (`others`; `partner` is the first of them), and the
+ * open invite while seats remain.
+ */
+async function challengeEntry(ctx: Ctx, { challenge, me }: Membership, viewer: string) {
+  const roster = await rosterOf(ctx, challenge._id, viewer)
+  const seatsLeft = roster.active.length < MAX_MEMBERS
+  const invite = seatsLeft && challenge.status === "active" ? await openInvite(ctx, challenge._id, Date.now(), roster.active) : null
+  const others = roster.others.map((m) => memberView(challenge, m))
+  return {
+    challenge: challengeView(challenge, viewer, roster.rows),
     me: memberView(challenge, me),
-    partner: partner ? memberView(challenge, partner) : null,
+    partner: others[0] ?? null,
+    others,
     invite: invite ? { token: invite.token, expiresAt: invite.expiresAt } : null,
   }
 }
@@ -328,6 +394,8 @@ function myDayView(row: Doc<"challengeDays">) {
     goalsKept: row.goalsKept ?? [],
     nudgesSentAt: row.nudgesSentAt ?? null,
     nudgeSentAt: row.nudgeSentAt ?? null,
+    /** My nudges today per member nudged (key: their member key); empty object when none. */
+    nudgesByMember: row.nudgesByMember ?? {},
   }
 }
 
@@ -367,11 +435,19 @@ function mintGoals(texts: string[], now: number, offset = 0): Commitment[] {
  * so the two can never accept different seasons. Deadlines are checked only
  * when given.
  */
-function assertSpan(span: { startDate: string; endDate: string; planDeadline?: string; checkinDeadline?: string }): void {
+function assertSpan(
+  span: { startDate: string; endDate: string; planDeadline?: string; checkinDeadline?: string },
+  reopenedDate?: string,
+): void {
   assertIsoDate(span.startDate, "startDate")
   assertIsoDate(span.endDate, "endDate")
   if (span.startDate > span.endDate) fail("The challenge must end on or after it starts")
-  if (daysBetween(span.startDate, span.endDate) + 1 > MAX_SPAN_DAYS) fail("A challenge can run for at most a year")
+  // A reopened season is measured from its reopen day, as `reopenChallenge` measured it; any other from its start.
+  if (reopenedDate !== undefined) {
+    if (daysBetween(reopenedDate, span.endDate) + 1 > MAX_SPAN_DAYS) fail(REOPEN_SPAN_MESSAGE)
+  } else if (daysBetween(span.startDate, span.endDate) + 1 > MAX_SPAN_DAYS) {
+    fail("A challenge can run for at most a year")
+  }
   if (span.planDeadline !== undefined) {
     assertHhmm(span.planDeadline, "planDeadline")
     if (hhmmToMinutes(span.planDeadline) >= hhmmToMinutes(CHECKIN_START)) {
@@ -386,7 +462,10 @@ function assertSpan(span: { startDate: string; endDate: string; planDeadline?: s
   }
 }
 
-const SHORT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+/** The refusal for a reopened season longer than 366 days from its reopen day (`reopenChallenge`, `updateSpan`). */
+const REOPEN_SPAN_MESSAGE = "A season runs at most 366 days from the day it was reopened"
+
+const SHORT_MONTHS =["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
 /** "24 Oct" from an ISO date, for a refusal sentence. */
 function dayMonth(iso: string): string {
@@ -494,13 +573,37 @@ export const myChallenges = query({
   },
 })
 
+const otherDatesValidator = v.optional(v.array(v.object({ key: v.string(), date: v.string() })))
+
 /**
- * Today for both members of one challenge. Each lives on their own local
- * date, so the client passes both; a query cannot watch a wall clock.
- * Null when signed out or not a member.
+ * Every other active member's day, in `others` order, each read at their own
+ * date from `dates` (by member key), else at `fallbackDate`.
+ */
+async function otherDays(
+  ctx: Ctx,
+  challengeId: Id<"challenges">,
+  others: Doc<"challengeMembers">[],
+  dates: Map<string, string>,
+  fallbackDate: string,
+): Promise<Array<{ key: string; day: ChallengeDayView | null }>> {
+  const out: Array<{ key: string; day: ChallengeDayView | null }> = []
+  for (const m of others) {
+    const key = m._id as string
+    const row = await getDayRow(ctx, challengeId, m.userId, dates.get(key) ?? fallbackDate)
+    out.push({ key, day: row ? dayView(row) : null })
+  }
+  return out
+}
+
+/**
+ * Today for every member of one challenge. Each lives on their own local
+ * date, so the client passes them: `partnerDate` for the first other member
+ * (and anyone without an entry), `otherDates` per member key; a query cannot
+ * watch a wall clock. `partner` is `others[0]`'s day at `partnerDate`, as it
+ * was for two people. Null when signed out or not a member.
  */
 export const dayCards = query({
-  args: { challengeId: v.string(), myDate: v.string(), partnerDate: v.string() },
+  args: { challengeId: v.string(), myDate: v.string(), partnerDate: v.string(), otherDates: otherDatesValidator },
   handler: async (ctx, args) => {
     const userId = await viewerId(ctx)
     if (!userId) return null
@@ -508,27 +611,31 @@ export const dayCards = query({
     if (!membership) return null
     assertIsoDate(args.myDate, "myDate")
     assertIsoDate(args.partnerDate, "partnerDate")
+    const dates = memberDates(args.otherDates, "otherDates")
     const { challenge } = membership
+    const roster = await rosterOf(ctx, challenge._id, userId)
     const mine = await getDayRow(ctx, challenge._id, userId, args.myDate)
-    const partner = await partnerOf(ctx, challenge._id, userId)
-    const partnerRow = partner ? await getDayRow(ctx, challenge._id, partner.userId, args.partnerDate) : null
+    const first = roster.others[0]
+    const partnerRow = first ? await getDayRow(ctx, challenge._id, first.userId, args.partnerDate) : null
     return {
-      challenge: challengeView(challenge, userId),
+      challenge: challengeView(challenge, userId, roster.rows),
       mine: mine ?? null,
       partner: partnerRow ? dayView(partnerRow) : null,
+      others: await otherDays(ctx, challenge._id, roster.others, dates, args.partnerDate),
     }
   },
 })
 
 /**
  * Today across the caller's active challenges, in one subscription, for the
- * Today block. `cards` names the challenges and each partner's local date;
- * an id the caller is not an active member of is skipped, never an error.
+ * Today block. `cards` names the challenges, the first other member's local
+ * date (`partnerDate`) and optionally each member's (`otherDates`); an id the
+ * caller is not an active member of is skipped, never an error.
  */
 export const todayCards = query({
   args: {
     myDate: v.string(),
-    cards: v.array(v.object({ challengeId: v.id("challenges"), partnerDate: v.string() })),
+    cards: v.array(v.object({ challengeId: v.id("challenges"), partnerDate: v.string(), otherDates: otherDatesValidator })),
   },
   handler: async (ctx, args) => {
     const userId = await viewerId(ctx)
@@ -539,6 +646,7 @@ export const todayCards = query({
       challenge: ChallengeView
       mine: ReturnType<typeof myDayView> | null
       partner: ChallengeDayView | null
+      others: Array<{ key: string; day: ChallengeDayView | null }>
     }> = []
     const seen = new Set<string>()
     for (const card of args.cards.slice(0, MAX_ACTIVE_MEMBERSHIPS)) {
@@ -547,14 +655,23 @@ export const todayCards = query({
       if (!ISO_DATE.test(card.partnerDate)) continue
       const membership = await findMember(ctx, userId, card.challengeId)
       if (!membership || membership.challenge.status !== "active") continue
+      // A malformed per-member date is skipped like a malformed partnerDate: that member reads at partnerDate.
+      const dates = new Map(
+        (card.otherDates ?? [])
+          .slice(0, MEMBER_ROW_BOUND)
+          .filter((d) => ISO_DATE.test(d.date))
+          .map((d) => [d.key, d.date] as const),
+      )
+      const roster = await rosterOf(ctx, card.challengeId, userId)
       const mine = await getDayRow(ctx, card.challengeId, userId, args.myDate)
-      const partner = await partnerOf(ctx, card.challengeId, userId)
-      const partnerRow = partner ? await getDayRow(ctx, card.challengeId, partner.userId, card.partnerDate) : null
+      const first = roster.others[0]
+      const partnerRow = first ? await getDayRow(ctx, card.challengeId, first.userId, card.partnerDate) : null
       out.push({
         challengeId: card.challengeId,
-        challenge: challengeView(membership.challenge, userId),
+        challenge: challengeView(membership.challenge, userId, roster.rows),
         mine: mine ? myDayView(mine) : null,
         partner: partnerRow ? dayView(partnerRow) : null,
+        others: await otherDays(ctx, card.challengeId, roster.others, dates, card.partnerDate),
       })
     }
     return out
@@ -562,16 +679,22 @@ export const todayCards = query({
 })
 
 /**
- * Every day of one challenge from the start up to `toDate`, for both
- * members. Callers pass yesterday, not today: today's row is rewritten on
+ * Every day of one challenge from the start up to `toDate`, for every
+ * member. Callers pass yesterday, not today: today's row is rewritten on
  * every planner edit, and keeping it out of this read set is what stops each
  * keystroke from re-reading a whole season (the same hot/cold rule as
- * `plannerDays`). The partner's rows run to `partnerToDate` (default
- * `toDate`): their yesterday, which is not the viewer's when they are a day
- * ahead.
+ * `plannerDays`). The first other member's rows (`partner`) run to
+ * `partnerToDate` (default `toDate`): their yesterday, which is not the
+ * viewer's when they are a day ahead. Each other member's rows (`others`)
+ * run to their entry in `otherToDates`, else `partnerToDate ?? toDate`.
  */
 export const history = query({
-  args: { challengeId: v.string(), toDate: v.string(), partnerToDate: v.optional(v.string()) },
+  args: {
+    challengeId: v.string(),
+    toDate: v.string(),
+    partnerToDate: v.optional(v.string()),
+    otherToDates: v.optional(v.array(v.object({ key: v.string(), toDate: v.string() }))),
+  },
   handler: async (ctx, args) => {
     const userId = await viewerId(ctx)
     if (!userId) return null
@@ -580,8 +703,13 @@ export const history = query({
     assertIsoDate(args.toDate, "toDate")
     const partnerToDate = args.partnerToDate ?? args.toDate
     assertIsoDate(partnerToDate, "partnerToDate")
+    const toDates = memberDates(
+      args.otherToDates?.map((d) => ({ key: d.key, date: d.toDate })),
+      "otherToDates",
+    )
     const { challenge } = membership
-    const partner = await partnerOf(ctx, challenge._id, userId)
+    const roster = await rosterOf(ctx, challenge._id, userId)
+    const partner = roster.others[0] ?? null
     const rowsFor = async (memberId: string, toDate: string) =>
       (
         await ctx.db
@@ -591,19 +719,33 @@ export const history = query({
           )
           .take(HISTORY_CAP)
       ).map(dayView)
+    const others: Array<{ key: string; rows: ChallengeDayView[] }> = []
+    for (const m of roster.others) {
+      const key = m._id as string
+      others.push({ key, rows: await rowsFor(m.userId, toDates.get(key) ?? partnerToDate) })
+    }
     return {
-      challenge: challengeView(challenge, userId),
+      challenge: challengeView(challenge, userId, roster.rows),
       mine: await rowsFor(userId, args.toDate),
       partner: partner ? await rowsFor(partner.userId, partnerToDate) : [],
+      others,
     }
   },
 })
 
-/** What an invite link opens onto. No auth: the visitor may not have an account yet. */
+/**
+ * What an invite link opens onto. No auth: the visitor may not have an
+ * account yet. It names nobody but the inviter; `memberCount` is how many are
+ * in it (0 when there is no challenge to read). A former member previews as
+ * `ok`: accepting brings their own row back. A link whose inviter is no
+ * longer an active member previews as `notFound` and names nobody: a former
+ * member's name and lists are never shown.
+ */
 export const invitePreview = query({
   args: { token: v.string() },
   handler: async (ctx, args) => {
-    const none = { challenge: null, inviterName: null, inviterGoals: [] as string[], inviterDonts: [] as string[] }
+    const seats = (memberCount: number) => ({ memberCount, capacity: MAX_MEMBERS })
+    const none = { challenge: null, inviterName: null, inviterGoals: [] as string[], inviterDonts: [] as string[], ...seats(0) }
     const noLists = { inviterGoals: [] as string[], inviterDonts: [] as string[] }
     const invite = await ctx.db
       .query("challengeInvites")
@@ -613,26 +755,29 @@ export const invitePreview = query({
     const challenge = await ctx.db.get(invite.challengeId)
     if (!challenge || challenge.status !== "active") return { status: "ended" as const, ...none }
     const preview = { name: challenge.name, startDate: challenge.startDate, endDate: challenge.endDate }
-    const members = await membersOf(ctx, challenge._id)
+    const rows = await memberRowsOf(ctx, challenge._id)
+    const members = activeOf(rows)
+    const count = seats(members.length)
     // Auth is optional here: a signed-in member revisiting the link is told they are in.
     const identity = await ctx.auth.getUserIdentity()
     if (identity && members.some((m) => m.userId === getUserId(identity.subject))) {
-      return { status: "member" as const, challengeId: challenge._id, challenge: preview, inviterName: null, ...noLists }
+      return { status: "member" as const, challengeId: challenge._id, challenge: preview, inviterName: null, ...noLists, ...count }
     }
-    if (invite.acceptedBy) return { status: "used" as const, challenge: preview, inviterName: null, ...noLists }
-    if (invite.expiresAt <= Date.now()) return { status: "expired" as const, challenge: preview, inviterName: null, ...noLists }
-    const inviter = members.find((m) => m.userId === invite.createdBy) ?? null
-    const inviterName = inviter?.displayName ?? null
+    // A link made by someone who has since left or been dropped is dead: it reads as not valid
+    // (the client's existing `notFound` sentence), and nothing of the former member is shown.
+    const inviter = members.find((m) => m.userId === invite.createdBy)
+    if (!inviter) return { status: "notFound" as const, ...none }
+    if (invite.acceptedBy) return { status: "used" as const, challenge: preview, inviterName: null, ...noLists, ...count }
+    if (invite.expiresAt <= Date.now()) return { status: "expired" as const, challenge: preview, inviterName: null, ...noLists, ...count }
+    const inviterName = inviter.displayName
     // What the friend is signing up next to: the inviter's active lists, texts only.
-    const lists = inviter ? memberCommitments(challenge, inviter) : null
-    const inviterLists = lists
-      ? {
-          inviterGoals: activeGoalTexts(lists.goals),
-          inviterDonts: lists.donts.filter((d) => d.archivedAt === undefined).map((d) => d.text),
-        }
-      : noLists
-    if (members.length >= MAX_MEMBERS) return { status: "full" as const, challenge: preview, inviterName, ...inviterLists }
-    return { status: "ok" as const, challenge: preview, inviterName, ...inviterLists }
+    const lists = memberCommitments(challenge, inviter)
+    const inviterLists = {
+      inviterGoals: activeGoalTexts(lists.goals),
+      inviterDonts: lists.donts.filter((d) => d.archivedAt === undefined).map((d) => d.text),
+    }
+    if (members.length >= MAX_MEMBERS) return { status: "full" as const, challenge: preview, inviterName, ...inviterLists, ...count }
+    return { status: "ok" as const, challenge: preview, inviterName, ...inviterLists, ...count }
   },
 })
 
@@ -664,6 +809,9 @@ export interface AdminChallengeRow {
   endedAt: number | null
   warning: { displayName: string; missedSince: string; issuedAt: number } | null
   solo: boolean
+  /** Rows of members who left or were dropped; they are not in `members`. */
+  formerMembers: number
+  /** Active members, join order. */
   members: Array<{
     displayName: string
     email: string | null
@@ -694,7 +842,8 @@ export const adminListChallenges = query({
     const challenges = [...active, ...ended].sort((a, b) => b.createdAt - a.createdAt).slice(0, ADMIN_LIST_CAP)
     const rows: AdminChallengeRow[] = []
     for (const c of challenges) {
-      const members = await membersOf(ctx, c._id)
+      const all = await memberRowsOf(ctx, c._id)
+      const members = activeOf(all)
       const memberRows: AdminChallengeRow["members"] = []
       for (const m of members) {
         memberRows.push({
@@ -706,7 +855,7 @@ export const adminListChallenges = query({
           isCreator: m.userId === c.createdBy,
         })
       }
-      const warned = c.warning ? members.find((m) => m.userId === c.warning!.userId) : undefined
+      const warned = c.warning ? all.find((m) => m.userId === c.warning!.userId) : undefined
       rows.push({
         id: c._id,
         name: c.name,
@@ -720,6 +869,7 @@ export const adminListChallenges = query({
           ? { displayName: warned?.displayName ?? "A former member", missedSince: c.warning.missedSince, issuedAt: c.warning.issuedAt }
           : null,
         solo: c.solo === true,
+        formerMembers: all.length - members.length,
         members: memberRows,
       })
     }
@@ -786,16 +936,19 @@ export const createChallenge = mutation({
   },
 })
 
-/** A link to paste to the friend. One open invite at a time; asking again returns it. */
+/**
+ * A link to paste to a friend; any active member may make one while seats
+ * remain. One seat per link, one open invite at a time; asking again returns it.
+ */
 export const createInvite = mutation({
   args: { challengeId: v.id("challenges") },
   handler: async (ctx, args) => {
     const userId = await requireUser(ctx)
     const { challenge } = await requireMember(ctx, userId, args.challengeId, { write: true })
     const members = await membersOf(ctx, challenge._id)
-    if (members.length >= MAX_MEMBERS) fail("The challenge already has two members")
+    if (members.length >= MAX_MEMBERS) fail(FULL_MESSAGE)
     const now = Date.now()
-    const open = await openInvite(ctx, challenge._id, now)
+    const open = await openInvite(ctx, challenge._id, now, members)
     if (open) return { token: open.token, expiresAt: open.expiresAt }
     const token = crypto.randomUUID()
     const expiresAt = now + INVITE_TTL_MS
@@ -804,7 +957,14 @@ export const createInvite = mutation({
   },
 })
 
-/** Joining. The joiner may bring their own lists; without them they start empty. */
+/**
+ * Joining. The joiner may bring their own lists; without them they start
+ * empty. A former member (left or dropped) gets their own row back, with
+ * their name, join order, lists and ids, and their recorded days reappear;
+ * only `joinedDate` moves to their today, so inactivity counts from the
+ * return. Lists sent with the accept are used for a returning member only
+ * where their own list is empty.
+ */
 export const acceptInvite = mutation({
   args: {
     token: v.string(),
@@ -823,29 +983,47 @@ export const acceptInvite = mutation({
     if (!invite) fail("This invite link is not valid")
     const challenge = await ctx.db.get(invite.challengeId)
     if (!challenge || challenge.status !== "active") fail("This challenge has ended")
-    const members = await membersOf(ctx, challenge._id)
+    const rows = await memberRowsOf(ctx, challenge._id)
+    const members = activeOf(rows)
     if (members.some((m) => m.userId === userId)) return { challengeId: challenge._id }
+    // A former member cannot keep adding people through a link they made before leaving.
+    if (!members.some((m) => m.userId === invite.createdBy)) fail("This invite link is no longer valid")
     if (invite.acceptedBy) fail("This invite has already been used")
     if (invite.expiresAt <= now) fail("This invite has expired")
-    if (members.length >= MAX_MEMBERS) fail("The challenge already has two members")
+    if (members.length >= MAX_MEMBERS) fail(FULL_MESSAGE)
     await assertBelowCap(ctx, userId)
     const timezone = cleanTimezone(args.timezone)
     const displayName = cleanDisplayName(args.displayName)
     const goals = mintGoals(cleanList(args.goals ?? [], "goals"), now)
     const donts = mintDonts(cleanList(args.donts ?? [], "don'ts"), now)
-    await ctx.db.insert("challengeMembers", {
-      challengeId: challenge._id,
-      userId,
-      timezone,
-      displayName,
-      joinedAt: now,
-      joinedDate: localDateAndMinutes(now, timezone).date,
-      goals,
-      donts,
-      commitmentsUpdatedAt: now,
-    })
+    const former = await ownRow(ctx, userId, challenge._id)
+    if (former) {
+      // A returning member: the same row, active again. Nothing they recorded is touched.
+      await ctx.db.patch(former._id, {
+        leftAt: undefined,
+        leftReason: undefined,
+        timezone,
+        joinedDate: localDateAndMinutes(now, timezone).date,
+        ...((former.goals ?? []).length === 0 && goals.length > 0 ? { goals, commitmentsUpdatedAt: now } : {}),
+        ...((former.donts ?? []).length === 0 && donts.length > 0 ? { donts, commitmentsUpdatedAt: now } : {}),
+      })
+    } else {
+      // Former rows are kept forever; the read that finds them is bounded, so the table is too.
+      if (rows.length >= MEMBER_ROW_BOUND) fail("This challenge cannot take new members")
+      await ctx.db.insert("challengeMembers", {
+        challengeId: challenge._id,
+        userId,
+        timezone,
+        displayName,
+        joinedAt: now,
+        joinedDate: localDateAndMinutes(now, timezone).date,
+        goals,
+        donts,
+        commitmentsUpdatedAt: now,
+      })
+    }
     await ctx.db.patch(invite._id, { acceptedBy: userId, acceptedAt: now })
-    // A solo challenge that gains a partner is a two-person challenge from now on.
+    // A solo challenge that gains a member is a shared challenge from now on.
     if (challenge.solo === true) await ctx.db.patch(challenge._id, { solo: false })
     return { challengeId: challenge._id }
   },
@@ -922,12 +1100,16 @@ export const updateMyCommitments = mutation({
 })
 
 /**
- * Correcting the season's dates and deadlines. Only the creator may, and only
- * while it runs. No recorded day may fall out of it: the end cannot move
- * before any member's today (the season-over sweep would end it at once),
- * and the start cannot move past the first lock-in or check-in either member
- * recorded (`history` reads from the start, so those days would vanish from
- * view). Day rows are never touched; `status` is untouched.
+ * Correcting the season's dates and deadlines. Only the (current) creator
+ * may, and only while it runs. No recorded day may fall out of it: the end
+ * cannot move before any active member's today (the season-over sweep would
+ * end it at once), and the start cannot move past the first lock-in,
+ * check-in or mark any member recorded, former members included (`history`
+ * reads from the start, so those days would vanish from view), nor past the
+ * first closed stretch. The 366-day cap runs from the start, or from
+ * `reopenedDate` once the challenge has been reopened (as the reopen measured
+ * it), so a reopened season longer than a year from its start stays editable.
+ * Day rows are never touched; `status` is untouched.
  */
 export const updateSpan = mutation({
   args: {
@@ -941,25 +1123,30 @@ export const updateSpan = mutation({
     const userId = await requireUser(ctx)
     const { challenge } = await requireMember(ctx, userId, args.challengeId, { write: true })
     if (challenge.createdBy !== userId) fail("Only the creator can change the dates")
-    assertSpan(args)
-    const members = await membersOf(ctx, challenge._id)
-    for (const m of members) {
+    assertSpan(args, challenge.reopenedDate)
+    const rows = await memberRowsOf(ctx, challenge._id)
+    for (const m of activeOf(rows)) {
       if (args.endDate < memberToday(m)) fail("The end date can't be before today")
     }
     let firstRecorded: string | null = null
-    for (const m of members) {
-      // Ascending by date; the first row carrying either act is the member's earliest record.
-      const rows = ctx.db
+    for (const m of rows) {
+      // Ascending by date; the first row carrying an act or a mark is the member's earliest record.
+      const days = ctx.db
         .query("challengeDays")
         .withIndex("by_challenge_user_date", (q) => q.eq("challengeId", challenge._id).eq("userId", m.userId))
-      for await (const row of rows) {
-        if (row.planSetAt === undefined && row.checkinAt === undefined) continue
+      for await (const row of days) {
+        const marked = row.dontsBroken.length > 0 || (row.goalsKept ?? []).length > 0
+        if (row.planSetAt === undefined && row.checkinAt === undefined && !marked) continue
         if (firstRecorded === null || row.date < firstRecorded) firstRecorded = row.date
         break
       }
     }
     if (firstRecorded !== null && args.startDate > firstRecorded) {
-      fail(`The start can't move past ${dayMonth(firstRecorded)}, when the first lock-in or check-in was recorded`)
+      fail(`The start can't move past ${dayMonth(firstRecorded)}, when the first lock-in, check-in or mark was recorded`)
+    }
+    const firstClosed = firstClosedDate(challenge.closedSpans)
+    if (firstClosed !== null && args.startDate > firstClosed) {
+      fail(`The start can't move past ${dayMonth(firstClosed)}, when the challenge was closed`)
     }
     await ctx.db.patch(challenge._id, {
       startDate: args.startDate,
@@ -967,11 +1154,11 @@ export const updateSpan = mutation({
       ...(args.planDeadline !== undefined ? { planDeadline: args.planDeadline } : {}),
       ...(args.checkinDeadline !== undefined ? { checkinDeadline: args.checkinDeadline } : {}),
     })
-    return challengeView((await ctx.db.get(challenge._id))!, userId)
+    return challengeView((await ctx.db.get(challenge._id))!, userId, rows)
   },
 })
 
-/** The season's name belongs to both members; either may change it while it runs. */
+/** The season's name belongs to every member; any may change it while it runs. */
 export const renameChallenge = mutation({
   args: { challengeId: v.id("challenges"), name: v.string() },
   handler: async (ctx, args) => {
@@ -986,11 +1173,14 @@ export const renameChallenge = mutation({
 })
 
 /**
- * Leaving. The creator leaving ends the challenge for both at once
- * (`creatorLeft`, or `allLeft` when they were alone); their row is kept, so
- * the season stays readable to both. Anyone else leaving deletes their own
- * row and the challenge runs on with one member, open to a new invite; the
- * last one out ends it (`allLeft`). Day rows are never deleted.
+ * Leaving. Nothing is deleted: the leaver's row is kept and marked
+ * (`leftAt`, `leftReason: "left"`), a former member who sees nothing of the
+ * challenge until an invite brings them back with everything intact. The
+ * creator leaving hands the role to the longest-standing remaining member
+ * and the challenge runs on. The last active member leaving ends it
+ * (`allLeft`) and keeps their row active, so they can still read it and
+ * reopen it. A warning naming the leaver goes with them. Day rows are never
+ * touched.
  */
 export const leaveChallenge = mutation({
   args: { challengeId: v.id("challenges") },
@@ -998,14 +1188,15 @@ export const leaveChallenge = mutation({
     const userId = await requireUser(ctx)
     const { challenge, me } = await requireMember(ctx, userId, args.challengeId, { write: true })
     const now = Date.now()
-    if (challenge.createdBy === userId) {
-      const partner = await partnerOf(ctx, challenge._id, userId)
-      await ctx.db.patch(challenge._id, { status: "ended", endedReason: partner ? "creatorLeft" : "allLeft", endedAt: now })
+    const rows = await memberRowsOf(ctx, challenge._id)
+    const others = activeOf(rows).filter((m) => m.userId !== userId)
+    if (others.length === 0) {
+      await ctx.db.patch(challenge._id, { status: "ended", endedReason: "allLeft", endedAt: now })
       return null
     }
-    await ctx.db.delete(me._id)
-    const remaining = await membersOf(ctx, challenge._id)
-    if (remaining.length === 0) await ctx.db.patch(challenge._id, { status: "ended", endedReason: "allLeft", endedAt: now })
+    await handOverIfCreator(ctx, challenge, rows, me)
+    await ctx.db.patch(me._id, { leftAt: now, leftReason: "left" })
+    if (challenge.warning?.userId === userId) await ctx.db.patch(challenge._id, { warning: undefined })
     return null
   },
 })
@@ -1042,6 +1233,86 @@ export const deleteChallenge = mutation({
     await purge(() => ctx.db.query("challengeInvites").withIndex("by_challenge", (q) => q.eq("challengeId", id)).take(PURGE_BATCH))
     await purge(() => ctx.db.query("challengeMembers").withIndex("by_challenge", (q) => q.eq("challengeId", id)).take(PURGE_BATCH))
     await ctx.db.delete(challenge._id)
+    return null
+  },
+})
+
+/**
+ * Reopening an ended challenge, by its creator, with everything it recorded.
+ * One patch on the challenge: active again, the end reason, end time and any
+ * warning gone, `endDate` set (`endDate ?? the old one`), the reopen stamped,
+ * and the stretch it spent closed appended to `closedSpans`. No member row
+ * and no day row is touched; former members stay former. The end date must
+ * be on or after every active member's today (else code `needsEndDate`, and
+ * the client asks for one), not before the start, and at most 366 days from
+ * the reopen day. Inactivity counts no day before the reopen day. Every other
+ * active member is emailed once that it runs again.
+ */
+export const reopenChallenge = mutation({
+  args: { challengeId: v.id("challenges"), endDate: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const userId = await requireUser(ctx)
+    const challenge = await ctx.db.get(args.challengeId)
+    if (!challenge) fail("This challenge no longer exists")
+    const membership = await findMember(ctx, userId, challenge._id)
+    if (!membership) fail("You are not in this challenge")
+    const { me } = membership
+    if (challenge.createdBy !== userId) fail("Only the creator can reopen a challenge")
+    if (challenge.status === "active") fail("This challenge is already running")
+    await assertBelowCap(ctx, userId)
+    const endDate = args.endDate ?? challenge.endDate
+    assertIsoDate(endDate, "endDate")
+    const now = Date.now()
+    const members = await membersOf(ctx, challenge._id)
+    const reopenDay = localDateAndMinutes(now, me.timezone).date
+    const problem = reopenEndProblem({
+      endDate,
+      startDate: challenge.startDate,
+      memberTodays: members.map((m) => memberToday(m)),
+      reopenDay,
+    })
+    if (problem === "needsEndDate") fail("Pick an end date from today on", "needsEndDate")
+    if (problem === "beforeStart") fail("The challenge must end on or after it starts")
+    if (problem === "tooLong") fail("A season runs at most 366 days from today")
+
+    let span: ClosedSpan | null = null
+    if (challenge.endedAt !== undefined) {
+      const endedDate = localDateAndMinutes(challenge.endedAt, me.timezone).date
+      let acted = false
+      for (const m of members) {
+        const row = await getDayRow(ctx, challenge._id, m.userId, endedDate)
+        if (row && (row.planSetAt !== undefined || row.checkinAt !== undefined)) acted = true
+      }
+      span = closedSpanFor({ endedDate, actedOnEndedDate: acted, reopenedDate: reopenDay })
+    }
+    await ctx.db.patch(challenge._id, {
+      status: "active",
+      endedReason: undefined,
+      endedAt: undefined,
+      warning: undefined,
+      endDate,
+      reopenedDate: reopenDay,
+      reopenedAt: now,
+      closedSpans: appendClosedSpan(challenge.closedSpans, span),
+    })
+
+    const link = `${process.env.SITE_URL ?? ""}/challenge/${challenge._id}`
+    for (const m of members) {
+      if (m.userId === userId) continue
+      const email = await userEmail(ctx, m.userId)
+      if (!email) continue
+      await ctx.scheduler.runAfter(0, internal.email.sendEmail, {
+        to: email,
+        subject: `${challenge.name} is running again`,
+        text: [
+          `Hi ${m.displayName},`,
+          ``,
+          `${me.displayName} reopened "${challenge.name}". It runs to ${dayMonth(endDate)}, and everything recorded so far is kept. The days it was closed count against nobody.`,
+          ``,
+          link,
+        ].join("\n"),
+      })
+    }
     return null
   },
 })
@@ -1207,20 +1478,32 @@ export const markDay = mutation({
 })
 
 /**
- * An email to the partner in one challenge while they still owe the day
- * something: up to three on the nudger's own local day, at least an hour
- * apart. The rules live in `_shared/challengeNudges.ts`, shared with the
- * card's button. The send is scheduled from inside the transaction, so a
- * nudge that fails to record never goes out; "sent" means queued, not
- * delivered.
+ * An email to one other member of a challenge while they still owe the day
+ * something: up to three per member nudged on the nudger's own local day, at
+ * least an hour apart. `memberKey` names the target; without it the target
+ * is the first other member (`partner`), which is what the two-person client
+ * sends. The rules live in `_shared/challengeNudges.ts`, shared with the
+ * card's button; the per-target times are `nudgesByMember[key]` on the
+ * nudger's day row, and the legacy `nudgesSentAt` list is still appended so
+ * a two-person client's count stays right. The send is scheduled from
+ * inside the transaction, so a nudge that fails to record never goes out;
+ * "sent" means queued, not delivered.
  */
 export const nudgePartner = mutation({
-  args: { challengeId: v.id("challenges") },
+  args: { challengeId: v.id("challenges"), memberKey: v.optional(v.string()) },
   handler: async (ctx, args): Promise<{ left: number; nextAt: number | null }> => {
     const userId = await requireUser(ctx)
     const { challenge, me } = await requireMember(ctx, userId, args.challengeId, { write: true })
-    const partner = await partnerOf(ctx, challenge._id, userId)
-    if (!partner) fail("Nobody has joined yet")
+    const others = (await membersOf(ctx, challenge._id)).filter((m) => m.userId !== userId)
+    let partner: Doc<"challengeMembers"> | undefined
+    if (args.memberKey !== undefined) {
+      partner = others.find((m) => (m._id as string) === args.memberKey)
+      if (!partner) fail("They are not in this challenge")
+    } else {
+      partner = others[0]
+      if (!partner) fail("Nobody has joined yet")
+    }
+    const key = partner._id as string
     const now = Date.now()
     const partnerLocal = localDateAndMinutes(now, partner.timezone)
     if (!inRange(challenge, partnerLocal.date)) fail("The challenge is not running today", NUDGE_RULE_CODE)
@@ -1230,15 +1513,19 @@ export const nudgePartner = mutation({
     if (!owes) fail(evening ? "They have already checked in" : "They have already locked in their plan", NUDGE_RULE_CODE)
     const myLocal = localDateAndMinutes(now, me.timezone)
     const myRow = await getDayRow(ctx, challenge._id, userId, myLocal.date)
-    const times = nudgeTimes(myRow)
+    const times = nudgeTimesFor(myRow, key, partner._id === others[0]?._id)
     const refusal = nudgeRefusal(nudgeAvailability({ nowMs: now, times, partnerOwes: owes }), now)
     if (refusal) fail(refusal, NUDGE_RULE_CODE)
     const email = await userEmail(ctx, partner.userId)
-    if (!email) fail("Your partner has no email address on file")
+    if (!email) fail(others.length > 1 ? "They have no email address on file" : "Your partner has no email address on file")
     const mine = myRow ?? (await upsertDay(ctx, challenge._id, userId, myLocal.date, emptySummary()))
-    // A legacy `nudgeSentAt` is carried into the array on the first write; the old field is left as it was.
     const sent = [...times, now]
-    await ctx.db.patch(mine._id, { nudgesSentAt: sent })
+    // A row from before per-target bookkeeping: its legacy list was all toward the first other member.
+    const legacy = nudgeTimes(mine)
+    const byMember = mine.nudgesByMember ?? (legacy.length > 0 ? { [others[0]!._id as string]: legacy } : {})
+    // The legacy list keeps every nudge of the day; a legacy `nudgeSentAt` is carried into it on the first write.
+    const allSent = [...legacy, now]
+    await ctx.db.patch(mine._id, { nudgesSentAt: allSent, nudgesByMember: { ...byMember, [key]: sent } })
     const what = evening ? "check in" : "lock in today's plan"
     await ctx.scheduler.runAfter(0, internal.email.sendEmail, {
       to: email,

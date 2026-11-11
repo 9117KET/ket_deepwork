@@ -47,7 +47,9 @@ function seed(page: Page, withSubtask = false) {
     if (!window.sessionStorage.getItem('_pw_claim_ready')) {
       window.sessionStorage.setItem('_pw_claim_ready', '1')
       try {
-        const today = new Date().toISOString().slice(0, 10)
+        // The local date, as the planner reads it. The UTC date differs near midnight.
+        const now = new Date()
+        const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
         const appState = {
           days: {
             [today]: {

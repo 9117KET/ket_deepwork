@@ -7,18 +7,17 @@
 - [ ] Bug fix
 - [ ] New feature
 - [ ] Refactor / cleanup
-- [ ] Migration (Supabase schema change)
+- [ ] Convex schema or function arguments change (two-sided deploy)
 
 ## Checklist
 
-- [ ] `npm run lint` passes
-- [ ] `npm run build` passes
+- [ ] CI is green (lint, unit, Convex, build, end-to-end)
 - [ ] Tested in guest mode (localStorage only)
-- [ ] Tested signed in (Supabase sync)
-- [ ] If adding a new `sectionId`: updated `types.ts`, `stats.ts` weights, and migration if stored in DB
-- [ ] If changing `planner_days` columns: updated `supabasePlanner.ts` fetch/upsert and the `get_shared_planner` / `upsert_shared_day` RPCs
-- [ ] If adding an Edge Function: documented secrets needed in `deploy-functions` skill
+- [ ] Tested signed in (Convex sync)
+- [ ] A changed sync payload, function argument or return shape: backend deployed first with `npx convex deploy`, then this PR merged (`docs/DEPLOYMENT.md`)
+- [ ] Touches a delete path, the timer or `deepWorkSessions`: read `docs/data-safety.md` and kept worked minutes safe
+- [ ] `CLAUDE.md` updated if a rule or pattern changed
 
 ## Screenshots (if UI change)
 
-<!-- Paste before/after screenshots -->
+<!-- Paste before/after screenshots, phone and desktop -->

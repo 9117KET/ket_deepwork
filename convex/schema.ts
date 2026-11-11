@@ -3,9 +3,12 @@ import { v } from "convex/values"
 import { authTables } from "@convex-dev/auth/server"
 import {
   challengeStatusValidator,
+  closedSpanValidator,
   commitmentValidator,
   dontValidator,
   endedReasonValidator,
+  leftReasonValidator,
+  nudgesByMemberValidator,
   remindersSentValidator,
   summaryValidator,
   warningValidator,
@@ -155,7 +158,7 @@ export default defineSchema({
     .index("by_user_event", ["userId", "googleCalendarId", "googleEventId"]),
 
   // ── Accountability challenge ──────────────────────────────────────────────
-  // Two people, one shared object. Each member's planner stays private: what
+  // Up to eight people (`MAX_MEMBERS`), one shared object. Each member's planner stays private: what
   // the partner sees is the `summary` the member's own client publishes into
   // `challengeDays`, never a `plannerDays` row. Index names follow the repo's
   // `by_user_date` style rather than the generated guidelines' `by_a_and_b`.
@@ -173,11 +176,16 @@ export default defineSchema({
     /** Local wall-clock deadlines, applied in each member's own timezone. */
     planDeadline: v.string(),
     checkinDeadline: v.string(),
+    /**
+     * The current creator. It moves to the longest-standing remaining member
+     * when the creator leaves or is dropped from a group (hand-over).
+     */
     createdBy: v.string(),
     createdAt: v.number(),
     /**
-     * The one switch the reminder cron reads; "ended" once the creator or
-     * everyone has left, a member went inactive, or the end date has passed.
+     * The one switch the reminder cron reads; "ended" once everyone has left,
+     * a member of a pair went inactive, or the end date has passed. The
+     * creator may set it back to "active" (`reopenChallenge`).
      */
     status: challengeStatusValidator,
     endedAt: v.optional(v.number()),
@@ -186,6 +194,11 @@ export default defineSchema({
     warning: v.optional(warningValidator),
     /** Created for one person; absent or false is a two-person challenge. A partner joining sets it false. */
     solo: v.optional(v.boolean()),
+    /** The reopener's local date of the latest reopen. Inactivity counts no day before it. */
+    reopenedDate: v.optional(v.string()),
+    reopenedAt: v.optional(v.number()),
+    /** The stretches spent ended before each reopen, oldest first, at most the newest 20. */
+    closedSpans: v.optional(v.array(closedSpanValidator)),
   }).index("by_status", ["status"]),
 
   challengeMembers: defineTable({
@@ -209,6 +222,13 @@ export default defineSchema({
     lastActedAt: v.optional(v.number()),
     /** The member's local date at join. Older rows derive it from `joinedAt` in `timezone`. */
     joinedDate: v.optional(v.string()),
+    /**
+     * Set when the member left or was dropped: a former member, invisible to
+     * every read and write as a member. The row is kept whole (name, zone,
+     * lists, ids) and an invite clears both fields again.
+     */
+    leftAt: v.optional(v.number()),
+    leftReason: v.optional(leftReasonValidator),
   })
     .index("by_user", ["userId"])
     .index("by_challenge", ["challengeId"])
@@ -245,6 +265,8 @@ export default defineSchema({
     nudgeSentAt: v.optional(v.number()),
     /** Nudges sent on this (the nudger's) local day; rules in `_shared/challengeNudges.ts`. */
     nudgesSentAt: v.optional(v.array(v.number())),
+    /** The same nudges per member nudged (key: their member row id); the cap and gap are judged per key. */
+    nudgesByMember: v.optional(nudgesByMemberValidator),
   })
     .index("by_challenge_user_date", ["challengeId", "userId", "date"])
     .index("by_user_date", ["userId", "date"]),

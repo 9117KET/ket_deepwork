@@ -109,6 +109,20 @@ _Last updated: 2026-10-11_
    those calls; nothing else is affected (planner sync does not touch these
    functions). All new schema fields are optional, so no migration runs.
 
+   **Group challenges and reopening (11 Nov 2026) is a backend-first deploy.**
+   Run `npx convex deploy` first; push the group client to `main` after. The
+   live client is safe in between because the backend only adds: every
+   existing argument is still accepted (`otherDates`, `otherToDates` and
+   `memberKey` are optional), every existing return field keeps its name, type
+   and meaning, and `partner` is still populated (it is `others[0]`), so the
+   two-person client renders exactly as before. Two behaviours change under it
+   by design: the creator leaving hands the challenge to the longest-standing
+   member instead of ending it (the old client's leave sheet still says it ends
+   for both until the new client ships), and a third person can now join with
+   a fresh invite. All new schema fields are optional (`leftAt`, `leftReason`,
+   `reopenedDate`, `reopenedAt`, `closedSpans`, `nudgesByMember`), so no
+   migration runs, and no row is rewritten by the deploy.
+
 4. **Reclaim `deepblock.vercel.app`** (optional) — log into the old Vercel
    account that owns it, delete that project (or detach the domain), then attach
    it to `ket-deepwork`:

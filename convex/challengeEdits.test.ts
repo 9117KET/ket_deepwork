@@ -124,7 +124,7 @@ describe('updateSpan: the rules', () => {
       "The end date can't be before today",
     )
     expect(await refusal(a.as.mutation(api.challenges.updateSpan, span(challengeId, { startDate: '2026-10-25' })))).toBe(
-      "The start can't move past 24 Oct, when the first lock-in or check-in was recorded",
+      "The start can't move past 24 Oct, when the first lock-in, check-in or mark was recorded",
     )
     expect(await refusal(a.as.mutation(api.challenges.updateSpan, span(challengeId, { startDate: '2026-10-01', endDate: '2027-10-02' })))).toBe(
       'A challenge can run for at most a year',

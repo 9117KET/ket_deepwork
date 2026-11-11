@@ -160,7 +160,7 @@ function AdminBody() {
       {target && (
         <ActionSheet
           title={`Delete ${target.name} for good?`}
-          message="This removes the whole season and every day, check-in and note for both members. It cannot be undone."
+          message="This removes the whole season and every day, check-in and note for every member. It cannot be undone."
           actionLabel="Delete for good"
           onAction={() => void confirmDelete()}
           pending={pending}

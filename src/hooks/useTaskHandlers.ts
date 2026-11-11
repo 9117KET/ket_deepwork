@@ -25,8 +25,14 @@ import {
   TOP3_MAX,
   wouldOverfillTop3,
 } from "../domain/taskUtils";
-import { blockDayIso, detachSessionsFromTasks, reattributeSession } from "../domain/workSafety";
+import {
+  attributedTaskOnDay,
+  blockDayIso,
+  detachSessionsFromTasks,
+  reattributeSession,
+} from "../domain/workSafety";
 import { withdrawManualMinutes } from "../domain/taskProgress";
+import { titleFromPrompt } from "../domain/promptTitle";
 import { getOrCreateDay } from "../storage/localStorageState";
 
 /**
@@ -203,15 +209,16 @@ export function useTaskHandlers(
     sectionId: TaskSectionId,
     beforeTaskId: string,
   ) => {
-    const title = window.prompt("Task title:", "New task") ?? "New task";
-    if (title.trim() === "") return;
+    // Cancel returns null, and cancel adds nothing.
+    const title = titleFromPrompt(window.prompt("Task title:", "New task"));
+    if (title == null) return;
     updateAppState((prev) => {
       const existingDay = getOrCreateDay(prev, selectedDay);
       const idx = existingDay.tasks.findIndex((t) => t.id === beforeTaskId);
       if (idx < 0) return prev;
       const newTask: Task = {
         id: createTaskId(),
-        title: title.trim(),
+        title,
         sectionId,
         date: selectedDay,
         isDone: false,
@@ -235,8 +242,8 @@ export function useTaskHandlers(
     sectionId: TaskSectionId,
     afterTaskId: string,
   ) => {
-    const title = window.prompt("Task title:", "New task") ?? "New task";
-    if (title.trim() === "") return;
+    const title = titleFromPrompt(window.prompt("Task title:", "New task"));
+    if (title == null) return;
     updateAppState((prev) => {
       const existingDay = getOrCreateDay(prev, selectedDay);
       const idx = existingDay.tasks.findIndex((t) => t.id === afterTaskId);
@@ -244,7 +251,7 @@ export function useTaskHandlers(
       if (idx < 0 || !after) return prev;
       const newTask: Task = {
         id: createTaskId(),
-        title: title.trim(),
+        title,
         sectionId,
         date: selectedDay,
         isDone: false,
@@ -265,9 +272,8 @@ export function useTaskHandlers(
   };
 
   const handleAddSubtask = (parentTaskId: string) => {
-    const title =
-      window.prompt("Subtask title:", "New subtask") ?? "New subtask";
-    if (title.trim() === "") return;
+    const title = titleFromPrompt(window.prompt("Subtask title:", "New subtask"));
+    if (title == null) return;
     updateAppState((prev) => {
       const existingDay = getOrCreateDay(prev, selectedDay);
       const idx = existingDay.tasks.findIndex((t) => t.id === parentTaskId);
@@ -275,7 +281,7 @@ export function useTaskHandlers(
       if (idx < 0 || !parent) return prev;
       const newTask: Task = {
         id: createTaskId(),
-        title: title.trim(),
+        title,
         sectionId: parent.sectionId,
         date: parent.date,
         isDone: false,
@@ -580,11 +586,14 @@ export function useTaskHandlers(
       const targetDay = blockDayIso(startedAt, selectedDay);
       const day = getOrCreateDay(prev, targetDay);
       const startedIso = startedAt ?? new Date(Date.now() - durationMinutes * 60_000).toISOString();
+      // The timer holds its task from the start; keep it only while the task
+      // still exists on the day the block is filed under.
+      const attributed = attributedTaskOnDay(taskId, day.tasks);
       const session: DeepWorkSession = {
         id: `dw-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         label,
         durationMinutes,
-        ...(taskId ? { taskId } : {}),
+        ...(attributed ? { taskId: attributed } : {}),
         startedAt: startedIso,
         finishedAt: new Date().toISOString(),
       };
@@ -617,13 +626,18 @@ export function useTaskHandlers(
       startedAt: string;
       finishedAt: string;
     }) => {
+      // The day the block STARTED, read from its start instant like the live
+      // path. `block.dayIso` is only the fallback: a record written by an older
+      // build carries the day that was on screen, not the day it started.
+      const targetDay = blockDayIso(block.startedAt, block.dayIso);
       updateAppState((prev) => {
-        const day = getOrCreateDay(prev, block.dayIso);
+        const day = getOrCreateDay(prev, targetDay);
+        const attributed = attributedTaskOnDay(block.taskId, day.tasks);
         const session: DeepWorkSession = {
           id: `dw-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
           label: block.label,
           durationMinutes: block.minutes,
-          ...(block.taskId ? { taskId: block.taskId } : {}),
+          ...(attributed ? { taskId: attributed } : {}),
           startedAt: block.startedAt,
           finishedAt: block.finishedAt,
         };
@@ -631,7 +645,7 @@ export function useTaskHandlers(
           ...prev,
           days: {
             ...prev.days,
-            [block.dayIso]: { ...day, deepWorkSessions: [...day.deepWorkSessions, session] },
+            [targetDay]: { ...day, deepWorkSessions: [...day.deepWorkSessions, session] },
           },
         };
       });

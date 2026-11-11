@@ -46,6 +46,26 @@ export function blockDayIso(
 }
 
 /**
+ * The task a finished block is recorded against, judged on the day it is filed
+ * under (the day it started).
+ *
+ * The timer holds the task from the moment the block starts, so paging to
+ * another day mid-block no longer drops it. Holding it also means a task
+ * deleted mid-block would leave the session pointing at nothing, so the id is
+ * kept only while the task still exists on that day; otherwise the block is
+ * recorded unattributed, which is what deleting a task does to its sessions.
+ * A done task still exists, so a block worked on something ticked off
+ * mid-block keeps it.
+ */
+export function attributedTaskOnDay(
+  taskId: string | undefined,
+  dayTasks: ReadonlyArray<Pick<Task, 'id'>>,
+): string | undefined {
+  if (!taskId) return undefined
+  return dayTasks.some((t) => t.id === taskId) ? taskId : undefined
+}
+
+/**
  * Minutes worth banking from a block that is being stopped early.
  *
  * Derived from what the countdown has left rather than from wall-clock time

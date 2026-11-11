@@ -115,6 +115,13 @@ test.describe('Calendar callback page (no auth required)', () => {
   })
 })
 
+/**
+ * The signed-in tests need the dev Convex deployment. CI runs against a
+ * placeholder backend that never resolves (`.github/workflows/ci.yml`), so
+ * they cannot sign in there and are skipped; everything else here runs.
+ */
+const NO_REAL_BACKEND = (process.env.VITE_CONVEX_URL ?? '').endsWith('.invalid')
+
 test.describe('Calendar page', () => {
   test('signed-out users see a sign-in CTA, not an infinite spinner', async ({ page }) => {
     await skipTour(page)
@@ -128,6 +135,7 @@ test.describe('Calendar page', () => {
   test('authenticated + not connected shows the Connect card without sync controls', async ({
     page,
   }) => {
+    test.skip(NO_REAL_BACKEND, 'needs the dev Convex deployment to sign in')
     await skipTour(page)
     await signIn(page)
     await page.goto('/calendar')
@@ -146,6 +154,7 @@ test.describe('Calendar page', () => {
   test('authenticated user starts OAuth with correct client_id and redirect_uri', async ({
     page,
   }) => {
+    test.skip(NO_REAL_BACKEND, 'needs the dev Convex deployment to sign in')
     await skipTour(page)
     await signIn(page)
 
